@@ -1,20 +1,20 @@
-// ******************************Ä¬ÈÏÉèÖÃ¶¨Òå******************************
+// ******************************é»˜è®¤è®¾ç½®å®šä¹‰******************************
 var iXuEr_TipsPop = null;
-var iXuEr_TipsoffsetX = 10; // ÌáÊ¾¿òÎ»ÓÚÊó±ê×ó²à»òÕßÓÒ²àµÄ¾àÀë£»3-12 ºÏÊÊ
-var iXuEr_TipsoffsetY = 15; // ÌáÊ¾¿òÎ»ÓÚÊó±êÏÂ·½µÄ¾àÀë£»3-12 ºÏÊÊ
-var iXuEr_TipsPopbg = "#FFFFFF"; // ÌáÊ¾¿ò±³¾°É«
-var iXuEr_TipsPopfg = "infotext"; // ÌáÊ¾¿òÇ°¾°É«
-var iXuEr_TipsAlpha = 90; // ÌáÊ¾¿òÍ¸Ã÷¶È£¬100Îª²»Í¸Ã÷
-var iXuEr_Tipsshadowcolor = "threedlightshadow"; // ÌáÊ¾¿òÒõÓ°ÑÕÉ«
-var iXuEr_Tipsshadowdirection = 135; // ÌáÊ¾¿òÒõÓ°·½Ïò
-var iXuEr_TipsTitlebg = "activecaption"; // ÌáÊ¾¿ò±êÌâÎÄ×Ö±³¾°
-var iXuEr_TipsTitlefg = "captiontext"; // ÌáÊ¾¿ò±êÌâÎÄ×ÖÑÕÉ«
-var iXuEr_TipsBorderColor = "activecaption"; // ÌáÊ¾¿ò±êÌâ±ß¿òÑÕÉ«
-var iXuEr_TipsBorder	= 1; // ÌáÊ¾¿ò±êÌâ±ß¿ò¿í¶È
-var iXuEr_TipsBaseWidth = 250; // ÌáÊ¾¿ò×îĞ¡¿í¶È ×¢ÒâÕâ¸öÖµ×îºÃ²»ÒªĞ¡ÓÚÌáÊ¾¿òµÄÏóËØ¿í¶È
-var iXuEr_TipsTitle = "·§ÃÅ"; // ÌáÊ¾¿ò±êÌâÎÄ×Ö
-var iXuEr_TipsSmallTitle = "- ÓÑÇéÌáÊ¾!";	// ÌáÊ¾¿ò¸±±êÌâÎÄ×Ö 
-var iXuEr_TipsTitleCt = " " // ±êÌâÎÄ×ÖºÍ¸±±êÌâÎÄ×ÖÖ®¼äµÄÁ¬½Ó·û
+var iXuEr_TipsoffsetX = 10; // æç¤ºæ¡†ä½äºé¼ æ ‡å·¦ä¾§æˆ–è€…å³ä¾§çš„è·ç¦»ï¼›3-12 åˆé€‚
+var iXuEr_TipsoffsetY = 15; // æç¤ºæ¡†ä½äºé¼ æ ‡ä¸‹æ–¹çš„è·ç¦»ï¼›3-12 åˆé€‚
+var iXuEr_TipsPopbg = "#FFFFFF"; // æç¤ºæ¡†èƒŒæ™¯è‰²
+var iXuEr_TipsPopfg = "infotext"; // æç¤ºæ¡†å‰æ™¯è‰²
+var iXuEr_TipsAlpha = 90; // æç¤ºæ¡†é€æ˜åº¦ï¼Œ100ä¸ºä¸é€æ˜
+var iXuEr_Tipsshadowcolor = "threedlightshadow"; // æç¤ºæ¡†é˜´å½±é¢œè‰²
+var iXuEr_Tipsshadowdirection = 135; // æç¤ºæ¡†é˜´å½±æ–¹å‘
+var iXuEr_TipsTitlebg = "activecaption"; // æç¤ºæ¡†æ ‡é¢˜æ–‡å­—èƒŒæ™¯
+var iXuEr_TipsTitlefg = "captiontext"; // æç¤ºæ¡†æ ‡é¢˜æ–‡å­—é¢œè‰²
+var iXuEr_TipsBorderColor = "activecaption"; // æç¤ºæ¡†æ ‡é¢˜è¾¹æ¡†é¢œè‰²
+var iXuEr_TipsBorder	= 1; // æç¤ºæ¡†æ ‡é¢˜è¾¹æ¡†å®½åº¦
+var iXuEr_TipsBaseWidth = 250; // æç¤ºæ¡†æœ€å°å®½åº¦ æ³¨æ„è¿™ä¸ªå€¼æœ€å¥½ä¸è¦å°äºæç¤ºæ¡†çš„è±¡ç´ å®½åº¦
+var iXuEr_TipsTitle = "é˜€é—¨"; // æç¤ºæ¡†æ ‡é¢˜æ–‡å­—
+var iXuEr_TipsSmallTitle = "- å‹æƒ…æç¤º!";	// æç¤ºæ¡†å‰¯æ ‡é¢˜æ–‡å­— 
+var iXuEr_TipsTitleCt = " " // æ ‡é¢˜æ–‡å­—å’Œå‰¯æ ‡é¢˜æ–‡å­—ä¹‹é—´çš„è¿æ¥ç¬¦
 
 var FormObj;
 var UsedForm="none";
@@ -31,14 +31,14 @@ function iXuEr_Tips(){
 	if(iXuEr_TipsPop!=null && iXuEr_TipsPop!="" && typeof(iXuEr_TipsPop)!="undefined"){
 		iXuEr_TipsLayer.style.left=-1000;
 		iXuEr_TipsLayer.style.display='';
-		var Msg = iXuEr_TipsPop.replace(/\n/g,"<br>"); // »»ĞĞ·û
-		Msg = Msg.replace(/\r/g,"<br>"); // »Ø³µ·û
+		var Msg = iXuEr_TipsPop.replace(/\n/g,"<br>"); // æ¢è¡Œç¬¦
+		Msg = Msg.replace(/\r/g,"<br>"); // å›è½¦ç¬¦
 		if(iXuEr_TipsSmallTitle==""){iXuEr_TipsTitleCt="";}
 		var attr=(document.location.toString().toLowerCase().indexOf("list.asp")>0?"nowrap":"");
 		var content = '<table style="FILTER:alpha(opacity='+iXuEr_TipsAlpha+') shadow(color='+iXuEr_Tipsshadowcolor+',direction='+iXuEr_Tipsshadowdirection+');" id=toolTipTalbe border=0><tr><td width="100%"><table border=0 cellspacing="'+iXuEr_TipsBorder+'" cellpadding="2" style="width:100%;background-color:'+iXuEr_TipsBorderColor+';">'+
-		'<tr id=iXuEr_TipsPoptop><th style="width:100%; color:'+iXuEr_TipsTitlefg+'; background-color:'+iXuEr_TipsTitlebg+';" class=s><b><p id=topleft align=left>¨I '+iXuEr_TipsTitle+iXuEr_TipsTitleCt+iXuEr_TipsSmallTitle+'</p><p id=topright align=right style="display:none" class=s>'+iXuEr_TipsSmallTitle+iXuEr_TipsTitleCt+iXuEr_TipsTitle+' ¨J</font></b></th></tr>'+
-		'<tr><td '+attr+' style="width:100%; background-color:'+iXuEr_TipsPopbg+'; color:'+iXuEr_TipsPopfg+'; padding-left:10px; padding-right:10px; padding-top: 4px; padding-bottom:4px; line-height:135%;font-family: Verdana, Arial, Helvetica, sans-serif, "ËÎÌå";" class=s>'+Msg+'</td></tr>'+
-		'<tr id=iXuEr_TipsPopbot style="display:none" class=s><th style="width:100%;color:'+iXuEr_TipsTitlefg+';background-color:'+iXuEr_TipsTitlebg+';" class=s><b><p id=botleft align=left>¨L '+iXuEr_TipsTitle+iXuEr_TipsTitleCt+iXuEr_TipsSmallTitle+'</p><p id=botright align=right style="display:none">'+iXuEr_TipsSmallTitle+iXuEr_TipsTitleCt+iXuEr_TipsTitle+' ¨K</font></b></th></tr>'+
+		'<tr id=iXuEr_TipsPoptop><th style="width:100%; color:'+iXuEr_TipsTitlefg+'; background-color:'+iXuEr_TipsTitlebg+';" class=s><b><p id=topleft align=left>â†– '+iXuEr_TipsTitle+iXuEr_TipsTitleCt+iXuEr_TipsSmallTitle+'</p><p id=topright align=right style="display:none" class=s>'+iXuEr_TipsSmallTitle+iXuEr_TipsTitleCt+iXuEr_TipsTitle+' â†—</font></b></th></tr>'+
+		'<tr><td '+attr+' style="width:100%; background-color:'+iXuEr_TipsPopbg+'; color:'+iXuEr_TipsPopfg+'; padding-left:10px; padding-right:10px; padding-top: 4px; padding-bottom:4px; line-height:135%;font-family: Verdana, Arial, Helvetica, sans-serif, "å®‹ä½“";" class=s>'+Msg+'</td></tr>'+
+		'<tr id=iXuEr_TipsPopbot style="display:none" class=s><th style="width:100%;color:'+iXuEr_TipsTitlefg+';background-color:'+iXuEr_TipsTitlebg+';" class=s><b><p id=botleft align=left>â†™ '+iXuEr_TipsTitle+iXuEr_TipsTitleCt+iXuEr_TipsSmallTitle+'</p><p id=botright align=right style="display:none">'+iXuEr_TipsSmallTitle+iXuEr_TipsTitleCt+iXuEr_TipsTitle+' â†˜</font></b></th></tr>'+
 		'</table></td></tr></table>';
 		iXuEr_TipsLayer.innerHTML = content;
 		var toolTipwidth = Math.min(iXuEr_TipsLayer.clientWidth, document.body.clientWidth/2.2);

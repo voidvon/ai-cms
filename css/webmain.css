@@ -169,69 +169,69 @@ body {
 }
 .Font-Weight{ font-weight:bold;}
 .Font_Size{font-size:14px;}
-/*ºÚÉ«*/
+/*é»‘è‰²*/
 .0a{color:#000000;text-decoration: none;}
 .0a:hover{text-decoration: underline;}
 .Ba{color:#000000;text-decoration: none;}
 .Ba:hover{color:#666666;text-decoration: underline;}
-/*°×É«*/
+/*ç™½è‰²*/
 .F_a{color:#ffffff;text-decoration: none;}
 .F_a:hover{color:#ffffff;text-decoration: underline;}
 
-/*ºìÉ«*/
+/*çº¢è‰²*/
 .Font_FF0000_a{color:#FF0000;text-decoration: none;}
 .Font_FF0000_a:hover{color:#FF0000;text-decoration: underline;}
 
-/*À¶É«*/
+/*è“è‰²*/
 .Font_2E4690_a{color:#2e4690;text-decoration: none;}
 .Font_2E4690_a:hover{color:#2E4690;text-decoration: underline;}
 
 .Font_666666_a{color:#666666;text-decoration: none;}
 .Font_666666_a:hover{color:#666666;text-decoration: underline;}
- /*ĞÂÎÅ±êÌâ*/
+ /*æ–°é—»æ ‡é¢˜*/
 .Font_2e4690_a{color:#2e4690;text-decoration: none;}
 .Font_2e4690_a:hover{color:#FE8D03;text-decoration: underline;}
  
 
-/*tableÓÒ±ßĞéÏß*/
+/*tableå³è¾¹è™šçº¿*/
 .in5{
 	border-Right-width: 1px;
 	border-Right-style: dashed;
 	border-Right-color: #aaac9f;
 }
-/*table×ó±ßĞéÏß*/
+/*tableå·¦è¾¹è™šçº¿*/
 .in4{
 	border-left-width: 1px;
 	border-left-style: dashed;
 	border-left-color: #aaac9f;
 }
-/*TableµÍ²¿ĞéÏß*/
+/*Tableä½éƒ¨è™šçº¿*/
 .in6{
 	border-bottom-width: 1px;
 	border-bottom-style: dashed;
 	border-bottom-color: #aaac9f;
 }
 
-/*table¶¥²¿ÊµÏß*/
+/*tableé¡¶éƒ¨å®çº¿*/
 .top_dasheds_line{
 	border-top-width: 1px;
 	border-top-style: solid;
 	border-top-color: #aaac9f;
 }
 
-/*table×ó±ßÊµÏß*/
+/*tableå·¦è¾¹å®çº¿*/
 .Right_dasheds_line{
 	border-left-width: 1px;
 	border-left-style: solid;
 	border-left-color: #aaac9f;
 }
-/*tableÓÒ±ßÊµÏß*/
+/*tableå³è¾¹å®çº¿*/
 .Right_solid_line{
 	border-Right-width: 1px;
 	border-Right-style: solid;
 	border-Right-color: #aaac9f;
 }
-/*tableµ×²¿ÊµÏß*/
+/*tableåº•éƒ¨å®çº¿*/
 .bottom_dasheds_line{
 	border-bottom-width: 1px;
 	border-bottom-style: solid;
@@ -243,7 +243,7 @@ body {
 .Foot_left{
 font-size:14px;
 }
-/*¹ØÓÚÆóÒµ*/
+/*å…³äºä¼ä¸š*/
 .p1{
 	border-bottom-width: 1px;
 	border-bottom-style: solid;
@@ -260,11 +260,11 @@ font-size:14px;
 	border-bottom-style: solid;
 	border-bottom-color: #d6d5da;
 }
-/*¹ØÓÚÆóÒµ*/
+/*å…³äºä¼ä¸š*/
 
 
 
-/*ĞÂÎÅ*/
+/*æ–°é—»*/
 
 .news_bottom_line{
 	border-bottom-width: 1px;
@@ -279,7 +279,7 @@ font-size:14px;
 	border-right-style: dashed;
 	border-right-color: #d6d5da;
 }
-.news_sp{line-height:18px} /*ĞÂÎÅÃèÊö*/
+.news_sp{line-height:18px} /*æ–°é—»æè¿°*/
 .news_body{
 	SCROLLBAR-FACE-COLOR: #f6f6f6;
 	SCROLLBAR-HIGHLIGHT-COLOR: #ffffff; 
@@ -298,7 +298,7 @@ font-size:14px;
 	
 }
 
-/*tableµ×²¿ÊµÏß*/
+/*tableåº•éƒ¨å®çº¿*/
 .prod_bottom_dasheds{
 	border-bottom-width: 1px;
 	border-bottom-style: solid;
@@ -368,14 +368,14 @@ abbr,acronym{border:0;font-variant:normal}
 sup{vertical-align:baseline}
 sub{vertical-align:baseline}
 legend{color:#000}
-/*********************************************** ºáÏòÖ÷µ¼º½Ìõ ***********************************************/
+/*********************************************** æ¨ªå‘ä¸»å¯¼èˆªæ¡ ***********************************************/
 .ddsmoothmenu{}
 .ddsmoothmenu ul{margin:0;padding:0}
-/*Ö÷²Ëµ¥ÉèÖÃ*/
+/*ä¸»èœå•è®¾ç½®*/
 .ddsmoothmenu ul li{position:relative;display:inline;float:left;margin:0px 4px}
 .ddsmoothmenu ul li a{display:block;height:30px;line-height:30px}
 .ddsmoothmenu ul li a span{display:block;padding:0px 15px}
-/*Ö÷²Ëµ¥Á¬½ÓĞ§¹ûÉèÖÃ*/
+/*ä¸»èœå•è¿æ¥æ•ˆæœè®¾ç½®*/
 .ddsmoothmenu ul li a:link,.ddsmoothmenu ul li a:visited{color:#000}
 .ddsmoothmenu ul li a:hover{background:url(../images/mainmenu.gif) no-repeat center -30px}
 .ddsmoothmenu ul li a:hover span{color:#FFF}
@@ -383,35 +383,35 @@ legend{color:#000}
 .ddsmoothmenu ul li a:active span{color:#FFF}
 .ddsmoothmenu ul li a.selected{background:url(../images/mainmenu.gif) no-repeat center -30px}
 .ddsmoothmenu ul li a.selected span{color:#FFF}
-/*Ö÷²Ëµ¥µ±Ç°ËùÔÚÒ³Ãæ*/
+/*ä¸»èœå•å½“å‰æ‰€åœ¨é¡µé¢*/
 .ddsmoothmenu ul li a#menu_selected{background:url(../images/mainmenu.gif) no-repeat center top}
 .ddsmoothmenu ul li a#menu_selected span{color:#FFF}
-/*×Ó¼¯²Ëµ¥ÉèÖÃ*/
+/*å­é›†èœå•è®¾ç½®*/
 .ddsmoothmenu ul.menulevel{position:absolute;left:0;display:none;visibility:hidden}
 .ddsmoothmenu ul.menulevel li{background:none;margin:0px;padding:0px;display:list-item;float:none}
 .ddsmoothmenu ul.menulevel li a{background:url(../images/mainmenu.gif) repeat-x left -60px;height:26px;line-height:26px;width:180px;padding:0px 5px;margin:0px;border-right:1px solid #999;border-bottom:1px solid #DFDFDF;border-left:1px solid #CCC}
-/*×Ó¼¯²Ëµ¥Á¬½ÓĞ§¹ûÉèÖÃ*/
+/*å­é›†èœå•è¿æ¥æ•ˆæœè®¾ç½®*/
 .ddsmoothmenu ul.menulevel li ul{top:0}
 .ddsmoothmenu ul.menulevel li a:link,.ddsmoothmenu ul.menulevel li a:visited{color:#000}
 .ddsmoothmenu ul.menulevel li a:hover{background:url(../images/mainmenu.gif) repeat-x left -90px;color:#034fab;font-weight:bold}
 .ddsmoothmenu ul.menulevel li a.selected{background:url(../images/mainmenu.gif) repeat-x left -90px;color:#034fab;font-weight:bold}
-/*ÏÂÀ­¼ıÍ·*/
+/*ä¸‹æ‹‰ç®­å¤´*/
 .ddsmoothmenu .downarrowclass{position:absolute;top:12px;right:8px}
 .ddsmoothmenu .rightarrowclass{position:absolute;top:8px;right:10px}
-/*ÒõÓ°*/
+/*é˜´å½±*/
 .ddshadow{position:absolute;left:0;top:0;width:0;height:0;background:url(../images/40.png);z-index:1}
 .toplevelshadow{/*opacity:0.8*/}
 * html .ddsmoothmenu{height:1%}/* Holly Hack for IE \*//*Holly Hack for IE7 and below*/
 * html .ddsmoothmenu ul li a{display:inline-block}/*IE6 hack to get sub menu links to behave correctly*/
 
-/*********************************************** ×İÏòÖ÷µ¼º½Ìõ ***********************************************/
+/*********************************************** çºµå‘ä¸»å¯¼èˆªæ¡ ***********************************************/
 .ddsmoothmenu-v{padding:0px 5px 0px 5px}
 .ddsmoothmenu-v ul{}
-/*Ö÷²Ëµ¥ÉèÖÃ*/
+/*ä¸»èœå•è®¾ç½®*/
 .ddsmoothmenu-v ul li{position:relative}
 .ddsmoothmenu-v ul li a{display:block;height:33px;line-height:33px;vertical-align:middle}
 .ddsmoothmenu-v ul li a span{display:block;padding:0px 30px}
-/*Ö÷²Ëµ¥Á¬½ÓĞ§¹ûÉèÖÃ*/
+/*ä¸»èœå•è¿æ¥æ•ˆæœè®¾ç½®*/
 .ddsmoothmenu-v ul li a:link,.ddsmoothmenu-v ul li a:visited{background:url(../images/leftmenu.gif) no-repeat center -31px;color:#000}
 .ddsmoothmenu-v ul li a:hover{background:url(../images/leftmenu.gif) no-repeat center top}
 .ddsmoothmenu-v ul li a:hover span{color:#FFF}
@@ -419,27 +419,27 @@ legend{color:#000}
 .ddsmoothmenu-v ul li a:active span{color:#FFF}
 .ddsmoothmenu-v ul li .selected:link,.ddsmoothmenu-v ul li a.selected:visited,.ddsmoothmenu-v ul li a.selected:active{background:url(../images/leftmenu.gif) no-repeat center top}
 .ddsmoothmenu-v ul li a.selected span{color:#FFF}
-/*Ö÷²Ëµ¥µ±Ç°ËùÔÚÒ³Ãæ*/
+/*ä¸»èœå•å½“å‰æ‰€åœ¨é¡µé¢*/
 .ddsmoothmenu-v ul li a#menu_selected{background:url(../images/leftmenu.gif) no-repeat center top}
 .ddsmoothmenu-v ul li a#menu_selected span{color:#FFF}
-/*×Ó¼¯²Ëµ¥ÉèÖÃ*/
+/*å­é›†èœå•è®¾ç½®*/
 .ddsmoothmenu-v ul.menulevel{position:absolute;top:0;visibility:hidden;border-top:1px solid #CCC}
 .ddsmoothmenu-v ul.menulevel li{background:none;margin:0px;padding:0px;display:list-item}
 .ddsmoothmenu-v ul.menulevel li a{background:url(../images/mainmenu.gif) repeat-x left -60px;height:30px;line-height:36px;width:215px;padding:0px 1px;margin:0px;border-right:1px solid #999;border-bottom:1px solid #DFDFDF;border-left:1px solid #CCC}
-/*×Ó¼¯²Ëµ¥Á¬½ÓĞ§¹ûÉèÖÃ*/
+/*å­é›†èœå•è¿æ¥æ•ˆæœè®¾ç½®*/
 .ddsmoothmenu-v ul.menulevel li a:link,.ddsmoothmenu-v ul.menulevel li a:visited{color:#000}
 .ddsmoothmenu-v ul.menulevel li a:hover{background:url(../images/mainmenu.gif) repeat-x left -90px;color:#034fab;font-weight:bold}
 .ddsmoothmenu-v ul.menulevel li a.selected{background:url(../images/mainmenu.gif) repeat-x left -90px;color:#034fab;font-weight:bold}
-/*×Ó¼¯²Ëµ¥Á¬½ÓĞ§¹ûÉèÖÃ*/
+/*å­é›†èœå•è¿æ¥æ•ˆæœè®¾ç½®*/
 .ddsmoothmenu-v ul.menulevel li a:link,.ddsmoothmenu-v ul.menulevel li a:visited{color:#000}
 .ddsmoothmenu-v ul.menulevel li a:hover{background:url(../images/mainmenu.gif) repeat-x left -90px;color:#034fab;font-weight:bold}
 .ddsmoothmenu-v ul.menulevel li a.selected{background:url(../images/mainmenu.gif) repeat-x left -90px;color:#034fab;font-weight:bold}
-/*×ó²à¼ıÍ·*/
+/*å·¦ä¾§ç®­å¤´*/
 .ddsmoothmenu-v .rightarrowclass{position:absolute;top:5px;right:5px}
 .ddsmoothmenu-v ul.menulevel .rightarrowclass{position:absolute;top:5px;right:5px}
 /* Holly Hack for IE \*/
 * html .ddsmoothmenu-v ul li {float:left;height:1%}
 * html .ddsmoothmenu-v ul li a {height:1%}
 
-/*×Ô¶¨ÒåÄÚÈİ*/
+/*è‡ªå®šä¹‰å†…å®¹*/
 .tvjpnr{margin: 30px 0 0 -163px;}

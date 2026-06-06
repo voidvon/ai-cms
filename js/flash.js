@@ -1,12 +1,12 @@
 document.writeln("        <SCRIPT language=javascript type=text\/javascript>");
-document.writeln("var focus_width=980;\/\/¿í¶È");
-document.writeln("var focus_height=188;\/\/¸ß¶È");
-document.writeln("var text_height=0;\/\/ÏÔÊ¾ÎÄ×ÖµÄ¸ß¶È");
+document.writeln("var focus_width=980;\/\/å®½åº¦");
+document.writeln("var focus_height=188;\/\/é«˜åº¦");
+document.writeln("var text_height=0;\/\/æ˜¾ç¤ºæ–‡å­—çš„é«˜åº¦");
 document.writeln("var swf_height = focus_height;");
 document.writeln("      ");
-document.writeln("var pics=\'\/images\/22.jpg|\/images\/33.jpg|\/images\/44.jpg|\/images\/55.jpg|\/images\/66.jpg\'; \/\/Á´½ÓÍ¼Æ¬");
-document.writeln("var links=\'\';\/\/Á´½ÓÍøÖ·");
-document.writeln("var texts=\'\';\/\/Á´½ÓÎÄ±¾ËµÃ÷");
+document.writeln("var pics=\'\/images\/22.jpg|\/images\/33.jpg|\/images\/44.jpg|\/images\/55.jpg|\/images\/66.jpg\'; \/\/é“¾æ¥å›¾ç‰‡");
+document.writeln("var links=\'\';\/\/é“¾æ¥ç½‘å€");
+document.writeln("var texts=\'\';\/\/é“¾æ¥æ–‡æœ¬è¯´æ˜");
 document.writeln("      ");
 document.writeln("document.write(\'<object classid=\"clsid:d27cdb6e-ae6d-11cf-96b8-444553540000\" codebase=\"http:\/\/fpdownload.macromedia.com\/pub\/shockwave\/cabs\/flash\/swflash.cab#version=6,0,0,0\" width=\"\'+ focus_width +\'\" height=\"\'+ swf_height +\'\">\');");
 document.writeln("document.write(\'<param name=\"allowScriptAccess\" value=\"sameDomain\"><param name=\"movie\" value=\"\/images\/autoflash.swf\"><param name=wmode value=transparent><param name=\"quality\" value=\"high\">\');");

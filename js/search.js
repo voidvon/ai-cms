@@ -1,4 +1,4 @@
-//--¼ì²âËÑË÷µÄ°²È«ĞÔ-->
+//--æ£€æµ‹æœç´¢çš„å®‰å…¨æ€§-->
 
 	   function doSearch() {
 
@@ -6,7 +6,7 @@
 		 // var direction = document.searchForm.direction.value;
 
           if(keywords == "") {
-		    alert("ÇëÊäÈë¹Ø¼ü×Ö£¡");
+		    alert("è¯·è¾“å…¥å…³é”®å­—ï¼");
 			document.searchForm.keywords.focus();
 		    return false;
 		  } 
@@ -21,18 +21,18 @@
               var retValue = inputString;
               var ch = retValue.substring(0, 1);
               while (ch == " ") { 
-	          //¼ì²é×Ö·û´®¿ªÊ¼²¿·ÖµÄ¿Õ¸ñ
+	          //æ£€æŸ¥å­—ç¬¦ä¸²å¼€å§‹éƒ¨åˆ†çš„ç©ºæ ¼
                   retValue = retValue.substring(1, retValue.length);
                   ch = retValue.substring(0, 1);
               }
               ch = retValue.substring(retValue.length-1, retValue.length);
               while (ch == " ") {
-                 //¼ì²é×Ö·û´®½áÊø²¿·ÖµÄ¿Õ¸ñ
+                 //æ£€æŸ¥å­—ç¬¦ä¸²ç»“æŸéƒ¨åˆ†çš„ç©ºæ ¼
                  retValue = retValue.substring(0, retValue.length-1);
                  ch = retValue.substring(retValue.length-1, retValue.length);
               }
               while (retValue.indexOf("  ") != -1) { 
-	         //½«ÎÄ×ÖÖĞ¼ä¶à¸öÏàÁ¬µÄ¿Õ¸ñ±äÎªÒ»¸ö¿Õ¸ñ
+	         //å°†æ–‡å­—ä¸­é—´å¤šä¸ªç›¸è¿çš„ç©ºæ ¼å˜ä¸ºä¸€ä¸ªç©ºæ ¼
                  retValue = retValue.substring(0, retValue.indexOf("  ")) + retValue.substring(retValue.indexOf("  ")+1, retValue.length); 
               }
               return retValue;

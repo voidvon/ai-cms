@@ -1,4 +1,4 @@
-// È¡Í¨¹ıURL´«¹ıÀ´µÄ²ÎÊı (¸ñÊ½Èç ?Param1=Value1&Param2=Value2)
+// å–é€šè¿‡URLä¼ è¿‡æ¥çš„å‚æ•° (æ ¼å¼å¦‚ ?Param1=Value1&Param2=Value2)
 var URLParams = new Object() ;
 var aParams = document.location.search.substr(1).split('&') ;
 for (i=0 ; i < aParams.length ; i++) {
@@ -6,7 +6,7 @@ for (i=0 ; i < aParams.length ; i++) {
 	URLParams[aParam[0]] = aParam[1] ;
 }
 
-// ¾ßÓĞÖ÷´°¿ÚÏàÍ¬µÄÅäÖÃĞÅÏ¢
+// å…·æœ‰ä¸»çª—å£ç›¸åŒçš„é…ç½®ä¿¡æ¯
 var config;
 try{
 	config = dialogArguments.config;
@@ -15,7 +15,7 @@ catch(e){
 }
 
 
-// È¥¿Õ¸ñ£¬left,right,all¿ÉÑ¡
+// å»ç©ºæ ¼ï¼Œleft,right,allå¯é€‰
 function BaseTrim(str){
 	  lIdx=0;rIdx=str.length;
 	  if (BaseTrim.arguments.length==2)
@@ -36,7 +36,7 @@ function BaseTrim(str){
       return str
 }
 
-// »ù±¾ĞÅÏ¢ÌáÊ¾£¬µÃµ½½¹µã²¢Ñ¡¶¨
+// åŸºæœ¬ä¿¡æ¯æç¤ºï¼Œå¾—åˆ°ç„¦ç‚¹å¹¶é€‰å®š
 function BaseAlert(theText,notice){
 	alert(notice);
 	theText.focus();
@@ -44,7 +44,7 @@ function BaseAlert(theText,notice){
 	return false;
 }
 
-// ÊÇ·ñÓĞĞ§ÑÕÉ«Öµ
+// æ˜¯å¦æœ‰æ•ˆé¢œè‰²å€¼
 function IsColor(color){
 	var temp=color;
 	if (temp=="") return true;
@@ -52,12 +52,12 @@ function IsColor(color){
 	return (temp.search(/\#[a-fA-F0-9]{6}/) != -1);
 }
 
-// Ö»ÔÊĞíÊäÈëÊı×Ö
+// åªå…è®¸è¾“å…¥æ•°å­—
 function IsDigit(){
   return ((event.keyCode >= 48) && (event.keyCode <= 57));
 }
 
-// Ñ¡ÑÕÉ«
+// é€‰é¢œè‰²
 function SelectColor(what){
 	var dEL = document.all("d_"+what);
 	var sEL = document.all("s_"+what);
@@ -69,12 +69,12 @@ function SelectColor(what){
 	}
 }
 
-// Ñ¡±³¾°Í¼
+// é€‰èƒŒæ™¯å›¾
 function SelectImage(){
 	showModalDialog("backimage.htm?action=other",window,"dialogWidth:350px;dialogHeight:210px;help:no;scroll:no;status:no");
 }
 
-// ËÑË÷ÏÂÀ­¿òÖµÓëÖ¸¶¨ÖµÆ¥Åä£¬²¢Ñ¡ÔñÆ¥ÅäÏî
+// æœç´¢ä¸‹æ‹‰æ¡†å€¼ä¸æŒ‡å®šå€¼åŒ¹é…ï¼Œå¹¶é€‰æ‹©åŒ¹é…é¡¹
 function SearchSelectValue(o_Select, s_Value){
 	for (var i=0;i<o_Select.length;i++){
 		if (o_Select.options[i].value == s_Value){
@@ -85,7 +85,7 @@ function SearchSelectValue(o_Select, s_Value){
 	return false;
 }
 
-// ×ªÎªÊı×ÖĞÍ£¬²¢ÎŞÇ°µ¼0£¬²»ÄÜ×ªÔò·µ»Ø""
+// è½¬ä¸ºæ•°å­—å‹ï¼Œå¹¶æ— å‰å¯¼0ï¼Œä¸èƒ½è½¬åˆ™è¿”å›""
 function ToInt(str){
 	str=BaseTrim(str);
 	if (str!=""){
@@ -99,7 +99,7 @@ function ToInt(str){
 	return str;
 }
 
-// ÊÇ·ñÓĞĞ§µÄÁ´½Ó
+// æ˜¯å¦æœ‰æ•ˆçš„é“¾æ¥
 function IsURL(url){
 	var sTemp;
 	var b=true;
@@ -111,7 +111,7 @@ function IsURL(url){
 	return b;
 }
 
-// ÊÇ·ñÓĞĞ§µÄÀ©Õ¹Ãû
+// æ˜¯å¦æœ‰æ•ˆçš„æ‰©å±•å
 function IsExt(url, opt){
 	var sTemp;
 	var b=false;
@@ -128,7 +128,7 @@ function IsExt(url, opt){
 	return b;
 }
 
-// Ïà¶ÔÂ·¾¶×ªÎª¸ùĞÎÊ½Â·¾¶
+// ç›¸å¯¹è·¯å¾„è½¬ä¸ºæ ¹å½¢å¼è·¯å¾„
 function relativePath2rootPath(url){
 	if (url.substring(0,1)=="/") return url;
 
@@ -140,7 +140,7 @@ function relativePath2rootPath(url){
 	return sWebEditorPath + "/" + url;
 }
 
-// Ïà¶ÔÂ·¾¶°´Â·¾¶Ä£Ê½×ªÎªÏàÓ¦µÄ¸ñÊ½
+// ç›¸å¯¹è·¯å¾„æŒ‰è·¯å¾„æ¨¡å¼è½¬ä¸ºç›¸åº”çš„æ ¼å¼
 function relativePath2setPath(url){
 	switch(config.BaseUrl){
 	case "0":
@@ -155,7 +155,7 @@ function relativePath2setPath(url){
 	}
 }
 
-// ÏÔÊ¾Â·¾¶µ½±à¼­Æ÷Â·µÄÏà¶ÔĞÎÊ½
+// æ˜¾ç¤ºè·¯å¾„åˆ°ç¼–è¾‘å™¨è·¯çš„ç›¸å¯¹å½¢å¼
 function baseHref2editorPath(url){
 	var editorPath = getWebEditorRootPath() + "/";
 	var baseHref = config.BaseHref;
@@ -189,13 +189,13 @@ function baseHref2editorPath(url){
 	return result;
 }
 
-// È¡±à¼­ËùÔÚ¸úÂ·¾¶
+// å–ç¼–è¾‘æ‰€åœ¨è·Ÿè·¯å¾„
 function getWebEditorRootPath(){
 	var url = "/" + document.location.pathname;
 	return url.substring(0,url.lastIndexOf("/dialog/"));
 }
 
-// È¡Õ¾µãÂ·¾¶
+// å–ç«™ç‚¹è·¯å¾„
 function getSitePath(){
 	var sSitePath = document.location.protocol + "//" + document.location.host;
 	if (sSitePath.substr(sSitePath.length-3) == ":80"){

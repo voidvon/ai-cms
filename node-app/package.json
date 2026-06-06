@@ -1,0 +1,17 @@
+{
+  "name": "spiraxsarcocn-node",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Lightweight Node.js + SQLite migration for the legacy Classic ASP site.",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "dev": "node --watch src/server.mjs",
+    "db:init": "node scripts/init-db.mjs",
+    "db:export-access": ".venv/bin/python scripts/export-access.py",
+    "db:import": "node scripts/import-csv.mjs",
+    "db:repair-encoding": "node scripts/repair-legacy-encoding.mjs --write",
+    "admin:create": "node scripts/create-admin.mjs",
+    "build:static": "node scripts/build-static.mjs"
+  }
+}

@@ -1,8 +1,8 @@
 <html>
 <head>
-<meta http-equiv="Content-Type" content="text/html; charset=gb2312">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <style type="text/css">
-body, a, table, div, span, td, th, input, select{font-size:9pt;font-family: "ËÎÌå", Verdana, Arial, Helvetica, sans-serif;}
+body, a, table, div, span, td, th, input, select{font-size:9pt;font-family: "å®‹ä½“", Verdana, Arial, Helvetica, sans-serif;}
 body {padding:5px}
 </style>
 
@@ -10,9 +10,9 @@ body {padding:5px}
 
 <script language="JavaScript">
 
-document.write("<title>µ¥Ôª¸ñ²ğ·Ö</title>");
+document.write("<title>å•å…ƒæ ¼æ‹†åˆ†</title>");
 
-// ÅĞ¶ÏÖµÊÇ·ñ´óÓÚ0
+// åˆ¤æ–­å€¼æ˜¯å¦å¤§äº0
 function MoreThanOne(obj, sErr){
 	var b=false;
 	if (obj.value!=""){
@@ -28,7 +28,7 @@ function MoreThanOne(obj, sErr){
 	return true;
 }
 
-// Ô¤ÀÀ
+// é¢„è§ˆ
 function doView(opt){
 	if (opt=="col"){
 		d_col.checked=true;
@@ -39,19 +39,19 @@ function doView(opt){
 	}
 	if (d_col.checked){
 		d_view.innerHTML = "<table border=1 cellpadding=0><tr><td width=25>&nbsp;</td><td width=25>&nbsp;</td></tr></table>";
-		d_label.innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;ÁĞÊı:";
+		d_label.innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;åˆ—æ•°:";
 	}
 	if (d_row.checked){
 		d_view.innerHTML = "<table border=1 cellpadding=0 width=50><tr><td>&nbsp;</td></tr><tr><td>&nbsp;</td></tr></table>";
-		d_label.innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;ĞĞÊı:";
+		d_label.innerHTML = "&nbsp;&nbsp;&nbsp;&nbsp;è¡Œæ•°:";
 	}
 }
 
 </script>
 
 <SCRIPT event=onclick for=Ok language=JavaScript>
-	// ĞĞÁĞÊıµÄÓĞĞ§ĞÔ
-	if (!MoreThanOne(d_num,'ÎŞĞ§µÄĞĞÁĞÊı£¬±ØĞë´óÓÚ1£¡')) return;
+	// è¡Œåˆ—æ•°çš„æœ‰æ•ˆæ€§
+	if (!MoreThanOne(d_num,'æ— æ•ˆçš„è¡Œåˆ—æ•°ï¼Œå¿…é¡»å¤§äº1ï¼')) return;
 
 	if (d_row.checked){
 		dialogArguments.TableRowSplit(parseInt(d_num.value));
@@ -72,9 +72,9 @@ function doView(opt){
 	<td>
 	<table border=0 cellpadding=0 cellspacing=0>
 	<tr><td colspan=3 height=5></td></tr>
-	<tr><td><input type=radio id=d_col checked onclick="doView('col')"><label for="d_col">²ğ·ÖÎªÁĞ</label></td><td rowspan=3 width=30></td><td width=60 rowspan=3 id=d_view valign=middle align=center></td></tr>
+	<tr><td><input type=radio id=d_col checked onclick="doView('col')"><label for="d_col">æ‹†åˆ†ä¸ºåˆ—</label></td><td rowspan=3 width=30></td><td width=60 rowspan=3 id=d_view valign=middle align=center></td></tr>
 	<tr><td height=5></td></tr>
-	<tr><td><input type=radio id=d_row onclick="doView('row')"><label for="d_row">²ğ·ÖÎªĞĞ</label></td></tr>
+	<tr><td><input type=radio id=d_row onclick="doView('row')"><label for="d_row">æ‹†åˆ†ä¸ºè¡Œ</label></td></tr>
 	<tr><td height=5 colspan=3></td></tr>
 	<tr>
 		<td id=d_label></td>
@@ -84,7 +84,7 @@ function doView(opt){
 	</table>
 </tr>
 <tr><td height=5></td></tr>
-<tr><td align=right><input type=submit value='  È·¶¨  ' id=Ok>&nbsp;&nbsp;<input type=button value='  È¡Ïû  ' onclick="window.close();"></td></tr>
+<tr><td align=right><input type=submit value='  ç¡®å®š  ' id=Ok>&nbsp;&nbsp;<input type=button value='  å–æ¶ˆ  ' onclick="window.close();"></td></tr>
 </table>
 
 <Script Language=JavaScript>

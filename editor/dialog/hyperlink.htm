@@ -1,9 +1,9 @@
 <HTML>
 <HEAD>
-<META content="text/html; charset=gb2312" http-equiv=Content-Type>
+<META content="text/html; charset=utf-8" http-equiv=Content-Type>
 
 <style type="text/css">
-body, a, table, div, span, td, th, input, select{font:9pt;font-family: "ËÎÌå", Verdana, Arial, Helvetica, sans-serif;}
+body, a, table, div, span, td, th, input, select{font:9pt;font-family: "å®‹ä½“", Verdana, Arial, Helvetica, sans-serif;}
 body {padding:5px}
 </style>
 
@@ -12,7 +12,7 @@ body {padding:5px}
 
 <Script Language=JavaScript>
 var sAction = URLParams['action'];
-var sTitle = "²åÈë";
+var sTitle = "æ’å…¥";
 
 var objWindow;
 
@@ -53,13 +53,13 @@ default:
 
 
 
-// ´ÓµØÖ·È¡Ğ­Òé
+// ä»åœ°å€å–åè®®
 function getProtocol(url){
 	var re=/(.+:\/*)(.*)/gi;
 	return url.replace(re,"$1");
 }
 
-// ¸Ä±äĞ­Òé
+// æ”¹å˜åè®®
 function changeProtocol(index){
 	sProtocol=d_protocol.options[index].value;
 	sUrl = d_url.value;
@@ -69,7 +69,7 @@ function changeProtocol(index){
 }
 
 
-// ³õÊ¼Öµ
+// åˆå§‹å€¼
 function InitDocument(){
 	SearchSelectValue(d_protocol, sProtocol.toLowerCase());
 	SearchSelectValue(d_target, sTarget.toLowerCase());
@@ -77,7 +77,7 @@ function InitDocument(){
 	d_url.value = sUrl;
 }
 
-// È¡ËùÓĞµÄÃª
+// å–æ‰€æœ‰çš„é”š
 function getAnchors() {
 	d_anchor.options.length = 1;
 	var allLinks = objWindow.eWebEditor.document.body.getElementsByTagName("A");
@@ -92,7 +92,7 @@ function getAnchors() {
 
 
 
-<title>³¬¼¶Á´½ÓÊôĞÔ</title>
+<title>è¶…çº§é“¾æ¥å±æ€§</title>
 
 <SCRIPT event=onclick for=Ok language=JavaScript>
 	sUrl = d_url.value;
@@ -128,7 +128,7 @@ function getAnchors() {
 			break;
 		}
 	} else {
-		alert("Á´½ÓµØÖ·²»ÄÜÎª¿Õ");
+		alert("é“¾æ¥åœ°å€ä¸èƒ½ä¸ºç©º");
 		d_url.focus();
 		return;
 	}
@@ -143,15 +143,15 @@ function getAnchors() {
 <tr>
 	<td>
 	<fieldset>
-	<legend>³¬¼¶Á´½ÓĞÅÏ¢</legend>
+	<legend>è¶…çº§é“¾æ¥ä¿¡æ¯</legend>
 	<table border=0 cellpadding=0 cellspacing=0>
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td noWrap>Á´½ÓÀàĞÍ:</td>
+		<td noWrap>é“¾æ¥ç±»å‹:</td>
 		<td width=5></td>
 		<td><select id=d_protocol style="width:72px" onchange="changeProtocol(this.selectedIndex)">
-				<option value=''>ÆäËü</option>
+				<option value=''>å…¶å®ƒ</option>
 				<option value='file://'>file:</option>
 				<option value='ftp://'>ftp:</option>
 				<option value='gopher://'>gopher:</option>
@@ -163,15 +163,15 @@ function getAnchors() {
 				<option value='wais:'>wais:</option>
 				</select></td>
 		<td width=40></td>
-		<td noWrap>Á´½ÓÄ¿±ê:</td>
+		<td noWrap>é“¾æ¥ç›®æ ‡:</td>
 		<td width=5></td>
-		<td><select id=d_target style="width:72px"><option value=''>Ä¬ÈÏ(ÎŞ)</option><option value='_self'>ÏàÍ¬¿ò¼Ü</option><option value='_top'>ÕûÒ³</option><option value='_blank'>ĞÂ½¨´°¿Ú</option><option value='_parent'>¸¸¿ò¼Ü</option></select></td>
+		<td><select id=d_target style="width:72px"><option value=''>é»˜è®¤(æ— )</option><option value='_self'>ç›¸åŒæ¡†æ¶</option><option value='_top'>æ•´é¡µ</option><option value='_blank'>æ–°å»ºçª—å£</option><option value='_parent'>çˆ¶æ¡†æ¶</option></select></td>
 		<td width=7></td>
 	</tr>
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>Á´½ÓµØÖ·:</td>
+		<td>é“¾æ¥åœ°å€:</td>
 		<td width=5></td>
 		<td colspan=5><input type=text id=d_url size=38 value="" style="width:243px"></td>
 		<td width=7></td>
@@ -179,9 +179,9 @@ function getAnchors() {
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>ÊéÇ©Á´½Ó:</td>
+		<td>ä¹¦ç­¾é“¾æ¥:</td>
 		<td width=5></td>
-		<td colspan=5><select id=d_anchor onchange="d_url.value=this.options[this.selectedIndex].value"><option value=''>Ä¬ÈÏ(ÎŞ)</option></select></td>
+		<td colspan=5><select id=d_anchor onchange="d_url.value=this.options[this.selectedIndex].value"><option value=''>é»˜è®¤(æ— )</option></select></td>
 		<td width=7></td>
 	</tr>
 	<tr><td colspan=9 height=5></td></tr>
@@ -190,7 +190,7 @@ function getAnchors() {
 	</td>
 </tr>
 <tr><td height=5></td></tr>
-<tr><td align=right><input type=submit value='  È·¶¨  ' id=Ok>&nbsp;&nbsp;<input type=button value='  È¡Ïû  ' onclick="window.close();"></td></tr>
+<tr><td align=right><input type=submit value='  ç¡®å®š  ' id=Ok>&nbsp;&nbsp;<input type=button value='  å–æ¶ˆ  ' onclick="window.close();"></td></tr>
 </table>
 
 </BODY>

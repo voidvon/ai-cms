@@ -1,66 +1,66 @@
 /*
-*¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î
-*¡ï                                                                  ¡ï
-*¡î                eWebEditor - eWebSoftÔÚÏßÎÄ±¾±à¼­Æ÷               ¡î
-*¡ï                                                                  ¡ï
-*¡î  °æÈ¨ËùÓĞ: eWebSoft.com                                          ¡î
-*¡ï                                                                  ¡ï
-*¡î  ³ÌĞòÖÆ×÷: eWeb¿ª·¢ÍÅ¶Ó                                          ¡î
-*¡ï            email:webmaster@webasp.net                            ¡ï
-*¡î            QQ:589808                                             ¡î
-*¡ï                                                                  ¡ï
-*¡î  Ïà¹ØÍøÖ·: [²úÆ·½éÉÜ]http://www.eWebSoft.com/Product/eWebEditor/ ¡î
-*¡ï            [Ö§³ÖÂÛÌ³]http://bbs.eWebSoft.com/                    ¡ï
-*¡î                                                                  ¡î
-*¡ï  Ö÷Ò³µØÖ·: http://www.eWebSoft.com/   eWebSoftÍÅ¶Ó¼°²úÆ·         ¡ï
-*¡î            http://www.webasp.net/     WEB¼¼Êõ¼°Ó¦ÓÃ×ÊÔ´ÍøÕ¾      ¡î
-*¡ï            http://bbs.webasp.net/     WEB¼¼Êõ½»Á÷ÂÛÌ³            ¡ï
-*¡ï                                                                  ¡ï
-*¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î¡ï¡î
+*â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†
+*â˜…                                                                  â˜…
+*â˜†                eWebEditor - eWebSoftåœ¨çº¿æ–‡æœ¬ç¼–è¾‘å™¨               â˜†
+*â˜…                                                                  â˜…
+*â˜†  ç‰ˆæƒæ‰€æœ‰: eWebSoft.com                                          â˜†
+*â˜…                                                                  â˜…
+*â˜†  ç¨‹åºåˆ¶ä½œ: eWebå¼€å‘å›¢é˜Ÿ                                          â˜†
+*â˜…            email:webmaster@webasp.net                            â˜…
+*â˜†            QQ:589808                                             â˜†
+*â˜…                                                                  â˜…
+*â˜†  ç›¸å…³ç½‘å€: [äº§å“ä»‹ç»]http://www.eWebSoft.com/Product/eWebEditor/ â˜†
+*â˜…            [æ”¯æŒè®ºå›]http://bbs.eWebSoft.com/                    â˜…
+*â˜†                                                                  â˜†
+*â˜…  ä¸»é¡µåœ°å€: http://www.eWebSoft.com/   eWebSoftå›¢é˜ŸåŠäº§å“         â˜…
+*â˜†            http://www.webasp.net/     WEBæŠ€æœ¯åŠåº”ç”¨èµ„æºç½‘ç«™      â˜†
+*â˜…            http://bbs.webasp.net/     WEBæŠ€æœ¯äº¤æµè®ºå›            â˜…
+*â˜…                                                                  â˜…
+*â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†â˜…â˜†
 */
 
-// ±í¸ñÏà¹ØÈ«¾Ö±äÁ¿
+// è¡¨æ ¼ç›¸å…³å…¨å±€å˜é‡
 var selectedTD
 var selectedTR
 var selectedTBODY
 var selectedTable
 
-// ²åÈë±í¸ñ
+// æ’å…¥è¡¨æ ¼
 function TableInsert(){
 	if (!isTableSelected()){
 		ShowDialog('dialog/table.htm', 350, 380, true);
 	}
 }
 
-// ĞŞ¸Ä±í¸ñÊôĞÔ
+// ä¿®æ”¹è¡¨æ ¼å±æ€§
 function TableProp(){
 	if (isTableSelected()||isCursorInTableCell()){
 		ShowDialog('dialog/table.htm?action=modify', 350, 380, true);
 	}
 }
 
-// ĞŞ¸Äµ¥Ôª¸ñÊôĞÔ
+// ä¿®æ”¹å•å…ƒæ ¼å±æ€§
 function TableCellProp(){
 	if (isCursorInTableCell()){
 		ShowDialog('dialog/tablecell.htm', 350, 280, true);
 	}
 }
 
-// ²ğ·Öµ¥Ôª¸ñ
+// æ‹†åˆ†å•å…ƒæ ¼
 function TableCellSplit(){
 	if (isCursorInTableCell()){
 		ShowDialog('dialog/tablecellsplit.htm', 200, 150, true);
 	}
 }
 
-// ĞŞ¸Ä±í¸ñĞĞÊôĞÔ
+// ä¿®æ”¹è¡¨æ ¼è¡Œå±æ€§
 function TableRowProp(){
 	if (isCursorInTableCell()){
 		ShowDialog('dialog/tablecell.htm?action=row', 350, 280, true);
 	}
 }
 
-// ²åÈëĞĞ£¨ÔÚÉÏ·½£©
+// æ’å…¥è¡Œï¼ˆåœ¨ä¸Šæ–¹ï¼‰
 function TableRowInsertAbove() {
 
 	if (isCursorInTableCell()){
@@ -84,7 +84,7 @@ function TableRowInsertAbove() {
 	}	
 }
 
-// ²åÈëĞĞ£¨ÔÚÏÂ·½£©
+// æ’å…¥è¡Œï¼ˆåœ¨ä¸‹æ–¹ï¼‰
 function TableRowInsertBelow() {
 
 	if (isCursorInTableCell()){
@@ -109,7 +109,7 @@ function TableRowInsertBelow() {
 	}
 }
 
-// ºÏ²¢ĞĞ£¨ÏòÏÂ·½£©
+// åˆå¹¶è¡Œï¼ˆå‘ä¸‹æ–¹ï¼‰
 function TableRowMerge() {
 	if (isCursorInTableCell()) {
 
@@ -130,7 +130,7 @@ function TableRowMerge() {
 
 }
 
-// ²ğ·ÖĞĞ
+// æ‹†åˆ†è¡Œ
 function TableRowSplit(nRows){
 	if (!isCursorInTableCell()) return;
 	if (nRows<2) return;
@@ -145,7 +145,7 @@ function TableRowSplit(nRows){
 
 	var allRows = selectedTable.rows;
 
-	// rowspan>1Ê±
+	// rowspan>1æ—¶
 	while (selectedTD.rowSpan > 1 && addRowsNoSpan > 0){
 		var nextRow = allRows[selectedTR.rowIndex+selectedTD.rowSpan-1];
 		selectedTD.rowSpan -= 1;
@@ -170,7 +170,7 @@ function TableRowSplit(nRows){
 		addRowsNoSpan -= 1;
 	}
 
-	// rowspan=1Ê±
+	// rowspan=1æ—¶
 	for (var n=0; n<addRowsNoSpan; n++){
 		var numCols = 0
 
@@ -181,7 +181,7 @@ function TableRowSplit(nRows){
 
 		var newTR = selectedTable.insertRow(selectedTR.rowIndex+1)
 
-		// ÉÏ·½ĞĞµÄrowspan´ïµ½ÕâĞĞ
+		// ä¸Šæ–¹è¡Œçš„rowspanè¾¾åˆ°è¿™è¡Œ
 		for (var j=0; j<selectedTR.rowIndex; j++){
 			for (var k=0; k<allRows[j].cells.length; k++){
 				if ((allRows[j].cells[k].rowSpan>1)&&(allRows[j].cells[k].rowSpan>=selectedTR.rowIndex-allRows[j].rowIndex+1)){
@@ -189,7 +189,7 @@ function TableRowSplit(nRows){
 				}
 			}
 		}
-		// µ±Ç°ĞĞ
+		// å½“å‰è¡Œ
 		for (i = 0; i < allCells.length; i++) {
 			if (i!=selectedTD.cellIndex){
 				selectedTR.cells[i].rowSpan += 1;
@@ -207,14 +207,14 @@ function TableRowSplit(nRows){
 
 }
 
-// É¾³ıĞĞ
+// åˆ é™¤è¡Œ
 function TableRowDelete() {
 	if (isCursorInTableCell()) {
 		selectedTable.deleteRow(selectedTR.rowIndex)
 	}
 }
 
-// ²åÈëÁĞ£¨ÔÚ×ó²à£©
+// æ’å…¥åˆ—ï¼ˆåœ¨å·¦ä¾§ï¼‰
 function TableColInsertLeft() {
    	if (isCursorInTableCell()) {
 		moveFromEnd = (selectedTR.cells.length-1) - (selectedTD.cellIndex)
@@ -235,7 +235,7 @@ function TableColInsertLeft() {
    	}
 }
 
-// ²åÈëÁĞ£¨ÔÚÓÒ²à£©
+// æ’å…¥åˆ—ï¼ˆåœ¨å³ä¾§ï¼‰
 function TableColInsertRight() {
    	if (isCursorInTableCell()) {
 		moveFromEnd = (selectedTR.cells.length-1) - (selectedTD.cellIndex)
@@ -256,7 +256,7 @@ function TableColInsertRight() {
    	}
 }
 
-// ºÏ²¢ÁĞ
+// åˆå¹¶åˆ—
 function TableColMerge() {
 	if (isCursorInTableCell()) {
 
@@ -272,7 +272,7 @@ function TableColMerge() {
 
 }
 
-// É¾³ıÁĞ
+// åˆ é™¤åˆ—
 function TableColDelete() {
    	if (isCursorInTableCell()) {
 		moveFromEnd = (selectedTR.cells.length-1) - (selectedTD.cellIndex)
@@ -299,7 +299,7 @@ function TableColDelete() {
 
 }
 
-// ²ğ·ÖÁĞ
+// æ‹†åˆ†åˆ—
 function TableColSplit(nCols){
 	if (!isCursorInTableCell()) return;
 	if (nCols<2) return;
@@ -318,7 +318,7 @@ function TableColSplit(nCols){
 	}
 
 	var allRows = selectedTable.rows
-	// colSpan>1Ê±
+	// colSpan>1æ—¶
 	while (selectedTD.colSpan > 1 && addColsNoSpan > 0) {
 		newCell = selectedTR.insertCell(selectedTD.cellIndex+1);
 		newCell.innerHTML = "&nbsp;"
@@ -328,7 +328,7 @@ function TableColSplit(nCols){
 		selectedTD.colSpan -= 1;
 		addColsNoSpan -= 1;
 	}
-	// colSpan=1Ê±
+	// colSpan=1æ—¶
 	for (i=0;i<allRows.length;i++) {
 		var ncLeftColSpan = 0;
 		var position = -1;
@@ -358,7 +358,7 @@ function TableColSplit(nCols){
 	}
 }
 
-// ÊÇ·ñÑ¡ÖĞ±í¸ñ
+// æ˜¯å¦é€‰ä¸­è¡¨æ ¼
 function isTableSelected() {
 	if (eWebEditor.document.selection.type == "Control") {
 		var oControlRange = eWebEditor.document.selection.createRange();
@@ -369,7 +369,7 @@ function isTableSelected() {
 	}
 } 
 
-// ¹â±êÊÇ·ñÔÚ±í¸ñÖĞ
+// å…‰æ ‡æ˜¯å¦åœ¨è¡¨æ ¼ä¸­
 function isCursorInTableCell() {
 	if (eWebEditor.document.selection.type != "Control") {
 		var elem = eWebEditor.document.selection.createRange().parentElement()

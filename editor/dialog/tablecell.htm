@@ -1,8 +1,8 @@
 <html>
 <head>
-<meta http-equiv="Content-Type" content="text/html; charset=gb2312">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <style type="text/css">
-body, a, table, div, span, td, th, input, select{font:9pt;font-family: "ËÎÌå", Verdana, Arial, Helvetica, sans-serif;}
+body, a, table, div, span, td, th, input, select{font:9pt;font-family: "å®‹ä½“", Verdana, Arial, Helvetica, sans-serif;}
 body {padding:5px}
 </style>
 
@@ -44,11 +44,11 @@ sRangeType = dialogArguments.eWebEditor.document.selection.type;
 if (sAction == "row"){
 	oControl = getParentObject(oSelection.parentElement(), "TR");
 	sAction = "ROW";
-	sTitle = "±í¸ñĞĞ";
+	sTitle = "è¡¨æ ¼è¡Œ";
 }else{
 	oControl = getParentObject(oSelection.parentElement(), "TD");
 	sAction = "CELL";
-	sTitle = "µ¥Ôª¸ñ";
+	sTitle = "å•å…ƒæ ¼";
 }
 if (oControl){
 	sAlign = oControl.align;
@@ -64,7 +64,7 @@ if (oControl){
 	sImage = sImage.substr(4, sImage.length-5);
 }
 
-// ·µ»ØÖ¸¶¨±êÇ©µÄ¸¸¶ÔÏó
+// è¿”å›æŒ‡å®šæ ‡ç­¾çš„çˆ¶å¯¹è±¡
 function getParentObject(obj, tag){
 	if (tag == "TD"){
 		while(obj!=null && obj.tagName!=tag && obj.tagName!="TH"){
@@ -78,15 +78,15 @@ function getParentObject(obj, tag){
 	return obj;
 }
 
-document.write("<title>" + sTitle + "ÊôĞÔ</title>");
+document.write("<title>" + sTitle + "å±æ€§</title>");
 
-// ³õÊ¼Öµ
+// åˆå§‹å€¼
 function InitDocument(){
 	SearchSelectValue(d_align, sAlign.toLowerCase());
 	SearchSelectValue(d_valign, sVAlign.toLowerCase());
 	SearchSelectValue(d_borderstyle, sBorderStyle.toLowerCase());
 
-	// ĞŞ¸Ä×´Ì¬Ê±È¡Öµ
+	// ä¿®æ”¹çŠ¶æ€æ—¶å–å€¼
 	if ((sWidth == "")||(sWidth==undefined)){
 		bWidthCheck = false;
 		bWidthDisable = true;
@@ -159,7 +159,7 @@ function InitDocument(){
 
 }
 
-// ÅĞ¶ÏÖµÊÇ·ñ´óÓÚ0
+// åˆ¤æ–­å€¼æ˜¯å¦å¤§äº0
 function MoreThanOne(obj, sErr){
 	var b=false;
 	if (obj.value!=""){
@@ -178,28 +178,28 @@ function MoreThanOne(obj, sErr){
 </script>
 
 <SCRIPT event=onclick for=Ok language=JavaScript>
-	// ±ß¿òÑÕÉ«µÄÓĞĞ§ĞÔ
+	// è¾¹æ¡†é¢œè‰²çš„æœ‰æ•ˆæ€§
 	sBorderColor = d_bordercolor.value;
 	if (!IsColor(sBorderColor)){
-		BaseAlert(d_bordercolor,'ÎŞĞ§µÄ±ß¿òÑÕÉ«Öµ£¡');
+		BaseAlert(d_bordercolor,'æ— æ•ˆçš„è¾¹æ¡†é¢œè‰²å€¼ï¼');
 		return;
 	}
-	// ±³¾°ÑÕÉ«µÄÓĞĞ§ĞÔ
+	// èƒŒæ™¯é¢œè‰²çš„æœ‰æ•ˆæ€§
 	sBgColor = d_bgcolor.value;
 	if (!IsColor(sBgColor)){
-		BaseAlert(d_bgcolor,'ÎŞĞ§µÄ±³¾°ÑÕÉ«Öµ£¡');
+		BaseAlert(d_bgcolor,'æ— æ•ˆçš„èƒŒæ™¯é¢œè‰²å€¼ï¼');
 		return;
 	}
-	// ¿í¶ÈÓĞĞ§ÖµĞÔ
+	// å®½åº¦æœ‰æ•ˆå€¼æ€§
 	var sWidth = "";
 	if (d_widthcheck.checked){
-		if (!MoreThanOne(d_widthvalue,'ÎŞĞ§µÄ¿í¶È£¡')) return;
+		if (!MoreThanOne(d_widthvalue,'æ— æ•ˆçš„å®½åº¦ï¼')) return;
 		sWidth = d_widthvalue.value + d_widthunit.value;
 	}
-	// ¸ß¶ÈÓĞĞ§ÖµĞÔ
+	// é«˜åº¦æœ‰æ•ˆå€¼æ€§
 	var sHeight = "";
 	if (d_heightcheck.checked){
-		if (!MoreThanOne(d_heightvalue,'ÎŞĞ§µÄ¸ß¶È£¡')) return;
+		if (!MoreThanOne(d_heightvalue,'æ— æ•ˆçš„é«˜åº¦ï¼')) return;
 		sHeight = d_heightvalue.value + d_heightunit.value;
 	}
 
@@ -218,13 +218,13 @@ function MoreThanOne(obj, sErr){
 			oControl.width = sWidth;
 		}
 		catch(e) {
-			//alert("¶Ô²»Æğ£¬ÇëÄúÊäÈëÓĞĞ§µÄ¿í¶ÈÖµ£¡\n£¨Èç£º90%  200  300px  10cm£©");
+			//alert("å¯¹ä¸èµ·ï¼Œè¯·æ‚¨è¾“å…¥æœ‰æ•ˆçš„å®½åº¦å€¼ï¼\nï¼ˆå¦‚ï¼š90%  200  300px  10cmï¼‰");
 		}
 		try {
 			oControl.height = sHeight;
 		}
 		catch(e) {
-			//alert("¶Ô²»Æğ£¬ÇëÄúÊäÈëÓĞĞ§µÄ¸ß¶ÈÖµ£¡\n£¨Èç£º90%  200  300px  10cm£©");
+			//alert("å¯¹ä¸èµ·ï¼Œè¯·æ‚¨è¾“å…¥æœ‰æ•ˆçš„é«˜åº¦å€¼ï¼\nï¼ˆå¦‚ï¼š90%  200  300px  10cmï¼‰");
 		}
 
 		oControl.align			= sAlign;
@@ -248,32 +248,32 @@ function MoreThanOne(obj, sErr){
 <tr>
 	<td>
 	<fieldset>
-	<legend>²¼¾Ö</legend>
+	<legend>å¸ƒå±€</legend>
 	<table border=0 cellpadding=0 cellspacing=0>
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>Ë®Æ½¶ÔÆë:</td>
+		<td>æ°´å¹³å¯¹é½:</td>
 		<td width=5></td>
 		<td>
 			<select id="d_align" style="width:72px">
-			<option value=''>Ä¬ÈÏ</option>
-			<option value='left'>×ó¶ÔÆë</option>
-			<option value='right'>ÓÒ¶ÔÆë</option>
-			<option value='center'>Ë®Æ½¾ÓÖĞ</option>
-			<option value='right'>Á½¶Ë¶ÔÆë</option>
+			<option value=''>é»˜è®¤</option>
+			<option value='left'>å·¦å¯¹é½</option>
+			<option value='right'>å³å¯¹é½</option>
+			<option value='center'>æ°´å¹³å±…ä¸­</option>
+			<option value='right'>ä¸¤ç«¯å¯¹é½</option>
 			</select>
 		</td>
 		<td width=40></td>
-		<td>´¹Ö±¶ÔÆë:</td>
+		<td>å‚ç›´å¯¹é½:</td>
 		<td width=5></td>
 		<td>
 			<select id="d_valign" style="width:72px">
-			<option value=''>Ä¬ÈÏ</option>
-			<option value='top'>¶¥±ß¶ÔÆë</option>
-			<option value='middle'>´¹Ö±¾ÓÖĞ</option>
-			<option value='baseline'>»ùÏß</option>
-			<option value='bottom'>µ×±ß¶ÔÆë</option>
+			<option value=''>é»˜è®¤</option>
+			<option value='top'>é¡¶è¾¹å¯¹é½</option>
+			<option value='middle'>å‚ç›´å±…ä¸­</option>
+			<option value='baseline'>åŸºçº¿</option>
+			<option value='bottom'>åº•è¾¹å¯¹é½</option>
 			</select>
 		</td>
 		<td width=7></td>
@@ -287,16 +287,16 @@ function MoreThanOne(obj, sErr){
 <tr>
 	<td>
 	<fieldset>
-	<legend>³ß´ç</legend>
+	<legend>å°ºå¯¸</legend>
 	<table border=0 cellpadding=0 cellspacing=0 width='100%'>
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td onclick="d_widthcheck.click()" noWrap valign=middle><input id="d_widthcheck" type="checkbox" onclick="d_widthvalue.disabled=(!this.checked);d_widthunit.disabled=(!this.checked);" value="1"> Ö¸¶¨¿í¶È</td>
+		<td onclick="d_widthcheck.click()" noWrap valign=middle><input id="d_widthcheck" type="checkbox" onclick="d_widthvalue.disabled=(!this.checked);d_widthunit.disabled=(!this.checked);" value="1"> æŒ‡å®šå®½åº¦</td>
 		<td align=right width="60%">
 			<input name="d_widthvalue" type="text" value="" size="5" ONKEYPRESS="event.returnValue=IsDigit();" maxlength="4">
 			<select name="d_widthunit">
-			<option value='px'>ÏñËØ</option><option value='%'>°Ù·Ö±È</option>
+			<option value='px'>åƒç´ </option><option value='%'>ç™¾åˆ†æ¯”</option>
 			</select>
 		</td>
 		<td width=7></td>
@@ -304,11 +304,11 @@ function MoreThanOne(obj, sErr){
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td height=7></td>
-		<td onclick="d_heightcheck.click()" noWrap valign=middle><input id="d_heightcheck" type="checkbox" onclick="d_heightvalue.disabled=(!this.checked);d_heightunit.disabled=(!this.checked);" value="1"> Ö¸¶¨¸ß¶È</td>
+		<td onclick="d_heightcheck.click()" noWrap valign=middle><input id="d_heightcheck" type="checkbox" onclick="d_heightvalue.disabled=(!this.checked);d_heightunit.disabled=(!this.checked);" value="1"> æŒ‡å®šé«˜åº¦</td>
 		<td align=right height="60%">
 			<input name="d_heightvalue" type="text" value="" size="5" ONKEYPRESS="event.returnValue=IsDigit();" maxlength="4">
 			<select name="d_heightunit">
-			<option value='px'>ÏñËØ</option><option value='%'>°Ù·Ö±È</option>
+			<option value='px'>åƒç´ </option><option value='%'>ç™¾åˆ†æ¯”</option>
 			</select>
 		</td>
 		<td width=7></td>
@@ -322,29 +322,29 @@ function MoreThanOne(obj, sErr){
 <tr>
 	<td>
 	<fieldset>
-	<legend>ÑùÊ½</legend>
+	<legend>æ ·å¼</legend>
 	<table border=0 cellpadding=0 cellspacing=0>
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>±ß¿òÑÕÉ«:</td>
+		<td>è¾¹æ¡†é¢œè‰²:</td>
 		<td width=5></td>
 		<td><input type=text id=d_bordercolor size=7 value=""></td>
 		<td><img border=0 src="../sysimage/rect.gif" width=18 style="cursor:hand" id=s_bordercolor onclick="SelectColor('bordercolor')"></td>
 		<td width=40></td>
-		<td>±ß¿òÑùÊ½:</td>
+		<td>è¾¹æ¡†æ ·å¼:</td>
 		<td width=5></td>
 		<td colspan=2>
 			<select id=d_borderstyle size=1 style="width:70px">
-			<option value="">Ä¬ÈÏ</option>
-			<option value="solid">ÊµÏß</option>
-			<option value="dotted">ĞéÏß</option>
-			<option value="dashed">ÆÆÕÛºÅ</option>
-			<option value="double">Ë«Ïß</option>
-			<option value="groove">°¼Ïß</option>
-			<option value="ridge">Í¹Ïß</option>
-			<option value="inset">Ç¶Èë</option>
-			<option value="outset">¿ª¶Ë</option>
+			<option value="">é»˜è®¤</option>
+			<option value="solid">å®çº¿</option>
+			<option value="dotted">è™šçº¿</option>
+			<option value="dashed">ç ´æŠ˜å·</option>
+			<option value="double">åŒçº¿</option>
+			<option value="groove">å‡¹çº¿</option>
+			<option value="ridge">å‡¸çº¿</option>
+			<option value="inset">åµŒå…¥</option>
+			<option value="outset">å¼€ç«¯</option>
 			</select>
 		</td>
 		<td width=7></td>
@@ -352,15 +352,15 @@ function MoreThanOne(obj, sErr){
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>±³¾°ÑÕÉ«:</td>
+		<td>èƒŒæ™¯é¢œè‰²:</td>
 		<td width=5></td>
 		<td><input type=text id=d_bgcolor size=7 value=""></td>
 		<td><img border=0 src="../sysimage/rect.gif" width=18 style="cursor:hand" id=s_bgcolor onclick="SelectColor('bgcolor')"></td>
 		<td width=40></td>
-		<td>±³¾°Í¼Æ¬:</td>
+		<td>èƒŒæ™¯å›¾ç‰‡:</td>
 		<td width=5></td>
 		<td><input type=text id=d_image size=7 value=""><input type=hidden id=d_repeat><input type=hidden id=d_attachment></td>
-		<td><img border=0 src="../sysimage/rectimg.gif" width=18 style="cursor:hand" id=s_bgimage onclick="SelectImage()" alt="ÉèÖÃ±³¾°Í¼"></td>
+		<td><img border=0 src="../sysimage/rectimg.gif" width=18 style="cursor:hand" id=s_bgimage onclick="SelectImage()" alt="è®¾ç½®èƒŒæ™¯å›¾"></td>
 		<td width=7></td>
 	</tr>
 	<tr><td colspan=9 height=5></td></tr>
@@ -369,7 +369,7 @@ function MoreThanOne(obj, sErr){
 	</td>
 </tr>
 <tr><td height=5></td></tr>
-<tr><td align=right><input type=submit value='  È·¶¨  ' id=Ok>&nbsp;&nbsp;<input type=button value='  È¡Ïû  ' onclick="window.close();"></td></tr>
+<tr><td align=right><input type=submit value='  ç¡®å®š  ' id=Ok>&nbsp;&nbsp;<input type=button value='  å–æ¶ˆ  ' onclick="window.close();"></td></tr>
 </table>
 
 

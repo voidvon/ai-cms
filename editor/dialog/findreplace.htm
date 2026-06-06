@@ -1,18 +1,18 @@
 <HTML>
 <HEAD>
-<TITLE>²éÕÒ / Ìæ»»</TITLE>
-<meta http-equiv="Content-Type" content="text/html; charset=gb2312">
+<TITLE>æŸ¥æ‰¾ / æ›¿æ¢</TITLE>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <style type="text/css">
-body, a, table, div, span, td, th, input, select{font-size:9pt;font-family: "ËÎÌå", Verdana, Arial, Helvetica, sans-serif;}
+body, a, table, div, span, td, th, input, select{font-size:9pt;font-family: "å®‹ä½“", Verdana, Arial, Helvetica, sans-serif;}
 body {padding:5px}
 </style>
 
 <script language="JavaScript">
-// ³õÊ¼Ñ¡¶¨¶ÔÏó
+// åˆå§‹é€‰å®šå¯¹è±¡
 var oSelection;
 oSelection = dialogArguments.document.selection.createRange();
 
-// ·µ»ØÆ¥ÅäÌõ¼ş
+// è¿”å›åŒ¹é…æ¡ä»¶
 function searchtype(){
     var retval = 0;
     var matchcase = 0;
@@ -23,17 +23,17 @@ function searchtype(){
     return(retval);
 }
 
-// ¼ì²âÊäÈë
+// æ£€æµ‹è¾“å…¥
 function checkInput(){
     if (document.frmSearch.strSearch.value.length < 1) {
-        alert("ÇëÊäÈë²éÕÒÄÚÈİ");
+        alert("è¯·è¾“å…¥æŸ¥æ‰¾å†…å®¹");
         return false;
     } else {
         return true;
     }
 }
 
-// ²éÕÒ
+// æŸ¥æ‰¾
 function findtext(){
     if (checkInput()) {
         var searchval = document.frmSearch.strSearch.value;
@@ -41,7 +41,7 @@ function findtext(){
         if (oSelection.findText(searchval, 1000000000, searchtype())) {
             oSelection.select();
         } else {
-            var startfromtop = confirm("ËÑË÷Íê³É£¬ÊÇ·ñÒª´Ó¶¥²¿¿ªÊ¼ÖØĞÂËÑË÷£¿");
+            var startfromtop = confirm("æœç´¢å®Œæˆï¼Œæ˜¯å¦è¦ä»é¡¶éƒ¨å¼€å§‹é‡æ–°æœç´¢ï¼Ÿ");
             if (startfromtop) {
                 oSelection.expand("textedit");
                 oSelection.collapse();
@@ -52,7 +52,7 @@ function findtext(){
     }
 }
 
-// ÔÚÑ¡ÖĞµÄÎÄ±¾ÖĞÌæ»»
+// åœ¨é€‰ä¸­çš„æ–‡æœ¬ä¸­æ›¿æ¢
 function replacetext(){
     if (checkInput()) {
         if (document.frmSearch.blnMatchCase.checked){
@@ -64,7 +64,7 @@ function replacetext(){
     }
 }
 
-// ÔÚËùÓĞÄÚÈİÖĞÌæ»»
+// åœ¨æ‰€æœ‰å†…å®¹ä¸­æ›¿æ¢
 function replacealltext(){
     if (checkInput()) {
         var searchval = document.frmSearch.strSearch.value;
@@ -78,8 +78,8 @@ function replacealltext(){
             oSelection.text = document.frmSearch.strReplace.value;
             wordcount++;
         }
-        if (wordcount == 0) msg = "Òª²éÕÒµÄÄÚÈİÃ»ÓĞÕÒµ½"
-        else msg = wordcount + " ´¦ÎÄ±¾±»Ìæ»»³É¹¦";
+        if (wordcount == 0) msg = "è¦æŸ¥æ‰¾çš„å†…å®¹æ²¡æœ‰æ‰¾åˆ°"
+        else msg = wordcount + " å¤„æ–‡æœ¬è¢«æ›¿æ¢æˆåŠŸ";
         alert(msg);
     }
 }
@@ -90,18 +90,18 @@ function replacealltext(){
 <FORM NAME="frmSearch" method="post" action="">
 <TABLE CELLSPACING="0" cellpadding="5" border="0">
 <TR><TD VALIGN="top" align="left" nowrap>
-    <label for="strSearch">²éÕÒÄÚÈİ</label><br>
+    <label for="strSearch">æŸ¥æ‰¾å†…å®¹</label><br>
     <INPUT TYPE=TEXT SIZE=40 NAME=strSearch id="strSearch" style="width : 200px;"><br>
-    <label for="strReplace">Ìæ»»ÄÚÈİ</label><br>
+    <label for="strReplace">æ›¿æ¢å†…å®¹</label><br>
     <INPUT TYPE=TEXT SIZE=40 NAME=strReplace id="strReplace" style="width : 200px;"><br>
-    <INPUT TYPE=Checkbox SIZE=40 NAME=blnMatchCase ID="blnMatchCase"><label for="blnMatchCase">Çø·Ö´óĞ¡Ğ´</label><br>
-    <INPUT TYPE=Checkbox SIZE=40 NAME=blnMatchWord ID="blnMatchWord"><label for="blnMatchWord">È«²¿Æ¥Åä</label>
+    <INPUT TYPE=Checkbox SIZE=40 NAME=blnMatchCase ID="blnMatchCase"><label for="blnMatchCase">åŒºåˆ†å¤§å°å†™</label><br>
+    <INPUT TYPE=Checkbox SIZE=40 NAME=blnMatchWord ID="blnMatchWord"><label for="blnMatchWord">å…¨éƒ¨åŒ¹é…</label>
 </td>
 <td rowspan="2" valign="top">
-    <input type=button style="width:80px;margin-top:15px" name="btnFind" onClick="findtext();" value="²éÕÒÏÂÒ»¸ö"><br>
-    <input type=button style="width:80px;margin-top:5px" name="btnCancel" onClick="window.close();" value="¹Ø±Õ"><br>
-    <input type=button style="width:80px;margin-top:5px" name="btnReplace" onClick="replacetext();" value="Ìæ»»"><br>
-    <input type=button style="width:80px;margin-top:5px" name="btnReplaceall" onClick="replacealltext();" value="È«²¿Ìæ»»"><br>
+    <input type=button style="width:80px;margin-top:15px" name="btnFind" onClick="findtext();" value="æŸ¥æ‰¾ä¸‹ä¸€ä¸ª"><br>
+    <input type=button style="width:80px;margin-top:5px" name="btnCancel" onClick="window.close();" value="å…³é—­"><br>
+    <input type=button style="width:80px;margin-top:5px" name="btnReplace" onClick="replacetext();" value="æ›¿æ¢"><br>
+    <input type=button style="width:80px;margin-top:5px" name="btnReplaceall" onClick="replacealltext();" value="å…¨éƒ¨æ›¿æ¢"><br>
 </td>
 </tr>
 </table>

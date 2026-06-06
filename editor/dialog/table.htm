@@ -1,8 +1,8 @@
 <html>
 <head>
-<meta http-equiv="Content-Type" content="text/html; charset=gb2312">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <style type="text/css">
-body, a, table, div, span, td, th, input, select{font:9pt;font-family: "ËÎÌå", Verdana, Arial, Helvetica, sans-serif;}
+body, a, table, div, span, td, th, input, select{font:9pt;font-family: "å®‹ä½“", Verdana, Arial, Helvetica, sans-serif;}
 body {padding:5px}
 </style>
 
@@ -10,7 +10,7 @@ body {padding:5px}
 
 <script language="JavaScript">
 var sAction = URLParams['action'] ;
-var sTitle = "²åÈë";
+var sTitle = "æ’å…¥";
 
 var oControl;
 var oSeletion;
@@ -55,7 +55,7 @@ if (sAction == "modify"){
 	}
 	if (oControl){
 		sAction = "MODI";
-		sTitle = "ĞŞ¸Ä";
+		sTitle = "ä¿®æ”¹";
 		sRow = oControl.rows.length;
 		sCol = getColCount(oControl);
 		sAlign = oControl.align;
@@ -74,21 +74,21 @@ if (sAction == "modify"){
 	}
 }
 
-// ·µ»ØÖ¸¶¨±êÇ©µÄ¸¸¶ÔÏó
+// è¿”å›æŒ‡å®šæ ‡ç­¾çš„çˆ¶å¯¹è±¡
 function getParentObject(obj, tag){
 	while(obj!=null && obj.tagName!=tag)
 		obj=obj.parentElement;
 	return obj;
 }
 
-document.write("<title>±í¸ñÊôĞÔ£¨" + sTitle + "£©</title>");
+document.write("<title>è¡¨æ ¼å±æ€§ï¼ˆ" + sTitle + "ï¼‰</title>");
 
-// ³õÊ¼Öµ
+// åˆå§‹å€¼
 function InitDocument(){
 	SearchSelectValue(d_align, sAlign.toLowerCase());
 	SearchSelectValue(d_borderstyle, sBorderStyle.toLowerCase());
 
-	// ĞŞ¸Ä×´Ì¬Ê±È¡Öµ
+	// ä¿®æ”¹çŠ¶æ€æ—¶å–å€¼
 	if (sAction == "MODI"){
 		if (sWidth == ""){
 			bWidthCheck = false;
@@ -169,7 +169,7 @@ function InitDocument(){
 
 }
 
-// ÅĞ¶ÏÖµÊÇ·ñ´óÓÚ0
+// åˆ¤æ–­å€¼æ˜¯å¦å¤§äº0
 function MoreThanOne(obj, sErr){
 	var b=false;
 	if (obj.value!=""){
@@ -185,7 +185,7 @@ function MoreThanOne(obj, sErr){
 	return true;
 }
 
-// µÃµ½±í¸ñÁĞÊı
+// å¾—åˆ°è¡¨æ ¼åˆ—æ•°
 function getColCount(oTable) {
 	var intCount = 0;
 	if (oTable != null) {
@@ -196,7 +196,7 @@ function getColCount(oTable) {
 	return intCount;
 }
 
-// Ôö¼ÓĞĞ
+// å¢åŠ è¡Œ
 function InsertRows( oTable ) {
 	if ( oTable ) {
 		var elRow=oTable.insertRow();
@@ -207,7 +207,7 @@ function InsertRows( oTable ) {
 	}
 }
 
-// Ôö¼ÓÁĞ
+// å¢åŠ åˆ—
 function InsertCols( oTable ) {
 	if ( oTable ) {
 		for(var i=0; i<oTable.rows.length; i++){
@@ -217,14 +217,14 @@ function InsertCols( oTable ) {
 	}
 }
 
-// É¾³ıĞĞ
+// åˆ é™¤è¡Œ
 function DeleteRows( oTable ) {
 	if ( oTable ) {
 		oTable.deleteRow();
 	}
 }
 
-// É¾³ıÁĞ
+// åˆ é™¤åˆ—
 function DeleteCols( oTable ) {
 	if ( oTable ) {
 		for(var i=0;i<oTable.rows.length;i++){
@@ -236,40 +236,40 @@ function DeleteCols( oTable ) {
 </script>
 
 <SCRIPT event=onclick for=Ok language=JavaScript>
-	// ±ß¿òÑÕÉ«µÄÓĞĞ§ĞÔ
+	// è¾¹æ¡†é¢œè‰²çš„æœ‰æ•ˆæ€§
 	sBorderColor = d_bordercolor.value;
 	if (!IsColor(sBorderColor)){
-		BaseAlert(d_bordercolor,'ÎŞĞ§µÄ±ß¿òÑÕÉ«Öµ£¡');
+		BaseAlert(d_bordercolor,'æ— æ•ˆçš„è¾¹æ¡†é¢œè‰²å€¼ï¼');
 		return;
 	}
-	// ±³¾°ÑÕÉ«µÄÓĞĞ§ĞÔ
+	// èƒŒæ™¯é¢œè‰²çš„æœ‰æ•ˆæ€§
 	sBgColor = d_bgcolor.value;
 	if (!IsColor(sBgColor)){
-		BaseAlert(d_bgcolor,'ÎŞĞ§µÄ±³¾°ÑÕÉ«Öµ£¡');
+		BaseAlert(d_bgcolor,'æ— æ•ˆçš„èƒŒæ™¯é¢œè‰²å€¼ï¼');
 		return;
 	}
-	// ĞĞÊıµÄÓĞĞ§ĞÔ
-	if (!MoreThanOne(d_row,'ÎŞĞ§µÄĞĞÊı£¬ÖÁÉÙÒª1ĞĞ£¡')) return;
-	// ÁĞÊıµÄÓĞĞ§ĞÔ
-	if (!MoreThanOne(d_col,'ÎŞĞ§µÄÁĞÊı£¬ÖÁÉÙÒª1ÁĞ£¡')) return;
-	// ±ßÏß´ÖÏ¸µÄÓĞĞ§ĞÔ
+	// è¡Œæ•°çš„æœ‰æ•ˆæ€§
+	if (!MoreThanOne(d_row,'æ— æ•ˆçš„è¡Œæ•°ï¼Œè‡³å°‘è¦1è¡Œï¼')) return;
+	// åˆ—æ•°çš„æœ‰æ•ˆæ€§
+	if (!MoreThanOne(d_col,'æ— æ•ˆçš„åˆ—æ•°ï¼Œè‡³å°‘è¦1åˆ—ï¼')) return;
+	// è¾¹çº¿ç²—ç»†çš„æœ‰æ•ˆæ€§
 	if (d_border.value == "") d_border.value = "0";
 	if (d_cellpadding.value == "") d_cellpadding.value = "0";
 	if (d_cellspacing.value == "") d_cellspacing.value = "0";
-	// È¥Ç°µ¼0
+	// å»å‰å¯¼0
 	d_border.value = parseFloat(d_border.value);
 	d_cellpadding.value = parseFloat(d_cellpadding.value);
 	d_cellspacing.value = parseFloat(d_cellspacing.value);
-	// ¿í¶ÈÓĞĞ§ÖµĞÔ
+	// å®½åº¦æœ‰æ•ˆå€¼æ€§
 	var sWidth = "";
 	if (d_widthcheck.checked){
-		if (!MoreThanOne(d_widthvalue,'ÎŞĞ§µÄ±í¸ñ¿í¶È£¡')) return;
+		if (!MoreThanOne(d_widthvalue,'æ— æ•ˆçš„è¡¨æ ¼å®½åº¦ï¼')) return;
 		sWidth = d_widthvalue.value + d_widthunit.value;
 	}
-	// ¸ß¶ÈÓĞĞ§ÖµĞÔ
+	// é«˜åº¦æœ‰æ•ˆå€¼æ€§
 	var sHeight = "";
 	if (d_heightcheck.checked){
-		if (!MoreThanOne(d_heightvalue,'ÎŞĞ§µÄ±í¸ñ¸ß¶È£¡')) return;
+		if (!MoreThanOne(d_heightvalue,'æ— æ•ˆçš„è¡¨æ ¼é«˜åº¦ï¼')) return;
 		sHeight = d_heightvalue.value + d_heightunit.value;
 	}
 
@@ -288,13 +288,13 @@ function DeleteCols( oTable ) {
 	}
 
 	if (sAction == "MODI") {
-		// ĞŞ¸ÄĞĞÊı
+		// ä¿®æ”¹è¡Œæ•°
 		var xCount = sRow - oControl.rows.length;
   		if (xCount > 0)
 	  		for (var i = 0; i < xCount; i++) InsertRows(oControl);
   		else
 	  		for (var i = 0; i > xCount; i--) DeleteRows(oControl);
-		// ĞŞ¸ÄÁĞÊı
+		// ä¿®æ”¹åˆ—æ•°
   		var xCount = sCol - getColCount(oControl);
   		if (xCount > 0)
   			for (var i = 0; i < xCount; i++) InsertCols(oControl);
@@ -306,14 +306,14 @@ function DeleteCols( oTable ) {
 			oControl.style.width = sWidth;
 		}
 		catch(e) {
-			//alert("¶Ô²»Æğ£¬ÇëÄúÊäÈëÓĞĞ§µÄ¿í¶ÈÖµ£¡\n£¨Èç£º90%  200  300px  10cm£©");
+			//alert("å¯¹ä¸èµ·ï¼Œè¯·æ‚¨è¾“å…¥æœ‰æ•ˆçš„å®½åº¦å€¼ï¼\nï¼ˆå¦‚ï¼š90%  200  300px  10cmï¼‰");
 		}
 		try {
 			oControl.height = sHeight;
 			oControl.style.height = sHeight;
 		}
 		catch(e) {
-			//alert("¶Ô²»Æğ£¬ÇëÄúÊäÈëÓĞĞ§µÄ¸ß¶ÈÖµ£¡\n£¨Èç£º90%  200  300px  10cm£©");
+			//alert("å¯¹ä¸èµ·ï¼Œè¯·æ‚¨è¾“å…¥æœ‰æ•ˆçš„é«˜åº¦å€¼ï¼\nï¼ˆå¦‚ï¼š90%  200  300px  10cmï¼‰");
 		}
 
 		oControl.align			= sAlign;
@@ -351,16 +351,16 @@ function DeleteCols( oTable ) {
 <tr>
 	<td>
 	<fieldset>
-	<legend>±í¸ñ´óĞ¡</legend>
+	<legend>è¡¨æ ¼å¤§å°</legend>
 	<table border=0 cellpadding=0 cellspacing=0>
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>±í¸ñĞĞÊı:</td>
+		<td>è¡¨æ ¼è¡Œæ•°:</td>
 		<td width=5></td>
 		<td><input type=text id=d_row size=10 value="" ONKEYPRESS="event.returnValue=IsDigit();" maxlength=3></td>
 		<td width=40></td>
-		<td>±í¸ñÁĞÊı:</td>
+		<td>è¡¨æ ¼åˆ—æ•°:</td>
 		<td width=5></td>
 		<td><input type=text id=d_col size=10 value="" ONKEYPRESS="event.returnValue=IsDigit();" maxlength=3></td>
 		<td width=7></td>
@@ -374,23 +374,23 @@ function DeleteCols( oTable ) {
 <tr>
 	<td>
 	<fieldset>
-	<legend>±í¸ñ²¼¾Ö</legend>
+	<legend>è¡¨æ ¼å¸ƒå±€</legend>
 	<table border=0 cellpadding=0 cellspacing=0>
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>¶ÔÆë·½Ê½:</td>
+		<td>å¯¹é½æ–¹å¼:</td>
 		<td width=5></td>
 		<td>
 			<select id="d_align" style="width:72px">
-			<option value=''>Ä¬ÈÏ</option>
-			<option value='left'>×ó¶ÔÆë</option>
-			<option value='center'>¾ÓÖĞ</option>
-			<option value='right'>ÓÒ¶ÔÆë</option>
+			<option value=''>é»˜è®¤</option>
+			<option value='left'>å·¦å¯¹é½</option>
+			<option value='center'>å±…ä¸­</option>
+			<option value='right'>å³å¯¹é½</option>
 			</select>
 		</td>
 		<td width=40></td>
-		<td>±ß¿ò´ÖÏ¸:</td>
+		<td>è¾¹æ¡†ç²—ç»†:</td>
 		<td width=5></td>
 		<td><input type=text id=d_border size=10 value="" ONKEYPRESS="event.returnValue=IsDigit();"></td>
 		<td width=7></td>
@@ -398,11 +398,11 @@ function DeleteCols( oTable ) {
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>µ¥Ôª¼ä¾à:</td>
+		<td>å•å…ƒé—´è·:</td>
 		<td width=5></td>
 		<td><input type=text id=d_cellspacing size=10 value="" ONKEYPRESS="event.returnValue=IsDigit();" maxlength=3></td>
 		<td width=40></td>
-		<td>µ¥Ôª±ß¾à:</td>
+		<td>å•å…ƒè¾¹è·:</td>
 		<td width=5></td>
 		<td><input type=text id=d_cellpadding size=10 value="" ONKEYPRESS="event.returnValue=IsDigit();" maxlength=3></td>
 		<td width=7></td>
@@ -416,16 +416,16 @@ function DeleteCols( oTable ) {
 <tr>
 	<td>
 	<fieldset>
-	<legend>±í¸ñ³ß´ç</legend>
+	<legend>è¡¨æ ¼å°ºå¯¸</legend>
 	<table border=0 cellpadding=0 cellspacing=0 width='100%'>
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td onclick="d_widthcheck.click()" noWrap valign=middle><input id="d_widthcheck" type="checkbox" onclick="d_widthvalue.disabled=(!this.checked);d_widthunit.disabled=(!this.checked);" value="1"> Ö¸¶¨±í¸ñµÄ¿í¶È</td>
+		<td onclick="d_widthcheck.click()" noWrap valign=middle><input id="d_widthcheck" type="checkbox" onclick="d_widthvalue.disabled=(!this.checked);d_widthunit.disabled=(!this.checked);" value="1"> æŒ‡å®šè¡¨æ ¼çš„å®½åº¦</td>
 		<td align=right width="60%">
 			<input name="d_widthvalue" type="text" value="" size="5" ONKEYPRESS="event.returnValue=IsDigit();" maxlength="4">
 			<select name="d_widthunit">
-			<option value='px'>ÏñËØ</option><option value='%'>°Ù·Ö±È</option>
+			<option value='px'>åƒç´ </option><option value='%'>ç™¾åˆ†æ¯”</option>
 			</select>
 		</td>
 		<td width=7></td>
@@ -433,11 +433,11 @@ function DeleteCols( oTable ) {
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td height=7></td>
-		<td onclick="d_heightcheck.click()" noWrap valign=middle><input id="d_heightcheck" type="checkbox" onclick="d_heightvalue.disabled=(!this.checked);d_heightunit.disabled=(!this.checked);" value="1"> Ö¸¶¨±í¸ñµÄ¸ß¶È</td>
+		<td onclick="d_heightcheck.click()" noWrap valign=middle><input id="d_heightcheck" type="checkbox" onclick="d_heightvalue.disabled=(!this.checked);d_heightunit.disabled=(!this.checked);" value="1"> æŒ‡å®šè¡¨æ ¼çš„é«˜åº¦</td>
 		<td align=right height="60%">
 			<input name="d_heightvalue" type="text" value="" size="5" ONKEYPRESS="event.returnValue=IsDigit();" maxlength="4">
 			<select name="d_heightunit">
-			<option value='px'>ÏñËØ</option><option value='%'>°Ù·Ö±È</option>
+			<option value='px'>åƒç´ </option><option value='%'>ç™¾åˆ†æ¯”</option>
 			</select>
 		</td>
 		<td width=7></td>
@@ -451,29 +451,29 @@ function DeleteCols( oTable ) {
 <tr>
 	<td>
 	<fieldset>
-	<legend>±í¸ñÑùÊ½</legend>
+	<legend>è¡¨æ ¼æ ·å¼</legend>
 	<table border=0 cellpadding=0 cellspacing=0>
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>±ß¿òÑÕÉ«:</td>
+		<td>è¾¹æ¡†é¢œè‰²:</td>
 		<td width=5></td>
 		<td><input type=text id=d_bordercolor size=7 value=""></td>
 		<td><img border=0 src="../sysimage/rect.gif" width=18 style="cursor:hand" id=s_bordercolor onclick="SelectColor('bordercolor')"></td>
 		<td width=40></td>
-		<td>±ß¿òÑùÊ½:</td>
+		<td>è¾¹æ¡†æ ·å¼:</td>
 		<td width=5></td>
 		<td colspan=2>
 			<select id=d_borderstyle size=1 style="width:72px">
-			<option value="">Ä¬ÈÏ</option>
-			<option value="solid">ÊµÏß</option>
-			<option value="dotted">ĞéÏß</option>
-			<option value="dashed">ÆÆÕÛºÅ</option>
-			<option value="double">Ë«Ïß</option>
-			<option value="groove">°¼Ïß</option>
-			<option value="ridge">Í¹Ïß</option>
-			<option value="inset">Ç¶Èë</option>
-			<option value="outset">¿ª¶Ë</option>
+			<option value="">é»˜è®¤</option>
+			<option value="solid">å®çº¿</option>
+			<option value="dotted">è™šçº¿</option>
+			<option value="dashed">ç ´æŠ˜å·</option>
+			<option value="double">åŒçº¿</option>
+			<option value="groove">å‡¹çº¿</option>
+			<option value="ridge">å‡¸çº¿</option>
+			<option value="inset">åµŒå…¥</option>
+			<option value="outset">å¼€ç«¯</option>
 			</select>
 		</td>
 		<td width=7></td>
@@ -481,15 +481,15 @@ function DeleteCols( oTable ) {
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>±³¾°ÑÕÉ«:</td>
+		<td>èƒŒæ™¯é¢œè‰²:</td>
 		<td width=5></td>
 		<td><input type=text id=d_bgcolor size=7 value=""></td>
 		<td><img border=0 src="../sysimage/rect.gif" width=18 style="cursor:hand" id=s_bgcolor onclick="SelectColor('bgcolor')"></td>
 		<td width=40></td>
-		<td>±³¾°Í¼Æ¬:</td>
+		<td>èƒŒæ™¯å›¾ç‰‡:</td>
 		<td width=5></td>
 		<td><input type=text id=d_image size=7 value=""><input type=hidden id=d_repeat><input type=hidden id=d_attachment></td>
-		<td><img border=0 src="../sysimage/rectimg.gif" width=18 style="cursor:hand" id=s_bgimage onclick="SelectImage()" alt="ÉèÖÃ±³¾°Í¼"></td>
+		<td><img border=0 src="../sysimage/rectimg.gif" width=18 style="cursor:hand" id=s_bgimage onclick="SelectImage()" alt="è®¾ç½®èƒŒæ™¯å›¾"></td>
 		<td width=7></td>
 	</tr>
 	<tr><td colspan=9 height=5></td></tr>
@@ -498,7 +498,7 @@ function DeleteCols( oTable ) {
 	</td>
 </tr>
 <tr><td height=5></td></tr>
-<tr><td align=right><input type=submit value='  È·¶¨  ' id=Ok>&nbsp;&nbsp;<input type=button value='  È¡Ïû  ' onclick="window.close();"></td></tr>
+<tr><td align=right><input type=submit value='  ç¡®å®š  ' id=Ok>&nbsp;&nbsp;<input type=button value='  å–æ¶ˆ  ' onclick="window.close();"></td></tr>
 </table>
 
 

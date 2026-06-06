@@ -1,15 +1,15 @@
 <HTML>
 <HEAD>
-<TITLE>ÊéÇ©¹ÜÀí</TITLE>
-<meta http-equiv="Content-Type" content="text/html; charset=gb2312">
+<TITLE>ä¹¦ç­¾ç®¡ç†</TITLE>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <style type="text/css">
-body, a, table, div, span, td, th, input, select{font-size:9pt;font-family: "ËÎÌå", Verdana, Arial, Helvetica, sans-serif;}
+body, a, table, div, span, td, th, input, select{font-size:9pt;font-family: "å®‹ä½“", Verdana, Arial, Helvetica, sans-serif;}
 body {padding:5px}
 </style>
 <Script Language=JavaScript src="dialog.js"></script>
 
 <script language="JavaScript">
-// ³õÊ¼Ñ¡¶¨¶ÔÏó
+// åˆå§‹é€‰å®šå¯¹è±¡
 var oRange;
 var sType;
 var oSel;
@@ -33,13 +33,13 @@ if (oSel.tagName.toUpperCase() == "A"){
 
 
 
-// ³õÊ¼Öµ
+// åˆå§‹å€¼
 function InitDocument(){
 	d_anchor.value = sName;
 	getAnchors();
 }
 
-// È¡ËùÓĞµÄÃª
+// å–æ‰€æœ‰çš„é”š
 function getAnchors() {
 	d_allanchor.options.length = 0;
 	var allLinks = dialogArguments.eWebEditor.document.body.getElementsByTagName("A");
@@ -50,7 +50,7 @@ function getAnchors() {
 	}
 }
 
-// È¡Ö¸¶¨Ãû³ÆµÄÃª¶ÔÏó
+// å–æŒ‡å®šåç§°çš„é”šå¯¹è±¡
 function getAnchorObj(str) {
 	var allLinks = dialogArguments.eWebEditor.document.body.getElementsByTagName("A");
 	for (i=0; i < allLinks.length; i++) {
@@ -63,11 +63,11 @@ function getAnchorObj(str) {
 	return null;
 }
 
-// È·¶¨
+// ç¡®å®š
 function OK(){
 	var sName = BaseTrim(d_anchor.value);
 	if (sName == ""){
-		BaseAlert(d_anchor, "ÇëÊäÈëÊéÇ©Ãû³Æ£¡");
+		BaseAlert(d_anchor, "è¯·è¾“å…¥ä¹¦ç­¾åç§°ï¼");
 		return;
 	}
 
@@ -107,11 +107,11 @@ function OK(){
 	window.close();
 }
 
-// ×ªµ½
+// è½¬åˆ°
 function doMove(){
 	var nIndex = d_allanchor.selectedIndex;
 	if (nIndex<0) {
-		alert("ÇëÏÈÑ¡ÔñÒ»¸öÊéÇ©£¡");
+		alert("è¯·å…ˆé€‰æ‹©ä¸€ä¸ªä¹¦ç­¾ï¼");
 		return;
 	}
 	var sel = getAnchorObj(d_allanchor.options[nIndex].value);
@@ -120,11 +120,11 @@ function doMove(){
 	}
 }
 
-// Çå³ı
+// æ¸…é™¤
 function doDel(){
 	var nIndex = d_allanchor.selectedIndex;
 	if (nIndex<0) {
-		alert("ÇëÏÈÑ¡ÔñÒ»¸öÊéÇ©£¡");
+		alert("è¯·å…ˆé€‰æ‹©ä¸€ä¸ªä¹¦ç­¾ï¼");
 		return;
 	}
 	var sel = getAnchorObj(d_allanchor.options[nIndex].value);
@@ -134,7 +134,7 @@ function doDel(){
 	}
 }
 
-// Ñ¡¶¨Ö¸¶¨ÔªËØµÄÑ¡Çø
+// é€‰å®šæŒ‡å®šå…ƒç´ çš„é€‰åŒº
 function moveRange(sel){
 	var rng = dialogArguments.eWebEditor.document.body.createTextRange();
 	rng.moveToElementText(sel);
@@ -147,16 +147,16 @@ function moveRange(sel){
 <TABLE CELLSPACING="0" cellpadding="5" border="0" align=center>
 <TR valign="top">
 	<TD align="left" nowrap>
-		ÊéÇ©Ãû³Æ:<br>
+		ä¹¦ç­¾åç§°:<br>
 		<INPUT TYPE=TEXT SIZE=20 id="d_anchor" style="width:150px;"><br>
-		±¾Ò³ÆäËüÊéÇ©:<br>
+		æœ¬é¡µå…¶å®ƒä¹¦ç­¾:<br>
 		<select id="d_allanchor" size=8 style="width:150px;" onchange="d_anchor.value=this.options[this.selectedIndex].value;"></select>
 	</td>
 	<td>
-		<input type=button style="width:80px;margin-top:15px" name="btnOK" onClick="OK()" value="È·¶¨"><br>
-		<input type=button style="width:80px;margin-top:5px" name="btnCancel" onClick="window.close()" value="È¡Ïû"><br>
-		<input type=button style="width:80px;margin-top:60px" name="btnMove" onClick="doMove()" value="×ªµ½"><br>
-		<input type=button style="width:80px;margin-top:5px" name="btnDel" onClick="doDel()" value="Çå³ı"><br>
+		<input type=button style="width:80px;margin-top:15px" name="btnOK" onClick="OK()" value="ç¡®å®š"><br>
+		<input type=button style="width:80px;margin-top:5px" name="btnCancel" onClick="window.close()" value="å–æ¶ˆ"><br>
+		<input type=button style="width:80px;margin-top:60px" name="btnMove" onClick="doMove()" value="è½¬åˆ°"><br>
+		<input type=button style="width:80px;margin-top:5px" name="btnDel" onClick="doDel()" value="æ¸…é™¤"><br>
 	</td>
 </tr>
 </table>

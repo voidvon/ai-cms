@@ -1,9 +1,9 @@
 <HTML>
 <HEAD>
-<META content="text/html; charset=gb2312" http-equiv=Content-Type>
+<META content="text/html; charset=utf-8" http-equiv=Content-Type>
 
 <style type="text/css">
-body, a, table, div, span, td, th, input, select{font:9pt;font-family: "ËÎÌå", Verdana, Arial, Helvetica, sans-serif;}
+body, a, table, div, span, td, th, input, select{font:9pt;font-family: "å®‹ä½“", Verdana, Arial, Helvetica, sans-serif;}
 body {padding:5px}
 </style>
 
@@ -12,7 +12,7 @@ body {padding:5px}
 
 <Script Language=JavaScript>
 var sAction = "INSERT";
-var sTitle = "²åÈë";
+var sTitle = "æ’å…¥";
 
 var oControl;
 var oSeletion;
@@ -32,7 +32,7 @@ sRangeType = dialogArguments.eWebEditor.document.selection.type;
 if (sRangeType == "Control") {
 	if (oSelection.item(0).tagName == "IFRAME"){
 		sAction = "MODI";
-		sTitle = "ĞŞ¸Ä";
+		sTitle = "ä¿®æ”¹";
 		oControl = oSelection.item(0);
 		sUrl = oControl.src;
 		sScrolling = oControl.scrolling;
@@ -45,9 +45,9 @@ if (sRangeType == "Control") {
 }
 
 
-document.write("<title>ÍøÒ³Ö¡ÊôĞÔ£¨" + sTitle + "£©</title>");
+document.write("<title>ç½‘é¡µå¸§å±æ€§ï¼ˆ" + sTitle + "ï¼‰</title>");
 
-// ³õÊ¼Öµ
+// åˆå§‹å€¼
 function InitDocument(){
 	SearchSelectValue(d_scrolling, sScrolling.toLowerCase());
 
@@ -64,14 +64,14 @@ function InitDocument(){
 
 
 
-<title>ÍøÒ³Ö¡ÊôĞÔ£¨<%=sTitle%>£©</title>
+<title>ç½‘é¡µå¸§å±æ€§ï¼ˆ<%=sTitle%>ï¼‰</title>
 
 <SCRIPT event=onclick for=Ok language=JavaScript>
 	sScrolling = d_scrolling.options[d_scrolling.selectedIndex].value;
 
 	sUrl = d_url.value;
 	if (!IsURL(sUrl)){
-		BaseAlert(d_url, "ÎŞĞ§µÄÍøÒ³µØÖ·£¡");
+		BaseAlert(d_url, "æ— æ•ˆçš„ç½‘é¡µåœ°å€ï¼");
 		return;
 	}
 
@@ -82,12 +82,12 @@ function InitDocument(){
 	sMarginHeight = d_marginheight.value;
 	sMarginWidth = d_marginwidth.value;
 
-	// ¿í¶È¸ß¶ÈÓĞĞ§ÖµĞÔ
+	// å®½åº¦é«˜åº¦æœ‰æ•ˆå€¼æ€§
 	var sWidth = "";
-	if (!MoreThanOne(d_width,'ÎŞĞ§µÄÖ¡¿í¶È£¡')) return;
+	if (!MoreThanOne(d_width,'æ— æ•ˆçš„å¸§å®½åº¦ï¼')) return;
 	sWidth = d_width.value;
 	var sHeight = "";
-	if (!MoreThanOne(d_height,'ÎŞĞ§µÄÖ¡¸ß¶È£¡')) return;
+	if (!MoreThanOne(d_height,'æ— æ•ˆçš„å¸§é«˜åº¦ï¼')) return;
 	sHeight = d_height.value;
 
 	if (sAction == "MODI") {
@@ -109,7 +109,7 @@ function InitDocument(){
 <SCRIPT LANGUAGE=JAVASCRIPT>
 
 
-// ÅĞ¶ÏÖµÊÇ·ñ´óÓÚ0
+// åˆ¤æ–­å€¼æ˜¯å¦å¤§äº0
 function MoreThanOne(obj, sErr){
 	var b=false;
 	if (obj.value!=""){
@@ -134,12 +134,12 @@ function MoreThanOne(obj, sErr){
 <tr>
 	<td>
 	<fieldset>
-	<legend>ÊôĞÔÉèÖÃ</legend>
+	<legend>å±æ€§è®¾ç½®</legend>
 	<table border=0 cellpadding=0 cellspacing=0>
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>ÍøÒ³µØÖ·:</td>
+		<td>ç½‘é¡µåœ°å€:</td>
 		<td width=5></td>
 		<td colspan=5><input type=text id=d_url size=38 value="" style="width:243px"></td>
 		<td width=7></td>
@@ -147,11 +147,11 @@ function MoreThanOne(obj, sErr){
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td noWrap>¹ö ¶¯ Ìõ:</td>
+		<td noWrap>æ»š åŠ¨ æ¡:</td>
 		<td width=5></td>
-		<td><select id=d_scrolling style="width:72px"><option value=''>Ä¬ÈÏ</option><option value='yes'>ÓĞ</option><option value='no'>ÎŞ</option></select></td>
+		<td><select id=d_scrolling style="width:72px"><option value=''>é»˜è®¤</option><option value='yes'>æœ‰</option><option value='no'>æ— </option></select></td>
 		<td width=40></td>
-		<td noWrap>±ß ¿ò Ïß:</td>
+		<td noWrap>è¾¹ æ¡† çº¿:</td>
 		<td width=5></td>
 		<td><input id=d_frameborder size=10 maxlength=2 value="" ONKEYPRESS="event.returnValue=IsDigit();"></td>
 		<td width=7></td>
@@ -159,11 +159,11 @@ function MoreThanOne(obj, sErr){
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>ÉÏÏÂ±ß¾à:</td>
+		<td>ä¸Šä¸‹è¾¹è·:</td>
 		<td width=5></td>
 		<td><input id=d_marginheight size=10 maxlength=2 value="" ONKEYPRESS="event.returnValue=IsDigit();"></td>
 		<td width=40></td>
-		<td>×óÓÒ±ß¾à:</td>
+		<td>å·¦å³è¾¹è·:</td>
 		<td width=5></td>
 		<td><input id=d_marginwidth size=10 maxlength=2 value="" ONKEYPRESS="event.returnValue=IsDigit();"></td>
 		<td width=7></td>
@@ -171,11 +171,11 @@ function MoreThanOne(obj, sErr){
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>Ö¡ ¿í ¶È:</td>
+		<td>å¸§ å®½ åº¦:</td>
 		<td width=5></td>
 		<td><input id=d_width size=10 maxlength=4 value="" ONKEYPRESS="event.returnValue=IsDigit();"></td>
 		<td width=40></td>
-		<td>Ö¡ ¸ß ¶È:</td>
+		<td>å¸§ é«˜ åº¦:</td>
 		<td width=5></td>
 		<td><input id=d_height size=10 maxlength=4 value="" ONKEYPRESS="event.returnValue=IsDigit();"></td>
 		<td width=7></td>
@@ -186,7 +186,7 @@ function MoreThanOne(obj, sErr){
 	</td>
 </tr>
 <tr><td height=5></td></tr>
-<tr><td align=right><input type=submit value='  È·¶¨  ' id=Ok>&nbsp;&nbsp;<input type=button value='  È¡Ïû  ' onclick="window.close();"></td></tr>
+<tr><td align=right><input type=submit value='  ç¡®å®š  ' id=Ok>&nbsp;&nbsp;<input type=button value='  å–æ¶ˆ  ' onclick="window.close();"></td></tr>
 </table>
 
 </BODY>

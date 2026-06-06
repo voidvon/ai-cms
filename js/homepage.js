@@ -2,11 +2,11 @@ function addCookie()
 {
  if (document.all)
     {
-       window.external.addFavorite('http://idc.59599.cn/','企业系统');
+       window.external.addFavorite('http://idc.59599.cn/','浼佷笟绯荤粺');
     }
     else if (window.sidebar)
     {
-       window.sidebar.addPanel('企业系统', 'http://idc.59599.cn/', "");
+       window.sidebar.addPanel('浼佷笟绯荤粺', 'http://idc.59599.cn/', "");
  }
 }
 
@@ -31,7 +31,7 @@ function setHomepage()
          }  
          catch (e)  
          {  
-    alert( "该操作被浏览器拒绝，如果想启用该功能，请在地址栏内输入 about:config,然后将项 signed.applets.codebase_principal_support 值该为true" );  
+    alert( "璇ユ搷浣滆娴忚鍣ㄦ嫆缁濓紝濡傛灉鎯冲惎鐢ㄨ鍔熻兘锛岃鍦ㄥ湴鍧�鏍忓唴杈撳叆 about:config,鐒跺悗灏嗛」 signed.applets.codebase_principal_support 鍊艰涓簍rue" );  
          }
     } 
     var prefs = Components.classes['@mozilla.org/preferences-service;1'].getService(Components. interfaces.nsIPrefBranch);

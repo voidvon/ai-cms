@@ -1,8 +1,8 @@
 <HTML>
 <HEAD>
-<meta http-equiv="Content-Type" content="text/html; charset=gb2312">
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <style type="text/css">
-body, a, table, div, span, td, th, input, select{font:9pt;font-family: "ËÎÌå", Verdana, Arial, Helvetica, sans-serif;}
+body, a, table, div, span, td, th, input, select{font:9pt;font-family: "å®‹ä½“", Verdana, Arial, Helvetica, sans-serif;}
 body {padding:5px}
 </style>
 
@@ -10,7 +10,7 @@ body {padding:5px}
 
 <script language="JavaScript">
 var sAction = "INSERT";
-var sTitle = "²åÈë";
+var sTitle = "æ’å…¥";
 
 var oControl;
 var oSeletion;
@@ -35,7 +35,7 @@ sRangeType = dialogArguments.eWebEditor.document.selection.type;
 if (sRangeType == "Control") {
 	if (oSelection.item(0).tagName == "IMG"){
 		sAction = "MODI";
-		sTitle = "ĞŞ¸Ä";
+		sTitle = "ä¿®æ”¹";
 		sCheckFlag = "url";
 		oControl = oSelection.item(0);
 		sFromUrl = oControl.getAttribute("src", 2);
@@ -52,10 +52,10 @@ if (sRangeType == "Control") {
 }
 
 
-document.write("<title>Í¼Æ¬ÊôĞÔ£¨" + sTitle + "£©</title>");
+document.write("<title>å›¾ç‰‡å±æ€§ï¼ˆ" + sTitle + "ï¼‰</title>");
 
 
-// ³õÊ¼Öµ
+// åˆå§‹å€¼
 function InitDocument(){
 	SearchSelectValue(d_filter, sFilter);
 	SearchSelectValue(d_align, sAlign.toLowerCase());
@@ -72,7 +72,7 @@ function InitDocument(){
 }
 
 
-// Í¼Æ¬À´Ô´µ¥Ñ¡µã»÷ÊÂ¼ş
+// å›¾ç‰‡æ¥æºå•é€‰ç‚¹å‡»äº‹ä»¶
 function RadioClick(what){
 	if (what=="url"){
 		d_checkfromfile.checked=false;
@@ -87,13 +87,13 @@ function RadioClick(what){
 	}
 }
 
-// ÉÏ´«Ö¡µ÷ÈëÍê³ÉÊ±Ö´ĞĞ
+// ä¸Šä¼ å¸§è°ƒå…¥å®Œæˆæ—¶æ‰§è¡Œ
 function UploadLoaded(){
-	// ³õÊ¼radio
+	// åˆå§‹radio
 	RadioClick(sCheckFlag);
 }
 
-// ÉÏ´«´íÎó
+// ä¸Šä¼ é”™è¯¯
 function UploadError(sErrDesc){
 	AbleItems();
 	RadioClick('file');
@@ -104,13 +104,13 @@ function UploadError(sErrDesc){
 	catch(e){}
 }
 
-// ÎÄ¼şÉÏ´«Íê³ÉÊ±Ö´ĞĞ,´øÈëÉÏ´«ÎÄ¼şÃû
+// æ–‡ä»¶ä¸Šä¼ å®Œæˆæ—¶æ‰§è¡Œ,å¸¦å…¥ä¸Šä¼ æ–‡ä»¶å
 function UploadSaved(sPathFileName){
 	d_fromurl.value = sPathFileName;
 	ReturnValue();
 }
 
-// ±¾´°¿Ú·µ»ØÖµ
+// æœ¬çª—å£è¿”å›å€¼
 function ReturnValue(){
 	sFromUrl = d_fromurl.value;
 	sAlt = d_alt.value;
@@ -182,36 +182,36 @@ function ReturnValue(){
 	window.close();
 }
 
-// µãÈ·¶¨Ê±Ö´ĞĞ
+// ç‚¹ç¡®å®šæ—¶æ‰§è¡Œ
 function ok(){
-	// Êı×ÖĞÍÊäÈëµÄÓĞĞ§ĞÔ
+	// æ•°å­—å‹è¾“å…¥çš„æœ‰æ•ˆæ€§
 	d_border.value = ToInt(d_border.value);
 	d_width.value = ToInt(d_width.value);
 	d_height.value = ToInt(d_height.value);
 	d_vspace.value = ToInt(d_vspace.value);
 	d_hspace.value = ToInt(d_hspace.value);
-	// ±ß¿òÑÕÉ«µÄÓĞĞ§ĞÔ
+	// è¾¹æ¡†é¢œè‰²çš„æœ‰æ•ˆæ€§
 	if (!IsColor(d_bordercolor.value)){
-		BaseAlert(d_bordercolor,'ÌáÊ¾£º\n\nÎŞĞ§µÄ±ß¿òÑÕÉ«Öµ£¡');
+		BaseAlert(d_bordercolor,'æç¤ºï¼š\n\næ— æ•ˆçš„è¾¹æ¡†é¢œè‰²å€¼ï¼');
 		return false;
 	}
 	
 	if (d_checkfromurl.checked){
-		// ·µ»ØÖµ
+		// è¿”å›å€¼
 		ReturnValue();
 	}else{
-		// ÉÏ´«ÎÄ¼şÅĞ¶Ï
+		// ä¸Šä¼ æ–‡ä»¶åˆ¤æ–­
 		if (!d_file.CheckUploadForm()) return false;
-		// Ê¹¸÷ÊäÈë¿òÎŞĞ§
+		// ä½¿å„è¾“å…¥æ¡†æ— æ•ˆ
 		DisableItems();
-		// ÏÔÊ¾ÕıÔÚÉÏ´«Í¼Æ¬
+		// æ˜¾ç¤ºæ­£åœ¨ä¸Šä¼ å›¾ç‰‡
 		divProcessing.style.display="";
-		// ÉÏ´«±íµ¥Ìá½»
+		// ä¸Šä¼ è¡¨å•æäº¤
 		d_file.myform.submit();
 	}
 }
 
-// Ê¹ËùÓĞÊäÈë¿òÎŞĞ§
+// ä½¿æ‰€æœ‰è¾“å…¥æ¡†æ— æ•ˆ
 function DisableItems(){
 	d_checkfromfile.disabled=true;
 	d_checkfromurl.disabled=true;
@@ -228,7 +228,7 @@ function DisableItems(){
 	Ok.disabled=true;
 }
 
-// Ê¹ËùÓĞÊäÈë¿òÓĞĞ§
+// ä½¿æ‰€æœ‰è¾“å…¥æ¡†æœ‰æ•ˆ
 function AbleItems(){
 	d_checkfromfile.disabled=false;
 	d_checkfromurl.disabled=false;
@@ -253,12 +253,12 @@ function AbleItems(){
 <tr>
 	<td>
 	<fieldset>
-	<legend>Í¼Æ¬À´Ô´</legend>
+	<legend>å›¾ç‰‡æ¥æº</legend>
 	<table border=0 cellpadding=0 cellspacing=0>
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td width=54 align=right onclick="RadioClick('file')"><input type=radio id="d_checkfromfile" value="1" onclick="RadioClick('file')">ÉÏ´«:</td>
+		<td width=54 align=right onclick="RadioClick('file')"><input type=radio id="d_checkfromfile" value="1" onclick="RadioClick('file')">ä¸Šä¼ :</td>
 		<td width=5></td>
 		<td colspan=5>
 		<Script Language=JavaScript>
@@ -270,7 +270,7 @@ function AbleItems(){
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td width=54 align=right onclick="RadioClick('url')"><input type=radio id="d_checkfromurl" value="1" onclick="RadioClick('url')">ÍøÂç:</td>
+		<td width=54 align=right onclick="RadioClick('url')"><input type=radio id="d_checkfromurl" value="1" onclick="RadioClick('url')">ç½‘ç»œ:</td>
 		<td width=5></td>
 		<td colspan=5><input type=text id="d_fromurl" style="width:243px" size=30 value=""></td>
 		<td width=7></td>
@@ -284,12 +284,12 @@ function AbleItems(){
 <tr>
 	<td>
 	<fieldset>
-	<legend>ÏÔÊ¾Ğ§¹û</legend>
+	<legend>æ˜¾ç¤ºæ•ˆæœ</legend>
 	<table border=0 cellpadding=0 cellspacing=0>
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>ËµÃ÷ÎÄ×Ö:</td>
+		<td>è¯´æ˜æ–‡å­—:</td>
 		<td width=5></td>
 		<td colspan=5><input type=text id=d_alt size=38 value="" style="width:243px"></td>
 		<td width=7></td>
@@ -297,11 +297,11 @@ function AbleItems(){
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td noWrap>±ß¿ò´ÖÏ¸:</td>
+		<td noWrap>è¾¹æ¡†ç²—ç»†:</td>
 		<td width=5></td>
 		<td><input type=text id=d_border size=10 value="" ONKEYPRESS="event.returnValue=IsDigit();"></td>
 		<td width=40></td>
-		<td noWrap>±ß¿òÑÕÉ«:</td>
+		<td noWrap>è¾¹æ¡†é¢œè‰²:</td>
 		<td width=5></td>
 		<td><table border=0 cellpadding=0 cellspacing=0><tr><td><input type=text id=d_bordercolor size=7 value=""></td><td><img border=0 src="../sysimage/rect.gif" width=18 style="cursor:hand" id=s_bordercolor onclick="SelectColor('bordercolor')"></td></tr></table></td>
 		<td width=7></td>
@@ -309,42 +309,42 @@ function AbleItems(){
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>ÌØÊâĞ§¹û:</td>
+		<td>ç‰¹æ®Šæ•ˆæœ:</td>
 		<td width=5></td>
 		<td>
 			<select id=d_filter style="width:72px" size=1>
-			<option value='' selected>ÎŞ</option>
-			<option value='Alpha(Opacity=50)'>°ëÍ¸Ã÷</option>
-			<option value='Alpha(Opacity=0, FinishOpacity=100, Style=1, StartX=0, StartY=0, FinishX=100, FinishY=140)'>ÏßĞÍÍ¸Ã÷</option>
-			<option value='Alpha(Opacity=10, FinishOpacity=100, Style=2, StartX=30, StartY=30, FinishX=200, FinishY=200)'>·ÅÉäÍ¸Ã÷</option>
-			<option value='blur(add=1,direction=14,strength=15)'>Ä£ºıĞ§¹û</option><option value='blur(add=true,direction=45,strength=30)'>·ç¶¯Ä£ºı</option>
-			<option value='Wave(Add=0, Freq=60, LightStrength=1, Phase=0, Strength=3)'>ÕıÏÒ²¨ÎÆ</option>
-			<option value='gray'>ºÚ°×ÕÕÆ¬</option><option value='Chroma(Color=#FFFFFF)'>°×É«Í¸Ã÷</option>
-			<option value='DropShadow(Color=#999999, OffX=7, OffY=4, Positive=1)'>Í¶ÉäÒõÓ°</option>
-			<option value='Shadow(Color=#999999, Direction=45)'>ÒõÓ°</option>
-			<option value='Glow(Color=#ff9900, Strength=5)'>·¢¹â</option>
-			<option value='flipv'>´¹Ö±·­×ª</option>
-			<option value='fliph'>×óÓÒ·­×ª</option>
-			<option value='grays'>½µµÍ²ÊÉ«</option>
-			<option value='xray'>X¹âÕÕÆ¬</option>
-			<option value='invert'>µ×Æ¬</option>
+			<option value='' selected>æ— </option>
+			<option value='Alpha(Opacity=50)'>åŠé€æ˜</option>
+			<option value='Alpha(Opacity=0, FinishOpacity=100, Style=1, StartX=0, StartY=0, FinishX=100, FinishY=140)'>çº¿å‹é€æ˜</option>
+			<option value='Alpha(Opacity=10, FinishOpacity=100, Style=2, StartX=30, StartY=30, FinishX=200, FinishY=200)'>æ”¾å°„é€æ˜</option>
+			<option value='blur(add=1,direction=14,strength=15)'>æ¨¡ç³Šæ•ˆæœ</option><option value='blur(add=true,direction=45,strength=30)'>é£åŠ¨æ¨¡ç³Š</option>
+			<option value='Wave(Add=0, Freq=60, LightStrength=1, Phase=0, Strength=3)'>æ­£å¼¦æ³¢çº¹</option>
+			<option value='gray'>é»‘ç™½ç…§ç‰‡</option><option value='Chroma(Color=#FFFFFF)'>ç™½è‰²é€æ˜</option>
+			<option value='DropShadow(Color=#999999, OffX=7, OffY=4, Positive=1)'>æŠ•å°„é˜´å½±</option>
+			<option value='Shadow(Color=#999999, Direction=45)'>é˜´å½±</option>
+			<option value='Glow(Color=#ff9900, Strength=5)'>å‘å…‰</option>
+			<option value='flipv'>å‚ç›´ç¿»è½¬</option>
+			<option value='fliph'>å·¦å³ç¿»è½¬</option>
+			<option value='grays'>é™ä½å½©è‰²</option>
+			<option value='xray'>Xå…‰ç…§ç‰‡</option>
+			<option value='invert'>åº•ç‰‡</option>
             </select>		
 		</td>
 		<td width=40></td>
-		<td>¶ÔÆë·½Ê½:</td>
+		<td>å¯¹é½æ–¹å¼:</td>
 		<td width=5></td>
 		<td>
 			<select id=d_align size=1 style="width:72px">
-			<option value='' selected>Ä¬ÈÏ</option>
-			<option value='left'>¾Ó×ó</option>
-			<option value='right'>¾ÓÓÒ</option>
-			<option value='top'>¶¥²¿</option>
-			<option value='middle'>ÖĞ²¿</option>
-			<option value='bottom'>µ×²¿</option>
-			<option value='absmiddle'>¾ø¶Ô¾ÓÖĞ</option>
-			<option value='absbottom'>¾ø¶Ôµ×²¿</option>
-			<option value='baseline'>»ùÏß</option>
-			<option value='texttop'>ÎÄ±¾¶¥²¿</option>
+			<option value='' selected>é»˜è®¤</option>
+			<option value='left'>å±…å·¦</option>
+			<option value='right'>å±…å³</option>
+			<option value='top'>é¡¶éƒ¨</option>
+			<option value='middle'>ä¸­éƒ¨</option>
+			<option value='bottom'>åº•éƒ¨</option>
+			<option value='absmiddle'>ç»å¯¹å±…ä¸­</option>
+			<option value='absbottom'>ç»å¯¹åº•éƒ¨</option>
+			<option value='baseline'>åŸºçº¿</option>
+			<option value='texttop'>æ–‡æœ¬é¡¶éƒ¨</option>
 			</select>
 		</td>
 		<td width=7></td>
@@ -352,11 +352,11 @@ function AbleItems(){
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>Í¼Æ¬¿í¶È:</td>
+		<td>å›¾ç‰‡å®½åº¦:</td>
 		<td width=5></td>
 		<td><input type=text id=d_width size=10 value="" ONKEYPRESS="event.returnValue=IsDigit();" maxlength=4></td>
 		<td width=40></td>
-		<td>Í¼Æ¬¸ß¶È:</td>
+		<td>å›¾ç‰‡é«˜åº¦:</td>
 		<td width=5></td>
 		<td><input type=text id=d_height size=10 value="" ONKEYPRESS="event.returnValue=IsDigit();" maxlength=4></td>
 		<td width=7></td>
@@ -364,11 +364,11 @@ function AbleItems(){
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>ÉÏÏÂ¼ä¾à:</td>
+		<td>ä¸Šä¸‹é—´è·:</td>
 		<td width=5></td>
 		<td><input type=text id=d_vspace size=10 value="" ONKEYPRESS="event.returnValue=IsDigit();" maxlength=2></td>
 		<td width=40></td>
-		<td>×óÓÒ¼ä¾à:</td>
+		<td>å·¦å³é—´è·:</td>
 		<td width=5></td>
 		<td><input type=text id=d_hspace size=10 value="" ONKEYPRESS="event.returnValue=IsDigit();" maxlength=2></td>
 		<td width=7></td>
@@ -379,11 +379,11 @@ function AbleItems(){
 	</td>
 </tr>
 <tr><td height=5></td></tr>
-<tr><td align=right><input type=submit value='  È·¶¨  ' id=Ok onclick="ok()">&nbsp;&nbsp;<input type=button value='  È¡Ïû  ' onclick="window.close();"></td></tr>
+<tr><td align=right><input type=submit value='  ç¡®å®š  ' id=Ok onclick="ok()">&nbsp;&nbsp;<input type=button value='  å–æ¶ˆ  ' onclick="window.close();"></td></tr>
 </table>
 
 <div id=divProcessing style="width:200px;height:30px;position:absolute;left:70px;top:100px;display:none">
-<table border=0 cellpadding=0 cellspacing=1 bgcolor="#000000" width="100%" height="100%"><tr><td bgcolor=#3A6EA5><marquee align="middle" behavior="alternate" scrollamount="5"><font color=#FFFFFF>...Í¼Æ¬ÉÏ´«ÖĞ...ÇëµÈ´ı...</font></marquee></td></tr></table>
+<table border=0 cellpadding=0 cellspacing=1 bgcolor="#000000" width="100%" height="100%"><tr><td bgcolor=#3A6EA5><marquee align="middle" behavior="alternate" scrollamount="5"><font color=#FFFFFF>...å›¾ç‰‡ä¸Šä¼ ä¸­...è¯·ç­‰å¾…...</font></marquee></td></tr></table>
 </div>
 
 </body>

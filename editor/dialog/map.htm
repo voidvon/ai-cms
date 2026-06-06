@@ -1,9 +1,9 @@
 <HTML>
 <HEAD>
-<TITLE>Í¼ĞÎÈÈµãÁ´½Ó</TITLE>
-<meta http-equiv="Content-Type" content="text/html; charset=gb2312">
+<TITLE>å›¾å½¢çƒ­ç‚¹é“¾æ¥</TITLE>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <style type="text/css">
-body, a, table, div, span, td, th, input, select{font:9pt;font-family: "ËÎÌå", Verdana, Arial, Helvetica, sans-serif;}
+body, a, table, div, span, td, th, input, select{font:9pt;font-family: "å®‹ä½“", Verdana, Arial, Helvetica, sans-serif;}
 body {padding:5px}
 </style>
 
@@ -68,12 +68,12 @@ if (oMap){
 }
 
 
-// ³õÊ¼»¯
+// åˆå§‹åŒ–
 function doInit(){
 
 	mapIframe.document.designMode="On";
 	mapIframe.document.open();
-	mapIframe.document.write("<head><style>body,a,table,td {font-size:9pt;font-family:'ËÎÌå,Verdana,Arial';Color:#000000;}</style></head><body MONOSPACE>");
+	mapIframe.document.write("<head><style>body,a,table,td {font-size:9pt;font-family:'å®‹ä½“,Verdana,Arial';Color:#000000;}</style></head><body MONOSPACE>");
 	mapIframe.document.body.innerHTML = sBody;
 	mapIframe.document.body.contentEditable = "true";
 	mapIframe.document.ondblclick=new Function("return dblClick(mapIframe.event);");
@@ -85,7 +85,7 @@ function doInit(){
 
 }
 
-// Ë«»÷ĞŞ¸ÄÁ´½ÓÊôĞÔ
+// åŒå‡»ä¿®æ”¹é“¾æ¥å±æ€§
 var objLink = new Object() ;
 function dblClick(event){
 	var e=event.srcElement;
@@ -105,7 +105,7 @@ function dblClick(event){
 	return false;
 }
 
-// ĞÂ½¨ÈÈµãÁ´½Ó
+// æ–°å»ºçƒ­ç‚¹é“¾æ¥
 function newMap(){
 	var n = aHref.length;
 	aHref[n]="";
@@ -115,7 +115,7 @@ function newMap(){
 	mapIframe.focus();
 }
 
-// È¡×Ô¶¯µİÔöÈÈµãÃû
+// å–è‡ªåŠ¨é€’å¢çƒ­ç‚¹å
 function getAutoMapName(){
 	var b=true;
 	var n=0;
@@ -131,7 +131,7 @@ function getAutoMapName(){
 
 }
 
-// ÅĞ¶ÏÊÇ·ñÎª²»´æÔÚµÄÃû³Æ
+// åˆ¤æ–­æ˜¯å¦ä¸ºä¸å­˜åœ¨çš„åç§°
 function isValidMapName(str){
 	str=str.toUpperCase();
 	for (var i=0; i<aMapName.length; i++){
@@ -194,7 +194,7 @@ function isValidMapName(str){
 <table border=0 cellpadding=0 cellspacing=3 align=center width="100%" height="100%">
 <tr><td colspan=2 height="100%"><iframe ID="mapIframe" MARGINHEIGHT="1" MARGINWIDTH="1" width="100%" scrolling="yes" height="100%"></iframe></td></tr>
 <tr><td colspan=2 height=5></td></tr>
-<tr><td><input type=button value='  ĞÂ½¨  ' id=btnNew title="ĞÂ½¨ÈÈµãÁ´½Ó" onclick="newMap()">&nbsp;(Ë«»÷¿É±à¼­Á´½Ó)</td><td align=right><input type=button value='  È·¶¨  ' id=Ok>&nbsp;&nbsp;<input type=button value='  È¡Ïû  ' onclick="window.close();"></td></tr>
+<tr><td><input type=button value='  æ–°å»º  ' id=btnNew title="æ–°å»ºçƒ­ç‚¹é“¾æ¥" onclick="newMap()">&nbsp;(åŒå‡»å¯ç¼–è¾‘é“¾æ¥)</td><td align=right><input type=button value='  ç¡®å®š  ' id=Ok>&nbsp;&nbsp;<input type=button value='  å–æ¶ˆ  ' onclick="window.close();"></td></tr>
 </table>
 
 <Script Language=JavaScript>

@@ -1,33 +1,33 @@
-<% data_path="/" 'ACCÁ¬½ÓÊı¾İ¿âÂ·¾¶£¬¶ÔSQLÎŞĞ§ %>
+<% data_path="/" 'ACCè¿æ¥æ•°æ®åº“è·¯å¾„ï¼Œå¯¹SQLæ— æ•ˆ %>
 <!--#include file="conn/conn.asp"-->
 <!--#include file="inc/safe.asp"-->
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
-<meta http-equiv="Content-Type" content="text/html; charset=gb2312" />
-<title><%=sprodname%>|²úÆ·ËÑË÷|#hope_webname#</title>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title><%=sprodname%>|äº§å“æœç´¢|#hope_webname#</title>
 <meta name="keywords" content="<%=sprodname%>" />
-<meta name="description" content="ÕÒµ½<%=sprodname%>" />
+<meta name="description" content="æ‰¾åˆ°<%=sprodname%>" />
 <link href="/css/c.css" rel="stylesheet" type="text/css" />
-<script language="javascript" type="text/javascript" src="/js/ajaxrequest.js"></script><SCRIPT language="javascript">function add(){if(document.addform.name.value==""){alert("ĞÕÃû²»ÄÜÎª¿Õ!");document.addform.name.focus();return false;}
-if(document.addform.address.value==""){alert("µØÖ·²»ÄÜÎª¿Õ!");document.addform.address.focus();return false;}if(document.addform.phone.value==""){alert("µç»°²»ÄÜÎª¿Õ!")
-;document.addform.phone.focus();return false;}if(document.addform.email.value==""){alert("Email²»ÄÜÎª¿Õ!");document.addform.email.focus();return false;}if(document.
-addform.Title.value==""){alert("Ö÷Ìâ²»ÄÜÎª¿Õ!");document.addform.Title.focus();return false;}var ajax=new AJAXRequest;ajax.setcharset("GB2312");ajax.postf(document.
-getElementById("addform"),function(obj) { if(obj.responseText=="true"){alert("ÁôÑÔ³É¹¦")}; });}</SCRIPT>
+<script language="javascript" type="text/javascript" src="/js/ajaxrequest.js"></script><SCRIPT language="javascript">function add(){if(document.addform.name.value==""){alert("å§“åä¸èƒ½ä¸ºç©º!");document.addform.name.focus();return false;}
+if(document.addform.address.value==""){alert("åœ°å€ä¸èƒ½ä¸ºç©º!");document.addform.address.focus();return false;}if(document.addform.phone.value==""){alert("ç”µè¯ä¸èƒ½ä¸ºç©º!")
+;document.addform.phone.focus();return false;}if(document.addform.email.value==""){alert("Emailä¸èƒ½ä¸ºç©º!");document.addform.email.focus();return false;}if(document.
+addform.Title.value==""){alert("ä¸»é¢˜ä¸èƒ½ä¸ºç©º!");document.addform.Title.focus();return false;}var ajax=new AJAXRequest;ajax.setcharset("GB2312");ajax.postf(document.
+getElementById("addform"),function(obj) { if(obj.responseText=="true"){alert("ç•™è¨€æˆåŠŸ")}; });}</SCRIPT>
 #BM_indextop#
 <div id="page_main" class="clearfix">
     <div class="page-right">
-      <div class="site-nav"><span>µ±Ç°Î»ÖÃ : </span><a href="/index.html">¹«Ë¾Ö÷Ò³</a> &gt;&gt; <a href="/Search.asp" title="¸ü¶à·§ÃÅ²úÆ·£¬ÕâÕÒÕÒ¿´">²úÆ·ËÑË÷</a> </div>
+      <div class="site-nav"><span>å½“å‰ä½ç½® : </span><a href="/index.html">å…¬å¸ä¸»é¡µ</a> &gt;&gt; <a href="/Search.asp" title="æ›´å¤šé˜€é—¨äº§å“ï¼Œè¿™æ‰¾æ‰¾çœ‹">äº§å“æœç´¢</a> </div>
 	  <div class="page-products">
       <ul class="clearfix"><%
 strsearch=request.QueryString("action")
 ProductsName=trim(request("ProductsName"))
 if ProductsName="" then
-ProductsName="ÊäÈë²úÆ·Ãû³Æ"
+ProductsName="è¾“å…¥äº§å“åç§°"
 end if
 if strsearch="search" then
 
-if ProductsName="ÊäÈë²úÆ·Ãû³Æ" then
+if ProductsName="è¾“å…¥äº§å“åç§°" then
 Sql="Select * from benming_ch_prod where show=1"
 else
 Sql="Select * from benming_ch_prod where show=1 and prodName like '%"&ProductsName&"%' "
@@ -51,7 +51,7 @@ end if
 <tr>
 <td width="3%">&nbsp;</td>
 
-<td width="24%">²úÆ·Ãû³Æ£º
+<td width="24%">äº§å“åç§°ï¼š
 <input name="ProductsName" type="text" id="ProductsName" value="<%=ProductsName%>" size="15"  class="Font_666666_a" onfocus="this.value='';" /></td>
 <td width="73%"><input name="image" type="image" src="/skin/blue/Images/cp_21.jpg" /></td>
 </tr>
@@ -61,7 +61,7 @@ end if
 </tr>
 <tr>
 <td width="3%" class="search_bottom_dashed">&nbsp;</td>
-<td width="97%" height="25" class="search_bottom_dashed">Ê×Ò³ >> ËÑË÷ <span class="Font_FF0000_a">¡°<%=sprodname%>¡± </span>½á¹û£º </td>
+<td width="97%" height="25" class="search_bottom_dashed">é¦–é¡µ >> æœç´¢ <span class="Font_FF0000_a">â€œ<%=sprodname%>â€ </span>ç»“æœï¼š </td>
 </tr>
 </table>
 
@@ -121,7 +121,7 @@ Set Rs=nothing
     </div>
     <div class="page-left">
       <div class="left-products">
-        <h2><span>²úÆ·Õ¹Ê¾</span></h2>
+        <h2><span>äº§å“å±•ç¤º</span></h2>
         <div id="LeftMenu" class="ddsmoothmenu-v">
           <ul>
 #HOPE_ProductsCat()#
@@ -129,10 +129,10 @@ Set Rs=nothing
         </div>
       </div>
       <div class="left-search">
-        <h2><span>Õ¾ÄÚËÑË÷</span></h2>
+        <h2><span>ç«™å†…æœç´¢</span></h2>
 <form id="form2" name="form2" method="post" action="/Search.asp?action=search">
           <p>
-            <input name="ProductsName" type="text" id="ProductsName" value="ÕÒÕÒ¿´" size="18"  class="Font_666666_a" onfocus="this.value='';" />
+            <input name="ProductsName" type="text" id="ProductsName" value="æ‰¾æ‰¾çœ‹" size="18"  class="Font_666666_a" onfocus="this.value='';" />
             <input name="searchbutton" type="submit" id="searchbutton" value="" />
           </p>
         </form>

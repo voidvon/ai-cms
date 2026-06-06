@@ -1,0 +1,6 @@
+data/site.sqlite
+data/site.sqlite-shm
+data/site.sqlite-wal
+generated/
+import/*.csv
+.venv/

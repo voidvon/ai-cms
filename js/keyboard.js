@@ -1,4 +1,4 @@
-//¶¨Òåµ±Ç°ÊÇ·ñ´óĞ´µÄ×´Ì¬
+//å®šä¹‰å½“å‰æ˜¯å¦å¤§å†™çš„çŠ¶æ€
 window.onload=
 	function()
 	{
@@ -137,8 +137,8 @@ eval(docStyle + objectXY + styleDoc + vert + "=" + y);
 
 
 
-	document.write("<DIV align=center id=\"softkeyboard\" name=\"softkeyboard\" style=\"position:absolute; left:0px; top:0px; width:500px; z-index:180;display:none\">  <table id=\"CalcTable\" width=\"\" border=\"0\" align=\"center\" cellpadding=\"0\" cellspacing=\"0\" bgcolor=\"\">           <FORM id=Calc name=Calc action=\"\" method=post autocomplete=\"off\">       <tr> <td title=\"Îª±£Ö¤ºóÌ¨µÇÂ½°²È«,½¨ÒéÊ¹ÓÃÊäÈëÆ÷ÊäÈëÕÊºÅÃÜÂë\" align=\"right\" valign=\"middle\" bgcolor=\"\" style=\"cursor: default;height:30\"> <INPUT type=hidden value=\"\" name=password>  <INPUT type=hidden value=ok name=action2>&nbsp;&nbsp&nbsp;&nbsp;&nbsp&nbsp;&nbsp;&nbsp&nbsp;&nbsp;&nbsp&nbsp;&nbsp&nbsp;<INPUT style=\"width:100px;height:20px;background-color:#54BAF1;\" type=button value=\"Ê¹ÓÃ¼üÅÌÊäÈë\" bgtype=\"1\" onclick=\"password1.readOnly=0;password1.focus();softkeyboard.style.display='none';password1.value='';\"><span style=\"width:2px;\"></span></td>      </tr>      <tr align=\"center\">         <td align=\"center\" bgcolor=\"#FFFFFF\"> <table align=\"center\" width=\"%\" border=\"0\" cellspacing=\"1\" cellpadding=\"0\">\n          <tr align=\"left\" valign=\"middle\"> \n            <td> <input type=button value=\" ~ \"></td>\n            <td> <input type=button value=\" ! \"></td>\n            <td> <input type=button  value=\" @ \"></td>\n            <td> <input type=button value=\" # \"></td>\n            <td> <input type=button value=\" $ \"></td>\n            <td> <input type=button value=\" % \"></td>\n            <td> <input type=button value=\" ^ \"></td>\n            <td> <input type=button value=\" & \"></td>\n            <td> <input type=button value=\" * \"></td>\n            <td> <input type=button value=\" ( \"></td>\n            <td> <input type=button value=\" ) \"></td>\n            <td> <input type=button value=\" _ \"></td>\n            <td> <input type=button value=\" + \"></td>\n            <td> <input type=button value=\" | \"></td>\n            <td colspan=\"1\" rowspan=\"2\"> <input name=\"button10\" type=button value=\" ÍË¸ñ\" onclick=\"setpassvalue();\"  onDblClick=\"setpassvalue();\" style=\"width:100px;height:42px\"> \n            </td>\n          </tr>\n          <tr align=\"left\" valign=\"middle\"> \n            <td> <input type=button value=\" ` \"></td>\n            <td> <input type=button value=\" 1 \"></td>\n            <td> <input type=button value=\" 2 \"></td>\n            <td> <input type=button value=\" 3 \"></td>\n            <td> <input type=button value=\" 4 \"></td>\n            <td> <input type=button value=\" 5 \"></td>\n            <td> <input type=button value=\" 6 \"></td>\n            <td> <input type=button value=\" 7 \"></td>\n            <td> <input type=button value=\" 8 \"></td>\n            <td> <input type=button value=\" 9 \"></td>\n            <td> <input name=\"button6\" type=button value=\" 0 \"></td>\n            <td> <input type=button value=\" - \"></td>\n            <td> <input type=button value=\" = \"></td>\n            <td> <input type=button value=\" \\ \"></td>\n            <td> </td>\n          </tr>\n          <tr align=\"left\" valign=\"middle\"> \n            <td> <input type=button value=\" q \"></td>\n            <td> <input type=button value=\" w \"></td>\n            <td> <input type=button value=\" e \"></td>\n            <td> <input type=button value=\" r \"></td>\n            <td> <input type=button value=\" t \"></td>\n            <td> <input type=button value=\" y \"></td>\n            <td> <input type=button value=\" u \"></td>\n            <td> <input type=button value=\" i \"></td>\n            <td> <input type=button value=\" o \"></td>\n            <td> <input name=\"button8\" type=button value=\" p \"></td>\n            <td> <input name=\"button9\" type=button value=\" { \"></td>\n            <td> <input type=button value=\" } \"></td>\n            <td> <input type=button value=\" [ \"></td>\n            <td> <input type=button value=\" ] \"></td>\n            <td><input name=\"button9\" type=button onClick=\"capsLockText();setCapsLock();\"  onDblClick=\"capsLockText();setCapsLock();\" value=\"ÇĞ»»´ó/Ğ¡Ğ´\" style=\"width:100px;\"></td>\n          </tr>\n          <tr align=\"left\" valign=\"middle\"> \n            <td> <input type=button value=\" a \"></td>\n            <td> <input type=button value=\" s \"></td>\n            <td> <input type=button value=\" d \"></td>\n            <td> <input type=button value=\" f \"></td>\n            <td> <input type=button value=\" g \"></td>\n            <td> <input type=button value=\" h \"></td>\n            <td> <input type=button value=\" j \"></td>\n            <td> <input name=\"button3\" type=button value=\" k \"></td>\n            <td> <input name=\"button4\" type=button value=\" l \"></td>\n            <td> <input name=\"button5\" type=button value=\" : \"></td>\n            <td> <input name=\"button7\" type=button value=\" &quot; \"></td>\n            <td> <input type=button value=\" ; \"></td>\n            <td> <input type=button value=\" ' \"></td>\n            <td rowspan=\"2\" colspan=\"2\"> <input name=\"button12\" type=button onclick=\"OverInput();\" value=\"   È·¶¨  \" style=\"width:130px;height:42\"></td>\n          </tr>\n          <tr align=\"left\" valign=\"middle\"> \n            <td> <input name=\"button2\" type=button value=\" z \"></td>\n            <td> <input type=button value=\" x \"></td>\n            <td> <input type=button value=\" c \"></td>\n            <td> <input type=button value=\" v \"></td>\n            <td> <input type=button value=\" b \"></td>\n            <td> <input type=button value=\" n \"></td>\n            <td> <input type=button value=\" m \"></td>\n            <td> <input type=button value=\" &lt; \"></td>\n            <td> <input type=button value=\" &gt; \"></td>\n            <td> <input type=button value=\" ? \"></td>\n            <td> <input type=button value=\" , \"></td>\n            <td> <input type=button value=\" . \"></td>\n            <td> <input type=button value=\" / \"></td>\n          </tr>\n        </table></td>    </FORM>      </tr>  </table></DIV>")
-//¸øÊäÈëµÄÃÜÂë¿òÌí¼ÓĞÂÖµ
+	document.write("<DIV align=center id=\"softkeyboard\" name=\"softkeyboard\" style=\"position:absolute; left:0px; top:0px; width:500px; z-index:180;display:none\">  <table id=\"CalcTable\" width=\"\" border=\"0\" align=\"center\" cellpadding=\"0\" cellspacing=\"0\" bgcolor=\"\">           <FORM id=Calc name=Calc action=\"\" method=post autocomplete=\"off\">       <tr> <td title=\"ä¸ºä¿è¯åå°ç™»é™†å®‰å…¨,å»ºè®®ä½¿ç”¨è¾“å…¥å™¨è¾“å…¥å¸å·å¯†ç \" align=\"right\" valign=\"middle\" bgcolor=\"\" style=\"cursor: default;height:30\"> <INPUT type=hidden value=\"\" name=password>  <INPUT type=hidden value=ok name=action2>&nbsp;&nbsp&nbsp;&nbsp;&nbsp&nbsp;&nbsp;&nbsp&nbsp;&nbsp;&nbsp&nbsp;&nbsp&nbsp;<INPUT style=\"width:100px;height:20px;background-color:#54BAF1;\" type=button value=\"ä½¿ç”¨é”®ç›˜è¾“å…¥\" bgtype=\"1\" onclick=\"password1.readOnly=0;password1.focus();softkeyboard.style.display='none';password1.value='';\"><span style=\"width:2px;\"></span></td>      </tr>      <tr align=\"center\">         <td align=\"center\" bgcolor=\"#FFFFFF\"> <table align=\"center\" width=\"%\" border=\"0\" cellspacing=\"1\" cellpadding=\"0\">\n          <tr align=\"left\" valign=\"middle\"> \n            <td> <input type=button value=\" ~ \"></td>\n            <td> <input type=button value=\" ! \"></td>\n            <td> <input type=button  value=\" @ \"></td>\n            <td> <input type=button value=\" # \"></td>\n            <td> <input type=button value=\" $ \"></td>\n            <td> <input type=button value=\" % \"></td>\n            <td> <input type=button value=\" ^ \"></td>\n            <td> <input type=button value=\" & \"></td>\n            <td> <input type=button value=\" * \"></td>\n            <td> <input type=button value=\" ( \"></td>\n            <td> <input type=button value=\" ) \"></td>\n            <td> <input type=button value=\" _ \"></td>\n            <td> <input type=button value=\" + \"></td>\n            <td> <input type=button value=\" | \"></td>\n            <td colspan=\"1\" rowspan=\"2\"> <input name=\"button10\" type=button value=\" é€€æ ¼\" onclick=\"setpassvalue();\"  onDblClick=\"setpassvalue();\" style=\"width:100px;height:42px\"> \n            </td>\n          </tr>\n          <tr align=\"left\" valign=\"middle\"> \n            <td> <input type=button value=\" ` \"></td>\n            <td> <input type=button value=\" 1 \"></td>\n            <td> <input type=button value=\" 2 \"></td>\n            <td> <input type=button value=\" 3 \"></td>\n            <td> <input type=button value=\" 4 \"></td>\n            <td> <input type=button value=\" 5 \"></td>\n            <td> <input type=button value=\" 6 \"></td>\n            <td> <input type=button value=\" 7 \"></td>\n            <td> <input type=button value=\" 8 \"></td>\n            <td> <input type=button value=\" 9 \"></td>\n            <td> <input name=\"button6\" type=button value=\" 0 \"></td>\n            <td> <input type=button value=\" - \"></td>\n            <td> <input type=button value=\" = \"></td>\n            <td> <input type=button value=\" \\ \"></td>\n            <td> </td>\n          </tr>\n          <tr align=\"left\" valign=\"middle\"> \n            <td> <input type=button value=\" q \"></td>\n            <td> <input type=button value=\" w \"></td>\n            <td> <input type=button value=\" e \"></td>\n            <td> <input type=button value=\" r \"></td>\n            <td> <input type=button value=\" t \"></td>\n            <td> <input type=button value=\" y \"></td>\n            <td> <input type=button value=\" u \"></td>\n            <td> <input type=button value=\" i \"></td>\n            <td> <input type=button value=\" o \"></td>\n            <td> <input name=\"button8\" type=button value=\" p \"></td>\n            <td> <input name=\"button9\" type=button value=\" { \"></td>\n            <td> <input type=button value=\" } \"></td>\n            <td> <input type=button value=\" [ \"></td>\n            <td> <input type=button value=\" ] \"></td>\n            <td><input name=\"button9\" type=button onClick=\"capsLockText();setCapsLock();\"  onDblClick=\"capsLockText();setCapsLock();\" value=\"åˆ‡æ¢å¤§/å°å†™\" style=\"width:100px;\"></td>\n          </tr>\n          <tr align=\"left\" valign=\"middle\"> \n            <td> <input type=button value=\" a \"></td>\n            <td> <input type=button value=\" s \"></td>\n            <td> <input type=button value=\" d \"></td>\n            <td> <input type=button value=\" f \"></td>\n            <td> <input type=button value=\" g \"></td>\n            <td> <input type=button value=\" h \"></td>\n            <td> <input type=button value=\" j \"></td>\n            <td> <input name=\"button3\" type=button value=\" k \"></td>\n            <td> <input name=\"button4\" type=button value=\" l \"></td>\n            <td> <input name=\"button5\" type=button value=\" : \"></td>\n            <td> <input name=\"button7\" type=button value=\" &quot; \"></td>\n            <td> <input type=button value=\" ; \"></td>\n            <td> <input type=button value=\" ' \"></td>\n            <td rowspan=\"2\" colspan=\"2\"> <input name=\"button12\" type=button onclick=\"OverInput();\" value=\"   ç¡®å®š  \" style=\"width:130px;height:42\"></td>\n          </tr>\n          <tr align=\"left\" valign=\"middle\"> \n            <td> <input name=\"button2\" type=button value=\" z \"></td>\n            <td> <input type=button value=\" x \"></td>\n            <td> <input type=button value=\" c \"></td>\n            <td> <input type=button value=\" v \"></td>\n            <td> <input type=button value=\" b \"></td>\n            <td> <input type=button value=\" n \"></td>\n            <td> <input type=button value=\" m \"></td>\n            <td> <input type=button value=\" &lt; \"></td>\n            <td> <input type=button value=\" &gt; \"></td>\n            <td> <input type=button value=\" ? \"></td>\n            <td> <input type=button value=\" , \"></td>\n            <td> <input type=button value=\" . \"></td>\n            <td> <input type=button value=\" / \"></td>\n          </tr>\n        </table></td>    </FORM>      </tr>  </table></DIV>")
+//ç»™è¾“å…¥çš„å¯†ç æ¡†æ·»åŠ æ–°å€¼
 	function addValue(newValue)
 	{
 		if (CapsLockValue==0)
@@ -166,7 +166,7 @@ eval(docStyle + objectXY + styleDoc + vert + "=" + y);
 			}
 		}
 	}
-//ÊµÏÖBackSpace¼üµÄ¹¦ÄÜ
+//å®ç°BackSpaceé”®çš„åŠŸèƒ½
 	function setpassvalue()
 	{
 		var longnum=Calc.password.value.length;
@@ -176,7 +176,7 @@ eval(docStyle + objectXY + styleDoc + vert + "=" + y);
 		var str=Calc.password.value;
 			password1.value=Calc.password.value;
 	}
-//ÊäÈëÍê±Ï
+//è¾“å…¥å®Œæ¯•
 	function OverInput()
 	{
 		//m_pass.mempass.value=Calc.password.value;
@@ -189,7 +189,7 @@ eval(docStyle + objectXY + styleDoc + vert + "=" + y);
 		password1.readOnly=1;
 		//password1.value=Calc.password.value;
 	}
-//¹Ø±ÕÈí¼üÅÌ
+//å…³é—­è½¯é”®ç›˜
 	function closekeyboard(theForm)
 	{
 		//eval("var theForm="+theForm+";");
@@ -198,7 +198,7 @@ eval(docStyle + objectXY + styleDoc + vert + "=" + y);
 		//Calc.password.value="";
 
 	}
-//ÏÔÊ¾Èí¼üÅÌ
+//æ˜¾ç¤ºè½¯é”®ç›˜
 	function showkeyboard()
 	{
 		if(event.y+140)
@@ -218,18 +218,18 @@ eval(docStyle + objectXY + styleDoc + vert + "=" + y);
 		//password1.value="";
 	}
 
-//ÉèÖÃÊÇ·ñ´óĞ´µÄÖµ
+//è®¾ç½®æ˜¯å¦å¤§å†™çš„å€¼
 function setCapsLock()
 {
 	if (CapsLockValue==0)
 	{
 		CapsLockValue=1
-//		Calc.showCapsLockValue.value="µ±Ç°ÊÇ´óĞ´ ";
+//		Calc.showCapsLockValue.value="å½“å‰æ˜¯å¤§å†™ ";
 	}
 	else 
 	{
 		CapsLockValue=0
-//		Calc.showCapsLockValue.value="µ±Ç°ÊÇĞ¡Ğ´ ";
+//		Calc.showCapsLockValue.value="å½“å‰æ˜¯å°å†™ ";
 	}
 }
 
@@ -320,8 +320,8 @@ function initCalc()
 
 String.prototype.trim = function()
 {
-    // ÓÃÕıÔò±í´ïÊ½½«Ç°ºó¿Õ¸ñ
-    // ÓÃ¿Õ×Ö·û´®Ìæ´ú¡£
+    // ç”¨æ­£åˆ™è¡¨è¾¾å¼å°†å‰åç©ºæ ¼
+    // ç”¨ç©ºå­—ç¬¦ä¸²æ›¿ä»£ã€‚
     return this.replace(/(^\s*)|(\s*$)/g, "");
 }
 
@@ -330,7 +330,7 @@ capsLockFlag=true;
 
 function capsLockText()
 {
-if(capsLockFlag)//¸Ä³É´óĞ´
+if(capsLockFlag)//æ”¹æˆå¤§å†™
 {
 	for(var i=0;i<Calc.elements.length;i++)
 	{

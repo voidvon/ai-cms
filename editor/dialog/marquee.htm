@@ -1,6 +1,6 @@
 <HTML>
 <HEAD>
-<META content="text/html; charset=gb2312" http-equiv=Content-Type>
+<META content="text/html; charset=utf-8" http-equiv=Content-Type>
 <style>
 BODY {PADDING:5PX}
 TD,BODY,SELECT,P,INPUT {FONT-SIZE:9PT}
@@ -10,7 +10,7 @@ TD,BODY,SELECT,P,INPUT {FONT-SIZE:9PT}
 
 <script language=javascript>
 var sAction = "INSERT";
-var sTitle = "²åÈë";
+var sTitle = "æ’å…¥";
 var sel = dialogArguments.eWebEditor.document.selection.createRange();
 sel.type = dialogArguments.eWebEditor.document.selection.type;
 
@@ -21,22 +21,22 @@ var sBehavior = "";
 if (sel.type=="Control") {
 	if (sel.item(0).tagName=="MARQUEE"){
 		sAction = "MODI";
-		sTitle = "ĞŞ¸Ä";
+		sTitle = "ä¿®æ”¹";
 		el = sel.item(0);
 		sBehavior = el.behavior;
 		sText = el.innerHTML;
 	}
 }
 
-document.write("<title>×ÖÄ»ÊôĞÔ£¨" + sTitle + "£©</title>");
+document.write("<title>å­—å¹•å±æ€§ï¼ˆ" + sTitle + "ï¼‰</title>");
 
 
-// µ¥Ñ¡µÄµã»÷ÊÂ¼ş
+// å•é€‰çš„ç‚¹å‡»äº‹ä»¶
 function check(){
 	sBehavior = event.srcElement.value;
 }
 
-// ³õÊ¼Öµ
+// åˆå§‹å€¼
 function InitDocument() {
 	d_text.value = sText;
 	switch (sBehavior) {
@@ -76,14 +76,14 @@ function InitDocument() {
 	<FIELDSET align=left>
 	<LEGEND></LEGEND>
 	<table border=0 cellspacing=5 cellpadding=0>
-	<tr valign=middle><td>ÎÄ±¾:&nbsp;</td><td><input type=text id="d_text" size=50 value=""></td></tr>
-	<tr valign=middle><td>±íÏÖ:&nbsp;</td><td><input onclick="check()" type="radio" name="d_behavior" value="scroll"> ¹ö¶¯Ìõ <input onclick="check()" type="radio" name="d_behavior" value="slide"> »ÃµÆÆ¬ <input onclick="check()" type="radio" name="d_behavior" value="alternate"> ½»Ìæ</td></tr>
+	<tr valign=middle><td>æ–‡æœ¬:&nbsp;</td><td><input type=text id="d_text" size=50 value=""></td></tr>
+	<tr valign=middle><td>è¡¨ç°:&nbsp;</td><td><input onclick="check()" type="radio" name="d_behavior" value="scroll"> æ»šåŠ¨æ¡ <input onclick="check()" type="radio" name="d_behavior" value="slide"> å¹»ç¯ç‰‡ <input onclick="check()" type="radio" name="d_behavior" value="alternate"> äº¤æ›¿</td></tr>
 	</table>
 	</FIELDSET>
 
 </td></tr>
 <tr><td height=10></td></tr>
-<tr><td align=right><input type=submit value='  È·¶¨  ' id=Ok>&nbsp;&nbsp;<input type=button value='  È¡Ïû  ' onclick="window.close();"></td></tr>
+<tr><td align=right><input type=submit value='  ç¡®å®š  ' id=Ok>&nbsp;&nbsp;<input type=button value='  å–æ¶ˆ  ' onclick="window.close();"></td></tr>
 </table>
 
 </body>

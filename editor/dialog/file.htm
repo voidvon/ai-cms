@@ -1,9 +1,9 @@
 <HTML>
 <HEAD>
-<TITLE>ÎÄ¼şÊôĞÔ</TITLE>
-<meta http-equiv="Content-Type" content="text/html; charset=gb2312">
+<TITLE>æ–‡ä»¶å±æ€§</TITLE>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
 <style type="text/css">
-body, a, table, div, span, td, th, input, select{font:9pt;font-family: "ËÎÌå", Verdana, Arial, Helvetica, sans-serif;}
+body, a, table, div, span, td, th, input, select{font:9pt;font-family: "å®‹ä½“", Verdana, Arial, Helvetica, sans-serif;}
 body {padding:5px}
 </style>
 
@@ -11,7 +11,7 @@ body {padding:5px}
 
 <script language="JavaScript">
 
-// ÎÄ¼şÀ´Ô´µ¥Ñ¡µã»÷ÊÂ¼ş
+// æ–‡ä»¶æ¥æºå•é€‰ç‚¹å‡»äº‹ä»¶
 function RadioClick(what){
 	if (what=="url"){
 		d_checkfromfile.checked=false;
@@ -26,13 +26,13 @@ function RadioClick(what){
 	}
 }
 
-// ÉÏ´«Ö¡µ÷ÈëÍê³ÉÊ±Ö´ĞĞ
+// ä¸Šä¼ å¸§è°ƒå…¥å®Œæˆæ—¶æ‰§è¡Œ
 function UploadLoaded(){
-	// ³õÊ¼radio
+	// åˆå§‹radio
 	RadioClick('file');
 }
 
-// ÉÏ´«´íÎó
+// ä¸Šä¼ é”™è¯¯
 function UploadError(sErrDesc){
 	AbleItems();
 	RadioClick('file');
@@ -43,13 +43,13 @@ function UploadError(sErrDesc){
 	catch(e){}
 }
 
-// ÎÄ¼şÉÏ´«Íê³ÉÊ±Ö´ĞĞ,´øÈëÉÏ´«ÎÄ¼şÃû
+// æ–‡ä»¶ä¸Šä¼ å®Œæˆæ—¶æ‰§è¡Œ,å¸¦å…¥ä¸Šä¼ æ–‡ä»¶å
 function UploadSaved(sPathFileName){
 	d_fromurl.value = sPathFileName;
 	ReturnValue();
 }
 
-// ±¾´°¿Ú·µ»ØÖµ
+// æœ¬çª—å£è¿”å›å€¼
 function ReturnValue(){
 	var url = d_fromurl.value;
 	var sFilePic = getFilePic(url);
@@ -68,28 +68,28 @@ function ReturnValue(){
 	window.close();
 }
 
-// µãÈ·¶¨Ê±Ö´ĞĞ
+// ç‚¹ç¡®å®šæ—¶æ‰§è¡Œ
 function ok(){
 	if (d_checkfromurl.checked){
-		// È¡ÎÄ¼şÃû
+		// å–æ–‡ä»¶å
 		GetFileName(d_fromurl.value, "/");
-		// ·µ»ØÖµ
+		// è¿”å›å€¼
 		ReturnValue();
 	}else{
-		// ÉÏ´«ÎÄ¼şÅĞ¶Ï
+		// ä¸Šä¼ æ–‡ä»¶åˆ¤æ–­
 		if (!d_file.CheckUploadForm()) return false;
-		// È¡ÎÄ¼şÃû
+		// å–æ–‡ä»¶å
 		GetFileName(d_file.myform.uploadfile.value, "\\");
-		// Ê¹¸÷ÊäÈë¿òÎŞĞ§
+		// ä½¿å„è¾“å…¥æ¡†æ— æ•ˆ
 		DisableItems();
-		// ÏÔÊ¾ÕıÔÚÉÏ´«ÎÄ¼ş
+		// æ˜¾ç¤ºæ­£åœ¨ä¸Šä¼ æ–‡ä»¶
 		divProcessing.style.display="";
-		// ÉÏ´«±íµ¥Ìá½»
+		// ä¸Šä¼ è¡¨å•æäº¤
 		d_file.myform.submit();
 	}
 }
 
-// Ê¹ËùÓĞÊäÈë¿òÎŞĞ§
+// ä½¿æ‰€æœ‰è¾“å…¥æ¡†æ— æ•ˆ
 function DisableItems(){
 	d_checkfromfile.disabled=true;
 	d_checkfromurl.disabled=true;
@@ -97,7 +97,7 @@ function DisableItems(){
 	Ok.disabled=true;
 }
 
-// Ê¹ËùÓĞÊäÈë¿òÓĞĞ§
+// ä½¿æ‰€æœ‰è¾“å…¥æ¡†æœ‰æ•ˆ
 function AbleItems(){
 	d_checkfromfile.disabled=false;
 	d_checkfromurl.disabled=false;
@@ -105,7 +105,7 @@ function AbleItems(){
 	Ok.disabled=false;
 }
 
-// °´ÎÄ¼şÀ©Õ¹ÃûÈ¡Í¼£¬²¢²úÉúÁ´½Ó
+// æŒ‰æ–‡ä»¶æ‰©å±•åå–å›¾ï¼Œå¹¶äº§ç”Ÿé“¾æ¥
 function getFilePic(url){
 	var sExt;
 	sExt=url.substr(url.lastIndexOf(".")+1);
@@ -202,7 +202,7 @@ function getFilePic(url){
 
 }
 
-// È¡ÎÄ¼şÃûµ½Òş²ØµÄÊäÈë¿ò
+// å–æ–‡ä»¶ååˆ°éšè—çš„è¾“å…¥æ¡†
 function GetFileName(url, opt){
 	d_filename.value=url.substr(url.lastIndexOf(opt)+1);
 }
@@ -216,12 +216,12 @@ function GetFileName(url, opt){
 <tr>
 	<td>
 	<fieldset>
-	<legend>ÎÄ¼şÀ´Ô´</legend>
+	<legend>æ–‡ä»¶æ¥æº</legend>
 	<table border=0 cellpadding=0 cellspacing=0>
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td width=54 align=right onclick="RadioClick('file')"><input type=radio id="d_checkfromfile" value="1" onclick="RadioClick('file')">ÉÏ´«:</td>
+		<td width=54 align=right onclick="RadioClick('file')"><input type=radio id="d_checkfromfile" value="1" onclick="RadioClick('file')">ä¸Šä¼ :</td>
 		<td width=5></td>
 		<td colspan=5>
 		<Script Language=JavaScript>
@@ -233,7 +233,7 @@ function GetFileName(url, opt){
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td width=54 align=right onclick="RadioClick('url')"><input type=radio id="d_checkfromurl" value="1" onclick="RadioClick('url')">ÍøÂç:</td>
+		<td width=54 align=right onclick="RadioClick('url')"><input type=radio id="d_checkfromurl" value="1" onclick="RadioClick('url')">ç½‘ç»œ:</td>
 		<td width=5></td>
 		<td colspan=5><input type=text id="d_fromurl" style="width:243px" size=30 value="http://"></td>
 		<td width=7></td>
@@ -244,11 +244,11 @@ function GetFileName(url, opt){
 	</td>
 </tr>
 <tr><td height=5></td></tr>
-<tr><td align=right><input type=submit value='  È·¶¨  ' id=Ok onclick="ok()">&nbsp;&nbsp;<input type=button value='  È¡Ïû  ' onclick="window.close();"></td></tr>
+<tr><td align=right><input type=submit value='  ç¡®å®š  ' id=Ok onclick="ok()">&nbsp;&nbsp;<input type=button value='  å–æ¶ˆ  ' onclick="window.close();"></td></tr>
 </table>
 
 <div id=divProcessing style="width:200px;height:30px;position:absolute;left:70px;top:30px;display:none">
-<table border=0 cellpadding=0 cellspacing=1 bgcolor="#000000" width="100%" height="100%"><tr><td bgcolor=#3A6EA5><marquee align="middle" behavior="alternate" scrollamount="5"><font color=#FFFFFF>...ÎÄ¼şÉÏ´«ÖĞ...ÇëµÈ´ı...</font></marquee></td></tr></table>
+<table border=0 cellpadding=0 cellspacing=1 bgcolor="#000000" width="100%" height="100%"><tr><td bgcolor=#3A6EA5><marquee align="middle" behavior="alternate" scrollamount="5"><font color=#FFFFFF>...æ–‡ä»¶ä¸Šä¼ ä¸­...è¯·ç­‰å¾…...</font></marquee></td></tr></table>
 </div>
 <input type=hidden id=d_filename value="">
 </body>

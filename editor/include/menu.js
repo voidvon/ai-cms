@@ -1,17 +1,17 @@
 
 
 
-// ²Ëµ¥³£Á¿
+// èœå•å¸¸é‡
 var sMenuHr="<tr><td align=center valign=middle height=2><TABLE border=0 cellpadding=0 cellspacing=0 width=128 height=2><tr><td height=1 class=HrShadow><\/td><\/tr><tr><td height=1 class=HrHighLight><\/td><\/tr><\/TABLE><\/td><\/tr>";
 var sMenu1="<TABLE border=0 cellpadding=0 cellspacing=0 class=Menu width=150><tr><td width=18 valign=bottom align=center style='background:url(sysimage/contextmenu.gif);background-position:bottom;'><\/td><td width=132 class=RightBg><TABLE border=0 cellpadding=0 cellspacing=0>";
 var sMenu2="<\/TABLE><\/td><\/tr><\/TABLE>";
-// ²Ëµ¥
+// èœå•
 var oPopupMenu = null;
 if (BrowserInfo.IsIE55OrMore){
 	oPopupMenu = window.createPopup();
 }
 
-// È¡²Ëµ¥ĞĞ
+// å–èœå•è¡Œ
 function getMenuRow(s_Disabled, s_Event, s_Image, s_Html) {
 	var s_MenuRow = "";
 	s_MenuRow = "<tr><td align=center valign=middle><TABLE border=0 cellpadding=0 cellspacing=0 width=132><tr "+s_Disabled+"><td valign=middle height=20 class=MouseOut onMouseOver=this.className='MouseOver'; onMouseOut=this.className='MouseOut';";
@@ -29,7 +29,7 @@ function getMenuRow(s_Disabled, s_Event, s_Image, s_Html) {
 
 }
 
-// È¡±ê×¼µÄformat²Ëµ¥ĞĞ
+// å–æ ‡å‡†çš„formatèœå•è¡Œ
 function getFormatMenuRow(menu, html, image){
 	var s_Disabled = "";
 	if (!eWebEditor.document.queryCommandEnabled(menu)){
@@ -43,42 +43,42 @@ function getFormatMenuRow(menu, html, image){
 	return getMenuRow(s_Disabled, s_Event, s_Image, html)
 }
 
-// È¡±í¸ñ²Ëµ¥ĞĞ
+// å–è¡¨æ ¼èœå•è¡Œ
 function getTableMenuRow(what){
 	var s_Menu = "";
 	var s_Disabled = "disabled";
 	switch(what){
 	case "TableInsert":
 		if (!isTableSelected()) s_Disabled="";
-		s_Menu += getMenuRow(s_Disabled, "TableInsert()", "TableInsert.gif", "²åÈë±í¸ñ...")
+		s_Menu += getMenuRow(s_Disabled, "TableInsert()", "TableInsert.gif", "æ’å…¥è¡¨æ ¼...")
 		break;
 	case "TableProp":
 		if (isTableSelected()||isCursorInTableCell()) s_Disabled="";
-		s_Menu += getMenuRow(s_Disabled, "TableProp()", "TableProp.gif", "±í¸ñÊôĞÔ...")
+		s_Menu += getMenuRow(s_Disabled, "TableProp()", "TableProp.gif", "è¡¨æ ¼å±æ€§...")
 		break;
 	case "TableCell":
 		if (isCursorInTableCell()) s_Disabled="";
-		s_Menu += getMenuRow(s_Disabled, "TableCellProp()", "TableCellProp.gif", "µ¥Ôª¸ñÊôĞÔ...")
-		s_Menu += getMenuRow(s_Disabled, "TableCellSplit()", "TableCellSplit.gif", "²ğ·Öµ¥Ôª¸ñ...")
+		s_Menu += getMenuRow(s_Disabled, "TableCellProp()", "TableCellProp.gif", "å•å…ƒæ ¼å±æ€§...")
+		s_Menu += getMenuRow(s_Disabled, "TableCellSplit()", "TableCellSplit.gif", "æ‹†åˆ†å•å…ƒæ ¼...")
 		s_Menu += sMenuHr;
-		s_Menu += getMenuRow(s_Disabled, "TableRowProp()", "TableRowProp.gif", "±í¸ñĞĞÊôĞÔ...")
-		s_Menu += getMenuRow(s_Disabled, "TableRowInsertAbove()", "TableRowInsertAbove.gif", "²åÈëĞĞ£¨ÔÚÉÏ·½£©");
-		s_Menu += getMenuRow(s_Disabled, "TableRowInsertBelow()", "TableRowInsertBelow.gif", "²åÈëĞĞ£¨ÔÚÏÂ·½£©");
-		s_Menu += getMenuRow(s_Disabled, "TableRowMerge()", "TableRowMerge.gif", "ºÏ²¢ĞĞ£¨ÏòÏÂ·½£©");
-		s_Menu += getMenuRow(s_Disabled, "TableRowSplit(2)", "TableRowSplit.gif", "²ğ·ÖĞĞ");
-		s_Menu += getMenuRow(s_Disabled, "TableRowDelete()", "TableRowDelete.gif", "É¾³ıĞĞ");
+		s_Menu += getMenuRow(s_Disabled, "TableRowProp()", "TableRowProp.gif", "è¡¨æ ¼è¡Œå±æ€§...")
+		s_Menu += getMenuRow(s_Disabled, "TableRowInsertAbove()", "TableRowInsertAbove.gif", "æ’å…¥è¡Œï¼ˆåœ¨ä¸Šæ–¹ï¼‰");
+		s_Menu += getMenuRow(s_Disabled, "TableRowInsertBelow()", "TableRowInsertBelow.gif", "æ’å…¥è¡Œï¼ˆåœ¨ä¸‹æ–¹ï¼‰");
+		s_Menu += getMenuRow(s_Disabled, "TableRowMerge()", "TableRowMerge.gif", "åˆå¹¶è¡Œï¼ˆå‘ä¸‹æ–¹ï¼‰");
+		s_Menu += getMenuRow(s_Disabled, "TableRowSplit(2)", "TableRowSplit.gif", "æ‹†åˆ†è¡Œ");
+		s_Menu += getMenuRow(s_Disabled, "TableRowDelete()", "TableRowDelete.gif", "åˆ é™¤è¡Œ");
 		s_Menu += sMenuHr;
-		s_Menu += getMenuRow(s_Disabled, "TableColInsertLeft()", "TableColInsertLeft.gif", "²åÈëÁĞ£¨ÔÚ×ó²à£©");
-		s_Menu += getMenuRow(s_Disabled, "TableColInsertRight()", "TableColInsertRight.gif", "²åÈëÁĞ£¨ÔÚÓÒ²à£©");
-		s_Menu += getMenuRow(s_Disabled, "TableColMerge()", "TableColMerge.gif", "ºÏ²¢ÁĞ£¨ÏòÓÒ²à£©");
-		s_Menu += getMenuRow(s_Disabled, "TableColSplit(2)", "TableColSplit.gif", "²ğ·ÖÁĞ");
-		s_Menu += getMenuRow(s_Disabled, "TableColDelete()", "TableColDelete.gif", "É¾³ıÁĞ");
+		s_Menu += getMenuRow(s_Disabled, "TableColInsertLeft()", "TableColInsertLeft.gif", "æ’å…¥åˆ—ï¼ˆåœ¨å·¦ä¾§ï¼‰");
+		s_Menu += getMenuRow(s_Disabled, "TableColInsertRight()", "TableColInsertRight.gif", "æ’å…¥åˆ—ï¼ˆåœ¨å³ä¾§ï¼‰");
+		s_Menu += getMenuRow(s_Disabled, "TableColMerge()", "TableColMerge.gif", "åˆå¹¶åˆ—ï¼ˆå‘å³ä¾§ï¼‰");
+		s_Menu += getMenuRow(s_Disabled, "TableColSplit(2)", "TableColSplit.gif", "æ‹†åˆ†åˆ—");
+		s_Menu += getMenuRow(s_Disabled, "TableColDelete()", "TableColDelete.gif", "åˆ é™¤åˆ—");
 		break;
 	}
 	return s_Menu;
 }
 
-// ÓÒ¼ü²Ëµ¥
+// å³é”®èœå•
 function showContextMenu(event){
 	if (!bEditMode) return false;
 
@@ -92,11 +92,11 @@ function showContextMenu(event){
 
 	var sMenu="";
 	
-	sMenu += getFormatMenuRow("cut", "¼ôÇĞ");
-	sMenu += getFormatMenuRow("copy", "¸´ÖÆ");
-	sMenu += getFormatMenuRow("paste", "³£¹æÕ³Ìù");
-	sMenu += getFormatMenuRow("delete", "É¾³ı");
-	sMenu += getFormatMenuRow("selectall", "È«Ñ¡");
+	sMenu += getFormatMenuRow("cut", "å‰ªåˆ‡");
+	sMenu += getFormatMenuRow("copy", "å¤åˆ¶");
+	sMenu += getFormatMenuRow("paste", "å¸¸è§„ç²˜è´´");
+	sMenu += getFormatMenuRow("delete", "åˆ é™¤");
+	sMenu += getFormatMenuRow("selectall", "å…¨é€‰");
 	sMenu += sMenuHr;
 	height += 102;
 
@@ -114,15 +114,15 @@ function showContextMenu(event){
 	}
 
 	if (isControlSelected("IMG")){
-		sMenu += getMenuRow("", "ShowDialog('dialog/img.htm', 350, 315, true)", "img.gif", "Í¼Æ¬ÊôĞÔ...");
+		sMenu += getMenuRow("", "ShowDialog('dialog/img.htm', 350, 315, true)", "img.gif", "å›¾ç‰‡å±æ€§...");
 		sMenu += sMenuHr;
-		sMenu += getMenuRow("", "zIndex('forward')", "forward.gif", "ÉÏÒÆÒ»²ã");
-		sMenu += getMenuRow("", "zIndex('backward')", "backward.gif", "ÏÂÒÆÒ»²ã");
+		sMenu += getMenuRow("", "zIndex('forward')", "forward.gif", "ä¸Šç§»ä¸€å±‚");
+		sMenu += getMenuRow("", "zIndex('backward')", "backward.gif", "ä¸‹ç§»ä¸€å±‚");
 		sMenu += sMenuHr;
 		height += 64;
 	}
 
-	sMenu += getMenuRow("", "findReplace()", "findreplace.gif", "²éÕÒÌæ»»...");
+	sMenu += getMenuRow("", "findReplace()", "findreplace.gif", "æŸ¥æ‰¾æ›¿æ¢...");
 	height += 20;
 
 	sMenu = sMenu1 + sMenu + sMenu2;
@@ -140,7 +140,7 @@ function showContextMenu(event){
 
 }
 
-// ¹¤¾ßÀ¸²Ëµ¥
+// å·¥å…·æ èœå•
 function showToolMenu(menu){
 	if (!bEditMode) return false;
 	var sMenu = ""
@@ -156,136 +156,136 @@ function showToolMenu(menu){
 	var oPopBody = oPopupMenu.document.body;
 
 	switch(menu){
-	case "font":		// ×ÖÌå²Ëµ¥
-		sMenu += getFormatMenuRow("bold", "´ÖÌå", "bold.gif");
-		sMenu += getFormatMenuRow("italic", "Ğ±Ìå", "italic.gif");
-		sMenu += getFormatMenuRow("underline", "ÏÂ»®Ïß", "underline.gif");
-		sMenu += getFormatMenuRow("strikethrough", "ÖĞ»®Ïß", "strikethrough.gif");
+	case "font":		// å­—ä½“èœå•
+		sMenu += getFormatMenuRow("bold", "ç²—ä½“", "bold.gif");
+		sMenu += getFormatMenuRow("italic", "æ–œä½“", "italic.gif");
+		sMenu += getFormatMenuRow("underline", "ä¸‹åˆ’çº¿", "underline.gif");
+		sMenu += getFormatMenuRow("strikethrough", "ä¸­åˆ’çº¿", "strikethrough.gif");
 		sMenu += sMenuHr;
-		sMenu += getFormatMenuRow("superscript", "ÉÏ±ê", "superscript.gif");
-		sMenu += getFormatMenuRow("subscript", "ÏÂ±ê", "subscript.gif");
+		sMenu += getFormatMenuRow("superscript", "ä¸Šæ ‡", "superscript.gif");
+		sMenu += getFormatMenuRow("subscript", "ä¸‹æ ‡", "subscript.gif");
 		sMenu += sMenuHr;
-		sMenu += getMenuRow("", "ShowDialog('dialog/selcolor.htm?action=forecolor', 280, 250, true)", "forecolor.gif", "×ÖÌåÑÕÉ«");
-		sMenu += getMenuRow("", "ShowDialog('dialog/selcolor.htm?action=backcolor', 280, 250, true)", "backcolor.gif", "×ÖÌå±³¾°É«");
+		sMenu += getMenuRow("", "ShowDialog('dialog/selcolor.htm?action=forecolor', 280, 250, true)", "forecolor.gif", "å­—ä½“é¢œè‰²");
+		sMenu += getMenuRow("", "ShowDialog('dialog/selcolor.htm?action=backcolor', 280, 250, true)", "backcolor.gif", "å­—ä½“èƒŒæ™¯è‰²");
 		sMenu += sMenuHr;
-		sMenu += getMenuRow("", "insert('big')", "tobig.gif", "×ÖÌåÔö´ó");
-		sMenu += getMenuRow("", "insert('small')", "tosmall.gif", "×ÖÌå¼õĞ¡");
+		sMenu += getMenuRow("", "insert('big')", "tobig.gif", "å­—ä½“å¢å¤§");
+		sMenu += getMenuRow("", "insert('small')", "tosmall.gif", "å­—ä½“å‡å°");
 		height = 206;
 		break;
-	case "paragraph":	// ¶ÎÂä²Ëµ¥
-		sMenu += getFormatMenuRow("JustifyLeft", "×ó¶ÔÆë", "JustifyLeft.gif");
-		sMenu += getFormatMenuRow("JustifyCenter", "¾ÓÖĞ¶ÔÆë", "JustifyCenter.gif");
-		sMenu += getFormatMenuRow("JustifyRight", "ÓÒ¶ÔÆë", "JustifyRight.gif");
-		sMenu += getFormatMenuRow("JustifyFull", "Á½¶Ë¶ÔÆë", "JustifyFull.gif");
+	case "paragraph":	// æ®µè½èœå•
+		sMenu += getFormatMenuRow("JustifyLeft", "å·¦å¯¹é½", "JustifyLeft.gif");
+		sMenu += getFormatMenuRow("JustifyCenter", "å±…ä¸­å¯¹é½", "JustifyCenter.gif");
+		sMenu += getFormatMenuRow("JustifyRight", "å³å¯¹é½", "JustifyRight.gif");
+		sMenu += getFormatMenuRow("JustifyFull", "ä¸¤ç«¯å¯¹é½", "JustifyFull.gif");
 		sMenu += sMenuHr;
-		sMenu += getFormatMenuRow("insertorderedlist", "±àºÅ", "insertorderedlist.gif");
-		sMenu += getFormatMenuRow("insertunorderedlist", "ÏîÄ¿·ûºÅ", "insertunorderedlist.gif");
-		sMenu += getFormatMenuRow("indent", "Ôö¼ÓËõ½øÁ¿", "indent.gif");
-		sMenu += getFormatMenuRow("outdent", "¼õÉÙËõ½øÁ¿", "outdent.gif");
+		sMenu += getFormatMenuRow("insertorderedlist", "ç¼–å·", "insertorderedlist.gif");
+		sMenu += getFormatMenuRow("insertunorderedlist", "é¡¹ç›®ç¬¦å·", "insertunorderedlist.gif");
+		sMenu += getFormatMenuRow("indent", "å¢åŠ ç¼©è¿›é‡", "indent.gif");
+		sMenu += getFormatMenuRow("outdent", "å‡å°‘ç¼©è¿›é‡", "outdent.gif");
 		sMenu += sMenuHr;
-		sMenu += getFormatMenuRow("insertparagraph", "²åÈë¶ÎÂä", "insertparagraph.gif");
-		sMenu += getMenuRow("", "insert('br')", "br.gif", "²åÈë»»ĞĞ·û");
+		sMenu += getFormatMenuRow("insertparagraph", "æ’å…¥æ®µè½", "insertparagraph.gif");
+		sMenu += getMenuRow("", "insert('br')", "br.gif", "æ’å…¥æ¢è¡Œç¬¦");
 		height = 204;
 		break;
-	case "edit":		// ±à¼­²Ëµ¥
+	case "edit":		// ç¼–è¾‘èœå•
 		var s_Disabled = "";
 		if (history.data.length <= 1 || history.position <= 0) s_Disabled = "disabled";
-		sMenu += getMenuRow(s_Disabled, "goHistory(-1)", "undo.gif", "³·Ïû")
+		sMenu += getMenuRow(s_Disabled, "goHistory(-1)", "undo.gif", "æ’¤æ¶ˆ")
 		if (history.position >= history.data.length-1 || history.data.length == 0) s_Disabled = "disabled";
-		sMenu += getMenuRow(s_Disabled, "goHistory(1)", "redo.gif", "»Ö¸´")
+		sMenu += getMenuRow(s_Disabled, "goHistory(1)", "redo.gif", "æ¢å¤")
 		sMenu += sMenuHr;
-		sMenu += getFormatMenuRow("Cut", "¼ôÇĞ", "cut.gif");
-		sMenu += getFormatMenuRow("Copy", "¸´ÖÆ", "copy.gif");
-		sMenu += getFormatMenuRow("Paste", "³£¹æÕ³Ìù", "paste.gif");
-		sMenu += getMenuRow("", "PasteText()", "pastetext.gif", "´¿ÎÄ±¾Õ³Ìù");
-		sMenu += getMenuRow("", "PasteWord()", "pasteword.gif", "´ÓWordÖĞÕ³Ìù");
+		sMenu += getFormatMenuRow("Cut", "å‰ªåˆ‡", "cut.gif");
+		sMenu += getFormatMenuRow("Copy", "å¤åˆ¶", "copy.gif");
+		sMenu += getFormatMenuRow("Paste", "å¸¸è§„ç²˜è´´", "paste.gif");
+		sMenu += getMenuRow("", "PasteText()", "pastetext.gif", "çº¯æ–‡æœ¬ç²˜è´´");
+		sMenu += getMenuRow("", "PasteWord()", "pasteword.gif", "ä»Wordä¸­ç²˜è´´");
 		sMenu += sMenuHr;
-		sMenu += getFormatMenuRow("delete", "É¾³ı", "delete.gif");
-		sMenu += getFormatMenuRow("RemoveFormat", "É¾³ıÎÄ×Ö¸ñÊ½", "removeformat.gif");
+		sMenu += getFormatMenuRow("delete", "åˆ é™¤", "delete.gif");
+		sMenu += getFormatMenuRow("RemoveFormat", "åˆ é™¤æ–‡å­—æ ¼å¼", "removeformat.gif");
 		sMenu += sMenuHr;
-		sMenu += getFormatMenuRow("SelectAll", "È«²¿Ñ¡ÖĞ", "selectall.gif");
-		sMenu += getFormatMenuRow("Unselect", "È¡ÏûÑ¡Ôñ", "unselect.gif");
+		sMenu += getFormatMenuRow("SelectAll", "å…¨éƒ¨é€‰ä¸­", "selectall.gif");
+		sMenu += getFormatMenuRow("Unselect", "å–æ¶ˆé€‰æ‹©", "unselect.gif");
 		sMenu += sMenuHr;
-		sMenu += getMenuRow("", "findReplace()", "findreplace.gif", "²éÕÒÌæ»»");
+		sMenu += getMenuRow("", "findReplace()", "findreplace.gif", "æŸ¥æ‰¾æ›¿æ¢");
 		height = 248;
 		break;
-	case "object":		// ¶ÔÏóĞ§¹û²Ëµ¥
-		sMenu += getMenuRow("", "ShowDialog('dialog/selcolor.htm?action=bgcolor', 280, 250, true)", "bgcolor.gif", "¶ÔÏó±³¾°ÑÕÉ«");
-		sMenu += getMenuRow("", "ShowDialog('dialog/backimage.htm', 350, 210, true)", "bgpic.gif", "±³¾°Í¼Æ¬");
+	case "object":		// å¯¹è±¡æ•ˆæœèœå•
+		sMenu += getMenuRow("", "ShowDialog('dialog/selcolor.htm?action=bgcolor', 280, 250, true)", "bgcolor.gif", "å¯¹è±¡èƒŒæ™¯é¢œè‰²");
+		sMenu += getMenuRow("", "ShowDialog('dialog/backimage.htm', 350, 210, true)", "bgpic.gif", "èƒŒæ™¯å›¾ç‰‡");
 		sMenu += sMenuHr;
-		sMenu += getMenuRow("", "absolutePosition()", "abspos.gif", "¾ø¶Ô»òÏà¶ÔÎ»ÖÃ");
-		sMenu += getMenuRow("", "zIndex('forward')", "forward.gif", "ÉÏÒÆÒ»²ã");
-		sMenu += getMenuRow("", "zIndex('backward')", "backward.gif", "ÏÂÒÆÒ»²ã");
+		sMenu += getMenuRow("", "absolutePosition()", "abspos.gif", "ç»å¯¹æˆ–ç›¸å¯¹ä½ç½®");
+		sMenu += getMenuRow("", "zIndex('forward')", "forward.gif", "ä¸Šç§»ä¸€å±‚");
+		sMenu += getMenuRow("", "zIndex('backward')", "backward.gif", "ä¸‹ç§»ä¸€å±‚");
 		sMenu += sMenuHr;
-		sMenu += getMenuRow("", "showBorders()", "showborders.gif", "ÏÔÊ¾Òş²ØÖ¸µ¼·½Õë");
+		sMenu += getMenuRow("", "showBorders()", "showborders.gif", "æ˜¾ç¤ºéšè—æŒ‡å¯¼æ–¹é’ˆ");
 		sMenu += sMenuHr;
-		sMenu += getMenuRow("", "insert('quote')", "quote.gif", "ÒıÓÃÑùÊ½");
-		sMenu += getMenuRow("", "insert('code')", "code.gif", "´úÂëÑùÊ½");
+		sMenu += getMenuRow("", "insert('quote')", "quote.gif", "å¼•ç”¨æ ·å¼");
+		sMenu += getMenuRow("", "insert('code')", "code.gif", "ä»£ç æ ·å¼");
 		height = 166;
 		break;
-	case "component":	// ×é¼ş²Ëµ¥
-		sMenu += getMenuRow("", "ShowDialog('dialog/img.htm', 350, 315, true)", "img.gif", "²åÈë»òĞŞ¸ÄÍ¼Æ¬");
-		sMenu += getMenuRow("", "ShowDialog('dialog/flash.htm', 350, 200, true)", "flash.gif", "²åÈëFlash¶¯»­");
-		sMenu += getMenuRow("", "ShowDialog('dialog/media.htm', 350, 200, true)", "media.gif", "²åÈë×Ô¶¯²¥·ÅÃ½Ìå");
-		sMenu += getMenuRow("", "ShowDialog('dialog/file.htm', 350, 150, true)", "file.gif", "²åÈëÆäËûÎÄ¼ş");
+	case "component":	// ç»„ä»¶èœå•
+		sMenu += getMenuRow("", "ShowDialog('dialog/img.htm', 350, 315, true)", "img.gif", "æ’å…¥æˆ–ä¿®æ”¹å›¾ç‰‡");
+		sMenu += getMenuRow("", "ShowDialog('dialog/flash.htm', 350, 200, true)", "flash.gif", "æ’å…¥FlashåŠ¨ç”»");
+		sMenu += getMenuRow("", "ShowDialog('dialog/media.htm', 350, 200, true)", "media.gif", "æ’å…¥è‡ªåŠ¨æ’­æ”¾åª’ä½“");
+		sMenu += getMenuRow("", "ShowDialog('dialog/file.htm', 350, 150, true)", "file.gif", "æ’å…¥å…¶ä»–æ–‡ä»¶");
 		sMenu += sMenuHr;
-		sMenu += getMenuRow("", "remoteUpload()", "remoteupload.gif", "Ô¶³Ì×Ô¶¯ÉÏ´«");
+		sMenu += getMenuRow("", "remoteUpload()", "remoteupload.gif", "è¿œç¨‹è‡ªåŠ¨ä¸Šä¼ ");
 		sMenu += sMenuHr;
-		sMenu += getMenuRow("", "ShowDialog('dialog/fieldset.htm', 350, 170, true)", "fieldset.gif", "²åÈë»òĞŞ¸ÄÀ¸Ä¿¿ò");
-		sMenu += getMenuRow("", "ShowDialog('dialog/iframe.htm', 350, 200, true)", "iframe.gif", "²åÈë»òĞŞ¸ÄÍøÒ³Ö¡");
-		sMenu += getFormatMenuRow("InsertHorizontalRule", "²åÈëË®Æ½³ß", "inserthorizontalrule.gif");
-		sMenu += getMenuRow("", "ShowDialog('dialog/marquee.htm', 395, 150, true)", "marquee.gif", "²åÈë»òĞŞ¸Ä×ÖÄ»");
+		sMenu += getMenuRow("", "ShowDialog('dialog/fieldset.htm', 350, 170, true)", "fieldset.gif", "æ’å…¥æˆ–ä¿®æ”¹æ ç›®æ¡†");
+		sMenu += getMenuRow("", "ShowDialog('dialog/iframe.htm', 350, 200, true)", "iframe.gif", "æ’å…¥æˆ–ä¿®æ”¹ç½‘é¡µå¸§");
+		sMenu += getFormatMenuRow("InsertHorizontalRule", "æ’å…¥æ°´å¹³å°º", "inserthorizontalrule.gif");
+		sMenu += getMenuRow("", "ShowDialog('dialog/marquee.htm', 395, 150, true)", "marquee.gif", "æ’å…¥æˆ–ä¿®æ”¹å­—å¹•");
 		sMenu += sMenuHr;
-		sMenu += getMenuRow("", "createLink()", "createlink.gif", "²åÈë»òĞŞ¸Ä³¬Á´½Ó");
-		sMenu += getMenuRow("", "ShowDialog('dialog/anchor.htm', 270, 220, true)", "anchor.gif", "ÊéÇ©¹ÜÀí");
-		sMenu += getMenuRow("", "mapEdit()", "map.gif", "Í¼ĞÎÈÈµãÁ´½Ó");
-		sMenu += getFormatMenuRow("UnLink", "È¡Ïû³¬Á´½Ó»ò±êÇ©", "unlink.gif");
+		sMenu += getMenuRow("", "createLink()", "createlink.gif", "æ’å…¥æˆ–ä¿®æ”¹è¶…é“¾æ¥");
+		sMenu += getMenuRow("", "ShowDialog('dialog/anchor.htm', 270, 220, true)", "anchor.gif", "ä¹¦ç­¾ç®¡ç†");
+		sMenu += getMenuRow("", "mapEdit()", "map.gif", "å›¾å½¢çƒ­ç‚¹é“¾æ¥");
+		sMenu += getFormatMenuRow("UnLink", "å–æ¶ˆè¶…é“¾æ¥æˆ–æ ‡ç­¾", "unlink.gif");
 		height = 266;
 		break;
-	case "tool":		// ¹¤¾ß²Ëµ¥
-		sMenu += getMenuRow("", "ShowDialog('dialog/symbol.htm', 350, 220, true)", "symbol.gif", "²åÈëÌØÊâ×Ö·û");
-		sMenu += getMenuRow("", "insert('excel')", "excel.gif", "²åÈëExcel±í¸ñ");
-		sMenu += getMenuRow("", "ShowDialog('dialog/emot.htm', 300, 180, true)", "emot.gif", "²åÈë±íÇéÍ¼±ê");
+	case "tool":		// å·¥å…·èœå•
+		sMenu += getMenuRow("", "ShowDialog('dialog/symbol.htm', 350, 220, true)", "symbol.gif", "æ’å…¥ç‰¹æ®Šå­—ç¬¦");
+		sMenu += getMenuRow("", "insert('excel')", "excel.gif", "æ’å…¥Excelè¡¨æ ¼");
+		sMenu += getMenuRow("", "ShowDialog('dialog/emot.htm', 300, 180, true)", "emot.gif", "æ’å…¥è¡¨æƒ…å›¾æ ‡");
 		sMenu += sMenuHr;
-		sMenu += getMenuRow("", "insert('nowdate')", "date.gif", "²åÈëµ±Ç°ÈÕÆÚ");
-		sMenu += getMenuRow("", "insert('nowtime')", "time.gif", "²åÈëµ±Ç°Ê±¼ä");
+		sMenu += getMenuRow("", "insert('nowdate')", "date.gif", "æ’å…¥å½“å‰æ—¥æœŸ");
+		sMenu += getMenuRow("", "insert('nowtime')", "time.gif", "æ’å…¥å½“å‰æ—¶é—´");
 		height = 102;
 		break;
-	case "file":		// ÎÄ¼şÊÓÍ¼²Ëµ¥
-		sMenu += getMenuRow("", "format('Refresh')", "refresh.gif", "ĞÂ½¨");
+	case "file":		// æ–‡ä»¶è§†å›¾èœå•
+		sMenu += getMenuRow("", "format('Refresh')", "refresh.gif", "æ–°å»º");
 		sMenu += sMenuHr;
-		sMenu += getMenuRow("", "setMode('CODE')", "modecodebtn.gif", "´úÂë×´Ì¬");
-		sMenu += getMenuRow("", "setMode('EDIT')", "modeeditbtn.gif", "±à¼­×´Ì¬");
-		sMenu += getMenuRow("", "setMode('TEXT')", "modetextbtn.gif", "ÎÄ±¾×´Ì¬");
-		sMenu += getMenuRow("", "setMode('VIEW')", "modeviewbtn.gif", "Ô¤ÀÀ×´Ì¬");
+		sMenu += getMenuRow("", "setMode('CODE')", "modecodebtn.gif", "ä»£ç çŠ¶æ€");
+		sMenu += getMenuRow("", "setMode('EDIT')", "modeeditbtn.gif", "ç¼–è¾‘çŠ¶æ€");
+		sMenu += getMenuRow("", "setMode('TEXT')", "modetextbtn.gif", "æ–‡æœ¬çŠ¶æ€");
+		sMenu += getMenuRow("", "setMode('VIEW')", "modeviewbtn.gif", "é¢„è§ˆçŠ¶æ€");
 		sMenu += sMenuHr;
-		sMenu += getMenuRow("", "sizeChange(300)", "sizeplus.gif", "Ôö¸ß±à¼­Çø");
-		sMenu += getMenuRow("", "sizeChange(-300)", "sizeminus.gif", "¼õĞ¡±à¼­Çø");
+		sMenu += getMenuRow("", "sizeChange(300)", "sizeplus.gif", "å¢é«˜ç¼–è¾‘åŒº");
+		sMenu += getMenuRow("", "sizeChange(-300)", "sizeminus.gif", "å‡å°ç¼–è¾‘åŒº");
 		sMenu += sMenuHr;
-		sMenu += getMenuRow("", "format('Print')", "print.gif", "´òÓ¡");
+		sMenu += getMenuRow("", "format('Print')", "print.gif", "æ‰“å°");
 		sMenu += sMenuHr;
-		sMenu += getMenuRow("", "ShowDialog('dialog/help.htm','400','300')", "help.gif", "²é¿´Ê¹ÓÃ°ïÖú");
-		sMenu += getMenuRow("", "ShowDialog('dialog/about.htm','400','220')", "about.gif", "¹ØÓÚeWebEditor");
-		sMenu += getMenuRow("", "window.open('http://ewebeditor.webasp.net')", "site.gif", "eWebEditorÕ¾µã");
+		sMenu += getMenuRow("", "ShowDialog('dialog/help.htm','400','300')", "help.gif", "æŸ¥çœ‹ä½¿ç”¨å¸®åŠ©");
+		sMenu += getMenuRow("", "ShowDialog('dialog/about.htm','400','220')", "about.gif", "å…³äºeWebEditor");
+		sMenu += getMenuRow("", "window.open('http://ewebeditor.webasp.net')", "site.gif", "eWebEditorç«™ç‚¹");
 		height = 228;
 		break;
-	case "table":		// ±í¸ñ²Ëµ¥
+	case "table":		// è¡¨æ ¼èœå•
 		sMenu += getTableMenuRow("TableInsert");
 		sMenu += getTableMenuRow("TableProp");
 		sMenu += sMenuHr;
 		sMenu += getTableMenuRow("TableCell");
 		height = 306;
 		break;
-	case "form":		// ±íµ¥²Ëµ¥
-		sMenu += getFormatMenuRow("InsertInputText", "²åÈëÊäÈë¿ò", "FormText.gif");
-		sMenu += getFormatMenuRow("InsertTextArea", "²åÈëÊäÈëÇø", "FormTextArea.gif");
-		sMenu += getFormatMenuRow("InsertInputRadio", "²åÈëµ¥Ñ¡Å¥", "FormRadio.gif");
-		sMenu += getFormatMenuRow("InsertInputCheckbox", "²åÈë¸´Ñ¡Å¥", "FormCheckBox.gif");
-		sMenu += getFormatMenuRow("InsertSelectDropdown", "²åÈëÏÂÀ­¿ò", "FormDropdown.gif");
-		sMenu += getFormatMenuRow("InsertButton", "²åÈë°´Å¥", "FormButton.gif");
+	case "form":		// è¡¨å•èœå•
+		sMenu += getFormatMenuRow("InsertInputText", "æ’å…¥è¾“å…¥æ¡†", "FormText.gif");
+		sMenu += getFormatMenuRow("InsertTextArea", "æ’å…¥è¾“å…¥åŒº", "FormTextArea.gif");
+		sMenu += getFormatMenuRow("InsertInputRadio", "æ’å…¥å•é€‰é’®", "FormRadio.gif");
+		sMenu += getFormatMenuRow("InsertInputCheckbox", "æ’å…¥å¤é€‰é’®", "FormCheckBox.gif");
+		sMenu += getFormatMenuRow("InsertSelectDropdown", "æ’å…¥ä¸‹æ‹‰æ¡†", "FormDropdown.gif");
+		sMenu += getFormatMenuRow("InsertButton", "æ’å…¥æŒ‰é’®", "FormButton.gif");
 		height = 120;
 		break;
-	case "zoom":		// Ëõ·Å²Ëµ¥
+	case "zoom":		// ç¼©æ”¾èœå•
 		for (var i=0; i<aZoomSize.length; i++){
 			if (aZoomSize[i]==nCurrZoomSize){
 				sMenu += getMenuRow("", "doZoom("+aZoomSize[i]+")", "checked.gif", aZoomSize[i]+"%");

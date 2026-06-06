@@ -1,16 +1,16 @@
 <HTML>
 <HEAD>
-<META content="text/html; charset=gb2312" http-equiv=Content-Type>
+<META content="text/html; charset=utf-8" http-equiv=Content-Type>
 
 <style type="text/css">
-body, a, table, div, span, td, th, input, select{font:9pt;font-family: "ËÎÌå", Verdana, Arial, Helvetica, sans-serif;}
+body, a, table, div, span, td, th, input, select{font:9pt;font-family: "å®‹ä½“", Verdana, Arial, Helvetica, sans-serif;}
 body {padding:5px}
 </style>
 <script language="JavaScript" src="dialog.js"></script>
 
 <Script language=JavaScript>
 var sAction = "INSERT";
-var sTitle = "²åÈë";
+var sTitle = "æ’å…¥";
 
 var oControl;
 var oChild;
@@ -28,7 +28,7 @@ sRangeType = dialogArguments.eWebEditor.document.selection.type;
 if (sRangeType == "Control") {
 	if (oSelection.item(0).tagName == "FIELDSET"){
 		sAction = "MODI";
-		sTitle = "ĞŞ¸Ä";
+		sTitle = "ä¿®æ”¹";
 		oControl = oSelection.item(0);
 		sAlignFieldset = oControl.align;
 		oChild = GetChildElement(oControl,"LEGEND");
@@ -39,10 +39,10 @@ if (sRangeType == "Control") {
 }
 
 
-document.write("<title>À¸Ä¿¿òÊôĞÔ£¨" + sTitle + "£©</title>");
+document.write("<title>æ ç›®æ¡†å±æ€§ï¼ˆ" + sTitle + "ï¼‰</title>");
 
 
-// ³õÊ¼Öµ
+// åˆå§‹å€¼
 function InitDocument(){
 	SearchSelectValue(d_alignfieldset, sAlignFieldset.toLowerCase());
 	SearchSelectValue(d_alignlegend, sAlignLegend.toLowerCase());
@@ -54,7 +54,7 @@ function InitDocument(){
 
 }
 
-// µİ¹éÕÒ±êÇ©ÃûÏàÍ¬µÄµÚÒ»¸ö×Ó¶ÔÏó
+// é€’å½’æ‰¾æ ‡ç­¾åç›¸åŒçš„ç¬¬ä¸€ä¸ªå­å¯¹è±¡
 function GetChildElement(obj, sTag){
 	var el;
 	for (var i=0;i<obj.children.length;i++){
@@ -73,16 +73,16 @@ function GetChildElement(obj, sTag){
 </script>
 
 <SCRIPT event=onclick for=Ok language=JavaScript>
-	// ±ß¿òÑÕÉ«µÄÓĞĞ§ĞÔ
+	// è¾¹æ¡†é¢œè‰²çš„æœ‰æ•ˆæ€§
 	sBorderColor = d_bordercolor.value;
 	if (!IsColor(sBorderColor)){
-		BaseAlert(d_bordercolor,'ÎŞĞ§µÄ±ß¿òÑÕÉ«Öµ£¡');
+		BaseAlert(d_bordercolor,'æ— æ•ˆçš„è¾¹æ¡†é¢œè‰²å€¼ï¼');
 		return;
 	}
-	// ±³¾°ÑÕÉ«µÄÓĞĞ§ĞÔ
+	// èƒŒæ™¯é¢œè‰²çš„æœ‰æ•ˆæ€§
 	sBgColor = d_bgcolor.value;
 	if (!IsColor(sBgColor)){
-		BaseAlert(d_bgcolor,'ÎŞĞ§µÄ±³¾°ÑÕÉ«Öµ£¡');
+		BaseAlert(d_bgcolor,'æ— æ•ˆçš„èƒŒæ™¯é¢œè‰²å€¼ï¼');
 		return;
 	}
 
@@ -95,7 +95,7 @@ function GetChildElement(obj, sTag){
 		oControl.style.borderColor = sBorderColor;
 		oControl.style.backgroundColor = sBgColor;
 	}else{
-		dialogArguments.insertHTML("<fieldset align='"+sAlignFieldset+"' style='border-color:"+sBorderColor+";background-color:"+sBgColor+"'><legend align="+sAlignLegend+">±êÌâ</legend>ÄÚÈİ</fieldset>");
+		dialogArguments.insertHTML("<fieldset align='"+sAlignFieldset+"' style='border-color:"+sBorderColor+";background-color:"+sBgColor+"'><legend align="+sAlignLegend+">æ ‡é¢˜</legend>å†…å®¹</fieldset>");
 	}
 
 	window.returnValue = null;
@@ -109,18 +109,18 @@ function GetChildElement(obj, sTag){
 <tr>
 	<td>
 	<fieldset>
-	<legend>¶ÔÆë·½Ê½</legend>
+	<legend>å¯¹é½æ–¹å¼</legend>
 	<table border=0 cellpadding=0 cellspacing=0>
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>À¸Ä¿¶ÔÆë:</td>
+		<td>æ ç›®å¯¹é½:</td>
 		<td width=5></td>
-		<td><select id=d_alignfieldset style="width:72px"><option value=''>Ä¬ÈÏ</option><option value='left'>×ó¶ÔÆë</option><option value='center'>¾ÓÖĞ</option><option value='right'>ÓÒ¶ÔÆë</option></select></td>
+		<td><select id=d_alignfieldset style="width:72px"><option value=''>é»˜è®¤</option><option value='left'>å·¦å¯¹é½</option><option value='center'>å±…ä¸­</option><option value='right'>å³å¯¹é½</option></select></td>
 		<td width=40></td>
-		<td>±êÌâ¶ÔÆë:</td>
+		<td>æ ‡é¢˜å¯¹é½:</td>
 		<td width=5></td>
-		<td><select id=d_alignlegend style="width:72px"><option value=''>Ä¬ÈÏ</option><option value='left'>×ó¶ÔÆë</option><option value='center'>¾ÓÖĞ</option><option value='right'>ÓÒ¶ÔÆë</option></select></td>
+		<td><select id=d_alignlegend style="width:72px"><option value=''>é»˜è®¤</option><option value='left'>å·¦å¯¹é½</option><option value='center'>å±…ä¸­</option><option value='right'>å³å¯¹é½</option></select></td>
 		<td width=7></td>
 	</tr>
 	<tr><td colspan=9 height=5></td></tr>
@@ -132,17 +132,17 @@ function GetChildElement(obj, sTag){
 <tr>
 	<td>
 	<fieldset>
-	<legend>ÑÕÉ«ÊôĞÔ</legend>
+	<legend>é¢œè‰²å±æ€§</legend>
 	<table border=0 cellpadding=0 cellspacing=0>
 	<tr><td colspan=9 height=5></td></tr>
 	<tr>
 		<td width=7></td>
-		<td>±ß¿òÑÕÉ«:</td>
+		<td>è¾¹æ¡†é¢œè‰²:</td>
 		<td width=5></td>
 		<td><input type=text id=d_bordercolor size=7 value=""></td>
 		<td><img border=0 src="../SysImage/rect.gif" width=18 style="cursor:hand" id=s_bordercolor onclick="SelectColor('bordercolor')"></td>
 		<td width=40></td>
-		<td>±³¾°ÑÕÉ«:</td>
+		<td>èƒŒæ™¯é¢œè‰²:</td>
 		<td width=5></td>
 		<td><input type=text id=d_bgcolor size=7 value=""></td>
 		<td><img border=0 src="../SysImage/rect.gif" width=18 style="cursor:hand" id=s_bgcolor onclick="SelectColor('bgcolor')"></td>
@@ -154,7 +154,7 @@ function GetChildElement(obj, sTag){
 	</td>
 </tr>
 <tr><td height=5></td></tr>
-<tr><td align=right><input type=submit value='  È·¶¨  ' id=Ok>&nbsp;&nbsp;<input type=button value='  È¡Ïû  ' onclick="window.close();"></td></tr>
+<tr><td align=right><input type=submit value='  ç¡®å®š  ' id=Ok>&nbsp;&nbsp;<input type=button value='  å–æ¶ˆ  ' onclick="window.close();"></td></tr>
 </table>
 
 </body>

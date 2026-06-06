@@ -1,6 +1,6 @@
 <HTML>
 <HEAD>
-<META content="text/html; charset=gb2312" http-equiv=Content-Type>
+<META content="text/html; charset=utf-8" http-equiv=Content-Type>
 
 <STYLE type=text/css>
 TD {FONT-SIZE: 10.8pt}
@@ -21,20 +21,20 @@ var oControl;
 var sRangeType;
 
 switch (sAction) {
-	case "forecolor":	// ×ÖÌåÇ°¾°É«
-		sTitle = "×ÖÌåÇ°¾°É«";
+	case "forecolor":	// å­—ä½“å‰æ™¯è‰²
+		sTitle = "å­—ä½“å‰æ™¯è‰²";
 		oSelection = dialogArguments.eWebEditor.document.selection.createRange();
 		color = oSelection.queryCommandValue("ForeColor");
 		if (color) color = N2Color(color);
 		break;
-	case "backcolor":	// ×ÖÌå±³¾°É«
-		sTitle = "×ÖÌå±³¾°É«";
+	case "backcolor":	// å­—ä½“èƒŒæ™¯è‰²
+		sTitle = "å­—ä½“èƒŒæ™¯è‰²";
 		oSelection = dialogArguments.eWebEditor.document.selection.createRange();
 		color = oSelection.queryCommandValue("BackColor");
 		if (color) color = N2Color(color);
 		break;
-	case "bgcolor":		// ¶ÔÏó±³¾°É«
-		sTitle = "¶ÔÏó±³¾°É«";
+	case "bgcolor":		// å¯¹è±¡èƒŒæ™¯è‰²
+		sTitle = "å¯¹è±¡èƒŒæ™¯è‰²";
 		oSelection = dialogArguments.eWebEditor.document.selection.createRange();
 		sRangeType = dialogArguments.eWebEditor.document.selection.type;
 		if (sRangeType == "Control") {
@@ -45,41 +45,41 @@ switch (sAction) {
 		if (oControl) {
 			switch(oControl.tagName){
 			case "TD":
-				sTitle += " - µ¥Ôª¸ñ";
+				sTitle += " - å•å…ƒæ ¼";
 				break;
 			case "TR":
 			case "TH":
-				sTitle += " - ±í¸ñĞĞ";
+				sTitle += " - è¡¨æ ¼è¡Œ";
 				break;
 			default:
-				sTitle += " - ±í¸ñ";
+				sTitle += " - è¡¨æ ¼";
 				break;
 			}
 			color = oControl.bgColor;
 		}else{
-			sTitle += " - ÍøÒ³";
+			sTitle += " - ç½‘é¡µ";
 		}
 		break;
-	default:			// ÆäËüÑÕÉ«¿ò
+	default:			// å…¶å®ƒé¢œè‰²æ¡†
 		if (URLParams['color']){
 			color = decodeURIComponent(URLParams['color']) ;
 		}
 		break;
 }
 
-document.write("<TITLE>ÑÕÉ«Ñ¡Ôñ£¨" + sTitle + "£©</TITLE>");
+document.write("<TITLE>é¢œè‰²é€‰æ‹©ï¼ˆ" + sTitle + "ï¼‰</TITLE>");
 
-// Ä¬ÈÏÏÔÊ¾Öµ
+// é»˜è®¤æ˜¾ç¤ºå€¼
 if (!color) color = "#000000";
 
-// ·µ»ØÓĞ±³¾°ÑÕÉ«ÊôĞÔµÄ¶ÔÏó
+// è¿”å›æœ‰èƒŒæ™¯é¢œè‰²å±æ€§çš„å¯¹è±¡
 function GetParent(obj){
 	while(obj!=null && obj.tagName!="TD" && obj.tagName!="TR" && obj.tagName!="TH" && obj.tagName!="TABLE")
 		obj=obj.parentElement;
 	return obj;
 }
 
-// ·µ»Ø±êÇ©ÃûµÄÑ¡¶¨¿Ø¼ş
+// è¿”å›æ ‡ç­¾åçš„é€‰å®šæ§ä»¶
 function GetControl(obj, sTag){
 	obj=obj.item(0);
 	if (obj.tagName==sTag){
@@ -88,7 +88,7 @@ function GetControl(obj, sTag){
 	return null;
 }
 
-// ÊıÖµ×ªÎªRGB16½øÖÆÑÕÉ«¸ñÊ½
+// æ•°å€¼è½¬ä¸ºRGB16è¿›åˆ¶é¢œè‰²æ ¼å¼
 function N2Color(s_Color){
 	s_Color = s_Color.toString(16);
 	switch (s_Color.length) {
@@ -116,7 +116,7 @@ function N2Color(s_Color){
 	return '#' + s_Color;
 }
 
-// ³õÊ¼Öµ
+// åˆå§‹å€¼
 function InitDocument(){
 	ShowColor.bgColor = color;
 	RGB.innerHTML = color;
@@ -208,7 +208,7 @@ function EndColor(){
 <SCRIPT event=onclick for=Ok language=JavaScript>
 	color = SelColor.value;
 	if (!IsColor(color)){
-		alert('ÎŞĞ§µÄÑÕÉ«Öµ£¡');
+		alert('æ— æ•ˆçš„é¢œè‰²å€¼ï¼');
 		return;
 	}
 
@@ -287,15 +287,15 @@ document.write('<TR BGCOLOR=#' + ToHex(i) + ToHex(i) + ToHex(i) + '><TD TITLE=' 
 <TABLE border=0 cellPadding=0 cellSpacing=10>
 <TBODY>
 <TR>
-<TD align=middle rowSpan=2>Ñ¡ÖĞÉ«²Ê
+<TD align=middle rowSpan=2>é€‰ä¸­è‰²å½©
 <TABLE border=1 cellPadding=0 cellSpacing=0 height=30 id=ShowColor width=40 bgcolor="">
 <TBODY>
 <TR>
 <TD></TD></TR></TBODY></TABLE></TD>
-<TD rowSpan=2>»ùÉ«: <SPAN id=RGB></SPAN><BR>ÁÁ¶È: <SPAN
-id=GRAY>120</SPAN><BR>´úÂë: <INPUT id=SelColor size=7 value=""></TD>
-<TD><BUTTON id=Ok type=submit>È·¶¨</BUTTON></TD></TR>
+<TD rowSpan=2>åŸºè‰²: <SPAN id=RGB></SPAN><BR>äº®åº¦: <SPAN
+id=GRAY>120</SPAN><BR>ä»£ç : <INPUT id=SelColor size=7 value=""></TD>
+<TD><BUTTON id=Ok type=submit>ç¡®å®š</BUTTON></TD></TR>
 <TR>
-<TD><BUTTON onclick=window.close();>È¡Ïû</BUTTON></TD></TR></TBODY></TABLE></CENTER></DIV>
+<TD><BUTTON onclick=window.close();>å–æ¶ˆ</BUTTON></TD></TR></TBODY></TABLE></CENTER></DIV>
 
 </BODY></HTML>
