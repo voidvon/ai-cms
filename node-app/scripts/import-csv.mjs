@@ -56,7 +56,7 @@ const TABLES = [
       large_image: fromText('bigpic'),
       keywords: fromText('key'),
       is_featured_home: fromBoolLike('tjhome'),
-      is_visible: fromInvertedCheckbox('show', 1),
+      is_visible: fromLegacyVisibility('show', 1),
       sort_order: fromInt('orderid', 0)
     }
   },
@@ -382,6 +382,23 @@ function fromInvertedCheckbox(header, checkedValue = 1) {
       return checkedValue;
     }
     return toBooleanInt(value, checkedValue) === 1 ? 0 : 1;
+  };
+  fn.sourceHeader = header;
+  return fn;
+}
+
+function fromLegacyVisibility(header, fallback = 1) {
+  const fn = (row) => {
+    const value = row[header];
+    if (value === undefined || value === null || String(value).trim() === '') {
+      return fallback;
+    }
+
+    const normalized = String(value).trim().toLowerCase();
+    if (normalized === '0' || normalized === 'false' || normalized === 'hidden' || normalized === 'hide') {
+      return 0;
+    }
+    return 1;
   };
   fn.sourceHeader = header;
   return fn;

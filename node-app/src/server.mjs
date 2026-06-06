@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createServer } from 'node:http';
-import { URL } from 'node:url';
+import { fileURLToPath, URL } from 'node:url';
 import { HOST, MIME_TYPES, PORT, PROJECT_ROOT } from './config.mjs';
 import { getDb } from './db.mjs';
 import { parseCookies, serializeCookie } from './utils/cookies.mjs';
@@ -87,7 +87,7 @@ import { readMultipartBody } from './utils/multipart.mjs';
 
 getDb();
 
-const server = createServer(async (request, response) => {
+export async function handleRequest(request, response) {
   try {
     const baseUrl = `http://${request.headers.host || 'localhost'}`;
     const url = new URL(request.url || '/', baseUrl);
@@ -2219,11 +2219,25 @@ const server = createServer(async (request, response) => {
     const statusCode = message.includes('required') ? 400 : 500;
     sendApiError(response, statusCode, statusCode === 400 ? 'invalid_request' : 'internal_server_error', message);
   }
-});
+}
 
-server.listen(PORT, HOST, () => {
-  console.log(`Node app listening on http://${HOST}:${PORT}`);
-});
+export function createAppServer() {
+  return createServer(handleRequest);
+}
+
+function isDirectExecution() {
+  if (!process.argv[1]) {
+    return false;
+  }
+  return path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+}
+
+if (isDirectExecution()) {
+  const server = createAppServer();
+  server.listen(PORT, HOST, () => {
+    console.log(`Node app listening on http://${HOST}:${PORT}`);
+  });
+}
 
 async function serveStaticFile(response, pathname, headOnly) {
   for (const candidate of getStaticCandidates(pathname)) {

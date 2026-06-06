@@ -4,8 +4,13 @@ import { buildStaticSite } from '../src/static-builder.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, '..');
-const outputRoot = path.resolve(appRoot, process.env.STATIC_OUTPUT_DIR || 'generated');
-const result = buildStaticSite({ outputRoot });
+const outputRoot = process.env.STATIC_OUTPUT_DIR
+  ? path.resolve(appRoot, process.env.STATIC_OUTPUT_DIR)
+  : path.resolve(appRoot, '..');
+const result = buildStaticSite({
+  outputRoot,
+  cleanExisting: true
+});
 
 console.log(`Static pages generated into: ${result.outputRoot}`);
 for (const item of result.results) {

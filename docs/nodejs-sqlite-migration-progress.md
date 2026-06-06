@@ -31,11 +31,14 @@
   - `node-app/scripts/import-csv.mjs`
 - 已实现旧库编码修复：
   - `node-app/scripts/repair-legacy-encoding.mjs`
+  - `node-app/scripts/repair-product-visibility.mjs`
   - CSV 导入后会自动执行一次编码修复
   - 当前已覆盖 `site_config`、`products`、`product_categories`、`news.summary`、`news.keywords`、`custom_labels`
   - 已额外清理一批旧新闻摘要/关键词里的乱码和历史营销尾巴（如 `上海彪维供应`、转载署名等）
   - 本轮已新增产品侧清洗：`products.name`、`products.code`、`products.summary`、`products.keywords` 中的旧品牌词和 `中国驰名商标` 类营销尾巴会被自动修复
   - 已实际回写一次产品修复，共修正 `products` 相关字段 `234` 处、覆盖 `118` 行
+  - 已修正产品导入时旧 `show` 字段到 `is_visible` 的映射语义，旧 CSV 中 `show=1` 现会导入为前台可见
+  - 已实际回写一次产品可见性修复，共同步 `429` 行产品的 `is_visible`
   - 已清理 `BM_top`、`BM_indextop`、`BM_linkind` 等旧自定义标签里的旧品牌名和旧域名残留
 
 ### 登录与后台框架
@@ -323,6 +326,8 @@
 - 已兼容旧搜索默认占位词 `找找看`、`输入产品名称` 的空搜索语义
 - 旧上传 iframe 已补 `CheckUploadForm()`、`UploadLoaded()`、`UploadError()`、`UploadSaved()` 所需回调链路
 - 已补 `upload2.asp?type=image` 这类旧编辑器图片对话框上传回填
+- `node-app/src/server.mjs` 已拆出可直接调用的 `handleRequest()`，便于在当前沙箱中不监听端口也能做运行态回归
+- 已新增 `node-app/scripts/runtime-smoke.mjs`，覆盖 `search.asp`、未登录上传拦截、旧上传表单、旧编辑器图片上传回填脚本
 - 上传文件删除已兼容更多旧路径格式，包括裸文件名和部分历史相对路径写法
 - 静态构建和后台 HTML 生成后，会统一把正文里的旧站上传图片绝对地址归一为站内 `/UploadFile/...` 路径
 - 静态构建会统一把当前站绝对链接归一为站内相对路径，并清理模板源里残留的 `spiraxsarcocn.com` 硬编码
@@ -368,16 +373,22 @@
 - `node --check node-app/src/services/custom-labels.mjs`
 - `node --check node-app/src/services/template-variants.mjs`
 - `node --check node-app/src/static-builder.mjs`
+- `node --check node-app/scripts/repair-product-visibility.mjs`
+- `node --check node-app/scripts/runtime-smoke.mjs`
+- `node node-app/scripts/repair-product-visibility.mjs`
+- `node node-app/scripts/runtime-smoke.mjs`
 - `npm --prefix node-app run build:static`
 - 生成后的 `node-app/generated/**/*.html` 中 `spiraxsarcocn.com` 绝对链接已清零
 - 生成后的 `node-app/generated/**/*.html` 中可确定映射的 `bilvie/bilwe` 旧站内链已清零
 - 生成后的 `node-app/generated/**/*.html` 中 `bilvie/bilwe` 域名残留已清零
 - 按字节扫描确认生成后的 `node-app/generated/**/*.html` 中历史控制字符已清零
 - 新闻/服务分类页里此前抽样出现的摘要乱码已回归为可读文本，静态生成已改为优先走清洗后的摘要兜底逻辑
+- 当前 SQLite 中 `products.is_visible` 已恢复为 `429` 条可见、`0` 条隐藏
 - `products.name`、`products.code`、`products.summary`、`products.keywords` 中的 `彪维` 旧品牌残留已清零
 - `products.summary`、`products.keywords` 中的 `中国驰名商标` 营销尾巴已清零
 - 生成后的 `node-app/generated/**/*.html` 中 `中国驰名商标` 已清零
-- 生成后的 `node-app/generated/**/*.html` 中 `彪维` 残留已降到 `3` 处，均为深层历史正文片段
+- 生成后的 `node-app/generated/**/*.html` 中 `彪维` 已清零
+- 生成后的 `node-app/generated/**/*.html` 中畸形 `http:///` 链接已清零
 - 登录旧后台：`POST /spck/check.asp`
 - 打开旧后台框架：`/spck/index.asp`
 - 打开模板列表：`/spck/cn/webtemp/index.asp`
@@ -400,10 +411,8 @@
 
 仍需继续迁移或回归的旧站能力：
 
-- 搜索结果页仍需再做一轮真实页面回归，重点看分页、详情跳转和不同模板下的前台样式一致性
-- 上传和图片管理仍需做一轮真实后台联调，重点看不同编辑页里的 iframe 上传提示和异常提示文案
 - 生成后的静态 HTML 与旧版模板仍需继续抽样对比，尤其是公司、服务、招聘、新闻分类列表页
-- 旧站遗留编码异常内容仍存在，重点已从产品摘要/关键词转移到少量新闻/服务/产品正文深层历史片段，仍需继续做数据级修复
+- 当前沙箱内直接 `listen 127.0.0.1:<port>` 会触发 `EPERM`，因此虽然已通过 `runtime-smoke.mjs` 做无 socket 运行态验证，但仍未完成一次真实浏览器/IIS 级联调
 
 ## 当前注意事项
 
@@ -416,6 +425,5 @@
 建议按以下顺序继续：
 
 1. 对比旧版公司、服务、招聘、新闻分类/list/detail 页面输出。
-2. 回归搜索、上传、编辑器图片回填和静态资源路径。
-3. 继续修复历史导入数据中的深层正文残留，优先清理剩余 `彪维` 历史片段和少量旧外链锚文本。
-4. 最后再处理登录验证码。
+2. 在可监听端口的环境里补一轮真实浏览器回归，重点确认搜索分页、上传 iframe 提示文案、编辑器图片回填和静态资源路径。
+3. 最后再处理登录验证码。

@@ -1,0 +1,11 @@
+/index.html
+/contact.html
+/msg.html
+
+/about/**/*.html
+/job/**/*.html
+/news/**/*.html
+/product/**/*.html
+/products/**/*.html
+/service/**/*.html
+/valve/**/*.html

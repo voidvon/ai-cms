@@ -11,7 +11,7 @@ import { getSiteConfig } from './services/site.mjs';
 import { escapeHtml, renderPage } from './utils/html.mjs';
 import { looksLikeLegacyMojibake } from './utils/legacy-text.mjs';
 
-const DEFAULT_OUTPUT_ROOT = path.join(APP_ROOT, 'generated');
+const DEFAULT_OUTPUT_ROOT = PROJECT_ROOT;
 const PRODUCT_LIST_PAGE_SIZE = 14;
 const NEWS_LIST_PAGE_SIZE = 6;
 const JOB_LIST_PAGE_SIZE = 8;
@@ -32,8 +32,10 @@ const LEGACY_PRODUCT_BRAND_PATTERNS = [
   /【\s*彪维\s*】/gi,
   /我公司彪维/gi
 ];
+const MANAGED_STATIC_ROOT_FILES = ['index.html', 'contact.html', 'msg.html'];
+const MANAGED_STATIC_DIRS = ['about', 'job', 'news', 'product', 'products', 'service', 'valve'];
 
-export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections } = {}) {
+export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cleanExisting = false } = {}) {
   getDb();
 
   const normalizedOutputRoot = path.resolve(outputRoot);
@@ -41,6 +43,9 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections } =
   const results = [];
 
   fs.mkdirSync(normalizedOutputRoot, { recursive: true });
+  if (cleanExisting) {
+    cleanupManagedStaticFiles(normalizedOutputRoot);
+  }
 
   if (requestedSections.has('index')) {
     results.push(buildIndexPage({ outputRoot: normalizedOutputRoot }));
@@ -78,8 +83,6 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections } =
   if (requestedSections.has('job-details')) {
     results.push(buildJobDetailPages({ outputRoot: normalizedOutputRoot }));
   }
-
-  normalizeLegacyGeneratedHtmlFiles(normalizedOutputRoot);
 
   return {
     outputRoot: normalizedOutputRoot,
@@ -1263,30 +1266,46 @@ function normalizeSections(sections) {
   return new Set([sections]);
 }
 
+function cleanupManagedStaticFiles(outputRoot) {
+  for (const relativePath of MANAGED_STATIC_ROOT_FILES) {
+    const filePath = path.resolve(outputRoot, relativePath);
+    if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
+      fs.unlinkSync(filePath);
+    }
+  }
+
+  for (const relativeDir of MANAGED_STATIC_DIRS) {
+    const dirPath = path.resolve(outputRoot, relativeDir);
+    if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) {
+      continue;
+    }
+    cleanupHtmlFilesRecursive(dirPath);
+  }
+}
+
+function cleanupHtmlFilesRecursive(currentPath) {
+  for (const entry of fs.readdirSync(currentPath, { withFileTypes: true })) {
+    const fullPath = path.join(currentPath, entry.name);
+    if (entry.isDirectory()) {
+      cleanupHtmlFilesRecursive(fullPath);
+      continue;
+    }
+
+    if (!entry.isFile()) {
+      continue;
+    }
+
+    const extension = path.extname(entry.name).toLowerCase();
+    if (extension === '.html' || extension === '.htm') {
+      fs.unlinkSync(fullPath);
+    }
+  }
+}
+
 function writeTextFile(outputRoot, relativePath, content) {
   const filePath = path.resolve(outputRoot, relativePath);
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, normalizeLegacyRichTextHtml(content), 'utf8');
-}
-
-function normalizeLegacyGeneratedHtmlFiles(rootPath) {
-  const entries = fs.readdirSync(rootPath, { withFileTypes: true });
-  for (const entry of entries) {
-    const fullPath = path.join(rootPath, entry.name);
-    if (entry.isDirectory()) {
-      normalizeLegacyGeneratedHtmlFiles(fullPath);
-      continue;
-    }
-    if (!entry.isFile() || path.extname(entry.name).toLowerCase() !== '.html') {
-      continue;
-    }
-
-    const original = fs.readFileSync(fullPath, 'utf8');
-    const normalized = normalizeLegacyRichTextHtml(original);
-    if (normalized !== original) {
-      fs.writeFileSync(fullPath, normalized, 'utf8');
-    }
-  }
 }
 
 function groupBy(items, keyFn) {
@@ -1609,10 +1628,21 @@ function normalizeLegacyRichTextHtml(value) {
     .replace(/彪维阀门品牌/gi, '斯派莎克阀门品牌')
     .replace(/彪维流体设备（上海）有限公司|彪维流体设备\(上海\)有限公司|彪维阀门有限公司/gi, companyName)
     .replace(/彪维流体设备/gi, companyName)
+    .replace(/<a[^>]*>\s*彪维\s*<\/a>\s*流体/gi, companyName)
+    .replace(/彪维流体/gi, companyName)
+    .replace(/彪维阀门集团/gi, companyName)
+    .replace(/合资牌彪维/gi, '合资品牌')
+    .replace(/彪维专业生产/gi, '专业生产')
+    .replace(/彪维公司的/gi, '公司的')
+    .replace(/彪维公司/gi, '公司')
+    .replace(/<strong>\s*彪维\s*<\/strong>(\s*<a\b)/gi, '$1')
     .replace(/【\s*彪维\s*】/gi, '')
     .replace(/我公司彪维/gi, '我公司')
     .replace(/alt="彪维流体设备"/gi, `alt="${escapeHtmlAttribute(companyName)}"`)
     .replace(/info@(?:<strong>)?spiraxsarcocn(?:<\/strong>)?\.com/gi, companyEmail)
+    .replace(/href="https?:\/\/\/+"/gi, 'href="/"')
+    .replace(/data-ke-src="https?:\/\/\/+"/gi, 'data-ke-src="/"')
+    .replace(/https?:\/\/\/+(?=[^/"])/gi, '/')
     .replace(/https?:\/\/(?:www\.)?spiraxsarcocn\.com(\/[^\s"'<>]*)?/gi, (_, relativePath = '/') => relativePath || '/')
     .replace(/https?:\/\/(?:www\.)?(?:bilvie\.com|bilwe\.com)(\/(?:Product|product|products|valve)\/\d+(?:-\d+)?\.html)/gi, '$1')
     .replace(/https?:\/\/(?:www\.)?(?:bilvie\.com|bilwe\.com)(\/(?:news|service)\/detail\/\d+\.html)/gi, '$1')
