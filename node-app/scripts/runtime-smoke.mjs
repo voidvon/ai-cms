@@ -146,16 +146,16 @@ async function main() {
   try {
     const emptySearch = await performRequest({
       method: 'GET',
-      url: '/Search.asp?action=search&ProductsName=%E6%89%BE%E6%89%BE%E7%9C%8B',
+      url: '/search?ProductsName=%E6%89%BE%E6%89%BE%E7%9C%8B',
       headers: { host: 'localhost' }
     });
     assert.equal(emptySearch.statusCode, 200);
     assert.match(emptySearch.bodyText, /搜索 <span class="Font_FF0000_a">“全部产品”<\/span>/);
-    assert.match(emptySearch.bodyText, /action="\/Search\.asp\?action=search"/);
+    assert.match(emptySearch.bodyText, /action="\/search"/);
 
     const keywordSearch = await performRequest({
       method: 'POST',
-      url: '/search.asp?action=search',
+      url: '/search',
       headers: {
         host: 'localhost',
         'content-type': 'application/x-www-form-urlencoded'
@@ -166,17 +166,49 @@ async function main() {
     assert.match(keywordSearch.bodyText, new RegExp(`value="${escapeRegex(searchKeyword)}"`));
     assert.match(keywordSearch.bodyText, new RegExp(`/Product/${product.id}\\.html`));
 
-    const uploadUnauthorized = await performRequest({
+    const legacySearch = await performRequest({
       method: 'GET',
-      url: '/inc/upload.asp?tMode=3&utype=prod',
+      url: '/search.asp?action=search',
       headers: { host: 'localhost' }
     });
-    assert.equal(uploadUnauthorized.statusCode, 401);
-    assert.match(uploadUnauthorized.bodyText, /admin_auth_required/);
+    assert.equal(legacySearch.statusCode, 404);
+
+    const legacyAdminLogin = await performRequest({
+      method: 'GET',
+      url: '/spck/login.asp',
+      headers: { host: 'localhost' }
+    });
+    assert.equal(legacyAdminLogin.statusCode, 404);
+
+    const editorConfig = await performRequest({
+      method: 'GET',
+      url: '/spck/ueditor/controller?action=config',
+      headers: { host: 'localhost' }
+    });
+    assert.equal(editorConfig.statusCode, 200);
+    assert.equal(editorConfig.getHeader('content-type'), 'application/json; charset=utf-8');
+    assert.match(editorConfig.bodyText, /"imageActionName":"uploadimage"/);
+    assert.doesNotMatch(editorConfig.bodyText, /controller\.asp/i);
+
+    const adminRedirect = await performRequest({
+      method: 'GET',
+      url: '/admin/site/config',
+      headers: { host: 'localhost' }
+    });
+    assert.equal(adminRedirect.statusCode, 302);
+    assert.equal(adminRedirect.getHeader('location'), '/admin/login');
+
+    const uploadUnauthorized = await performRequest({
+      method: 'GET',
+      url: '/admin/uploads/frame?tMode=3&utype=prod',
+      headers: { host: 'localhost' }
+    });
+    assert.equal(uploadUnauthorized.statusCode, 302);
+    assert.equal(uploadUnauthorized.getHeader('location'), '/admin/login');
 
     const uploadForm = await performRequest({
       method: 'GET',
-      url: '/inc/upload2.asp?type=image&tMode=3&utype=prod',
+      url: '/admin/uploads/frame-image?type=image&tMode=3&utype=prod',
       headers: {
         host: 'localhost',
         cookie: adminCookie
@@ -198,7 +230,7 @@ async function main() {
     });
     const uploadResult = await performRequest({
       method: 'POST',
-      url: '/inc/upload2.asp?type=image&tMode=3&utype=prod',
+      url: '/admin/uploads/frame-image?type=image&tMode=3&utype=prod',
       headers: {
         host: 'localhost',
         cookie: adminCookie,

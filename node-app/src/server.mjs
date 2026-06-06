@@ -82,20 +82,266 @@ import {
   buildServiceDetailPages
 } from './static-builder.mjs';
 import { escapeHtml, renderPage } from './utils/html.mjs';
-import { getClientIp, readFormBody, readJsonBody, sendApi, sendApiError, sendHtml } from './utils/http.mjs';
+import { getClientIp, readFormBody, readJsonBody, sendApi, sendApiError, sendHtml as baseSendHtml } from './utils/http.mjs';
 import { readMultipartBody } from './utils/multipart.mjs';
 
 getDb();
+
+const CLEAN_PATH_TO_LEGACY_PATH = new Map([
+  ['/search', '/search.asp'],
+  ['/ajaxcode/msg', '/ajaxcode/msg.asp'],
+  ['/ajaxcode/prodmsg', '/ajaxcode/prodmsg.asp'],
+  ['/admin/uploads/frame', '/inc/upload.asp'],
+  ['/admin/uploads/frame-image', '/inc/upload2.asp'],
+  ['/admin/uploads/frame-gallery', '/inc/upload3.asp'],
+  ['/admin', '/spck'],
+  ['/admin/login', '/spck/login.asp'],
+  ['/admin/session', '/spck/check.asp'],
+  ['/admin/logout', '/spck/exitsystem.asp'],
+  ['/admin/frame', '/spck/index.asp'],
+  ['/admin/top', '/spck/top.asp'],
+  ['/admin/nav', '/spck/left.asp'],
+  ['/admin/dashboard', '/spck/main.asp'],
+  ['/admin/forbidden', '/spck/err.asp'],
+  ['/admin/site/config', '/spck/cn/config/config.asp'],
+  ['/admin/site/meta', '/spck/cn/config/meta_keywords.asp'],
+  ['/admin/site/meta/new', '/spck/cn/config/meta_keywords_add.asp'],
+  ['/admin/site/meta/edit', '/spck/cn/config/mate_edit.asp'],
+  ['/admin/site/meta/save', '/spck/cn/config/mate_save.asp'],
+  ['/admin/site/offices', '/spck/cn/offices/offices.asp'],
+  ['/admin/site/offices/new', '/spck/cn/offices/offices_add.asp'],
+  ['/admin/site/offices/edit', '/spck/cn/offices/offices_edit.asp'],
+  ['/admin/site/offices/save', '/spck/cn/offices/offices_save.asp'],
+  ['/admin/templates', '/spck/cn/webtemp/index.asp'],
+  ['/admin/templates/label-kinds', '/spck/cn/webtemp/cuskind.asp'],
+  ['/admin/templates/label-kinds/edit', '/spck/cn/webtemp/cuskind_ed.asp'],
+  ['/admin/templates/labels', '/spck/cn/webtemp/cuslabel.asp'],
+  ['/admin/templates/labels/new', '/spck/cn/webtemp/addcuslabel.asp'],
+  ['/admin/templates/labels/edit', '/spck/cn/webtemp/cuslabel_ed.asp'],
+  ['/admin/templates/labels/check', '/spck/cn/webtemp/cuscheck.asp'],
+  ['/admin/templates/edit/index', '/spck/cn/webtemp/worldec_index.asp'],
+  ['/admin/templates/edit/corporation', '/spck/cn/webtemp/worldec_co.asp'],
+  ['/admin/templates/edit/news', '/spck/cn/webtemp/worldec_news.asp'],
+  ['/admin/templates/edit/service', '/spck/cn/webtemp/worldec_service.asp'],
+  ['/admin/templates/edit/product', '/spck/cn/webtemp/worldec_prod.asp'],
+  ['/admin/templates/edit/job', '/spck/cn/webtemp/worldec_job.asp'],
+  ['/admin/templates/edit/contact', '/spck/cn/webtemp/worldec_contact.asp'],
+  ['/admin/templates/edit/message', '/spck/cn/webtemp/worldec_msg.asp'],
+  ['/admin/templates/edit/product-list', '/spck/cn/webtemp/prod/worldec_index.asp'],
+  ['/admin/templates/edit/product-category', '/spck/cn/webtemp/prod/worldec_sort2.asp'],
+  ['/admin/templates/edit/product-detail', '/spck/cn/webtemp/prod/worldec_detail.asp'],
+  ['/admin/templates/edit/news-list', '/spck/cn/webtemp/news/worldec_index.asp'],
+  ['/admin/templates/edit/news-detail', '/spck/cn/webtemp/news/worldec_detail.asp'],
+  ['/admin/templates/edit/service-list', '/spck/cn/webtemp/service/worldec_index.asp'],
+  ['/admin/templates/edit/service-detail', '/spck/cn/webtemp/service/worldec_detail.asp'],
+  ['/admin/templates/edit/job-detail', '/spck/cn/webtemp/job/worldec_detail.asp'],
+  ['/admin/corporation/categories', '/spck/cn/corporation/co_class.asp'],
+  ['/admin/corporation/categories/new', '/spck/cn/corporation/co_class_add.asp'],
+  ['/admin/corporation/categories/edit', '/spck/cn/corporation/co_class_edit.asp'],
+  ['/admin/corporation/categories/save', '/spck/cn/corporation/co_class_save.asp'],
+  ['/admin/corporation/content/edit', '/spck/cn/corporation/co_edit.asp'],
+  ['/admin/corporation/content/save', '/spck/cn/corporation/co_save.asp'],
+  ['/admin/news', '/spck/cn/news/news_index.asp'],
+  ['/admin/news/new', '/spck/cn/news/news_add.asp'],
+  ['/admin/news/edit', '/spck/cn/news/news_edit.asp'],
+  ['/admin/news/save', '/spck/cn/news/news_save.asp'],
+  ['/admin/news/categories', '/spck/cn/news/class.asp'],
+  ['/admin/news/categories/new', '/spck/cn/news/class_add.asp'],
+  ['/admin/news/categories/edit', '/spck/cn/news/class_edit.asp'],
+  ['/admin/news/categories/save', '/spck/cn/news/class_save.asp'],
+  ['/admin/products', '/spck/cn/produts/prod.asp'],
+  ['/admin/products/new', '/spck/cn/produts/prod_add.asp'],
+  ['/admin/products/edit', '/spck/cn/produts/prod_edit.asp'],
+  ['/admin/products/save', '/spck/cn/produts/prod_save.asp'],
+  ['/admin/products/categories', '/spck/cn/produts/prodcat.asp'],
+  ['/admin/products/categories/new', '/spck/cn/produts/prodcat_add.asp'],
+  ['/admin/products/categories/edit', '/spck/cn/produts/prodcat_edit.asp'],
+  ['/admin/products/categories/save', '/spck/cn/produts/prodcat_save.asp'],
+  ['/admin/products/photos', '/spck/cn/produts/prodphoto.asp'],
+  ['/admin/products/photos/new', '/spck/cn/produts/prodphoto_add.asp'],
+  ['/admin/products/photos/save', '/spck/cn/produts/prodphoto_save.asp'],
+  ['/admin/products/photos/show', '/spck/cn/produts/photoshow.asp'],
+  ['/admin/messages', '/spck/cn/msg/msg.asp'],
+  ['/admin/messages/view', '/spck/cn/msg/show.asp'],
+  ['/admin/messages/handle', '/spck/cn/msg/chu.asp'],
+  ['/admin/jobs', '/spck/cn/job/job.asp'],
+  ['/admin/jobs/new', '/spck/cn/job/job_add.asp'],
+  ['/admin/jobs/edit', '/spck/cn/job/job_edit.asp'],
+  ['/admin/jobs/save', '/spck/cn/job/job_save.asp'],
+  ['/admin/admins', '/spck/system/admin_admin.asp'],
+  ['/admin/admins/edit', '/spck/system/admin_admin_ok.asp'],
+  ['/admin/admins/password', '/spck/system/admin_adminmodifypwd.asp'],
+  ['/admin/build', '/manage/makehtml/index.asp'],
+  ['/admin/build/single', '/manage/makehtml/index/index.asp'],
+  ['/admin/build/groups', '/manage/makehtml/maketrade.asp'],
+  ['/admin/build/all-lists', '/manage/makehtml/makelist_my.asp'],
+  ['/admin/build/all-details', '/manage/makehtml/makedetail_my.asp'],
+  ['/admin/build/products/lists', '/manage/makehtml/prod/makelist.asp'],
+  ['/admin/build/products/groups', '/manage/makehtml/prod/maketrade.asp'],
+  ['/admin/build/products/details', '/manage/makehtml/prod/makedetail.asp'],
+  ['/admin/build/news/groups', '/manage/makehtml/news/maketrade.asp'],
+  ['/admin/build/news/details', '/manage/makehtml/news/makedetail.asp'],
+  ['/admin/build/services/groups', '/manage/makehtml/service/maketrade.asp'],
+  ['/admin/build/services/details', '/manage/makehtml/service/makedetail.asp'],
+  ['/admin/build/jobs/groups', '/manage/makehtml/job/maketrade.asp'],
+  ['/admin/build/jobs/details', '/manage/makehtml/job/makedetail.asp'],
+  ['/admin/build/corporation/groups', '/manage/makehtml/co/maketrade.asp']
+]);
+
+const HTML_ROUTE_REWRITES = [
+  ['/Search.asp?action=search', '/search'],
+  ['/search.asp?action=search', '/search'],
+  ['/Search.asp', '/search'],
+  ['/search.asp', '/search'],
+  ['/ajaxcode/prodMsg.asp', '/ajaxcode/prodmsg'],
+  ['/ajaxcode/prodmsg.asp', '/ajaxcode/prodmsg'],
+  ['/ajaxcode/msg.asp', '/ajaxcode/msg'],
+  ['../../../inc/upload3.asp', '/admin/uploads/frame-gallery'],
+  ['../../../inc/upload2.asp', '/admin/uploads/frame-image'],
+  ['../../../inc/upload.asp', '/admin/uploads/frame'],
+  ['/inc/upload3.asp', '/admin/uploads/frame-gallery'],
+  ['/inc/upload2.asp', '/admin/uploads/frame-image'],
+  ['/inc/upload.asp', '/admin/uploads/frame'],
+  ['/spck/login.asp', '/admin/login'],
+  ['/spck/check.asp', '/admin/session'],
+  ['/spck/exitsystem.asp', '/admin/logout'],
+  ['/spck/index.asp', '/admin/frame'],
+  ['/spck/top.asp', '/admin/top'],
+  ['/spck/left.asp', '/admin/nav'],
+  ['/spck/main.asp', '/admin/dashboard'],
+  ['/spck/err.asp', '/admin/forbidden'],
+  ['/manage/makehtml/index/index.asp', '/admin/build/single'],
+  ['/manage/makehtml/index.asp', '/admin/build'],
+  ['/manage/makehtml/maketrade.asp', '/admin/build/groups'],
+  ['/manage/makehtml/makelist_my.asp', '/admin/build/all-lists'],
+  ['/manage/makehtml/makedetail_my.asp', '/admin/build/all-details'],
+  ['/manage/makehtml/prod/makelist.asp', '/admin/build/products/lists'],
+  ['/manage/makehtml/prod/maketrade.asp', '/admin/build/products/groups'],
+  ['/manage/makehtml/prod/makedetail.asp', '/admin/build/products/details'],
+  ['/manage/makehtml/news/maketrade.asp', '/admin/build/news/groups'],
+  ['/manage/makehtml/news/makedetail.asp', '/admin/build/news/details'],
+  ['/manage/makehtml/service/maketrade.asp', '/admin/build/services/groups'],
+  ['/manage/makehtml/service/makedetail.asp', '/admin/build/services/details'],
+  ['/manage/makehtml/job/maketrade.asp', '/admin/build/jobs/groups'],
+  ['/manage/makehtml/job/makedetail.asp', '/admin/build/jobs/details'],
+  ['/manage/makehtml/co/maketrade.asp', '/admin/build/corporation/groups'],
+  ['system/admin_AdminModifyPwd.asp', '/admin/admins/password'],
+  ['ExitSystem.asp', '/admin/logout'],
+  ['Left.asp', '/admin/nav'],
+  ['Top.asp', '/admin/top'],
+  ['Main.asp', '/admin/dashboard'],
+  ['check.asp', '/admin/session'],
+  ['login.asp', '/admin/login'],
+  ['cn/Config/Config.asp', '/admin/site/config'],
+  ['cn/Offices/Offices.asp', '/admin/site/offices'],
+  ['cn/Config/Meta_keywords.asp', '/admin/site/meta'],
+  ['cn/WebTemp/index.asp', '/admin/templates'],
+  ['cn/WebTemp/cuslabel.asp', '/admin/templates/labels'],
+  ['cn/WebTemp/cuskind.asp', '/admin/templates/label-kinds'],
+  ['cn/Corporation/Co_Class.asp', '/admin/corporation/categories'],
+  ['cn/Corporation/Co_Class_add.asp', '/admin/corporation/categories/new'],
+  ['cn/News/Class.asp', '/admin/news/categories'],
+  ['cn/News/News_index.asp', '/admin/news'],
+  ['cn/produts/prodcat.asp', '/admin/products/categories'],
+  ['cn/produts/prod.asp', '/admin/products'],
+  ['cn/produts/prodphoto.asp', '/admin/products/photos'],
+  ['cn/msg/Msg.asp', '/admin/messages'],
+  ['cn/job/job.asp', '/admin/jobs'],
+  ['system/admin_admin.asp', '/admin/admins'],
+  ['worldec_index.asp', '/admin/templates/edit/index'],
+  ['worldec_co.asp', '/admin/templates/edit/corporation'],
+  ['worldec_news.asp', '/admin/templates/edit/news'],
+  ['worldec_service.asp', '/admin/templates/edit/service'],
+  ['worldec_prod.asp', '/admin/templates/edit/product'],
+  ['worldec_job.asp', '/admin/templates/edit/job'],
+  ['worldec_contact.asp', '/admin/templates/edit/contact'],
+  ['worldec_msg.asp', '/admin/templates/edit/message'],
+  ['prod/worldec_index.asp', '/admin/templates/edit/product-list'],
+  ['prod/worldec_sort2.asp', '/admin/templates/edit/product-category'],
+  ['prod/worldec_detail.asp', '/admin/templates/edit/product-detail'],
+  ['news/worldec_index.asp', '/admin/templates/edit/news-list'],
+  ['news/worldec_detail.asp', '/admin/templates/edit/news-detail'],
+  ['service/worldec_index.asp', '/admin/templates/edit/service-list'],
+  ['service/worldec_detail.asp', '/admin/templates/edit/service-detail'],
+  ['job/worldec_detail.asp', '/admin/templates/edit/job-detail'],
+  ['Config.asp', '/admin/site/config'],
+  ['Offices_save.asp', '/admin/site/offices/save'],
+  ['Offices_edit.asp', '/admin/site/offices/edit'],
+  ['Offices_add.asp', '/admin/site/offices/new'],
+  ['Offices.asp', '/admin/site/offices'],
+  ['Meta_keywords_add.asp', '/admin/site/meta/new'],
+  ['Meta_keywords.asp', '/admin/site/meta'],
+  ['Mate_edit.asp', '/admin/site/meta/edit'],
+  ['Mate_save.asp', '/admin/site/meta/save'],
+  ['cuskind_ed.asp', '/admin/templates/label-kinds/edit'],
+  ['cuskind.asp', '/admin/templates/label-kinds'],
+  ['cuslabel_ed.asp', '/admin/templates/labels/edit'],
+  ['addcuslabel.asp', '/admin/templates/labels/new'],
+  ['cuslabel.asp', '/admin/templates/labels'],
+  ['cuscheck.asp', '/admin/templates/labels/check'],
+  ['Co_Class_Save.asp', '/admin/corporation/categories/save'],
+  ['Co_Class_edit.asp', '/admin/corporation/categories/edit'],
+  ['Co_Class_add.asp', '/admin/corporation/categories/new'],
+  ['Co_Class.asp', '/admin/corporation/categories'],
+  ['co_edit.asp', '/admin/corporation/content/edit'],
+  ['Co_Save.asp', '/admin/corporation/content/save'],
+  ['Class_Save.asp', '/admin/news/categories/save'],
+  ['Class_edit.asp', '/admin/news/categories/edit'],
+  ['Class_add.asp', '/admin/news/categories/new'],
+  ['Class.asp', '/admin/news/categories'],
+  ['News_save.asp', '/admin/news/save'],
+  ['News_edit.asp', '/admin/news/edit'],
+  ['News_add.asp', '/admin/news/new'],
+  ['News_index.asp', '/admin/news'],
+  ['photoShow.asp', '/admin/products/photos/show'],
+  ['prodphoto_save.asp', '/admin/products/photos/save'],
+  ['prodphoto_add.asp', '/admin/products/photos/new'],
+  ['prodphoto.asp', '/admin/products/photos'],
+  ['prodcat_save.asp', '/admin/products/categories/save'],
+  ['prodcat_edit.asp', '/admin/products/categories/edit'],
+  ['prodcat_add.asp', '/admin/products/categories/new'],
+  ['prodcat.asp', '/admin/products/categories'],
+  ['prod_save.asp', '/admin/products/save'],
+  ['prod_edit.asp', '/admin/products/edit'],
+  ['prod_add.asp', '/admin/products/new'],
+  ['prod.asp', '/admin/products'],
+  ['show.asp', '/admin/messages/view'],
+  ['chu.asp', '/admin/messages/handle'],
+  ['Msg.asp', '/admin/messages'],
+  ['job_save.asp', '/admin/jobs/save'],
+  ['job_edit.asp', '/admin/jobs/edit'],
+  ['job_add.asp', '/admin/jobs/new'],
+  ['job.asp', '/admin/jobs'],
+  ['admin_adminmodifypwd.asp', '/admin/admins/password'],
+  ['admin_admin_ok.asp', '/admin/admins/edit'],
+  ['admin_admin.asp', '/admin/admins']
+];
+
+const SORTED_HTML_ROUTE_REWRITES = HTML_ROUTE_REWRITES
+  .slice()
+  .sort((left, right) => right[0].length - left[0].length);
+
+function sendHtml(response, statusCode, html) {
+  return baseSendHtml(response, statusCode, normalizeHtmlRoutes(html));
+}
 
 export async function handleRequest(request, response) {
   try {
     const baseUrl = `http://${request.headers.host || 'localhost'}`;
     const url = new URL(request.url || '/', baseUrl);
-    const pathnameLower = url.pathname.toLowerCase();
+    const originalPathnameLower = url.pathname.toLowerCase();
+    if (isLegacyDynamicPath(originalPathnameLower)) {
+      return sendHtml(response, 404, renderPage({ title: '404', body: '<h1>404</h1><p>未找到请求资源。</p>' }));
+    }
+    let pathnameLower = normalizeIncomingPath(originalPathnameLower);
+
+    if ((request.method === 'GET' || request.method === 'POST') && pathnameLower === '/spck/ueditor/controller') {
+      return handleUeditorRequest(request, response, url);
+    }
 
     if (request.method === 'GET' && (pathnameLower === '/spck' || pathnameLower === '/spck/')) {
       response.statusCode = 302;
-      response.setHeader('Location', '/spck/login.asp');
+      response.setHeader('Location', normalizeRedirectLocation('/spck/login.asp'));
       response.end();
       return;
     }
@@ -104,7 +350,7 @@ export async function handleRequest(request, response) {
       const session = getAdminSession(getAdminToken(request));
       if (session) {
         response.statusCode = 302;
-        response.setHeader('Location', '/spck/index.asp');
+        response.setHeader('Location', normalizeRedirectLocation('/spck/index.asp'));
         response.end();
         return;
       }
@@ -143,7 +389,7 @@ export async function handleRequest(request, response) {
       }
       response.statusCode = 302;
       response.setHeader('Set-Cookie', clearLegacyAdminCookies());
-      response.setHeader('Location', '/spck/login.asp');
+      response.setHeader('Location', normalizeRedirectLocation('/spck/login.asp'));
       response.end();
       return;
     }
@@ -266,7 +512,7 @@ export async function handleRequest(request, response) {
       }
 
       if (action === 'search') {
-        return sendHtml(response, 200, renderLegacySimpleSuccess('搜索页已改为动态入口 /search.asp，无需单独生成', '/manage/makehtml/index/index.asp'));
+        return sendHtml(response, 200, renderLegacySimpleSuccess('搜索页已改为动态入口 /search，无需单独生成', '/manage/makehtml/index/index.asp'));
       }
 
       return sendHtml(response, 400, renderLegacySimpleMessage('不支持的生成类型', '/manage/makehtml/index/index.asp'));
@@ -898,7 +1144,7 @@ export async function handleRequest(request, response) {
         const form = await readFormBody(request);
         updateSiteConfig(normalizeLegacySiteConfigForm(form));
         response.statusCode = 302;
-        response.setHeader('Location', 'Config.asp');
+        response.setHeader('Location', normalizeRedirectLocation('Config.asp'));
         response.end();
         return;
       }
@@ -1017,7 +1263,7 @@ export async function handleRequest(request, response) {
         const form = await readFormBody(request);
         createCustomLabelKind({ addkind: form.addkind });
         response.statusCode = 302;
-        response.setHeader('Location', 'cuskind.asp');
+        response.setHeader('Location', normalizeRedirectLocation('cuskind.asp'));
         response.end();
         return;
       }
@@ -1027,7 +1273,7 @@ export async function handleRequest(request, response) {
           deleteCustomLabelKind(id);
         }
         response.statusCode = 302;
-        response.setHeader('Location', 'cuskind.asp');
+        response.setHeader('Location', normalizeRedirectLocation('cuskind.asp'));
         response.end();
         return;
       }
@@ -1054,7 +1300,7 @@ export async function handleRequest(request, response) {
           return sendHtml(response, 404, renderLegacySimpleMessage('自定义标签分类不存在', 'cuskind.asp'));
         }
         response.statusCode = 302;
-        response.setHeader('Location', 'cuskind.asp');
+        response.setHeader('Location', normalizeRedirectLocation('cuskind.asp'));
         response.end();
         return;
       }
@@ -1079,7 +1325,7 @@ export async function handleRequest(request, response) {
           deleteCustomLabel(id);
         }
         response.statusCode = 302;
-        response.setHeader('Location', 'cuslabel.asp');
+        response.setHeader('Location', normalizeRedirectLocation('cuslabel.asp'));
         response.end();
         return;
       }
@@ -1098,7 +1344,7 @@ export async function handleRequest(request, response) {
         const form = await readFormBody(request);
         createCustomLabel(form);
         response.statusCode = 302;
-        response.setHeader('Location', 'cuslabel.asp');
+        response.setHeader('Location', normalizeRedirectLocation('cuslabel.asp'));
         response.end();
         return;
       }
@@ -1129,7 +1375,7 @@ export async function handleRequest(request, response) {
           return sendHtml(response, 404, renderLegacySimpleMessage('自定义标签不存在', 'cuslabel.asp'));
         }
         response.statusCode = 302;
-        response.setHeader('Location', 'cuslabel.asp');
+        response.setHeader('Location', normalizeRedirectLocation('cuslabel.asp'));
         response.end();
         return;
       }
@@ -1174,7 +1420,7 @@ export async function handleRequest(request, response) {
             return sendHtml(response, 404, renderLegacySimpleMessage('模板不存在', 'index.asp'));
           }
           response.statusCode = 302;
-          response.setHeader('Location', `/spck/cn/webtemp/${templatePage.fileName}?id=${id}`);
+          response.setHeader('Location', normalizeRedirectLocation(`/spck/cn/webtemp/${templatePage.fileName}?id=${id}`));
           response.end();
           return;
         }
@@ -1485,7 +1731,7 @@ export async function handleRequest(request, response) {
       });
 
       response.statusCode = 302;
-      response.setHeader('Location', 'Msg.asp');
+      response.setHeader('Location', normalizeRedirectLocation('Msg.asp'));
       response.end();
       return;
     }
@@ -2338,6 +2584,152 @@ function getStaticCandidates(pathname) {
   return [...candidates];
 }
 
+function normalizeIncomingPath(pathnameLower) {
+  const normalized = pathnameLower.length > 1 ? pathnameLower.replace(/\/+$/, '') : pathnameLower;
+  return CLEAN_PATH_TO_LEGACY_PATH.get(normalized) || pathnameLower;
+}
+
+function isLegacyDynamicPath(pathnameLower) {
+  return pathnameLower === '/spck' ||
+    pathnameLower === '/spck/' ||
+    pathnameLower === '/manage' ||
+    pathnameLower === '/manage/' ||
+    pathnameLower.endsWith('.asp') ||
+    pathnameLower.endsWith('.asa');
+}
+
+function normalizeHtmlRoutes(html) {
+  return rewriteLegacyRoutes(html);
+}
+
+function normalizeRedirectLocation(location) {
+  return rewriteLegacyRoutes(location);
+}
+
+function rewriteLegacyRoutes(value) {
+  let output = String(value || '');
+  for (const [legacyPath, cleanPath] of SORTED_HTML_ROUTE_REWRITES) {
+    output = output.replaceAll(legacyPath, cleanPath);
+  }
+  return output;
+}
+
+async function handleUeditorRequest(request, response, url) {
+  const action = String(url.searchParams.get('action') || 'config').toLowerCase();
+
+  if (action === 'config') {
+    return sendUeditorJson(response, 200, createUeditorConfigPayload());
+  }
+
+  if (action === 'listimage' || action === 'listfile') {
+    const uploadType = action === 'listimage' ? 'news' : 'prod';
+    const list = listUeditorFiles(uploadType);
+    return sendUeditorJson(response, 200, {
+      state: 'SUCCESS',
+      list,
+      start: 0,
+      total: list.length
+    });
+  }
+
+  if (action === 'catchimage') {
+    return sendUeditorJson(response, 200, {
+      state: 'SUCCESS',
+      list: []
+    });
+  }
+
+  if (request.method !== 'POST') {
+    return sendUeditorJson(response, 405, { state: 'unsupported method' });
+  }
+
+  if (action === 'uploadimage' || action === 'uploadfile' || action === 'uploadvideo') {
+    try {
+      const multipart = await readMultipartBody(request, { maxBytes: 2 * 1024 * 1024 });
+      const uploadType = action === 'uploadimage' ? 'news' : 'prod';
+      const uploaded = saveUploadedFile(multipart.files[0], { uploadType });
+      return sendUeditorJson(response, 200, {
+        state: 'SUCCESS',
+        url: uploaded.relativePath,
+        title: uploaded.legacyFileName,
+        original: multipart.files[0]?.filename || uploaded.legacyFileName
+      });
+    } catch (error) {
+      return sendUeditorJson(response, 400, {
+        state: normalizeLegacyUploadErrorMessage(error instanceof Error ? error.message : String(error))
+      });
+    }
+  }
+
+  return sendUeditorJson(response, 400, { state: 'unsupported action' });
+}
+
+function createUeditorConfigPayload() {
+  return {
+    imageActionName: 'uploadimage',
+    imageFieldName: 'upfile',
+    imageMaxSize: 400 * 1024,
+    imageAllowFiles: ['.png', '.jpg', '.jpeg', '.gif'],
+    imageCompressEnable: false,
+    imageInsertAlign: 'none',
+    imageUrlPrefix: '',
+    imagePathFormat: '/uploadfile/newsuppic/{filename}',
+    scrawlActionName: 'uploadimage',
+    scrawlFieldName: 'upfile',
+    scrawlMaxSize: 400 * 1024,
+    scrawlUrlPrefix: '',
+    scrawlInsertAlign: 'none',
+    scrawlPathFormat: '/uploadfile/newsuppic/{filename}',
+    fileActionName: 'uploadfile',
+    fileFieldName: 'upfile',
+    fileMaxSize: 400 * 1024,
+    fileAllowFiles: ['.png', '.jpg', '.jpeg', '.gif'],
+    fileUrlPrefix: '',
+    filePathFormat: '/uploadfile/produppic/{filename}',
+    videoActionName: 'uploadvideo',
+    videoFieldName: 'upfile',
+    videoMaxSize: 400 * 1024,
+    videoAllowFiles: ['.png', '.jpg', '.jpeg', '.gif'],
+    videoUrlPrefix: '',
+    videoPathFormat: '/uploadfile/produppic/{filename}',
+    imageManagerActionName: 'listimage',
+    imageManagerListPath: '/uploadfile/newsuppic/',
+    imageManagerListSize: 20,
+    imageManagerUrlPrefix: '',
+    imageManagerInsertAlign: 'none',
+    imageManagerAllowFiles: ['.png', '.jpg', '.jpeg', '.gif'],
+    fileManagerActionName: 'listfile',
+    fileManagerListPath: '/uploadfile/produppic/',
+    fileManagerListSize: 20,
+    fileManagerUrlPrefix: '',
+    fileManagerAllowFiles: ['.png', '.jpg', '.jpeg', '.gif']
+  };
+}
+
+function listUeditorFiles(uploadType) {
+  const relativeDir = uploadType === 'news' ? 'uploadfile/newsuppic' : 'uploadfile/produppic';
+  const absoluteDir = path.join(PROJECT_ROOT, relativeDir);
+  if (!fs.existsSync(absoluteDir)) {
+    return [];
+  }
+
+  return fs.readdirSync(absoluteDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => ({
+      url: `/${relativeDir}/${entry.name}`.replaceAll('\\', '/'),
+      mtime: fs.statSync(path.join(absoluteDir, entry.name)).mtimeMs
+    }))
+    .sort((left, right) => right.mtime - left.mtime)
+    .map((item) => ({ url: item.url }));
+}
+
+function sendUeditorJson(response, statusCode, payload) {
+  response.writeHead(statusCode, {
+    'Content-Type': 'application/json; charset=utf-8'
+  });
+  response.end(JSON.stringify(payload));
+}
+
 function renderSearchPage({ query, result }) {
   const site = getSiteConfig();
   const titleKeyword = query || '产品搜索';
@@ -2376,7 +2768,7 @@ function renderSearchPage({ query, result }) {
   const page = result.pagination.page;
   const totalPages = result.pagination.totalPages;
   const total = result.pagination.total;
-  const baseQuery = `/Search.asp?action=search&ProductsName=${encodeURIComponent(query)}`;
+  const baseQuery = `/search?ProductsName=${encodeURIComponent(query)}`;
   const pagination = totalPages > 1
     ? `
       共 <strong>${total}</strong> 条信息
@@ -2434,11 +2826,11 @@ function renderSearchPage({ query, result }) {
     </div>
     <div id="page_main" class="clearfix" style="padding-top:18px;">
       <div class="page-right">
-        <div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> &gt;&gt; <a href="/Search.asp" title="更多阀门产品，这里找找看">产品搜索</a></div>
+        <div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> &gt;&gt; <a href="/search" title="更多阀门产品，这里找找看">产品搜索</a></div>
         <div class="page-products">
           <div class="search-panel">
             <div class="search-toolbar">
-              <form id="form2" name="form2" method="post" action="/Search.asp?action=search">
+              <form id="form2" name="form2" method="post" action="/search">
                 <table border="0" cellpadding="0" cellspacing="0">
                   <tr>
                     <td width="90">产品名称：</td>
@@ -2465,7 +2857,7 @@ function renderSearchPage({ query, result }) {
         </div>
         <div class="left-search">
           <h2><span>站内搜索</span></h2>
-          <form id="form1" name="form1" method="post" action="/Search.asp?action=search">
+          <form id="form1" name="form1" method="post" action="/search">
             <p>
               <input name="ProductsName" type="text" id="ProductsName2" value="找找看" size="18" class="Font_666666_a" onfocus="if(this.value==='找找看'){this.value='';}" />
               <input name="searchbutton" type="submit" value="搜索" />
@@ -2528,9 +2920,9 @@ function requireAdminSession(request, response) {
   const session = getAdminSession(token);
   if (!session) {
     const pathname = new URL(request.url || '/', `http://${request.headers.host || 'localhost'}`).pathname.toLowerCase();
-    if (pathname.startsWith('/spck/') || pathname.startsWith('/manage/')) {
+    if (pathname.startsWith('/admin/')) {
       response.statusCode = 302;
-      response.setHeader('Location', '/spck/login.asp');
+      response.setHeader('Location', normalizeRedirectLocation('/spck/login.asp'));
       response.end();
       return null;
     }
@@ -2627,9 +3019,9 @@ try {
     obj.addUploadFile('${uploaded.legacyFileName}', '${uploaded.legacyFileName}', '${uploaded.relativePath}');
   }
 } catch (error) {}`;
-  } else if (pathname.toLowerCase().endsWith('upload2.asp')) {
+  } else if (pathname.toLowerCase().endsWith('/frame-image')) {
     script = `parent.form.magicfacepic1.value='${uploaded.relativePath}'`;
-  } else if (pathname.toLowerCase().endsWith('upload3.asp')) {
+  } else if (pathname.toLowerCase().endsWith('/frame-gallery')) {
     script = `parent.form.magicfacepic2.value='${uploaded.relativePath}'`;
   } else if (tMode === '2') {
     script = `parent.form.picture.value='${uploaded.legacyFileName}'`;
@@ -4064,6 +4456,9 @@ function renderLegacyJobForm({ mode, job, defaults = {} }) {
   <meta charset="utf-8">
   <title>${title}</title>
   <link rel="stylesheet" type="text/css" href="/spck/css/style.css">
+  <script type="text/javascript" src="/spck/ueditor/ueditor.config.js"></script>
+  <script type="text/javascript" src="/spck/ueditor/ueditor.all.min.js"></script>
+  <script type="text/javascript" src="/spck/ueditor/lang/zh-cn/zh-cn.js"></script>
   <style>.STYLE2 { color:#FF0000; }</style>
   <script>
     function submitLegacyJobForm() {
@@ -4092,6 +4487,12 @@ function renderLegacyJobForm({ mode, job, defaults = {} }) {
         document.form.phone.focus();
         return;
       }
+      if (window.UE) {
+        const editor = UE.getEditor('myEditor');
+        if (editor && typeof editor.sync === 'function') {
+          editor.sync();
+        }
+      }
       document.form.submit();
     }
   </script>
@@ -4099,7 +4500,7 @@ function renderLegacyJobForm({ mode, job, defaults = {} }) {
 <body>
   <table width="98%" border="0" cellspacing="0" cellpadding="0" align="center" class="tableBorder">
     <tr><th height="25" colspan="2" class="tableHeaderText">招聘管理</th></tr>
-    <tr><td colspan="2" class="forumRowHighlight"><p><b>注意</b>：继续复用旧招聘表单，内容编辑器仍走旧 iframe。</p></td></tr>
+    <tr><td colspan="2" class="forumRowHighlight"><p><b>注意</b>：招聘内容编辑器已切到第三方 UEditor，不再依赖旧 ASP 编辑器。</p></td></tr>
     <tr><td width="26%" height="25" class="forumRowHighlight">&nbsp;</td><td class="forumRowHighlight"><a href="job.asp">管理招聘</a> | <a href="job_add.asp">添加职位</a> | [<a href="javascript:location.reload()">刷新页面</a>]</td></tr>
   </table>
   <form name="form" method="post" action="${action}">
@@ -4133,7 +4534,10 @@ function renderLegacyJobForm({ mode, job, defaults = {} }) {
             </tr>
             <tr>
               <td align="right" class="Forumrow"><b>任职要求</b></td>
-              <td colspan="3" class="Forumrow"><textarea name="content" style="display:none">${escapeHtml(data.requirements_html || '')}</textarea><iframe id="eWebEditor1" src="/editor/ewebeditor.asp?id=content&style=standard&originalfilename=d_originalfilename&savefilename=d_savefilename&savepathfilename=d_savepathfilename" frameborder="0" scrolling="no" width="617" height="450"></iframe></td>
+              <td colspan="3" class="Forumrow">
+                <textarea name="content" id="myEditor" style="width:720px; height:300px">${escapeHtml(data.requirements_html || '')}</textarea>
+                <script>if (window.UE) UE.getEditor('myEditor');</script>
+              </td>
             </tr>
             <tr height="40">
               <td colspan="4" align="center" class="Forumrow" height="40">

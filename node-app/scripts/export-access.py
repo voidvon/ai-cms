@@ -8,9 +8,8 @@ from access_parser import AccessParser
 
 
 APP_ROOT = Path(__file__).resolve().parent.parent
-DEFAULT_SOURCE = APP_ROOT.parent / "database" / "!!@spck@##.asa"
 IMPORT_DIR = APP_ROOT / "import"
-SOURCE_PATH = Path(os.environ.get("ACCESS_SOURCE", DEFAULT_SOURCE))
+SOURCE_PATH = Path(os.environ["ACCESS_SOURCE"]) if os.environ.get("ACCESS_SOURCE") else None
 
 TABLE_FILES = [
     ("benming_master", "benming_master.csv"),
@@ -32,8 +31,11 @@ TABLE_FILES = [
 
 
 def main() -> None:
+    if SOURCE_PATH is None:
+        raise SystemExit("ACCESS_SOURCE is required, for example ACCESS_SOURCE=/path/to/legacy.mdb")
+
     if not SOURCE_PATH.exists():
-      raise SystemExit(f"Access database not found: {SOURCE_PATH}")
+        raise SystemExit(f"Access database not found: {SOURCE_PATH}")
 
     IMPORT_DIR.mkdir(parents=True, exist_ok=True)
     parser = AccessParser(str(SOURCE_PATH))

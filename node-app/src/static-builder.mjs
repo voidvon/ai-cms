@@ -191,7 +191,7 @@ export function buildMessagePage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
         </style>
         <h1>在线留言</h1>
         <p class="muted">提交后会写入新的 Node.js 后台留言管理。</p>
-        <form id="message-form" class="message-form" method="post" action="/ajaxcode/msg.asp?action=msgadd">
+        <form id="message-form" class="message-form" method="post" action="/ajaxcode/msg?action=msgadd">
           <div>
             <label for="msg-name">姓名</label>
             <input id="msg-name" name="name" type="text" required>
@@ -867,6 +867,13 @@ function normalizeLegacyTemplateMarkup(value, site) {
   let output = String(value || '');
 
   output = output
+    .replace(/\/Search\.asp\?action=search/gi, '/search')
+    .replace(/\/search\.asp\?action=search/gi, '/search')
+    .replace(/\/Search\.asp\b/gi, '/search')
+    .replace(/\/search\.asp\b/gi, '/search')
+    .replace(/\/ajaxcode\/prodMsg\.asp/gi, '/ajaxcode/prodmsg')
+    .replace(/\/ajaxcode\/prodmsg\.asp/gi, '/ajaxcode/prodmsg')
+    .replace(/\/ajaxcode\/msg\.asp/gi, '/ajaxcode/msg')
     .replace(/https?:\/\/(?:www\.)?bilvie\.com\/?/gi, siteUrl)
     .replace(/https?:\/\/(?:www\.)?bilwe\.com\/?/gi, siteUrl)
     .replace(/彪维阀门品牌/gi, '斯派莎克阀门品牌')
