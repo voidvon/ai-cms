@@ -326,7 +326,27 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } =
   const categoryMap = new Map(categories.map((item) => [item.id, item]));
   const childrenByParent = groupBy(categories, (item) => normalizeInteger(item.parent_id, 0));
   const productsByCategory = groupBy(products, (item) => normalizeInteger(item.category_id, 0));
+  const topLevelCategories = childrenByParent.get(0) || [];
   let filesWritten = 0;
+
+  const rootCategory = {
+    id: 0,
+    name: '产品展示',
+    parent_id: 0,
+    seo_keywords: templateContext.site.web_name || '产品展示',
+    seo_description: templateContext.site.web_name || '产品展示'
+  };
+
+  filesWritten += writeProductCategoryPageSet({
+    outputRoot,
+    template,
+    templateContext,
+    category: rootCategory,
+    parent: null,
+    children: topLevelCategories,
+    items: products.slice().sort(compareBySortAndId),
+    fileStem: 'index'
+  });
 
   for (const category of categories) {
     const categoryId = normalizeInteger(category.id, 0);
@@ -339,52 +359,18 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } =
       .flatMap((id) => productsByCategory.get(id) || [])
       .slice()
       .sort(compareBySortAndId);
-    const pages = paginate(items, PRODUCT_LIST_PAGE_SIZE);
-    const pageList = pages.length > 0 ? pages : [[]];
     const parent = categoryMap.get(normalizeInteger(category.parent_id, 0));
     const children = childrenByParent.get(categoryId) || [];
-
-    for (let index = 0; index < pageList.length; index += 1) {
-      const pageNumber = index + 1;
-      const pageItems = pageList[index];
-      const html = template
-        ? renderLegacyProductCategoryPage({
-          template,
-          templateContext,
-          category,
-          parent,
-          children,
-          pageItems,
-          pageNumber,
-          pageCount: pageList.length,
-          totalRecords: items.length
-        })
-        : renderPage({
-          title: `${category.name} - 产品分类`,
-          description: category.seo_description || category.seo_keywords || category.name || '',
-          body: renderProductCategoryBody({
-            category,
-            parent,
-            children,
-            pageItems,
-            pageNumber,
-            pageCount: pageList.length
-          })
-        });
-
-      const fileName = buildLegacyListFileName(categoryId, pageNumber);
-      writeTextFile(outputRoot, path.join('products', fileName), html);
-      filesWritten += 1;
-      writeTextFile(outputRoot, path.join('valve', fileName), html);
-      filesWritten += 1;
-
-      if (pageNumber === 1) {
-        writeTextFile(outputRoot, path.join('products', `${categoryId}.html`), html);
-        filesWritten += 1;
-        writeTextFile(outputRoot, path.join('valve', `${categoryId}.html`), html);
-        filesWritten += 1;
-      }
-    }
+    filesWritten += writeProductCategoryPageSet({
+      outputRoot,
+      template,
+      templateContext,
+      category,
+      parent,
+      children,
+      items,
+      fileStem: String(categoryId)
+    });
   }
 
   return createBuildResult('product-lists', '产品分类页', categories.filter((item) => normalizeInteger(item.id, 0) !== 0).length, filesWritten);
@@ -687,7 +673,8 @@ function renderLegacyProductCategoryPage({ template, templateContext, category, 
   const siblingCategories = parent
     ? templateContext.productCategories.filter((item) => normalizeInteger(item.parent_id, 0) === normalizeInteger(parent.id, 0))
     : children;
-  const pageBody = buildLegacyProductCategoryBody(pageItems, category.id, pageNumber, pageCount, totalRecords);
+  const fileStem = normalizeInteger(category.id, 0) === 0 ? 'index' : String(category.id);
+  const pageBody = buildLegacyProductCategoryBody(pageItems, fileStem, pageNumber, pageCount, totalRecords);
   return applyLegacyTemplateCommon(template, templateContext)
     .replaceAll('#Hope_SmallName#', category.name || '')
     .replaceAll('#Hope_BigID#', String(normalizeInteger(parent?.id, category.id)))
@@ -1000,7 +987,7 @@ function buildLegacyProductSmallCategories(categories) {
   return html;
 }
 
-function buildLegacyProductCategoryBody(pageItems, categoryId, pageNumber, pageCount, totalRecords) {
+function buildLegacyProductCategoryBody(pageItems, fileStem, pageNumber, pageCount, totalRecords) {
   let html = '<table width="98%" border="0" cellpadding="0" cellspacing="0" align="center"><tr>';
   let rowItemCount = 0;
 
@@ -1026,12 +1013,72 @@ function buildLegacyProductCategoryBody(pageItems, categoryId, pageNumber, pageC
   html += '</tr></table>';
   html += '<table width="90%" border="0" align="center" cellpadding="0" cellspacing="0"><tr><td height="45" align="center">';
   html += `共 <strong>${totalRecords}</strong> 条信息 `;
-  html += ` <a href="${categoryId}.html">首页</a>`;
-  html += pageNumber > 1 ? ` <a href="${categoryId}-${pageNumber - 1}.html">上一页</a>` : ' <span>上一页</span>';
-  html += pageNumber < pageCount ? ` <a href="${categoryId}-${pageNumber + 1}.html">下一页</a>` : ' <span>下一页</span>';
-  html += ` <a href="${categoryId}-${pageCount}.html">末页</a>`;
+  html += ` <a href="${fileStem}.html">首页</a>`;
+  html += pageNumber > 1 ? ` <a href="${fileStem}-${pageNumber - 1}.html">上一页</a>` : ' <span>上一页</span>';
+  html += pageNumber < pageCount ? ` <a href="${fileStem}-${pageNumber + 1}.html">下一页</a>` : ' <span>下一页</span>';
+  html += ` <a href="${fileStem}-${pageCount}.html">末页</a>`;
   html += ` 页次：<strong> ${pageNumber}/${pageCount} </strong>页 <strong>${PRODUCT_LIST_PAGE_SIZE}</strong>条信息/页</td></tr></table>`;
   return html;
+}
+
+function writeProductCategoryPageSet({
+  outputRoot,
+  template,
+  templateContext,
+  category,
+  parent,
+  children,
+  items,
+  fileStem
+}) {
+  const pages = paginate(items, PRODUCT_LIST_PAGE_SIZE);
+  const pageList = pages.length > 0 ? pages : [[]];
+  let filesWritten = 0;
+
+  for (let index = 0; index < pageList.length; index += 1) {
+    const pageNumber = index + 1;
+    const pageItems = pageList[index];
+    const html = template
+      ? renderLegacyProductCategoryPage({
+        template,
+        templateContext,
+        category,
+        parent,
+        children,
+        pageItems,
+        pageNumber,
+        pageCount: pageList.length,
+        totalRecords: items.length
+      })
+      : renderPage({
+        title: `${category.name} - 产品分类`,
+        description: category.seo_description || category.seo_keywords || category.name || '',
+        body: renderProductCategoryBody({
+          category,
+          parent,
+          children,
+          pageItems,
+          pageNumber,
+          pageCount: pageList.length
+        })
+      });
+
+    const fileName = buildLegacyListFileName(fileStem, pageNumber);
+    writeTextFile(outputRoot, path.join('products', fileName), html);
+    filesWritten += 1;
+    writeTextFile(outputRoot, path.join('valve', fileName), html);
+    filesWritten += 1;
+
+    if (pageNumber === 1) {
+      const firstPageFileName = `${fileStem}.html`;
+      writeTextFile(outputRoot, path.join('products', firstPageFileName), html);
+      filesWritten += 1;
+      writeTextFile(outputRoot, path.join('valve', firstPageFileName), html);
+      filesWritten += 1;
+    }
+  }
+
+  return filesWritten;
 }
 
 function getDescendantProductCategoryIds(childrenByParent, rootId) {
