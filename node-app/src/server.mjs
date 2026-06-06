@@ -213,6 +213,25 @@ const server = createServer(async (request, response) => {
         return sendHtml(response, 200, renderLegacyMakeHtmlSinglePageMenu());
       }
 
+      if (action === 'all') {
+        const results = [
+          buildIndexPage({ outputRoot: PROJECT_ROOT }),
+          buildContactPage({ outputRoot: PROJECT_ROOT }),
+          buildMessagePage({ outputRoot: PROJECT_ROOT })
+        ];
+        return sendHtml(response, 200, renderLegacyMakeHtmlResult({
+          title: '单页批量生成完成',
+          result: {
+            label: '首页、联系页面、留言页面',
+            recordsProcessed: results.reduce((sum, item) => sum + Number(item.recordsProcessed || 0), 0),
+            filesWritten: results.reduce((sum, item) => sum + Number(item.filesWritten || 0), 0)
+          },
+          outputRoot: PROJECT_ROOT,
+          viewPath: null,
+          backUrl: '/manage/makehtml/index/index.asp'
+        }));
+      }
+
       if (action === 'index') {
         const result = buildIndexPage({ outputRoot: PROJECT_ROOT });
         return sendHtml(response, 200, renderLegacyMakeHtmlResult({
@@ -4915,8 +4934,15 @@ function renderLegacyMakeHtmlHome() {
     },
     {
       title: '单页生成',
-      description: '生成首页、联系页、留言页。',
-      href: '/manage/makehtml/index/index.asp'
+      description: '生成首页、联系页、留言页，可直接点击具体页面或一次性全部生成。',
+      links: [
+        ['全部单页', '/manage/makehtml/index/index.asp?act=all'],
+        ['首页', '/manage/makehtml/index/index.asp?act=index'],
+        ['联系页', '/manage/makehtml/index/index.asp?act=contact'],
+        ['留言页', '/manage/makehtml/index/index.asp?act=msg'],
+        ['搜索页', '/manage/makehtml/index/index.asp?act=search'],
+        ['打开菜单', '/manage/makehtml/index/index.asp']
+      ]
     }
   ];
 
@@ -4939,7 +4965,11 @@ function renderLegacyMakeHtmlHome() {
       <tr>
         <td width="20%" class="forumRowHighlight"><strong>${escapeHtml(item.title)}</strong></td>
         <td width="48%" class="forumRowHighlight">${escapeHtml(item.description)}</td>
-        <td width="32%" class="forumRowHighlight"><a href="${escapeHtml(item.href)}">开始生成</a></td>
+        <td width="32%" class="forumRowHighlight">${
+          Array.isArray(item.links) && item.links.length > 0
+            ? item.links.map(([label, href]) => `<a href="${escapeHtml(href)}">${escapeHtml(label)}</a>`).join(' | ')
+            : `<a href="${escapeHtml(item.href)}">开始生成</a>`
+        }</td>
       </tr>
     `).join('')}
   </table>
@@ -4949,6 +4979,7 @@ function renderLegacyMakeHtmlHome() {
 
 function renderLegacyMakeHtmlSinglePageMenu() {
   const items = [
+    ['全部单页', '/manage/makehtml/index/index.asp?act=all'],
     ['首页', '/manage/makehtml/index/index.asp?act=index'],
     ['联系页面', '/manage/makehtml/index/index.asp?act=contact'],
     ['留言页面', '/manage/makehtml/index/index.asp?act=msg'],
@@ -4964,7 +4995,12 @@ function renderLegacyMakeHtmlSinglePageMenu() {
 </head>
 <body>
   <table border="0" cellspacing="1" cellpadding="3" align="center" class="tableBorder" width="90%">
-    <tr><th class="tableHeaderText" height="25" colspan="4">生成单页 HTML</th></tr>
+    <tr><th class="tableHeaderText" height="25" colspan="${items.length}">生成单页 HTML</th></tr>
+    <tr>
+      <td class="forumRowHighlight" colspan="${items.length}">
+        可直接生成单个页面，也可以先点击“全部单页”一次性刷新首页、联系页和留言页。
+      </td>
+    </tr>
     <tr>
       ${items.map(([label, href]) => `<td class="forumRowHighlight" align="center"><a href="${escapeHtml(href)}">${escapeHtml(label)}</a></td>`).join('')}
     </tr>

@@ -331,7 +331,11 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } =
       continue;
     }
 
-    const items = (productsByCategory.get(categoryId) || []).slice().sort(compareBySortAndId);
+    const descendantCategoryIds = getDescendantProductCategoryIds(childrenByParent, categoryId);
+    const items = descendantCategoryIds
+      .flatMap((id) => productsByCategory.get(id) || [])
+      .slice()
+      .sort(compareBySortAndId);
     const pages = paginate(items, PRODUCT_LIST_PAGE_SIZE);
     const pageList = pages.length > 0 ? pages : [[]];
     const parent = categoryMap.get(normalizeInteger(category.parent_id, 0));
@@ -349,7 +353,8 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } =
           children,
           pageItems,
           pageNumber,
-          pageCount: pageList.length
+          pageCount: pageList.length,
+          totalRecords: items.length
         })
         : renderPage({
           title: `${category.name} - 产品分类`,
@@ -675,11 +680,11 @@ function buildLegacyNewsSectionDetailPages({
   return createBuildResult(sectionKey, sectionLabel, items.length, filesWritten);
 }
 
-function renderLegacyProductCategoryPage({ template, templateContext, category, parent, children, pageItems, pageNumber, pageCount }) {
+function renderLegacyProductCategoryPage({ template, templateContext, category, parent, children, pageItems, pageNumber, pageCount, totalRecords }) {
   const siblingCategories = parent
     ? templateContext.productCategories.filter((item) => normalizeInteger(item.parent_id, 0) === normalizeInteger(parent.id, 0))
     : children;
-  const pageBody = buildLegacyProductCategoryBody(pageItems, category.id, pageNumber, pageCount);
+  const pageBody = buildLegacyProductCategoryBody(pageItems, category.id, pageNumber, pageCount, totalRecords);
   return applyLegacyTemplateCommon(template, templateContext)
     .replaceAll('#Hope_SmallName#', category.name || '')
     .replaceAll('#Hope_BigID#', String(normalizeInteger(parent?.id, category.id)))
@@ -985,7 +990,7 @@ function buildLegacyProductSmallCategories(categories) {
   return html;
 }
 
-function buildLegacyProductCategoryBody(pageItems, categoryId, pageNumber, pageCount) {
+function buildLegacyProductCategoryBody(pageItems, categoryId, pageNumber, pageCount, totalRecords) {
   let html = '<table width="98%" border="0" cellpadding="0" cellspacing="0" align="center"><tr>';
   let rowItemCount = 0;
 
@@ -1010,13 +1015,36 @@ function buildLegacyProductCategoryBody(pageItems, categoryId, pageNumber, pageC
 
   html += '</tr></table>';
   html += '<table width="90%" border="0" align="center" cellpadding="0" cellspacing="0"><tr><td height="45" align="center">';
-  html += '共 <strong>1</strong> 条信息 ';
+  html += `共 <strong>${totalRecords}</strong> 条信息 `;
   html += ` <a href="${categoryId}.html">首页</a>`;
   html += pageNumber > 1 ? ` <a href="${categoryId}-${pageNumber - 1}.html">上一页</a>` : ' <span>上一页</span>';
   html += pageNumber < pageCount ? ` <a href="${categoryId}-${pageNumber + 1}.html">下一页</a>` : ' <span>下一页</span>';
   html += ` <a href="${categoryId}-${pageCount}.html">末页</a>`;
   html += ` 页次：<strong> ${pageNumber}/${pageCount} </strong>页 <strong>${PRODUCT_LIST_PAGE_SIZE}</strong>条信息/页</td></tr></table>`;
   return html;
+}
+
+function getDescendantProductCategoryIds(childrenByParent, rootId) {
+  const pending = [normalizeInteger(rootId, 0)];
+  const visited = new Set();
+
+  while (pending.length > 0) {
+    const currentId = pending.pop();
+    if (visited.has(currentId)) {
+      continue;
+    }
+
+    visited.add(currentId);
+    const children = childrenByParent.get(currentId) || [];
+    for (const child of children) {
+      const childId = normalizeInteger(child.id, 0);
+      if (childId !== 0 && !visited.has(childId)) {
+        pending.push(childId);
+      }
+    }
+  }
+
+  return Array.from(visited);
 }
 
 function buildLegacyNewsCategoryBody({ pageItems, categoryId, pageNumber, pageCount, totalRecords, summaryClassName }) {
