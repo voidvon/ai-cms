@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>联系方式编辑</title>
+  <link href="/spck/css/style.css" rel="stylesheet" type="text/css">
+  <style>
+    .form-row { margin: 10px 0; }
+    .form-row label { display: inline-block; width: 120px; text-align: right; padding-right: 10px; }
+    .form-row input[type="text"] { width: 400px; padding: 5px; }
+    .form-row input[type="number"] { width: 100px; padding: 5px; }
+    .form-row textarea { width: 400px; height: 60px; padding: 5px; }
+    .form-actions { margin: 20px 0 0 130px; }
+  </style>
+</head>
+<body>
+  <form id="contactForm">
+    <table width="98%" border="0" cellspacing="0" cellpadding="0" align="center" class="tableBorder">
+      <tr><th height="25" class="tableHeaderText" id="pageTitle">添加联系方式</th></tr>
+      <tr>
+        <td class="forumRowHighlight">
+          <div class="form-row">
+            <label><span style="color:red;">*</span> 办事处名称：</label>
+            <input type="text" name="office_name" id="office_name" required>
+          </div>
+          <div class="form-row">
+            <label>地址：</label>
+            <textarea name="address" id="address"></textarea>
+          </div>
+          <div class="form-row">
+            <label>电话：</label>
+            <input type="text" name="phone" id="phone">
+          </div>
+          <div class="form-row">
+            <label>传真：</label>
+            <input type="text" name="fax" id="fax">
+          </div>
+          <div class="form-row">
+            <label>排序：</label>
+            <input type="number" name="sort_order" id="sort_order" value="0">
+            <span style="color: #999; font-size: 11px;">数字越大越靠前</span>
+          </div>
+          <div class="form-actions">
+            <input type="submit" value="保存" class="button">
+            <input type="button" value="返回" onclick="history.back()" class="button">
+          </div>
+        </td>
+      </tr>
+    </table>
+  </form>
+
+  <script>
+    let contactId = null;
+
+    async function loadContact(id) {
+      try {
+        const response = await fetch(`/api/contacts/${id}`);
+        const data = await response.json();
+
+        if (data.success && data.data) {
+          const contact = data.data;
+          document.getElementById('office_name').value = contact.office_name || '';
+          document.getElementById('address').value = contact.address || '';
+          document.getElementById('phone').value = contact.phone || '';
+          document.getElementById('fax').value = contact.fax || '';
+          document.getElementById('sort_order').value = contact.sort_order || 0;
+        }
+      } catch (error) {
+        alert('加载联系方式失败：' + error.message);
+      }
+    }
+
+    document.getElementById('contactForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const formData = {
+        office_name: document.getElementById('office_name').value,
+        address: document.getElementById('address').value,
+        phone: document.getElementById('phone').value,
+        fax: document.getElementById('fax').value,
+        sort_order: parseInt(document.getElementById('sort_order').value)
+      };
+
+      try {
+        const url = contactId ? `/api/contacts/${contactId}` : '/api/contacts';
+        const method = contactId ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+          method: method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert('保存成功');
+          window.location.href = '/admin/contacts';
+        } else {
+          alert('保存失败：' + (data.message || '未知错误'));
+        }
+      } catch (error) {
+        alert('保存失败：' + error.message);
+      }
+    });
+
+    function init() {
+      const urlParams = new URLSearchParams(window.location.search);
+      contactId = urlParams.get('id');
+
+      if (contactId) {
+        document.getElementById('pageTitle').textContent = '编辑联系方式';
+        loadContact(contactId);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

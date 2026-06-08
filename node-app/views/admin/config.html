@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>站点配置</title>
+  <link href="/spck/css/style.css" rel="stylesheet" type="text/css">
+  <style>
+    .form-row { margin: 10px 0; }
+    .form-row label { display: inline-block; width: 150px; text-align: right; padding-right: 10px; }
+    .form-row input[type="text"], .form-row textarea { width: 400px; padding: 5px; }
+    .form-row textarea { height: 80px; }
+    .form-actions { margin: 20px 0 0 160px; }
+  </style>
+</head>
+<body>
+  <form id="configForm">
+    <table width="98%" border="0" cellspacing="0" cellpadding="0" align="center" class="tableBorder">
+      <tr><th height="25" class="tableHeaderText">站点配置</th></tr>
+      <tr>
+        <td class="forumRowHighlight">
+          <div class="form-row">
+            <label>站点名称：</label>
+            <input type="text" name="site_name" id="site_name" required>
+          </div>
+          <div class="form-row">
+            <label>站点标题：</label>
+            <input type="text" name="site_title" id="site_title">
+          </div>
+          <div class="form-row">
+            <label>关键词：</label>
+            <input type="text" name="site_keywords" id="site_keywords">
+            <span style="color: #999; font-size: 11px;">多个关键词用逗号分隔</span>
+          </div>
+          <div class="form-row">
+            <label>站点描述：</label>
+            <textarea name="site_description" id="site_description"></textarea>
+          </div>
+          <div class="form-row">
+            <label>公司名称：</label>
+            <input type="text" name="company_name" id="company_name">
+          </div>
+          <div class="form-row">
+            <label>公司地址：</label>
+            <input type="text" name="company_address" id="company_address">
+          </div>
+          <div class="form-row">
+            <label>联系电话：</label>
+            <input type="text" name="company_phone" id="company_phone">
+          </div>
+          <div class="form-row">
+            <label>联系邮箱：</label>
+            <input type="text" name="company_email" id="company_email">
+          </div>
+          <div class="form-row">
+            <label>ICP 备案号：</label>
+            <input type="text" name="icp_number" id="icp_number">
+          </div>
+          <div class="form-row">
+            <label>版权信息：</label>
+            <input type="text" name="copyright" id="copyright">
+          </div>
+          <div class="form-actions">
+            <input type="submit" value="保存配置" class="button">
+            <input type="button" value="取消" onclick="history.back()" class="button">
+          </div>
+        </td>
+      </tr>
+    </table>
+  </form>
+
+  <script>
+    // 加载配置
+    async function loadConfig() {
+      try {
+        const response = await fetch('/api/site-config');
+        const data = await response.json();
+
+        if (data.success && data.data) {
+          const config = data.data;
+          document.getElementById('site_name').value = config.site_name || '';
+          document.getElementById('site_title').value = config.site_title || '';
+          document.getElementById('site_keywords').value = config.site_keywords || '';
+          document.getElementById('site_description').value = config.site_description || '';
+          document.getElementById('company_name').value = config.company_name || '';
+          document.getElementById('company_address').value = config.company_address || '';
+          document.getElementById('company_phone').value = config.company_phone || '';
+          document.getElementById('company_email').value = config.company_email || '';
+          document.getElementById('icp_number').value = config.icp_number || '';
+          document.getElementById('copyright').value = config.copyright || '';
+        }
+      } catch (error) {
+        alert('加载配置失败：' + error.message);
+      }
+    }
+
+    // 保存配置
+    document.getElementById('configForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const formData = {
+        site_name: document.getElementById('site_name').value,
+        site_title: document.getElementById('site_title').value,
+        site_keywords: document.getElementById('site_keywords').value,
+        site_description: document.getElementById('site_description').value,
+        company_name: document.getElementById('company_name').value,
+        company_address: document.getElementById('company_address').value,
+        company_phone: document.getElementById('company_phone').value,
+        company_email: document.getElementById('company_email').value,
+        icp_number: document.getElementById('icp_number').value,
+        copyright: document.getElementById('copyright').value
+      };
+
+      try {
+        const response = await fetch('/api/site-config', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert('保存成功');
+        } else {
+          alert('保存失败：' + (data.message || '未知错误'));
+        }
+      } catch (error) {
+        alert('保存失败：' + error.message);
+      }
+    });
+
+    loadConfig();
+  </script>
+</body>
+</html>

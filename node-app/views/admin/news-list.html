@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>新闻管理</title>
+  <link href="/spck/css/style.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+  <table width="98%" border="0" cellspacing="0" cellpadding="0" align="center" class="tableBorder">
+    <tr><th height="25" colspan="2" class="tableHeaderText">新闻管理</th></tr>
+    <tr><td colspan="2" class="forumRowHighlight"><p><b>注意</b>：删除新闻会同时删除其上传封面图。</p></td></tr>
+    <tr>
+      <td width="9%" height="25" class="forumRowHighlight">&nbsp;</td>
+      <td width="91%" class="forumRowHighlight">
+        <a href="/admin/news">管理新闻</a> |
+        <a href="/admin/news/add">添加新闻</a> |
+        <a href="/admin/news-categories">管理分类</a> |
+        <a href="/admin/news-categories/add">添加分类</a> |
+        [<a href="javascript:location.reload()">刷新页面</a>]
+      </td>
+    </tr>
+  </table>
+
+  <form method="post" action="/admin/news/delete" id="deleteForm">
+    <table width="100%" border="0" align="center" cellpadding="2" cellspacing="1" class="tableBorder">
+      <tr><th class="tableHeaderText" height="25" colspan="6">新闻列表</th></tr>
+      <tr height="25" class="bodytitle">
+        <td width="43" align="left">ID</td>
+        <td width="425" align="left"><b>新闻标题</b></td>
+        <td width="111" align="center"><b>新闻分类</b></td>
+        <td width="131" align="center"><b>添加时间</b></td>
+        <td width="59" align="center"><b>修改</b></td>
+        <td width="100" align="center"><input name="submit2" type="submit" value="删除"></td>
+      </tr>
+      <tbody id="newsRows">
+        <tr><td colspan="6" class="forumRow" align="center">加载中...</td></tr>
+      </tbody>
+      <tr height="20" bgcolor="#ffffff">
+        <td colspan="5" class="forumRow" align="right">&nbsp;</td>
+        <td class="forumRow" align="center"><input name="button" type="button" onclick="toggleAll()" value="全选"></td>
+      </tr>
+      <tr height="20" bgcolor="#ffffff">
+        <td class="forumrowHighLight" align="center" colspan="6" id="pagination">
+          第 1 / 1 页，共 0 条
+        </td>
+      </tr>
+    </table>
+  </form>
+
+  <script>
+    let checkFlag = false;
+    function toggleAll() {
+      const checkboxes = document.querySelectorAll('input[name="selNews"]');
+      checkFlag = !checkFlag;
+      checkboxes.forEach(cb => cb.checked = checkFlag);
+    }
+
+    async function loadNews() {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const page = urlParams.get('page') || 1;
+        const limit = 50;
+
+        const response = await fetch(`/api/news/admin?page=${page}&limit=${limit}`);
+        const data = await response.json();
+
+        if (!data.success || !data.items) {
+          throw new Error('加载失败');
+        }
+
+        renderNews(data.items, data.pagination);
+      } catch (error) {
+        document.getElementById('newsRows').innerHTML =
+          '<tr><td colspan="6" class="forumRow" align="center" style="color:red;">加载失败：' + error.message + '</td></tr>';
+      }
+    }
+
+    function renderNews(news, pagination) {
+      const tbody = document.getElementById('newsRows');
+
+      if (news.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="forumRow" align="center">暂无新闻</td></tr>';
+        return;
+      }
+
+      const rows = news.map(item => `
+        <tr height="20">
+          <td align="left" class="forumRow">${item.id}</td>
+          <td align="left" class="forumRow">
+            &nbsp;${escapeHtml(item.title || '')}
+            ${item.is_featured_home ? ' <img src="/spck/images/thanx.gif" width="19" height="19" align="absmiddle">' : ''}
+            ${item.picture && item.picture !== '/UploadFile/nopicture.gif' ? ' <img src="/spck/images/haveimg.gif" width="12" height="12" border="0">' : ''}
+          </td>
+          <td class="forumRow" align="center">${escapeHtml(item.category_name || '')}</td>
+          <td align="center" class="forumRow">${escapeHtml(item.created_at || '')}</td>
+          <td align="center" class="forumRow"><a href="/admin/news/edit?id=${item.id}">修改</a></td>
+          <td align="center" class="forumRow"><input type="checkbox" name="selNews" value="${item.id}"></td>
+        </tr>
+      `).join('');
+
+      tbody.innerHTML = rows;
+
+      // 渲染完整分页
+      const { page, totalPages, total } = pagination;
+      let paginationHtml = `共 ${total} 条，第 ${page} / ${totalPages} 页`;
+
+      if (totalPages > 1) {
+        paginationHtml += ' | ';
+        if (page > 1) {
+          paginationHtml += `<a href="?page=1">首页</a> | <a href="?page=${page - 1}">上一页</a> | `;
+        }
+        if (page < totalPages) {
+          paginationHtml += `<a href="?page=${page + 1}">下一页</a> | <a href="?page=${totalPages}">末页</a>`;
+        }
+      }
+
+      document.getElementById('pagination').innerHTML = paginationHtml;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    document.getElementById('deleteForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const selected = Array.from(document.querySelectorAll('input[name="selNews"]:checked'))
+        .map(cb => cb.value);
+
+      if (selected.length === 0) {
+        alert('请选择要删除的新闻');
+        return;
+      }
+
+      if (!confirm(`确定要删除选中的 ${selected.length} 条新闻吗？`)) {
+        return;
+      }
+
+      try {
+        const promises = selected.map(id =>
+          fetch(`/api/news/${id}`, { method: 'DELETE' })
+        );
+        await Promise.all(promises);
+        alert('删除成功');
+        loadNews();
+      } catch (error) {
+        alert('删除失败：' + error.message);
+      }
+    });
+
+    loadNews();
+  </script>
+</body>
+</html>

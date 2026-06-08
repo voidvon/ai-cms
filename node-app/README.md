@@ -1,87 +1,208 @@
-# Node.js + SQLite Migration
+# Node.js + SQLite 迁移 (Fastify)
 
-这个目录是旧 ASP 站点的轻量迁移骨架，目标是先把动态能力迁到 `Node.js + SQLite`，同时继续复用仓库根目录里的静态页面、图片、CSS 和 JS。
+这个目录是旧 ASP 站点的轻量迁移骨架，使用 **Fastify** 框架重构，目标是先把动态能力迁到 `Node.js + SQLite`，同时继续复用仓库根目录里的静态页面、图片、CSS 和 JS。
+
+## 架构
+
+- **框架**: Fastify (高性能 Node.js Web 框架)
+- **数据库**: SQLite (内置，无需额外安装)
+- **路由**: 模块化路由系统，按功能域分组
+- **认证**: 基于 Session Token 的身份验证
+- **静态生成**: 独立的静态 HTML 生成器
 
 ## 当前已实现
 
-- SQLite schema，覆盖产品、新闻、招聘、留言、联系人、管理员、站点配置、模板配置等核心表
-- 内置 Node HTTP 服务，无第三方依赖
-- 后台管理入口
-  - `/admin/login`
-  - `/admin/session`
-  - `/admin/frame`
-  - `/admin/nav`
-  - `/admin/top`
-  - `/admin/dashboard`
-  - `/admin/logout`
-- 兼容旧站常见路径大小写差异
-  - `/Product/123.html`
-  - `/Contact.html`
-  - `/JS/...`
-- `/search` 动态搜索页
-- 基础 JSON API
-  - `GET /health`
-  - `GET /api/site-config`
-  - `GET /api/contacts`
-  - `GET /api/contacts/:id`
-  - `POST /api/contacts`
-  - `PUT /api/contacts/:id`
-  - `DELETE /api/contacts/:id`
-  - `GET /api/jobs`
-  - `GET /api/jobs/:id`
-  - `POST /api/jobs`
-  - `PUT /api/jobs/:id`
-  - `DELETE /api/jobs/:id`
-  - `GET /api/products`
-  - `GET /api/products/:id`
-  - `POST /api/products`
-  - `PUT /api/products/:id`
-  - `DELETE /api/products/:id`
-  - `GET /api/news`
-  - `GET /api/news/:id`
-  - `POST /api/news`
-  - `PUT /api/news/:id`
-  - `DELETE /api/news/:id`
-  - `GET /api/messages`
-  - `GET /api/messages/:id`
-  - `POST /api/messages`
-  - `PUT /api/messages/:id`
-  - `DELETE /api/messages/:id`
-  - `POST /api/admin/login`
-  - `GET /api/admin/me`
-  - `POST /api/admin/logout`
-- 统一静态页生成
-  - `npm run build:static`
-  - 默认覆盖仓库根目录中的原有静态 HTML
-- 上传接口
-  - `POST /api/uploads?utype=prod|news`
-- 后台上传 iframe
-  - `/admin/uploads/frame`
-  - `/admin/uploads/frame-image`
-  - `/admin/uploads/frame-gallery`
-- 旧 `.asp` 后台和动态入口不再开放访问
-- 后台管理功能
-  - 站点配置、Meta、模板、自定义标签
-  - 公司信息、新闻、产品、产品图片、留言、招聘、管理员
-  - 静态页生成任务
-- CSV 导入脚本，支持把 Access 导出的表迁入 SQLite
-- 前台动态提交入口
-  - `POST /ajaxcode/prodmsg?action=add`
-  - `POST /ajaxcode/msg?action=msgadd`
+### REST API
+- `GET /api/health` - 健康检查
+- `GET /api/site-config` - 站点配置
+- `PUT /api/site-config` - 更新配置（需认证）
+
+#### 产品相关
+- `GET /api/products` - 产品列表
+- `GET /api/products/search?q=关键词` - 搜索产品
+- `GET /api/products/:id` - 产品详情
+- `POST /api/products` - 创建产品（需认证）
+- `PUT /api/products/:id` - 更新产品（需认证）
+- `DELETE /api/products/:id` - 删除产品（需认证）
+
+#### 新闻相关
+- `GET /api/news` - 新闻列表
+- `GET /api/news/:id` - 新闻详情
+- `POST /api/news` - 创建新闻（需认证）
+- `PUT /api/news/:id` - 更新新闻（需认证）
+- `DELETE /api/news/:id` - 删除新闻（需认证）
+
+#### 招聘相关
+- `GET /api/jobs` - 招聘列表
+- `GET /api/jobs/:id` - 招聘详情
+- `POST /api/jobs` - 创建招聘（需认证）
+- `PUT /api/jobs/:id` - 更新招聘（需认证）
+- `DELETE /api/jobs/:id` - 删除招聘（需认证）
+
+#### 留言相关
+- `POST /api/messages` - 提交留言（公开）
+- `GET /api/messages` - 留言列表（需认证）
+- `GET /api/messages/:id` - 留言详情（需认证）
+- `PUT /api/messages/:id` - 更新留言（需认证）
+- `DELETE /api/messages/:id` - 删除留言（需认证）
+
+#### 联系人相关
+- `GET /api/contacts` - 联系人列表
+- `POST /api/contacts` - 创建联系人（需认证）
+- `PUT /api/contacts/:id` - 更新联系人（需认证）
+- `DELETE /api/contacts/:id` - 删除联系人（需认证）
+
+#### 上传相关
+- `POST /api/uploads?utype=prod|news` - 文件上传（需认证）
+
+#### 管理员相关
+- `GET /api/admin/me` - 获取当前用户信息（需认证）
+- `GET /api/admin/list` - 管理员列表（需认证）
+- `POST /api/admin` - 创建管理员（需认证）
+- `PUT /api/admin/:id` - 更新管理员（需认证）
+- `PUT /api/admin/:id/password` - 更新密码（需认证）
+- `DELETE /api/admin/:id` - 删除管理员（需认证）
+
+### 后台管理页面
+- `GET /admin/login` - 登录页面
+- `POST /admin/login` - 登录处理
+- `GET /admin/logout` - 登出
+- `GET /admin/dashboard` - 管理后台首页（需认证）
+- `GET /admin/build` - 静态生成管理页面（需认证）
+- `POST /admin/build/generate?section=all` - 执行静态生成（需认证）
+
+### 前台动态路由
+- `GET /search?keyword=关键词` - 搜索页面
+- `POST /ajaxcode/msg?action=add` - 提交留言
+- `POST /ajaxcode/prodmsg?action=add` - 提交产品咨询
+
+### 静态文件服务
+- 自动服务根目录的所有静态文件
+- 支持大小写不敏感的路径匹配（兼容旧链接）
+- 自动处理 `/index.html` 等默认文档
 
 ## 使用方式
 
 ```bash
-cd node-app
+# 安装依赖
+npm install
+
+# 初始化数据库
 npm run db:init
+
+# 导入旧数据（可选）
 ACCESS_SOURCE=/path/to/legacy.mdb npm run db:export-access
 RESET_TABLES=1 npm run db:import
-npm run start
+
+# 创建管理员账号
+npm run admin:create -- admin yourpassword
+
+# 启动服务器
+npm start              # 生产模式
+npm run dev            # 开发模式（自动重载）
+
+# 生成静态页面
+npm run build:static
 ```
 
-默认会读取 `node-app/data/site.sqlite`，并把仓库根目录作为静态资源目录。
+服务器默认运行在 `http://127.0.0.1:3000`
+
+## 环境变量
+
+- `PORT`: 服务器端口（默认: 3000）
+- `HOST`: 服务器主机（默认: 127.0.0.1）
+- `DATABASE_PATH`: SQLite 数据库路径（默认: `node-app/data/site.sqlite`）
+- `LOG_LEVEL`: 日志级别（默认: info）
+- `NODE_ENV`: 环境（development/production）
+- `COOKIE_SECRET`: Cookie 加密密钥（生产环境务必修改）
+- `UPLOAD_MAX_SIZE_KB`: 上传文件大小限制（默认: 400KB）
+- `ACCESS_SOURCE`: Access 数据库路径（用于导出）
+- `CSV_ENCODING`: CSV 文件编码（默认: utf-8，旧文件用 gbk）
+- `RESET_TABLES`: 导入前是否重置表（1 = 是）
+- `STATIC_OUTPUT_DIR`: 静态生成输出目录（默认: 项目根目录）
 
 ## 管理员认证
+
+### Cookie 方式
+登录后会自动设置 `adminToken` cookie，后续请求会自动携带。
+
+### API Token 方式
+```bash
+# 登录获取 token
+curl -X POST http://127.0.0.1:3000/admin/api/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"yourpassword"}'
+
+# 使用 token 访问受保护接口
+curl http://127.0.0.1:3000/api/admin/me \
+  -H 'Authorization: Bearer YOUR_TOKEN_HERE'
+```
+
+## 路由结构
+
+```
+src/
+├── app.mjs                   # Fastify 应用入口
+├── server.mjs                # 启动脚本
+├── middleware/
+│   └── auth.mjs              # 认证中间件
+├── routes/
+│   ├── auth.mjs              # 登录/登出
+│   ├── legacy.mjs            # 前台动态路由（搜索、留言）
+│   ├── api/                  # REST API 路由
+│   │   ├── products.mjs
+│   │   ├── news.mjs
+│   │   ├── jobs.mjs
+│   │   ├── messages.mjs
+│   │   ├── contacts.mjs
+│   │   ├── uploads.mjs
+│   │   ├── admin.mjs
+│   │   └── site-config.mjs
+│   └── admin/                # 后台管理路由
+│       ├── index.mjs         # 后台首页、菜单
+│       └── static-gen.mjs    # 静态生成页面
+├── services/                 # 业务逻辑层（不变）
+├── utils/                    # 工具函数（不变）
+├── static-builder.mjs        # 静态生成器（不变）
+└── static-file-handler.mjs   # 静态文件服务
+```
+
+## 迁移说明
+
+### 从旧版本升级
+
+旧的 `server.mjs` 已备份为 `server.mjs.backup`。主要变化：
+
+1. **框架迁移**: 从自研 HTTP 服务器迁移到 Fastify
+2. **路由模块化**: 按功能域拆分为独立路由文件
+3. **中间件系统**: 统一的认证、错误处理
+4. **插件支持**: Cookie、Multipart、CORS 等通过 Fastify 插件实现
+5. **更好的日志**: 使用 Pino 结构化日志
+
+### URL 兼容性
+
+✅ **生成的静态 HTML URL 完全不变**：
+- `/index.html`
+- `/product/123.html`
+- `/products/分类名/`
+- `/news/456.html`
+- 等等...
+
+⚠️ **后台管理 URL 已简化**：
+- 旧: `/spck/login.asp` → 新: `/admin/login`
+- 旧: `/spck/index.asp` → 新: `/admin/dashboard`
+- 旧: `/manage/makehtml/index.asp` → 新: `/admin/build`
+
+✅ **前台动态 URL 保持兼容**：
+- `/search?keyword=xxx` - 正常工作
+- `/ajaxcode/msg?action=add` - 正常工作
+- `/ajaxcode/prodmsg?action=add` - 正常工作
+
+### Services 层无变化
+
+所有 `src/services/` 下的业务逻辑文件保持不变，可以直接使用。
+
+## 当前边界
 
 如果你是从旧 ASP 的 Access 库迁移：
 
@@ -168,14 +289,58 @@ ACCESS_SOURCE=/path/to/legacy.mdb npm run db:export-access
 RESET_TABLES=1 npm run db:import
 ```
 
-## 当前边界
+## 技术栈
 
-- 还没有完整重写后台 UI
-- 上传接口和验证码逻辑仍待迁移
-- 当前静态页生成器是轻量版，还没有完全复刻旧 ASP 模板体系
+- **Node.js**: 24.x+
+- **Fastify**: 5.x (高性能 Web 框架)
+- **SQLite**: 内置数据库
+- **插件**:
+  - `@fastify/cookie` - Cookie 处理
+  - `@fastify/multipart` - 文件上传
+  - `@fastify/cors` - CORS 支持
+  - `@fastify/sensible` - 实用工具（400/404 等快捷方法）
 
-下一步优先建议：
+## 后续优化建议
 
-1. 迁移上传接口与图片管理
-2. 补验证码、表单防刷和更细粒度的权限校验
-3. 继续增强静态页生成器和后台功能细节
+1. **后台 UI**: 构建完整的后台管理界面（可选用 Vue/React）
+2. **权限系统**: 细粒度的角色权限管理
+3. **验证码**: 添加表单防刷机制
+4. **API 文档**: 生成 OpenAPI/Swagger 文档
+5. **测试**: 添加单元测试和集成测试
+6. **性能**: 添加 Redis 缓存层
+7. **监控**: 集成 APM 和错误追踪
+
+## 故障排除
+
+### 端口占用
+```bash
+# 查看端口占用
+lsof -i :3000
+# 或修改端口
+PORT=8080 npm start
+```
+
+### 数据库锁定
+```bash
+# 如果遇到数据库锁定，重启服务器
+pkill -f "node src/server.mjs"
+npm start
+```
+
+### 日志调试
+```bash
+# 开启详细日志
+LOG_LEVEL=debug npm start
+```
+
+## 贡献指南
+
+1. 创建功能分支
+2. 修改代码并测试
+3. 提交 PR，说明变更内容
+4. 确保所有 API 端点正常工作
+
+## License
+
+内部项目，版权所有。
+

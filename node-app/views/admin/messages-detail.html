@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>留言详情</title>
+  <link href="/spck/css/style.css" rel="stylesheet" type="text/css">
+  <style>
+    .detail-row { margin: 10px 0; padding: 10px; border-bottom: 1px solid #ddd; }
+    .detail-row label { display: inline-block; width: 100px; font-weight: bold; color: #0B55D2; }
+    .detail-content { margin-left: 110px; line-height: 1.6; }
+    .btn-group { margin: 20px 0; text-align: center; }
+  </style>
+</head>
+<body>
+  <table width="98%" border="0" cellspacing="0" cellpadding="0" align="center" class="tableBorder">
+    <tr><th height="25" class="tableHeaderText">留言详情</th></tr>
+    <tr>
+      <td class="forumRowHighlight">
+        <div id="messageDetail">
+          <p style="text-align: center;">加载中...</p>
+        </div>
+        <div class="btn-group">
+          <input type="button" value="返回列表" onclick="window.location.href='/admin/messages'" class="button">
+          <input type="button" value="删除此留言" onclick="deleteMessage()" class="button" style="margin-left: 10px;">
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <script>
+    let messageId = null;
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    async function loadMessage(id) {
+      try {
+        const response = await fetch(`/api/messages/${id}`);
+        const data = await response.json();
+
+        if (!data.success || !data.data) {
+          throw new Error('加载失败');
+        }
+
+        const msg = data.data;
+        const typeText = msg.type === 'product' ? '产品咨询' : '一般留言';
+
+        let html = `
+          <div class="detail-row">
+            <label>留言类型：</label>
+            <span>${escapeHtml(typeText)}</span>
+          </div>
+          <div class="detail-row">
+            <label>姓名：</label>
+            <span>${escapeHtml(msg.name || '')}</span>
+          </div>
+          <div class="detail-row">
+            <label>联系方式：</label>
+            <span>${escapeHtml(msg.contact || '')}</span>
+          </div>
+          <div class="detail-row">
+            <label>公司名称：</label>
+            <span>${escapeHtml(msg.company || '')}</span>
+          </div>
+        `;
+
+        if (msg.type === 'product' && msg.product_name) {
+          html += `
+            <div class="detail-row">
+              <label>咨询产品：</label>
+              <span>${escapeHtml(msg.product_name)}</span>
+            </div>
+          `;
+        }
+
+        html += `
+          <div class="detail-row">
+            <label>留言内容：</label>
+            <div class="detail-content">${escapeHtml(msg.message || '').replace(/\n/g, '<br>')}</div>
+          </div>
+          <div class="detail-row">
+            <label>留言时间：</label>
+            <span>${escapeHtml(msg.created_at || '')}</span>
+          </div>
+        `;
+
+        document.getElementById('messageDetail').innerHTML = html;
+      } catch (error) {
+        document.getElementById('messageDetail').innerHTML =
+          '<p style="text-align: center; color: red;">加载失败：' + error.message + '</p>';
+      }
+    }
+
+    async function deleteMessage() {
+      if (!confirm('确定要删除这条留言吗？')) {
+        return;
+      }
+
+      try {
+        const response = await fetch(`/api/messages/${messageId}`, {
+          method: 'DELETE'
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert('删除成功');
+          window.location.href = '/admin/messages';
+        } else {
+          alert('删除失败：' + (data.message || '未知错误'));
+        }
+      } catch (error) {
+        alert('删除失败：' + error.message);
+      }
+    }
+
+    function init() {
+      const urlParams = new URLSearchParams(window.location.search);
+      messageId = urlParams.get('id');
+
+      if (!messageId) {
+        alert('缺少留言ID');
+        history.back();
+        return;
+      }
+
+      loadMessage(messageId);
+    }
+
+    init();
+  </script>
+</body>
+</html>

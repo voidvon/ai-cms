@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>管理员编辑</title>
+  <link href="/spck/css/style.css" rel="stylesheet" type="text/css">
+  <style>
+    .form-row { margin: 10px 0; }
+    .form-row label { display: inline-block; width: 120px; text-align: right; padding-right: 10px; }
+    .form-row input[type="text"], .form-row input[type="password"] { width: 300px; padding: 5px; }
+    .form-actions { margin: 20px 0 0 130px; }
+  </style>
+</head>
+<body>
+  <form id="adminForm">
+    <table width="98%" border="0" cellspacing="0" cellpadding="0" align="center" class="tableBorder">
+      <tr><th height="25" class="tableHeaderText" id="pageTitle">添加管理员</th></tr>
+      <tr>
+        <td class="forumRowHighlight">
+          <div class="form-row">
+            <label><span style="color:red;">*</span> 用户名：</label>
+            <input type="text" name="username" id="username" required>
+          </div>
+          <div class="form-row" id="passwordRow">
+            <label><span style="color:red;">*</span> 密码：</label>
+            <input type="password" name="password" id="password" required>
+            <span style="color: #999; font-size: 11px;">至少6位</span>
+          </div>
+          <div class="form-row">
+            <label>权限标识：</label>
+            <input type="text" name="permission_flags" id="permission_flags" placeholder="如：admin,editor">
+            <span style="color: #999; font-size: 11px;">多个权限用逗号分隔</span>
+          </div>
+          <div class="form-actions">
+            <input type="submit" value="保存" class="button">
+            <input type="button" value="返回" onclick="history.back()" class="button">
+          </div>
+        </td>
+      </tr>
+    </table>
+  </form>
+
+  <script>
+    let adminId = null;
+
+    async function loadAdmin(id) {
+      try {
+        const response = await fetch(`/api/admin/${id}`);
+        const data = await response.json();
+
+        if (data.success && data.data) {
+          const admin = data.data;
+          document.getElementById('username').value = admin.username || '';
+          document.getElementById('permission_flags').value = admin.permission_flags || '';
+
+          // 编辑模式时，密码不是必填
+          document.getElementById('password').required = false;
+          document.getElementById('passwordRow').querySelector('span').textContent = '留空则不修改';
+        }
+      } catch (error) {
+        alert('加载管理员信息失败：' + error.message);
+      }
+    }
+
+    document.getElementById('adminForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const formData = {
+        username: document.getElementById('username').value,
+        permission_flags: document.getElementById('permission_flags').value
+      };
+
+      const password = document.getElementById('password').value;
+      if (password) {
+        if (password.length < 6) {
+          alert('密码至少6位');
+          return;
+        }
+        formData.password = password;
+      }
+
+      try {
+        const url = adminId ? `/api/admin/${adminId}` : '/api/admin';
+        const method = adminId ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+          method: method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert('保存成功');
+          window.location.href = '/admin/admins';
+        } else {
+          alert('保存失败：' + (data.message || '未知错误'));
+        }
+      } catch (error) {
+        alert('保存失败：' + error.message);
+      }
+    });
+
+    function init() {
+      const urlParams = new URLSearchParams(window.location.search);
+      adminId = urlParams.get('id');
+
+      if (adminId) {
+        document.getElementById('pageTitle').textContent = '编辑管理员';
+        loadAdmin(adminId);
+      }
+    }
+
+    init();
+  </script>
+</body>
+</html>

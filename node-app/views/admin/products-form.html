@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>产品编辑</title>
+  <link href="/spck/css/style.css" rel="stylesheet" type="text/css">
+  <script src="/spck/ueditor/ueditor.config.js"></script>
+  <script src="/spck/ueditor/ueditor.all.js"></script>
+  <style>
+    .form-row { margin: 10px 0; }
+    .form-row label { display: inline-block; width: 120px; text-align: right; padding-right: 10px; vertical-align: top; }
+    .form-row input[type="text"], .form-row select { width: 400px; padding: 5px; }
+    .form-row input[type="number"] { width: 100px; padding: 5px; }
+    .form-actions { margin: 20px 0 0 130px; }
+    .image-preview { max-width: 200px; max-height: 200px; margin-left: 130px; }
+  </style>
+</head>
+<body>
+  <form id="productForm" enctype="multipart/form-data">
+    <table width="98%" border="0" cellspacing="0" cellpadding="0" align="center" class="tableBorder">
+      <tr><th height="25" class="tableHeaderText" id="pageTitle">添加产品</th></tr>
+      <tr>
+        <td class="forumRowHighlight">
+          <div class="form-row">
+            <label><span style="color:red;">*</span> 产品名称：</label>
+            <input type="text" name="name" id="name" required>
+          </div>
+          <div class="form-row">
+            <label>产品编号：</label>
+            <input type="text" name="product_code" id="product_code">
+          </div>
+          <div class="form-row">
+            <label><span style="color:red;">*</span> 所属分类：</label>
+            <select name="category_id" id="category_id" required>
+              <option value="">请选择分类</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>产品图片：</label>
+            <input type="file" name="image" id="image" accept="image/*">
+            <span style="color: #999; font-size: 11px;">支持jpg/png/gif，最大400KB</span>
+          </div>
+          <div id="imagePreview"></div>
+          <div class="form-row">
+            <label style="vertical-align: top;">产品简介：</label>
+            <textarea name="summary" id="summary" style="width: 600px; height: 80px;"></textarea>
+          </div>
+          <div class="form-row">
+            <label style="vertical-align: top;">产品详情：</label>
+            <div style="display: inline-block; width: 800px;">
+              <script id="editor" type="text/plain" style="height:400px;"></script>
+            </div>
+          </div>
+          <div class="form-row">
+            <label>是否显示：</label>
+            <select name="visible" id="visible">
+              <option value="1">显示</option>
+              <option value="0">隐藏</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>是否推荐：</label>
+            <select name="featured" id="featured">
+              <option value="0">否</option>
+              <option value="1">是</option>
+            </select>
+          </div>
+          <div class="form-row">
+            <label>排序：</label>
+            <input type="number" name="sort_order" id="sort_order" value="0">
+            <span style="color: #999; font-size: 11px;">数字越大越靠前</span>
+          </div>
+          <div class="form-actions">
+            <input type="submit" value="保存" class="button">
+            <input type="button" value="返回" onclick="history.back()" class="button">
+          </div>
+        </td>
+      </tr>
+    </table>
+  </form>
+
+  <script>
+    let ue = null;
+    let productId = null;
+
+    async function loadCategories() {
+      try {
+        const response = await fetch('/api/product-categories');
+        const data = await response.json();
+
+        if (data.success && data.data) {
+          const select = document.getElementById('category_id');
+          data.data.forEach(cat => {
+            const option = document.createElement('option');
+            option.value = cat.id;
+            option.textContent = cat.name;
+            select.appendChild(option);
+          });
+        }
+      } catch (error) {
+        console.error('加载分类失败:', error);
+      }
+    }
+
+    async function loadProduct(id) {
+      try {
+        const response = await fetch(`/api/products/${id}`);
+        const data = await response.json();
+
+        if (data.success && data.data) {
+          const product = data.data;
+          document.getElementById('name').value = product.name || '';
+          document.getElementById('product_code').value = product.product_code || '';
+          document.getElementById('category_id').value = product.category_id || '';
+          document.getElementById('summary').value = product.summary || '';
+          document.getElementById('visible').value = product.visible !== undefined ? product.visible : 1;
+          document.getElementById('featured').value = product.featured || 0;
+          document.getElementById('sort_order').value = product.sort_order || 0;
+
+          if (product.image_url) {
+            document.getElementById('imagePreview').innerHTML =
+              `<img src="${product.image_url}" class="image-preview">`;
+          }
+
+          if (ue && product.description) {
+            ue.setContent(product.description);
+          }
+        }
+      } catch (error) {
+        alert('加载产品失败：' + error.message);
+      }
+    }
+
+    document.getElementById('productForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const formData = new FormData();
+      formData.append('name', document.getElementById('name').value);
+      formData.append('product_code', document.getElementById('product_code').value);
+      formData.append('category_id', document.getElementById('category_id').value);
+      formData.append('summary', document.getElementById('summary').value);
+      formData.append('description', ue ? ue.getContent() : '');
+      formData.append('visible', document.getElementById('visible').value);
+      formData.append('featured', document.getElementById('featured').value);
+      formData.append('sort_order', document.getElementById('sort_order').value);
+
+      const imageFile = document.getElementById('image').files[0];
+      if (imageFile) {
+        formData.append('image', imageFile);
+      }
+
+      try {
+        const url = productId ? `/api/products/${productId}` : '/api/products';
+        const method = productId ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+          method: method,
+          body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert('保存成功');
+          window.location.href = '/admin/products';
+        } else {
+          alert('保存失败：' + (data.message || '未知错误'));
+        }
+      } catch (error) {
+        alert('保存失败：' + error.message);
+      }
+    });
+
+    // 初始化
+    async function init() {
+      await loadCategories();
+
+      const urlParams = new URLSearchParams(window.location.search);
+      productId = urlParams.get('id');
+
+      if (productId) {
+        document.getElementById('pageTitle').textContent = '编辑产品';
+        await loadProduct(productId);
+      }
+
+      // 初始化富文本编辑器
+      ue = UE.getEditor('editor', {
+        serverUrl: '/api/ueditor',
+        initialFrameHeight: 400,
+        initialFrameWidth: '100%'
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>

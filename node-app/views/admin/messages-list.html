@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>留言管理</title>
+  <link href="/spck/css/style.css" rel="stylesheet" type="text/css">
+</head>
+<body>
+  <table width="98%" border="0" cellspacing="0" cellpadding="0" align="center" class="tableBorder">
+    <tr><th height="25" colspan="2" class="tableHeaderText">留言管理</th></tr>
+    <tr><td colspan="2" class="forumRowHighlight"><p><b>注意</b>：删除留言后不可恢复。</p></td></tr>
+    <tr>
+      <td width="9%" height="25" class="forumRowHighlight">&nbsp;</td>
+      <td width="91%" class="forumRowHighlight">
+        <a href="/admin/messages">管理留言</a> |
+        [<a href="javascript:location.reload()">刷新页面</a>]
+      </td>
+    </tr>
+  </table>
+
+  <form method="post" action="/admin/messages/delete" id="deleteForm">
+    <table width="100%" border="0" align="center" cellpadding="2" cellspacing="1" class="tableBorder">
+      <tr><th class="tableHeaderText" height="25" colspan="8">留言列表</th></tr>
+      <tr height="25" class="bodytitle">
+        <td width="43" align="center">ID</td>
+        <td width="100" align="center"><b>姓名</b></td>
+        <td width="120" align="center"><b>联系方式</b></td>
+        <td width="250" align="left"><b>留言内容</b></td>
+        <td width="80" align="center"><b>类型</b></td>
+        <td width="120" align="center"><b>提交时间</b></td>
+        <td width="59" align="center"><b>查看</b></td>
+        <td width="100" align="center"><input name="submit2" type="submit" value="删除"></td>
+      </tr>
+      <tbody id="messageRows">
+        <tr><td colspan="8" class="forumRow" align="center">加载中...</td></tr>
+      </tbody>
+      <tr height="20" bgcolor="#ffffff">
+        <td colspan="7" class="forumRow" align="right">&nbsp;</td>
+        <td class="forumRow" align="center"><input name="button" type="button" onclick="toggleAll()" value="全选"></td>
+      </tr>
+      <tr height="20" bgcolor="#ffffff">
+        <td class="forumrowHighLight" align="center" colspan="8" id="pagination">
+          第 1 / 1 页，共 0 条
+        </td>
+      </tr>
+    </table>
+  </form>
+
+  <script>
+    let checkFlag = false;
+    function toggleAll() {
+      const checkboxes = document.querySelectorAll('input[name="selMessage"]');
+      checkFlag = !checkFlag;
+      checkboxes.forEach(cb => cb.checked = checkFlag);
+    }
+
+    async function loadMessages() {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const page = urlParams.get('page') || 1;
+        const limit = 50;
+
+        const response = await fetch(`/api/messages/admin?page=${page}&limit=${limit}`);
+        const data = await response.json();
+
+        if (!data.success || !data.items) {
+          throw new Error('加载失败');
+        }
+
+        renderMessages(data.items, data.pagination);
+      } catch (error) {
+        document.getElementById('messageRows').innerHTML =
+          '<tr><td colspan="8" class="forumRow" align="center" style="color:red;">加载失败：' + error.message + '</td></tr>';
+      }
+    }
+
+    function renderMessages(messages, pagination) {
+      const tbody = document.getElementById('messageRows');
+
+      if (messages.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="forumRow" align="center">暂无留言</td></tr>';
+        return;
+      }
+
+      const rows = messages.map(item => {
+        const typeText = item.type === 'product' ? '产品咨询' : '一般留言';
+        const content = (item.message || '').substring(0, 50) + (item.message && item.message.length > 50 ? '...' : '');
+
+        return `
+          <tr height="20">
+            <td align="center" class="forumRow">${item.id}</td>
+            <td align="center" class="forumRow">${escapeHtml(item.name || '')}</td>
+            <td align="center" class="forumRow">${escapeHtml(item.contact || '')}</td>
+            <td align="left" class="forumRow">${escapeHtml(content)}</td>
+            <td align="center" class="forumRow">${typeText}</td>
+            <td align="center" class="forumRow">${escapeHtml(item.created_at || '')}</td>
+            <td align="center" class="forumRow"><a href="/admin/messages/view?id=${item.id}">查看</a></td>
+            <td align="center" class="forumRow"><input type="checkbox" name="selMessage" value="${item.id}"></td>
+          </tr>
+        `;
+      }).join('');
+
+      tbody.innerHTML = rows;
+
+      // 渲染完整分页
+      const { page, totalPages, total } = pagination;
+      let paginationHtml = `共 ${total} 条，第 ${page} / ${totalPages} 页`;
+
+      if (totalPages > 1) {
+        paginationHtml += ' | ';
+        if (page > 1) {
+          paginationHtml += `<a href="?page=1">首页</a> | <a href="?page=${page - 1}">上一页</a> | `;
+        }
+        if (page < totalPages) {
+          paginationHtml += `<a href="?page=${page + 1}">下一页</a> | <a href="?page=${totalPages}">末页</a>`;
+        }
+      }
+
+      document.getElementById('pagination').innerHTML = paginationHtml;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    document.getElementById('deleteForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const selected = Array.from(document.querySelectorAll('input[name="selMessage"]:checked'))
+        .map(cb => cb.value);
+
+      if (selected.length === 0) {
+        alert('请选择要删除的留言');
+        return;
+      }
+
+      if (!confirm(`确定要删除选中的 ${selected.length} 条留言吗？`)) {
+        return;
+      }
+
+      try {
+        const promises = selected.map(id =>
+          fetch(`/api/messages/${id}`, { method: 'DELETE' })
+        );
+        await Promise.all(promises);
+        alert('删除成功');
+        loadMessages();
+      } catch (error) {
+        alert('删除失败：' + error.message);
+      }
+    });
+
+    loadMessages();
+  </script>
+</body>
+</html>

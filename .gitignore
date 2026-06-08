@@ -9,3 +9,5 @@
 /products/**/*.html
 /service/**/*.html
 /valve/**/*.html
+
+node_modules

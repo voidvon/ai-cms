@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>产品管理</title>
+  <link href="/spck/css/style.css" rel="stylesheet" type="text/css">
+  <style>.STYLE1 { color:#FF0000; }</style>
+</head>
+<body>
+  <table width="98%" border="0" cellspacing="0" cellpadding="0" align="center" class="tableBorder">
+    <tr><th height="25" colspan="2" class="tableHeaderText">产品管理</th></tr>
+    <tr><td colspan="2" class="forumRowHighlight"><p><b>注意</b>：删除产品会同时清理其上传图片路径记录。</p></td></tr>
+    <tr>
+      <td width="19%" height="25" class="forumRowHighlight">&nbsp;</td>
+      <td width="81%" class="forumRowHighlight">
+        <a href="/admin/products">管理产品</a> |
+        <a href="/admin/products/add">添加产品</a> |
+        <a href="/admin/product-categories">管理分类</a> |
+        <a href="/admin/product-categories/add">添加分类</a> |
+        [<a href="javascript:location.reload()">刷新页面</a>]
+      </td>
+    </tr>
+  </table>
+
+  <form method="post" action="/admin/products/delete" id="deleteForm">
+    <table width="100%" border="0" align="center" cellpadding="2" cellspacing="1" class="tableBorder">
+      <tr><th class="tableHeaderText" height="25" colspan="8">产品列表</th></tr>
+      <tr height="25" class="bodytitle">
+        <td width="43" align="left">ID</td>
+        <td width="325" align="left"><b>产品名称</b></td>
+        <td width="131" align="center"><b>产品型号</b></td>
+        <td width="111" align="center"><b>产品分类</b></td>
+        <td width="82" align="center"><b>产品属性</b></td>
+        <td width="62" align="center"><b>排序</b></td>
+        <td width="59" align="center"><b>修改</b></td>
+        <td width="100" align="center"><input name="submit2" type="submit" value="删除"></td>
+      </tr>
+      <tbody id="productRows">
+        <tr><td colspan="8" class="forumRow" align="center">加载中...</td></tr>
+      </tbody>
+      <tr height="20" bgcolor="#ffffff">
+        <td colspan="7" class="forumRow" align="right">&nbsp;</td>
+        <td class="forumRow" align="center"><input name="button" type="button" onclick="toggleAll()" value="全选"></td>
+      </tr>
+      <tr height="20" bgcolor="#ffffff">
+        <td class="forumrowHighLight" align="center" colspan="8" id="pagination">
+          第 1 / 1 页，共 0 条
+        </td>
+      </tr>
+    </table>
+  </form>
+
+  <script>
+    let checkFlag = false;
+    function toggleAll() {
+      const checkboxes = document.querySelectorAll('input[name="selProduct"]');
+      checkFlag = !checkFlag;
+      checkboxes.forEach(cb => cb.checked = checkFlag);
+    }
+
+    // 加载产品列表
+    async function loadProducts() {
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const page = urlParams.get('page') || 1;
+        const limit = 50;
+
+        const response = await fetch(`/api/products/admin?page=${page}&limit=${limit}`);
+        const data = await response.json();
+
+        if (!data.success || !data.items) {
+          throw new Error('加载失败');
+        }
+
+        renderProducts(data.items, data.pagination);
+      } catch (error) {
+        document.getElementById('productRows').innerHTML =
+          '<tr><td colspan="8" class="forumRow" align="center" style="color:red;">加载失败：' + error.message + '</td></tr>';
+      }
+    }
+
+    function renderProducts(products, pagination) {
+      const tbody = document.getElementById('productRows');
+
+      if (products.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="forumRow" align="center">暂无产品</td></tr>';
+        return;
+      }
+
+      const rows = products.map(item => `
+        <tr height="20">
+          <td align="left" class="forumRow">${item.id}</td>
+          <td align="left" class="forumRow">
+            ${escapeHtml(item.name || '')}
+            ${item.is_featured_home ? ' <img src="/spck/images/thanx.gif" width="19" height="19" align="absmiddle">' : ''}
+            ${item.small_image ? ' <img src="/spck/images/haveimg.gif" width="12" height="12" border="0">' : ''}
+          </td>
+          <td align="center" class="forumRow">${escapeHtml(item.code || '')}</td>
+          <td align="center" class="forumRow">${escapeHtml(item.category_name || '')}</td>
+          <td align="center" class="forumRow">${item.is_visible ? '显示' : '<span class="STYLE1">隐藏</span>'}</td>
+          <td align="center" class="forumRow">${item.sort_order ?? 0}</td>
+          <td align="center" class="forumRow"><a href="/admin/products/edit?id=${item.id}">修改</a></td>
+          <td align="center" class="forumRow"><input type="checkbox" name="selProduct" value="${item.id}"></td>
+        </tr>
+      `).join('');
+
+      tbody.innerHTML = rows;
+
+      // 渲染完整分页
+      const { page, totalPages, total } = pagination;
+      let paginationHtml = `共 ${total} 条，第 ${page} / ${totalPages} 页`;
+
+      if (totalPages > 1) {
+        paginationHtml += ' | ';
+        if (page > 1) {
+          paginationHtml += `<a href="?page=1">首页</a> | <a href="?page=${page - 1}">上一页</a> | `;
+        }
+        if (page < totalPages) {
+          paginationHtml += `<a href="?page=${page + 1}">下一页</a> | <a href="?page=${totalPages}">末页</a>`;
+        }
+      }
+
+      document.getElementById('pagination').innerHTML = paginationHtml;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // 处理删除
+    document.getElementById('deleteForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const selected = Array.from(document.querySelectorAll('input[name="selProduct"]:checked'))
+        .map(cb => cb.value);
+
+      if (selected.length === 0) {
+        alert('请选择要删除的产品');
+        return;
+      }
+
+      if (!confirm(`确定要删除选中的 ${selected.length} 个产品吗？`)) {
+        return;
+      }
+
+      try {
+        const promises = selected.map(id =>
+          fetch(`/api/products/${id}`, { method: 'DELETE' })
+        );
+        await Promise.all(promises);
+        alert('删除成功');
+        loadProducts();
+      } catch (error) {
+        alert('删除失败：' + error.message);
+      }
+    });
+
+    // 页面加载时获取数据
+    loadProducts();
+  </script>
+</body>
+</html>

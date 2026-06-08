@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>招聘编辑</title>
+  <link href="/spck/css/style.css" rel="stylesheet" type="text/css">
+  <script src="/spck/ueditor/ueditor.config.js"></script>
+  <script src="/spck/ueditor/ueditor.all.js"></script>
+  <style>
+    .form-row { margin: 10px 0; }
+    .form-row label { display: inline-block; width: 120px; text-align: right; padding-right: 10px; vertical-align: top; }
+    .form-row input[type="text"] { width: 400px; padding: 5px; }
+    .form-row input[type="number"] { width: 100px; padding: 5px; }
+    .form-actions { margin: 20px 0 0 130px; }
+  </style>
+</head>
+<body>
+  <form id="jobForm">
+    <table width="98%" border="0" cellspacing="0" cellpadding="0" align="center" class="tableBorder">
+      <tr><th height="25" class="tableHeaderText" id="pageTitle">添加招聘</th></tr>
+      <tr>
+        <td class="forumRowHighlight">
+          <div class="form-row">
+            <label><span style="color:red;">*</span> 职位名称：</label>
+            <input type="text" name="title" id="title" required>
+          </div>
+          <div class="form-row">
+            <label><span style="color:red;">*</span> 工作地点：</label>
+            <input type="text" name="location" id="location" required>
+          </div>
+          <div class="form-row">
+            <label>招聘人数：</label>
+            <input type="number" name="num_positions" id="num_positions" value="1" min="1">
+          </div>
+          <div class="form-row">
+            <label style="vertical-align: top;">职位描述：</label>
+            <div style="display: inline-block; width: 800px;">
+              <script id="editor" type="text/plain" style="height:400px;"></script>
+            </div>
+          </div>
+          <div class="form-actions">
+            <input type="submit" value="保存" class="button">
+            <input type="button" value="返回" onclick="history.back()" class="button">
+          </div>
+        </td>
+      </tr>
+    </table>
+  </form>
+
+  <script>
+    let ue = null;
+    let jobId = null;
+
+    async function loadJob(id) {
+      try {
+        const response = await fetch(`/api/jobs/${id}`);
+        const data = await response.json();
+
+        if (data.success && data.data) {
+          const job = data.data;
+          document.getElementById('title').value = job.title || '';
+          document.getElementById('location').value = job.location || '';
+          document.getElementById('num_positions').value = job.num_positions || 1;
+
+          if (ue && job.description) {
+            ue.setContent(job.description);
+          }
+        }
+      } catch (error) {
+        alert('加载招聘信息失败：' + error.message);
+      }
+    }
+
+    document.getElementById('jobForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const formData = {
+        title: document.getElementById('title').value,
+        location: document.getElementById('location').value,
+        num_positions: parseInt(document.getElementById('num_positions').value),
+        description: ue ? ue.getContent() : ''
+      };
+
+      try {
+        const url = jobId ? `/api/jobs/${jobId}` : '/api/jobs';
+        const method = jobId ? 'PUT' : 'POST';
+
+        const response = await fetch(url, {
+          method: method,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(formData)
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          alert('保存成功');
+          window.location.href = '/admin/jobs';
+        } else {
+          alert('保存失败：' + (data.message || '未知错误'));
+        }
+      } catch (error) {
+        alert('保存失败：' + error.message);
+      }
+    });
+
+    async function init() {
+      const urlParams = new URLSearchParams(window.location.search);
+      jobId = urlParams.get('id');
+
+      if (jobId) {
+        document.getElementById('pageTitle').textContent = '编辑招聘';
+        await loadJob(jobId);
+      }
+
+      ue = UE.getEditor('editor', {
+        serverUrl: '/api/ueditor',
+        initialFrameHeight: 400,
+        initialFrameWidth: '100%'
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>

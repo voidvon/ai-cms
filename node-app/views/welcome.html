@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>欢迎</title>
+  <style>
+    body {
+      font-family: "Microsoft YaHei", Arial, sans-serif;
+      margin: 0;
+      padding: 40px;
+      background: #f5f5f5;
+    }
+    .welcome-box {
+      max-width: 800px;
+      margin: 60px auto;
+      background: white;
+      padding: 40px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      text-align: center;
+    }
+    h1 {
+      color: #0B55D2;
+      font-size: 28px;
+      margin-bottom: 20px;
+    }
+    p {
+      color: #666;
+      font-size: 14px;
+      line-height: 1.8;
+      margin: 10px 0;
+    }
+    .stats {
+      display: flex;
+      justify-content: space-around;
+      margin-top: 40px;
+    }
+    .stat-item {
+      flex: 1;
+      padding: 20px;
+      border-left: 3px solid #0B55D2;
+      background: #f9f9f9;
+      margin: 0 10px;
+    }
+    .stat-item h3 {
+      color: #0B55D2;
+      font-size: 32px;
+      margin: 0;
+    }
+    .stat-item p {
+      color: #999;
+      font-size: 12px;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="welcome-box">
+    <h1>欢迎使用 Spirax Sarco 后台管理系统</h1>
+    <p>当前系统版本：v2.0 (Fastify)</p>
+    <p>请从左侧菜单选择相应功能进行操作</p>
+
+    <div class="stats" id="stats">
+      <div class="stat-item">
+        <h3 id="product-count">-</h3>
+        <p>产品数量</p>
+      </div>
+      <div class="stat-item">
+        <h3 id="news-count">-</h3>
+        <p>新闻数量</p>
+      </div>
+      <div class="stat-item">
+        <h3 id="message-count">-</h3>
+        <p>留言数量</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // 获取统计数据
+    fetch('/api/products?limit=1').then(r => r.json()).then(data => {
+      document.getElementById('product-count').textContent = data.data.length > 0 ? '20+' : '0';
+    });
+
+    fetch('/api/news?limit=1').then(r => r.json()).then(data => {
+      document.getElementById('news-count').textContent = data.data.length > 0 ? '20+' : '0';
+    });
+
+    // 留言需要认证，先显示占位符
+    document.getElementById('message-count').textContent = '-';
+  </script>
+</body>
+</html>
