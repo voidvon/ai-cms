@@ -8,7 +8,7 @@ import { listNews } from './services/news.mjs';
 import { listProductCategories } from './services/product-categories.mjs';
 import { listProducts } from './services/products.mjs';
 import { getSiteConfig } from './services/site.mjs';
-import { escapeHtml, renderPage } from './utils/html.mjs';
+import { escapeHtml } from './utils/html.mjs';
 import { looksLikeLegacyMojibake } from './utils/legacy-text.mjs';
 
 const DEFAULT_OUTPUT_ROOT = CONTENT_ROOT;
@@ -94,34 +94,8 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
 
 export function buildIndexPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   const templateContext = getLegacyTemplateContext();
-  const template = loadLegacyTemplate(templateContext.variant?.home_index);
-  const site = getSiteConfig();
-  const products = listProducts({ featured: true, visibleOnly: true, limit: 8 });
-  const newsItems = listNews({ limit: 8 });
-
-  const html = template
-    ? renderLegacyIndexPage(template, templateContext)
-    : renderPage({
-      title: site.web_name || '站点首页',
-      description: site.company_name || site.web_name || '',
-      body: `
-        <h1>${escapeHtml(site.web_name || '站点首页')}</h1>
-        <p class="muted">${escapeHtml(site.company_name || '')}</p>
-        ${site.company_address ? `<p>${escapeHtml(site.company_address)}</p>` : ''}
-        <h2>推荐产品</h2>
-        ${
-          products.length > 0
-            ? `<ul>${products.map(renderProductListItem).join('')}</ul>`
-            : '<div class="empty">暂无推荐产品。</div>'
-        }
-        <h2 style="margin-top:32px;">最新新闻</h2>
-        ${
-          newsItems.length > 0
-            ? `<ul>${newsItems.map(renderNewsListItem).join('')}</ul>`
-            : '<div class="empty">暂无新闻内容。</div>'
-        }
-      `
-    });
+  const template = requireLegacyTemplate(templateContext.variant?.home_index, '首页模板');
+  const html = renderLegacyIndexPage(template, templateContext);
 
   writeTextFile(outputRoot, 'index.html', html);
   return createBuildResult('index', '首页', 1, 1);
@@ -129,41 +103,9 @@ export function buildIndexPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
 
 export function buildContactPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   const templateContext = getLegacyTemplateContext();
-  const template = loadLegacyTemplate(templateContext.variant?.contact || guessSiblingTemplatePath(templateContext.variant?.home_index, 'contact.htm'));
-  const site = getSiteConfig();
-  const contacts = listContacts();
-
-  const officesHtml = contacts.length > 0
-    ? contacts.map((item) => `
-        <article style="padding:16px 0;border-top:1px solid #e5e7eb;">
-          <h2 style="margin:0 0 10px;font-size:20px;">${escapeHtml(item.office_name || '办事处')}</h2>
-          ${item.contact_person ? `<p><strong>联系人：</strong>${escapeHtml(item.contact_person)}</p>` : ''}
-          ${item.address ? `<p><strong>地址：</strong>${escapeHtml(item.address)}</p>` : ''}
-          ${item.phone ? `<p><strong>电话：</strong>${escapeHtml(item.phone)}</p>` : ''}
-          ${item.fax ? `<p><strong>传真：</strong>${escapeHtml(item.fax)}</p>` : ''}
-          ${item.email ? `<p><strong>邮箱：</strong>${escapeHtml(item.email)}</p>` : ''}
-          ${item.postal_code ? `<p><strong>邮编：</strong>${escapeHtml(item.postal_code)}</p>` : ''}
-        </article>
-      `).join('')
-    : '<div class="empty">暂无办事处联系信息。</div>';
-
-  const html = template
-    ? renderLegacyContactPage(template, templateContext)
-    : renderPage({
-      title: `${site.company_name || site.web_name || '联系我们'} - 联系我们`,
-      description: site.company_address || site.company_name || '',
-      body: `
-        <h1>联系我们</h1>
-        ${site.company_name ? `<p><strong>公司名称：</strong>${escapeHtml(site.company_name)}</p>` : ''}
-        ${site.company_address ? `<p><strong>公司地址：</strong>${escapeHtml(site.company_address)}</p>` : ''}
-        ${site.company_phone ? `<p><strong>服务热线：</strong>${escapeHtml(site.company_phone)}</p>` : ''}
-        ${site.company_fax ? `<p><strong>传真：</strong>${escapeHtml(site.company_fax)}</p>` : ''}
-        ${site.contact_person ? `<p><strong>联系人：</strong>${escapeHtml(site.contact_person)}</p>` : ''}
-        ${site.company_email ? `<p><strong>邮箱：</strong>${escapeHtml(site.company_email)}</p>` : ''}
-        <h2 style="margin-top:32px;">办事处信息</h2>
-        ${officesHtml}
-      `
-    });
+  const templatePath = templateContext.variant?.contact || guessSiblingTemplatePath(templateContext.variant?.home_index, 'contact.htm');
+  const template = requireLegacyTemplate(templatePath, '联系页面模板');
+  const html = renderLegacyContactPage(template, templateContext);
 
   writeTextFile(outputRoot, 'contact.html', html);
   return createBuildResult('contact', '联系页面', 1, 1);
@@ -171,90 +113,9 @@ export function buildContactPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
 
 export function buildMessagePage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   const templateContext = getLegacyTemplateContext();
-  const template = loadLegacyTemplate(templateContext.variant?.msg_index || guessSiblingTemplatePath(templateContext.variant?.home_index, 'msg.htm'));
-  const site = getSiteConfig();
-  const html = template
-    ? renderLegacyMessagePage(template, templateContext)
-    : renderPage({
-      title: `${site.company_name || site.web_name || '在线留言'} - 在线留言`,
-      description: '在线留言表单',
-      body: `
-        <style>
-          .message-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
-          .message-form .full{grid-column:1 / -1;}
-          .message-form label{display:block;font-size:14px;color:#475569;margin-bottom:6px;}
-          .message-form input,.message-form textarea{width:100%;box-sizing:border-box;padding:12px 14px;border:1px solid #cbd5e1;border-radius:10px;font:inherit;}
-          .message-form textarea{min-height:140px;resize:vertical;}
-          .message-actions{margin-top:18px;display:flex;gap:12px;align-items:center;}
-          .message-status{font-size:14px;color:#0f766e;}
-          @media (max-width:680px){.message-form{grid-template-columns:1fr;}}
-        </style>
-        <h1>在线留言</h1>
-        <p class="muted">提交后会写入新的 Node.js 后台留言管理。</p>
-        <form id="message-form" class="message-form" method="post" action="/ajaxcode/msg?action=msgadd">
-          <div>
-            <label for="msg-name">姓名</label>
-            <input id="msg-name" name="name" type="text" required>
-          </div>
-          <div>
-            <label for="msg-phone">电话</label>
-            <input id="msg-phone" name="phone" type="text">
-          </div>
-          <div>
-            <label for="msg-mobile">手机</label>
-            <input id="msg-mobile" name="mobile" type="text">
-          </div>
-          <div>
-            <label for="msg-email">邮箱</label>
-            <input id="msg-email" name="email" type="text">
-          </div>
-          <div class="full">
-            <label for="msg-title">标题</label>
-            <input id="msg-title" name="title" type="text" required>
-          </div>
-          <div class="full">
-            <label for="msg-address">地址</label>
-            <input id="msg-address" name="address" type="text">
-          </div>
-          <div>
-            <label for="msg-fax">传真</label>
-            <input id="msg-fax" name="fax" type="text">
-          </div>
-          <div></div>
-          <div class="full">
-            <label for="msg-content">留言内容</label>
-            <textarea id="msg-content" name="content" required></textarea>
-          </div>
-        </form>
-        <div class="message-actions">
-          <button type="submit" form="message-form">提交留言</button>
-          <span id="message-status" class="message-status"></span>
-        </div>
-        <script>
-          const form = document.getElementById('message-form');
-          const status = document.getElementById('message-status');
-          form.addEventListener('submit', async (event) => {
-            event.preventDefault();
-            status.textContent = '提交中...';
-            try {
-              const response = await fetch(form.action, {
-                method: 'POST',
-                body: new FormData(form)
-              });
-              const text = (await response.text()).trim().toLowerCase();
-              if (response.ok && text === 'true') {
-                form.reset();
-                status.textContent = '提交成功。';
-                return;
-              }
-              status.textContent = '提交失败，请稍后重试。';
-            } catch {
-              status.textContent = '提交失败，请稍后重试。';
-            }
-          });
-        </script>
-      `
-    });
+  const templatePath = templateContext.variant?.msg_index || guessSiblingTemplatePath(templateContext.variant?.home_index, 'msg.htm');
+  const template = requireLegacyTemplate(templatePath, '留言页面模板');
+  const html = renderLegacyMessagePage(template, templateContext);
 
   writeTextFile(outputRoot, 'msg.html', html);
   return createBuildResult('msg', '留言页面', 1, 1);
@@ -262,23 +123,14 @@ export function buildMessagePage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
 
 export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   const templateContext = getLegacyTemplateContext();
-  const template = loadLegacyTemplate(templateContext.variant?.co_index);
+  const template = requireLegacyTemplate(templateContext.variant?.co_index, '公司栏目模板');
   const items = templateContext.corporationCategories
     .filter((item) => normalizeInteger(item.parent_id, 0) === CORPORATION_ROOT_ID && normalizeInteger(item.is_external, 0) === 0);
 
   let filesWritten = 0;
 
   for (const [index, item] of items.entries()) {
-    const html = template
-      ? renderLegacyCorporationPage({ template, templateContext, item })
-      : renderPage({
-        title: `${item.name || '关于公司'} - ${templateContext.site.web_name || '关于公司'}`,
-        description: item.name || templateContext.site.company_name || '',
-        body: `
-          <h1>${escapeHtml(item.name || '')}</h1>
-          <article>${normalizeLegacyRichTextHtml(item.content_html) || '<p>暂无内容。</p>'}</article>
-        `
-      });
+    const html = renderLegacyCorporationPage({ template, templateContext, item });
 
     writeTextFile(outputRoot, path.join('about', `about-${item.id}.html`), html);
     filesWritten += 1;
@@ -300,7 +152,6 @@ export function buildNewsCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}
     sectionKey: 'news-lists',
     sectionLabel: '新闻分类页',
     templateField: 'news_sort1',
-    fallbackTitle: '新闻中心',
     summaryClassName: 'Font_000000_a'
   });
 }
@@ -313,7 +164,6 @@ export function buildServiceCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } =
     sectionKey: 'service-lists',
     sectionLabel: '服务分类页',
     templateField: 'service_sort1',
-    fallbackTitle: '阀门知识',
     summaryClassName: '0a'
   });
 }
@@ -322,7 +172,7 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } =
   const categories = listProductCategories();
   const products = listProducts({ visibleOnly: false, limit: 10000 });
   const templateContext = getLegacyTemplateContext();
-  const template = loadLegacyTemplate(templateContext.variant?.produts_sort2);
+  const template = requireLegacyTemplate(templateContext.variant?.produts_sort2, '产品分类模板');
   const categoryMap = new Map(categories.map((item) => [item.id, item]));
   const childrenByParent = groupBy(categories, (item) => normalizeInteger(item.parent_id, 0));
   const productsByCategory = groupBy(products, (item) => normalizeInteger(item.category_id, 0));
@@ -395,7 +245,7 @@ export function buildJobIndexPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
     `
   );
   const templateContext = getLegacyTemplateContext();
-  const template = loadLegacyTemplate(templateContext.variant?.job_index);
+  const template = requireLegacyTemplate(templateContext.variant?.job_index, '招聘列表模板');
   const pages = paginate(items, JOB_LIST_PAGE_SIZE);
   const pageList = pages.length > 0 ? pages : [[]];
   let filesWritten = 0;
@@ -403,25 +253,14 @@ export function buildJobIndexPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   for (let index = 0; index < pageList.length; index += 1) {
     const pageNumber = index + 1;
     const pageItems = pageList[index];
-    const html = template
-      ? renderLegacyJobIndexPage({
-        template,
-        templateContext,
-        pageItems,
-        pageNumber,
-        pageCount: pageList.length,
-        totalRecords: items.length
-      })
-      : renderPage({
-        title: `${templateContext.site.web_name || '人才招聘'} - 人才招聘`,
-        description: templateContext.site.company_name || templateContext.site.web_name || '',
-        body: renderJobIndexBody({
-          pageItems,
-          pageNumber,
-          pageCount: pageList.length,
-          totalRecords: items.length
-        })
-      });
+    const html = renderLegacyJobIndexPage({
+      template,
+      templateContext,
+      pageItems,
+      pageNumber,
+      pageCount: pageList.length,
+      totalRecords: items.length
+    });
 
     writeTextFile(outputRoot, path.join('job', `${pageNumber}.html`), html);
     filesWritten += 1;
@@ -438,37 +277,19 @@ export function buildJobIndexPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
 export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange } = {}) {
   const products = filterByIdRange(listProducts({ visibleOnly: false, limit: 10000 }), idRange);
   const templateContext = getLegacyTemplateContext();
-  const template = loadLegacyTemplate(templateContext.variant?.produts_detail);
+  const template = requireLegacyTemplate(templateContext.variant?.produts_detail, '产品详情模板');
   const productMap = groupBy(products, (item) => normalizeInteger(item.category_id, 0));
   let filesWritten = 0;
 
   for (const product of products) {
     const categoryProducts = (productMap.get(normalizeInteger(product.category_id, 0)) || []).filter((item) => item.id !== product.id);
     const relatedProducts = categoryProducts.slice().sort(compareBySortAndId).slice(0, 4);
-    const html = template
-      ? renderLegacyProductDetailPage({
-        template,
-        templateContext,
-        product,
-        relatedProducts
-      })
-      : renderPage({
-        title: `${product.name} - 产品详情`,
-        description: product.summary || product.keywords || product.name || '',
-        body: `
-          <h1>${escapeHtml(product.name || '')}</h1>
-          <p class="muted">产品编号：${escapeHtml(product.code || '-')}</p>
-          <p><img src="${escapeHtml(product.small_image || '/skin/dfpic.gif')}" alt="${escapeHtml(product.name || '')}" style="max-width:320px;width:100%;height:auto;border-radius:8px;"></p>
-          <p>${escapeHtml(product.summary || '暂无摘要。')}</p>
-          <article>${normalizeLegacyRichTextHtml(product.content_html) || '<p>暂无详细内容。</p>'}</article>
-          <h2 style="margin-top:32px;">相关产品</h2>
-          ${
-            relatedProducts.length > 0
-              ? `<ul>${relatedProducts.map(renderProductListItem).join('')}</ul>`
-              : '<div class="empty">暂无相关产品。</div>'
-          }
-        `
-      });
+    const html = renderLegacyProductDetailPage({
+      template,
+      templateContext,
+      product,
+      relatedProducts
+    });
 
     writeTextFile(outputRoot, path.join('product', `${product.id}.html`), html);
     filesWritten += 1;
@@ -520,17 +341,11 @@ export function buildJobDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange 
     `
   ), idRange);
   const templateContext = getLegacyTemplateContext();
-  const template = loadLegacyTemplate(templateContext.variant?.job_detail);
+  const template = requireLegacyTemplate(templateContext.variant?.job_detail, '招聘详情模板');
   let filesWritten = 0;
 
   for (const job of jobs) {
-    const html = template
-      ? renderLegacyJobDetailPage({ template, templateContext, job })
-      : renderPage({
-        title: `${job.name || '招聘详情'} - 人才招聘`,
-        description: job.address || templateContext.site.company_name || '',
-        body: renderJobDetailBody(job)
-      });
+    const html = renderLegacyJobDetailPage({ template, templateContext, job });
 
     writeTextFile(outputRoot, path.join('job', 'detail', `${job.id}.html`), html);
     filesWritten += 1;
@@ -546,12 +361,11 @@ function buildLegacyNewsSectionCategoryPages({
   sectionKey,
   sectionLabel,
   templateField,
-  fallbackTitle,
   summaryClassName
 }) {
   const categories = listNewsCategories();
   const templateContext = getLegacyTemplateContext();
-  const template = loadLegacyTemplate(templateContext.variant?.[templateField]);
+  const template = requireLegacyTemplate(templateContext.variant?.[templateField], `${sectionLabel}模板`);
   const categoryList = categories.filter((item) => normalizeInteger(item.parent_id, 0) === rootId);
   const items = listNews({ limit: 10000 });
   const categoryBuckets = groupBy(items, (item) => normalizeInteger(item.category_id, 0));
@@ -565,29 +379,17 @@ function buildLegacyNewsSectionCategoryPages({
     for (let pageIndex = 0; pageIndex < pageList.length; pageIndex += 1) {
       const pageNumber = pageIndex + 1;
       const currentItems = pageList[pageIndex];
-      const html = template
-        ? renderLegacyNewsCategoryPage({
-          template,
-          templateContext,
-          category,
-          pageItems: currentItems,
-          pageNumber,
-          pageCount: pageList.length,
-          totalRecords: pageItems.length,
-          dirName,
-          summaryClassName
-        })
-        : renderPage({
-          title: `${category.name || fallbackTitle} - ${fallbackTitle}`,
-          description: category.name || fallbackTitle,
-          body: renderNewsCategoryBody({
-            category,
-            pageItems: currentItems,
-            pageNumber,
-            pageCount: pageList.length,
-            dirName
-          })
-        });
+      const html = renderLegacyNewsCategoryPage({
+        template,
+        templateContext,
+        category,
+        pageItems: currentItems,
+        pageNumber,
+        pageCount: pageList.length,
+        totalRecords: pageItems.length,
+        dirName,
+        summaryClassName
+      });
 
       const fileName = pageNumber === 1 ? `${category.id}.html` : `${category.id}-${pageNumber}.html`;
       writeTextFile(outputRoot, path.join(dirName, fileName), html);
@@ -618,7 +420,7 @@ function buildLegacyNewsSectionDetailPages({
 }) {
   const categories = listNewsCategories();
   const templateContext = getLegacyTemplateContext();
-  const template = loadLegacyTemplate(templateContext.variant?.[templateField]);
+  const template = requireLegacyTemplate(templateContext.variant?.[templateField], `${sectionLabel}模板`);
   const allowedCategoryIds = new Set(getDescendantNewsCategoryIds(categories, rootId));
   const categoryMap = new Map(categories.map((item) => [item.id, item]));
   const items = filterByIdRange(
@@ -637,30 +439,14 @@ function buildLegacyNewsSectionDetailPages({
     const previous = currentIndex > 0 ? siblings[currentIndex - 1] : null;
     const next = currentIndex >= 0 && currentIndex < siblings.length - 1 ? siblings[currentIndex + 1] : null;
     const category = categoryMap.get(normalizeInteger(item.category_id, 0));
-    const html = template
-      ? renderLegacyNewsDetailPage({
-        template,
-        templateContext,
-        item,
-        category,
-        previous,
-        next
-      })
-      : renderPage({
-        title: `${item.title} - 新闻详情`,
-        description: resolveRenderableNewsSummary(item) || item.title || '',
-        body: `
-          <h1>${escapeHtml(item.title || '')}</h1>
-          <p class="muted">栏目：${escapeHtml(category?.name || '-')} | 发布时间：${escapeHtml(formatLegacyDateOnly(item.created_at) || '-')}</p>
-          <p><img src="${escapeHtml(item.picture || '/UploadFile/nopicture.gif')}" alt="${escapeHtml(item.title || '')}" style="max-width:320px;width:100%;height:auto;border-radius:8px;"></p>
-          <p>${escapeHtml(resolveRenderableNewsSummary(item) || '暂无摘要。')}</p>
-          <article>${normalizeLegacyRichTextHtml(item.content_html) || '<p>暂无详细内容。</p>'}</article>
-          <div style="margin-top:32px;padding-top:18px;border-top:1px solid #e5e7eb;">
-            <p>上一篇：${previous ? `<a href="/${dirName}/detail/${previous.id}.html">${escapeHtml(previous.title || '')}</a>` : '没有了'}</p>
-            <p>下一篇：${next ? `<a href="/${dirName}/detail/${next.id}.html">${escapeHtml(next.title || '')}</a>` : '没有了'}</p>
-          </div>
-        `
-      });
+    const html = renderLegacyNewsDetailPage({
+      template,
+      templateContext,
+      item,
+      category,
+      previous,
+      next
+    });
 
     writeTextFile(outputRoot, path.join(dirName, 'detail', `${item.id}.html`), html);
     filesWritten += 1;
@@ -889,6 +675,15 @@ function buildLegacyTelText(companyPhone, companyMobile) {
   return '';
 }
 
+function requireLegacyTemplate(templatePath, label) {
+  const template = loadLegacyTemplate(templatePath);
+  if (!template) {
+    const displayPath = String(templatePath || '').trim() || '(未配置)';
+    throw new Error(`${label}不存在或无法加载: ${displayPath}`);
+  }
+  return template;
+}
+
 function loadLegacyTemplate(templatePath) {
   if (!templatePath) {
     return null;
@@ -923,6 +718,9 @@ function resolveCaseInsensitivePath(relativePath) {
   const normalized = cleanPath.replace(/\\/g, '/');
   if (normalized.toLowerCase().startsWith('templates/')) {
     candidates.push(normalized.slice('templates/'.length));
+  }
+  if (normalized.toLowerCase().startsWith('templets/')) {
+    candidates.push(normalized.slice('templets/'.length));
   }
 
   for (const candidate of candidates) {
@@ -1059,30 +857,17 @@ function writeProductCategoryPageSet({
   for (let index = 0; index < pageList.length; index += 1) {
     const pageNumber = index + 1;
     const pageItems = pageList[index];
-    const html = template
-      ? renderLegacyProductCategoryPage({
-        template,
-        templateContext,
-        category,
-        parent,
-        children,
-        pageItems,
-        pageNumber,
-        pageCount: pageList.length,
-        totalRecords: items.length
-      })
-      : renderPage({
-        title: `${category.name} - 产品分类`,
-        description: category.seo_description || category.seo_keywords || category.name || '',
-        body: renderProductCategoryBody({
-          category,
-          parent,
-          children,
-          pageItems,
-          pageNumber,
-          pageCount: pageList.length
-        })
-      });
+    const html = renderLegacyProductCategoryPage({
+      template,
+      templateContext,
+      category,
+      parent,
+      children,
+      pageItems,
+      pageNumber,
+      pageCount: pageList.length,
+      totalRecords: items.length
+    });
 
     const fileName = buildLegacyListFileName(fileStem, pageNumber);
     writeTextFile(outputRoot, path.join('products', fileName), html);
@@ -1421,135 +1206,6 @@ function filterByIdRange(items, idRange) {
   const start = idRange.start == null ? Number.MIN_SAFE_INTEGER : normalizeInteger(idRange.start, Number.MIN_SAFE_INTEGER);
   const end = idRange.end == null ? Number.MAX_SAFE_INTEGER : normalizeInteger(idRange.end, Number.MAX_SAFE_INTEGER);
   return items.filter((item) => item.id >= start && item.id <= end);
-}
-
-function renderProductCategoryBody({ category, parent, children, pageItems, pageNumber, pageCount }) {
-  const childLinks = children.length > 0
-    ? `<p>${children.map((item) => `<a href="/products/${item.id}.html">${escapeHtml(item.name || '')}</a>`).join(' | ')}</p>`
-    : '';
-  const listHtml = pageItems.length > 0
-    ? `<ul>${pageItems.map(renderProductListItem).join('')}</ul>`
-    : '<div class="empty">当前分类下暂无产品。</div>';
-  const pagination = renderPagination({
-    pageNumber,
-    pageCount,
-    hrefForPage: (targetPage) => `/products/${targetPage === 1 ? category.id : `${category.id}-${targetPage}`}.html`
-  });
-
-  return `
-    <h1>${escapeHtml(category.name || '')}</h1>
-    ${parent ? `<p class="muted">上级分类：<a href="/products/${parent.id}.html">${escapeHtml(parent.name || '')}</a></p>` : ''}
-    ${childLinks}
-    ${category.seo_description ? `<p>${escapeHtml(category.seo_description)}</p>` : ''}
-    ${listHtml}
-    ${pagination}
-  `;
-}
-
-function renderPagination({ pageNumber, pageCount, hrefForPage }) {
-  if (pageCount <= 1) {
-    return '';
-  }
-  return `
-    <div style="margin-top:24px;color:#475569;">
-      第 ${pageNumber} / ${pageCount} 页　
-      <a href="${escapeHtml(hrefForPage(1))}">首页</a>　
-      ${pageNumber > 1 ? `<a href="${escapeHtml(hrefForPage(pageNumber - 1))}">上一页</a>` : '<span class="muted">上一页</span>'}　
-      ${pageNumber < pageCount ? `<a href="${escapeHtml(hrefForPage(pageNumber + 1))}">下一页</a>` : '<span class="muted">下一页</span>'}　
-      <a href="${escapeHtml(hrefForPage(pageCount))}">末页</a>
-    </div>
-  `;
-}
-
-function renderProductListItem(product) {
-  const image = escapeHtml(product.small_image || '/skin/dfpic.gif');
-  const name = escapeHtml(product.name || '');
-  const summary = escapeHtml(product.summary || '');
-  return `<li>
-    <img src="${image}" alt="${name}">
-    <div>
-      <h3><a href="/product/${product.id}.html">${name}</a></h3>
-      <p class="muted">${summary || '暂无摘要。'}</p>
-    </div>
-  </li>`;
-}
-
-function renderNewsCategoryBody({ category, pageItems, pageNumber, pageCount, dirName }) {
-  const listHtml = pageItems.length > 0
-    ? `<ul>${pageItems.map((item) => renderNewsListItem(item, dirName)).join('')}</ul>`
-    : '<div class="empty">当前分类下暂无内容。</div>';
-  const pagination = renderPagination({
-    pageNumber,
-    pageCount,
-    hrefForPage: (targetPage) => `/${dirName}/${targetPage === 1 ? category.id : `${category.id}-${targetPage}`}.html`
-  });
-
-  return `
-    <h1>${escapeHtml(category.name || '')}</h1>
-    ${listHtml}
-    ${pagination}
-  `;
-}
-
-function renderJobIndexBody({ pageItems, pageNumber, pageCount, totalRecords }) {
-  const rows = pageItems.length > 0
-    ? pageItems.map((item) => `
-      <tr>
-        <td>${escapeHtml(item.name || '')}</td>
-        <td>${escapeHtml(item.openings || '')}</td>
-        <td>${escapeHtml(item.address || '')}</td>
-        <td>${escapeHtml(formatLegacyDateOnly(item.created_at) || '')}</td>
-      </tr>
-    `).join('')
-    : '<tr><td colspan="4">暂无招聘信息。</td></tr>';
-  const pagination = renderPagination({
-    pageNumber,
-    pageCount,
-    hrefForPage: (targetPage) => `/job/${targetPage}.html`
-  });
-
-  return `
-    <h1>人才招聘</h1>
-    <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;width:100%;">
-      <tr>
-        <th>招聘职位</th>
-        <th>招聘人数</th>
-        <th>工作地点</th>
-        <th>发布时间</th>
-      </tr>
-      ${rows}
-    </table>
-    <p class="muted">共 ${totalRecords} 条信息</p>
-    ${pagination}
-  `;
-}
-
-function renderJobDetailBody(job) {
-  return `
-    <h1>${escapeHtml(job.name || '')}</h1>
-    <table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse;width:100%;">
-      <tr><th align="left">职位名称</th><td>${escapeHtml(job.name || '')}</td></tr>
-      <tr><th align="left">工作地点</th><td>${escapeHtml(job.address || '')}</td></tr>
-      <tr><th align="left">需求人数</th><td>${escapeHtml(job.openings || '')}</td></tr>
-      <tr><th align="left">发布日期</th><td>${escapeHtml(formatLegacyDateOnly(job.created_at) || '')}</td></tr>
-      <tr><th align="left">联系人</th><td>${escapeHtml(job.contact_person || '')}</td></tr>
-      <tr><th align="left">联系电话</th><td>${escapeHtml(job.phone || '')}</td></tr>
-      <tr><th align="left">具体要求</th><td>${normalizeLegacyRichTextHtml(job.requirements_html) || '<p>暂无要求。</p>'}</td></tr>
-    </table>
-  `;
-}
-
-function renderNewsListItem(item, dirName = 'news') {
-  const image = escapeHtml(item.picture || '/UploadFile/nopicture.gif');
-  const title = escapeHtml(item.title || '');
-  const summary = escapeHtml(resolveRenderableNewsSummary(item) || '');
-  return `<li>
-    <img src="${image}" alt="${title}">
-    <div>
-      <h3><a href="/${dirName}/detail/${item.id}.html">${title}</a></h3>
-      <p class="muted">${summary || '暂无摘要。'}</p>
-    </div>
-  </li>`;
 }
 
 function createBuildResult(key, label, recordsProcessed, filesWritten) {

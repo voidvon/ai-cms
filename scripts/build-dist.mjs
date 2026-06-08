@@ -111,8 +111,11 @@ npm run admin:create -- admin your-password
 }
 
 function shouldSkip(relativePath, options = {}) {
+  const basename = path.basename(relativePath);
   const segments = relativePath.split(path.sep);
-  return segments.includes('node_modules')
+  return basename === '.DS_Store'
+    || basename.startsWith('._')
+    || segments.includes('node_modules')
     || segments.includes('.git')
     || segments.includes('.venv')
     || segments.includes('generated')
