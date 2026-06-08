@@ -5,42 +5,68 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project Overview
 
 This is a hybrid enterprise website in active migration from Classic ASP to Node.js + SQLite. The repository contains:
-- **Legacy layer**: Static HTML files and Classic ASP code in the root directory
-- **Modern layer**: Node.js application in `node-app/` using **Fastify** framework, providing REST APIs, admin backend, and static site generation
-- **Templates**: HTML templates in `templets/blue/` and `templets/blue11/` for static page generation
+- **Runtime entry**: Root `server.mjs` is the single startup entry; `package.json` exposes root-level scripts
+- **Deploy package**: `dist/` is generated locally as the unified upload package
+- **Published site**: `html/` contains generated static HTML, assets, uploads, and deployment files
+- **Runtime data**: `data/` contains local SQLite runtime data, defaulting to `data/site.sqlite`
+- **Modern layer**: Node.js application in `system/server/` using **Fastify** framework, providing REST APIs, admin backend, and static site generation
+- **Admin UI**: React + TypeScript + Vite application in `system/admin/`, served under `/admin/`
+- **Templates**: HTML templates in `system/templates/blue/` for static page generation
 
 The Node.js layer has been **fully refactored with Fastify framework** (2026-06-08), replacing the previous 5,880-line monolithic HTTP server with a modular, maintainable architecture.
 
 ## Development Commands
 
-All Node.js commands run from the `node-app/` directory:
+Prefer the root-level single entry for daily development and deployment:
 
 ```bash
-# Install dependencies
-npm install
+# Root entry
+npm start                    # Start unified server on PORT, default 3000
+npm run dev                  # Build admin UI, then start server with --watch
+npm run build                # Build unified dist/ deployment package
+npm run build:dist           # Explicitly build unified dist/ deployment package
+npm run build:admin          # Build only system/admin
+npm run build:site           # Generate only html/
+```
 
-# Start the server
-npm start                    # Production mode
-npm run dev                  # Development with auto-reload (--watch)
+Server maintenance commands run through `system/server/`:
+
+```bash
+# Install server dependencies
+npm --prefix system/server install
 
 # Database management
-npm run db:init              # Initialize SQLite database from schema
-npm run db:export-access     # Export CSV from legacy Access database (requires ACCESS_SOURCE env)
-npm run db:import            # Import CSV files from node-app/import/ directory
-npm run db:repair-encoding   # Fix legacy encoding issues (with --write flag)
+npm --prefix system/server run db:init              # Initialize SQLite database from schema
+npm --prefix system/server run db:export-access     # Export CSV from legacy Access database
+npm --prefix system/server run db:import            # Import CSV files from system/server/import/
+npm --prefix system/server run db:repair-encoding   # Fix legacy encoding issues
 
 # Admin management
-npm run admin:create -- <username> <password>  # Create a new admin user
+npm --prefix system/server run admin:create -- <username> <password>
 
 # Static site generation
-npm run build:static         # Generate all static HTML files to root directory
-STATIC_OUTPUT_DIR=preview npm run build:static  # Generate to custom directory
+npm --prefix system/server run build:static     # Generate static HTML into html/
+STATIC_OUTPUT_DIR=preview npm --prefix system/server run build:static
 ```
+
+Deployment package flow:
+
+```bash
+# Local machine
+npm run build
+
+# Server, after uploading dist/ contents
+npm --prefix system/server install --omit=dev
+npm run build:site
+PORT=3000 HOST=0.0.0.0 NODE_ENV=production npm start
+```
+
+Do not upload local `html/` as part of normal deployment. The server should generate `html/` from its own `data/site.sqlite` and `system/templates/`.
 
 Environment variables:
 - `PORT`: Server port (default: 3000)
 - `HOST`: Server host (default: 127.0.0.1)
-- `DATABASE_PATH`: SQLite database path (default: `node-app/data/site.sqlite`)
+- `DATABASE_PATH`: SQLite database path (default: root `data/site.sqlite`)
 - `LOG_LEVEL`: Log level (default: info, use debug for verbose)
 - `NODE_ENV`: Environment (development/production)
 - `COOKIE_SECRET`: Cookie encryption secret (must change in production!)
@@ -48,14 +74,14 @@ Environment variables:
 - `ACCESS_SOURCE`: Path to legacy Access .mdb file for export
 - `CSV_ENCODING`: Encoding for CSV imports (default: utf-8, use `gbk` for legacy files)
 - `RESET_TABLES`: Set to `1` to reset tables before import
-- `STATIC_OUTPUT_DIR`: Output directory for static generation
+- `STATIC_OUTPUT_DIR`: Output directory for static generation; defaults to root `html/`
 
 ## Architecture (Fastify-based)
 
 ### Project Structure
 
 ```
-node-app/
+system/server/
 ├── src/
 │   ├── app.mjs                   # Fastify application entry point
 │   ├── server.mjs                # Startup script
@@ -84,7 +110,7 @@ node-app/
 │   └── utils/                    # Utility functions (unchanged)
 ├── scripts/                      # CLI tools for database and admin management
 ├── schema/schema.sql             # SQLite database schema
-├── data/site.sqlite              # SQLite database (not in git)
+├── ../../data/site.sqlite        # SQLite runtime database (not in git)
 └── import/                       # CSV files for data import
 ```
 
@@ -119,8 +145,8 @@ node-app/
 
 **6. Static Site Generation (Unchanged)**
 - `static-builder.mjs` reads data from SQLite and renders HTML
-- Templates in `templets/blue/` use placeholders: `#BM_*#`, `#hope_*#`
-- Generated files written to root directories (gitignored)
+- Templates in `system/templates/blue/` use placeholders: `#BM_*#`, `#hope_*#`
+- Generated files are written to root `html/` by default
 
 ### Database Schema
 
@@ -209,10 +235,10 @@ Frontend Dynamic:
 
 ### Static File Serving
 
-The server automatically serves static files from the project root:
+The server automatically serves public static files from root `html/`:
 - `/index.html`, `/contact.html`, `/msg.html` - Main pages
 - `/product/`, `/products/`, `/news/`, `/service/`, `/valve/` - Generated content
-- `/images/`, `/css/`, `/js/` - Static assets
+- `/images/`, `/css/`, `/js/`, `/upload/`, `/uploadfile/` - Static assets and uploads from `html/`
 - Case-insensitive path matching for legacy compatibility (e.g., `/Product/123.html` → `/product/123.html`)
 
 ## Common Development Workflows
@@ -287,7 +313,7 @@ await app.register(async (instance) => {
 - **Services Layer**: Business logic in `src/services/` remains unchanged from the pre-Fastify version
 - **Legacy Cleanup**: The static builder removes legacy marketing text patterns defined in `LEGACY_MARKETING_PATTERNS` and `LEGACY_PRODUCT_BRAND_PATTERNS`
 - **Upload Limits**: Images are limited to 400KB by default (configurable via `UPLOAD_MAX_SIZE_KB`)
-- **Database**: SQLite database is in `node-app/data/` and not committed to git. Initialize it with `npm run db:init`.
+- **Database**: SQLite database is in root `data/` and not committed to git. Initialize it with `npm run db:init`.
 - **Authentication**: Sessions are stored in `admin_sessions` table with expiration. Both cookie-based (for web) and token-based (for API) auth are supported.
 - **Logging**: Fastify uses Pino for structured logging. Set `LOG_LEVEL=debug` for verbose output.
 
@@ -345,7 +371,7 @@ CSV_ENCODING=gbk npm run db:import  # Try different encoding
 ```
 
 **Static generation fails:**
-Check that database has data, templates exist in `templets/blue/`
+Check that database has data, templates exist in `system/templates/blue/`
 
 **Authentication not working:**
 Verify `COOKIE_SECRET` is set, check browser cookies, check session expiration in database
@@ -379,4 +405,3 @@ Consider these for future iterations:
 - Set up CI/CD pipeline
 - Add request logging middleware
 - Implement granular role-based permissions
-

@@ -1,0 +1,12 @@
+{
+  "name": "www-spiraxsarcocn-root",
+  "private": true,
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "npm --prefix system/admin run build && node --watch server.mjs",
+    "build:admin": "npm --prefix system/admin run build",
+    "build:site": "npm --prefix system/server run build:static",
+    "build:dist": "npm run build:admin && node scripts/build-dist.mjs",
+    "build": "npm run build:dist"
+  }
+}

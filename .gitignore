@@ -9,5 +9,12 @@
 /products/**/*.html
 /service/**/*.html
 /valve/**/*.html
+/html/**/*.html
+!/html/.gitkeep
 
 node_modules
+/dist
+/system/admin/dist
+/data/site.sqlite*
+/data/*.bak
+!/data/.gitkeep

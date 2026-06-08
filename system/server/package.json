@@ -1,0 +1,26 @@
+{
+  "name": "spiraxsarcocn-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Fastify + SQLite server for the legacy static site migration.",
+  "scripts": {
+    "start": "node src/server.mjs",
+    "dev": "node --watch src/server.mjs",
+    "db:init": "node scripts/init-db.mjs",
+    "db:export-access": ".venv/bin/python scripts/export-access.py",
+    "db:import": "node scripts/import-csv.mjs",
+    "db:repair-encoding": "node scripts/repair-legacy-encoding.mjs --write",
+    "admin:create": "node scripts/create-admin.mjs",
+    "build:static": "node scripts/build-static.mjs"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.0.2",
+    "@fastify/cors": "^11.2.0",
+    "@fastify/formbody": "^8.0.2",
+    "@fastify/multipart": "^10.0.0",
+    "@fastify/sensible": "^6.0.4",
+    "@fastify/static": "^9.1.3",
+    "fastify": "^5.8.5"
+  }
+}
