@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import ProductCategoryFormDialog from '@/components/ProductCategoryFormDialog'
+import CategoryTemplateBindingDialog from '@/components/CategoryTemplateBindingDialog'
 import { toast } from 'sonner'
 import type { ProductCategory } from '@/types'
 
@@ -26,6 +27,8 @@ export default function ProductCategoriesPage() {
 
   const [formOpen, setFormOpen] = useState(false)
   const [editingCategory, setEditingCategory] = useState<ProductCategory | undefined>()
+  const [bindingCategory, setBindingCategory] = useState<ProductCategory | undefined>()
+  const [bindingOpen, setBindingOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
@@ -54,6 +57,11 @@ export default function ProductCategoriesPage() {
   const handleEdit = (category: ProductCategory) => {
     setEditingCategory(category)
     setFormOpen(true)
+  }
+
+  const handleTemplateBinding = (category: ProductCategory) => {
+    setBindingCategory(category)
+    setBindingOpen(true)
   }
 
   const handleDelete = (id: number) => {
@@ -139,6 +147,9 @@ export default function ProductCategoriesPage() {
                       <Button variant="ghost" size="sm" onClick={() => handleEdit(category)}>
                         编辑
                       </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleTemplateBinding(category)}>
+                        模板
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => handleDelete(category.id)}>
                         删除
                       </Button>
@@ -199,6 +210,15 @@ export default function ProductCategoriesPage() {
         category={editingCategory}
         currentParentId={parentId}
         mode={editingCategory ? 'edit' : 'create'}
+      />
+
+      <CategoryTemplateBindingDialog
+        open={bindingOpen}
+        onOpenChange={setBindingOpen}
+        targetType="product_category"
+        targetId={bindingCategory?.id}
+        targetName={bindingCategory?.name}
+        templateTypes={['list', 'content']}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import NewsCategoryFormDialog from '@/components/NewsCategoryFormDialog'
+import CategoryTemplateBindingDialog from '@/components/CategoryTemplateBindingDialog'
 import { toast } from 'sonner'
 import type { NewsCategory } from '@/types'
 
@@ -23,6 +24,8 @@ export default function NewsCategoriesPage() {
 
   const [formOpen, setFormOpen] = useState(false)
   const [editingCategory, setEditingCategory] = useState<NewsCategory | undefined>()
+  const [bindingCategory, setBindingCategory] = useState<NewsCategory | undefined>()
+  const [bindingOpen, setBindingOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
@@ -51,6 +54,11 @@ export default function NewsCategoriesPage() {
   const handleEdit = (category: NewsCategory) => {
     setEditingCategory(category)
     setFormOpen(true)
+  }
+
+  const handleTemplateBinding = (category: NewsCategory) => {
+    setBindingCategory(category)
+    setBindingOpen(true)
   }
 
   const handleDelete = (id: number) => {
@@ -115,6 +123,9 @@ export default function NewsCategoriesPage() {
                       <Button variant="ghost" size="sm" onClick={() => handleEdit(category)}>
                         编辑
                       </Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleTemplateBinding(category)}>
+                        模板
+                      </Button>
                       <Button variant="ghost" size="sm" onClick={() => handleDelete(category.id)}>
                         删除
                       </Button>
@@ -132,6 +143,15 @@ export default function NewsCategoriesPage() {
         onOpenChange={setFormOpen}
         category={editingCategory}
         mode={editingCategory ? 'edit' : 'create'}
+      />
+
+      <CategoryTemplateBindingDialog
+        open={bindingOpen}
+        onOpenChange={setBindingOpen}
+        targetType="news_category"
+        targetId={bindingCategory?.id}
+        targetName={bindingCategory?.name}
+        templateTypes={['list', 'content']}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { CorporationCategory, ProductPhoto, TemplateVariant, ApiResponse } from '@/types'
+import type { CorporationCategory, ProductPhoto, Template, TemplateBinding, TemplateVariant, ApiResponse } from '@/types'
 
 // 公司信息分类 API
 export const corporationCategoriesApi = {
@@ -87,6 +87,55 @@ export const templateVariantsApi = {
 
   select: async (id: number) => {
     const response = await apiClient.post<ApiResponse<TemplateVariant>>(`/template-variants/${id}/select`)
+    return response.data
+  },
+}
+
+export const templatesApi = {
+  list: async (type?: Template['type']) => {
+    const response = await apiClient.get<ApiResponse<Template[]>>('/templates', {
+      params: type ? { type } : {},
+    })
+    return response.data
+  },
+
+  get: async (id: number) => {
+    const response = await apiClient.get<ApiResponse<Template>>(`/templates/${id}`)
+    return response.data
+  },
+
+  create: async (data: Partial<Template>) => {
+    const response = await apiClient.post<ApiResponse<Template>>('/templates', data)
+    return response.data
+  },
+
+  update: async (id: number, data: Partial<Template>) => {
+    const response = await apiClient.put<ApiResponse<Template>>(`/templates/${id}`, data)
+    return response.data
+  },
+
+  publish: async (id: number, note?: string) => {
+    const response = await apiClient.post<ApiResponse<Template>>(`/templates/${id}/publish`, { note })
+    return response.data
+  },
+
+  delete: async (id: number) => {
+    const response = await apiClient.delete<ApiResponse<Template>>(`/templates/${id}`)
+    return response.data
+  },
+
+  listBindings: async () => {
+    const response = await apiClient.get<ApiResponse<TemplateBinding[]>>('/template-bindings')
+    return response.data
+  },
+
+  saveBinding: async (data: Partial<TemplateBinding>) => {
+    const response = await apiClient.put<ApiResponse<TemplateBinding>>('/template-bindings', data)
+    return response.data
+  },
+
+  deleteBinding: async (id: number) => {
+    const response = await apiClient.delete<ApiResponse<TemplateBinding>>(`/template-bindings/${id}`)
     return response.data
   },
 }

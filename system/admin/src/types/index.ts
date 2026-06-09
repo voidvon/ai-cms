@@ -132,6 +132,32 @@ export interface TemplateVariant {
   contact?: string;
 }
 
+export interface Template {
+  id: number;
+  name: string;
+  type: 'home' | 'list' | 'content' | 'component';
+  code: string;
+  engine: 'html' | 'tsx';
+  content: string;
+  published_content?: string | null;
+  status: 'draft' | 'published';
+  is_default: number;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+  published_at?: string | null;
+}
+
+export interface TemplateBinding {
+  id: number;
+  target_type: 'site' | 'product_category' | 'news_category' | 'corporation_category' | 'content_type';
+  target_id?: number | null;
+  template_type: 'home' | 'list' | 'content';
+  template_id: number;
+  template_name?: string;
+  template_code?: string;
+}
+
 export interface ProductPhoto {
   id: number;
   product_id?: number;

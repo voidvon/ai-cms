@@ -16,6 +16,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import CorporationCategoryFormDialog from '@/components/CorporationCategoryFormDialog'
+import CategoryTemplateBindingDialog from '@/components/CategoryTemplateBindingDialog'
 import { toast } from 'sonner'
 import type { CorporationCategory } from '@/types'
 
@@ -24,6 +25,8 @@ export default function CorporationCategoriesPage() {
 
   const [formOpen, setFormOpen] = useState(false)
   const [editingCategory, setEditingCategory] = useState<CorporationCategory | undefined>()
+  const [bindingCategory, setBindingCategory] = useState<CorporationCategory | undefined>()
+  const [bindingOpen, setBindingOpen] = useState(false)
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
@@ -52,6 +55,11 @@ export default function CorporationCategoriesPage() {
   const handleEdit = (category: CorporationCategory) => {
     setEditingCategory(category)
     setFormOpen(true)
+  }
+
+  const handleTemplateBinding = (category: CorporationCategory) => {
+    setBindingCategory(category)
+    setBindingOpen(true)
   }
 
   const handleDelete = (id: number) => {
@@ -124,6 +132,11 @@ export default function CorporationCategoriesPage() {
                       <Button variant="ghost" size="sm" onClick={() => handleEdit(category)}>
                         编辑
                       </Button>
+                      {category.is_external !== 1 && (
+                        <Button variant="ghost" size="sm" onClick={() => handleTemplateBinding(category)}>
+                          模板
+                        </Button>
+                      )}
                       <Button variant="ghost" size="sm" onClick={() => handleDelete(category.id)}>
                         删除
                       </Button>
@@ -141,6 +154,15 @@ export default function CorporationCategoriesPage() {
         onOpenChange={setFormOpen}
         category={editingCategory}
         mode={editingCategory ? 'edit' : 'create'}
+      />
+
+      <CategoryTemplateBindingDialog
+        open={bindingOpen}
+        onOpenChange={setBindingOpen}
+        targetType="corporation_category"
+        targetId={bindingCategory?.id}
+        targetName={bindingCategory?.name}
+        templateTypes={['content']}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

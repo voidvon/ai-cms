@@ -37,7 +37,8 @@ function App() {
           <Route path="contacts" element={<ContactsPage />} />
           <Route path="custom-labels" element={<CustomLabelsPage />} />
           <Route path="meta-types" element={<MetaTypesPage />} />
-          <Route path="template-variants" element={<TemplateVariantsPage />} />
+          <Route path="templates" element={<TemplateVariantsPage />} />
+          <Route path="template-variants" element={<Navigate to="/templates" replace />} />
           <Route path="admins" element={<AdminsPage />} />
           <Route path="static-gen" element={<StaticGenerationPage />} />
           <Route path="site-config" element={<SiteConfigPage />} />

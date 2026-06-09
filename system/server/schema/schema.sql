@@ -197,6 +197,45 @@ CREATE TABLE IF NOT EXISTS custom_labels (
   FOREIGN KEY (kind_id) REFERENCES custom_label_kinds(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS templates (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL,
+  type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'component')),
+  code TEXT NOT NULL UNIQUE,
+  engine TEXT NOT NULL DEFAULT 'html' CHECK (engine IN ('html', 'tsx')),
+  content TEXT NOT NULL DEFAULT '',
+  published_content TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+  is_default INTEGER NOT NULL DEFAULT 0,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  published_at TEXT
+);
+
+CREATE TABLE IF NOT EXISTS template_bindings (
+  id INTEGER PRIMARY KEY,
+  target_type TEXT NOT NULL,
+  target_id INTEGER,
+  template_type TEXT NOT NULL CHECK (template_type IN ('home', 'list', 'content')),
+  template_id INTEGER NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (target_type, target_id, template_type),
+  FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS template_versions (
+  id INTEGER PRIMARY KEY,
+  template_id INTEGER NOT NULL,
+  version_no INTEGER NOT NULL,
+  engine TEXT NOT NULL DEFAULT 'html',
+  content TEXT NOT NULL,
+  note TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
+);
+
 CREATE INDEX IF NOT EXISTS idx_products_category_id ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_visible_sort ON products(is_visible, sort_order, id);
 CREATE INDEX IF NOT EXISTS idx_news_category_id ON news(category_id);
@@ -206,6 +245,10 @@ CREATE INDEX IF NOT EXISTS idx_product_categories_parent_id ON product_categorie
 CREATE INDEX IF NOT EXISTS idx_news_categories_parent_id ON news_categories(parent_id);
 CREATE INDEX IF NOT EXISTS idx_admin_sessions_admin_id ON admin_sessions(admin_id);
 CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires_at ON admin_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_templates_type_sort ON templates(type, sort_order, id);
+CREATE INDEX IF NOT EXISTS idx_templates_status ON templates(status);
+CREATE INDEX IF NOT EXISTS idx_template_bindings_target ON template_bindings(target_type, target_id, template_type);
+CREATE INDEX IF NOT EXISTS idx_template_versions_template_id ON template_versions(template_id, version_no);
 
 CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(
   name,
