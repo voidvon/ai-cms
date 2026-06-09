@@ -4,10 +4,13 @@ import {
   deleteTemplate,
   deleteTemplateBinding,
   getTemplateById,
+  getTemplateDependencyInfo,
   listTemplateBindings,
   listTemplateVersions,
   listTemplates,
   publishTemplate,
+  renderTemplatePreview,
+  restoreTemplateVersion,
   updateTemplate,
   upsertTemplateBinding
 } from '../../services/templates.mjs';
@@ -19,6 +22,18 @@ export default async function templatesRoutes(app) {
     try {
       const templates = listTemplates({ type: request.query?.type });
       return { success: true, data: templates };
+    } catch (error) {
+      reply.code(400);
+      return { success: false, message: error.message };
+    }
+  });
+
+  app.post('/templates/preview', {
+    onRequest: [requireAuth]
+  }, async (request, reply) => {
+    try {
+      const preview = renderTemplatePreview(request.body || {});
+      return { success: true, data: preview };
     } catch (error) {
       reply.code(400);
       return { success: false, message: error.message };
@@ -113,6 +128,33 @@ export default async function templatesRoutes(app) {
     onRequest: [requireAuth]
   }, async (request) => {
     return { success: true, data: listTemplateVersions(request.params.id) };
+  });
+
+  app.post('/templates/:id/versions/:versionId/restore', {
+    onRequest: [requireAuth]
+  }, async (request, reply) => {
+    try {
+      const template = restoreTemplateVersion(request.params.id, request.params.versionId);
+      if (!template) {
+        reply.code(404);
+        return { success: false, message: '模板或版本不存在' };
+      }
+      return { success: true, data: template, message: '模板版本已恢复并发布' };
+    } catch (error) {
+      reply.code(400);
+      return { success: false, message: error.message };
+    }
+  });
+
+  app.get('/templates/:id/dependencies', {
+    onRequest: [requireAuth]
+  }, async (request, reply) => {
+    const dependencies = getTemplateDependencyInfo(request.params.id);
+    if (!dependencies) {
+      reply.code(404);
+      return { success: false, message: '模板不存在' };
+    }
+    return { success: true, data: dependencies };
   });
 
   app.delete('/templates/:id', {

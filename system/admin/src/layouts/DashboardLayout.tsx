@@ -88,6 +88,7 @@ export default function DashboardLayout() {
         { path: '/custom-labels', label: '自定义标签' },
         { path: '/meta-types', label: 'SEO元数据' },
         { path: '/templates', label: '模板管理' },
+        { path: '/content-models', label: '数据模型' },
       ]
     },
     {

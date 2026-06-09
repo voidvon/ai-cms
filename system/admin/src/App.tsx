@@ -14,6 +14,7 @@ import ContactsPage from '@/pages/ContactsPage'
 import CustomLabelsPage from '@/pages/CustomLabelsPage'
 import MetaTypesPage from '@/pages/MetaTypesPage'
 import TemplateVariantsPage from '@/pages/TemplateVariantsPage'
+import ContentModelsPage from '@/pages/ContentModelsPage'
 import AdminsPage from '@/pages/AdminsPage'
 import StaticGenerationPage from '@/pages/StaticGenerationPage'
 import SiteConfigPage from '@/pages/SiteConfigPage'
@@ -38,6 +39,7 @@ function App() {
           <Route path="custom-labels" element={<CustomLabelsPage />} />
           <Route path="meta-types" element={<MetaTypesPage />} />
           <Route path="templates" element={<TemplateVariantsPage />} />
+          <Route path="content-models" element={<ContentModelsPage />} />
           <Route path="template-variants" element={<Navigate to="/templates" replace />} />
           <Route path="admins" element={<AdminsPage />} />
           <Route path="static-gen" element={<StaticGenerationPage />} />

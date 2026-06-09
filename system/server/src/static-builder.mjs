@@ -1,20 +1,15 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
-import { CONTENT_ROOT, SERVER_ROOT } from './config.mjs';
+import { CONTENT_ROOT } from './config.mjs';
 import { getDb, queryAll } from './db.mjs';
+import { createCmsTemplateRuntime } from './cms-template-runtime.mjs';
 import { listContacts } from './services/contacts.mjs';
 import { listNewsCategories } from './services/news-categories.mjs';
 import { listNews } from './services/news.mjs';
 import { listProductCategories } from './services/product-categories.mjs';
 import { listProducts } from './services/products.mjs';
 import { getSiteConfig } from './services/site.mjs';
-import {
-  ensureTemplatesSchema,
-  listPublishedComponents,
-  resolvePublishedTemplate
-} from './services/templates.mjs';
-import { renderTsxTemplate } from './tsx-template-renderer.mjs';
+import { ensureTemplatesSchema } from './services/templates.mjs';
 import { escapeHtml } from './utils/html.mjs';
 import { looksLikeLegacyMojibake } from './utils/legacy-text.mjs';
 
@@ -74,7 +69,17 @@ const CONTENT_TYPE_TARGETS = {
   corporation: 6
 };
 const TEMPLATE_CLIENT_ASSET_DIR = path.join('assets', 'cms-templates');
-const registeredTsxClientTemplates = new Map();
+const {
+  renderCmsSitePage,
+  cleanupTemplateClientBundles,
+  buildRegisteredTsxClientBundles
+} = createCmsTemplateRuntime({
+  templateByPage: CMS_TEMPLATE_BY_PAGE,
+  templateTypeByPage: CMS_TEMPLATE_TYPE_BY_PAGE,
+  templateClientAssetDir: TEMPLATE_CLIENT_ASSET_DIR,
+  expandLegacyCommonPlaceholders,
+  legacyLabelToComponentCode
+});
 
 export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cleanExisting = false } = {}) {
   getDb();
@@ -585,225 +590,6 @@ function getCustomLabel(templateContext, name) {
     }
   }
   return expandLegacyCommonPlaceholders(value, templateContext);
-}
-
-function renderCmsSitePage(pageName, props, templateContext, options = {}) {
-  const templateCode = CMS_TEMPLATE_BY_PAGE[pageName];
-  const templateType = options.templateType || CMS_TEMPLATE_TYPE_BY_PAGE[pageName];
-  const template = templateCode && templateType ? resolvePublishedTemplate({
-    templateType,
-    targets: options.targets || [],
-    fallbackCode: templateCode
-  }) : null;
-
-  if (!template?.content) {
-    throw new Error(`Published CMS template is missing: ${templateCode || pageName}`);
-  }
-
-  if (template.engine === 'tsx') {
-    const html = renderCmsTsxTemplate(template.content, props, templateContext);
-    if (hasTsxClientRuntime(template.content)) {
-      registerTsxClientTemplate(template);
-      return injectTsxClientRuntime(html, template.code, props, template.content);
-    }
-    return html;
-  }
-
-  return renderCmsTemplate(template.content, props, templateContext);
-}
-
-function renderCmsTsxTemplate(content, props, templateContext) {
-  const components = buildCmsComponentMap(templateContext);
-  const templateProps = {
-    ...props,
-    component: (code, extraProps = {}) => {
-      return renderCmsComponent(code, components, templateContext, { ...props, ...extraProps }, 0);
-    }
-  };
-  return expandLegacyCommonPlaceholders(renderTsxTemplate(content, templateProps), templateContext);
-}
-
-function hasTsxClientRuntime(source) {
-  return /\bClientOnly\b|\bexport\s+(?:function|const|let|var)\s+(?:Client|client|ClientComponents)\b/.test(String(source || ''));
-}
-
-function registerTsxClientTemplate(template) {
-  const code = sanitizeTemplateCode(template.code);
-  if (!code) {
-    return;
-  }
-  registeredTsxClientTemplates.set(code, {
-    code,
-    source: template.content || ''
-  });
-}
-
-function injectTsxClientRuntime(html, templateCode, props, source) {
-  const code = sanitizeTemplateCode(templateCode);
-  if (!code) {
-    return html;
-  }
-  const runtimeParts = [];
-  if (hasImperativeTsxClientRuntime(source)) {
-    runtimeParts.push(`<script type="application/json" id="cms-tsx-props-${code}">${safeJsonForScript(props)}</script>`);
-  }
-  runtimeParts.push(`<script type="module" src="/${TEMPLATE_CLIENT_ASSET_DIR}/${code}.js"></script>`);
-  const runtimeHtml = runtimeParts.join('\n');
-
-  if (/<\/body>/i.test(html)) {
-    return html.replace(/<\/body>/i, `${runtimeHtml}\n</body>`);
-  }
-  return `${html}\n${runtimeHtml}`;
-}
-
-function hasImperativeTsxClientRuntime(source) {
-  return /\bexport\s+(?:function|const|let|var)\s+client\b/.test(String(source || ''));
-}
-
-function safeJsonForScript(value) {
-  return JSON.stringify(stripNonSerializableTemplateValues(value) ?? {})
-    .replace(/</g, '\\u003c')
-    .replace(/>/g, '\\u003e')
-    .replace(/&/g, '\\u0026')
-    .replace(/\u2028/g, '\\u2028')
-    .replace(/\u2029/g, '\\u2029');
-}
-
-function stripNonSerializableTemplateValues(value) {
-  if (value == null) {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map((item) => stripNonSerializableTemplateValues(item));
-  }
-  if (typeof value === 'object') {
-    const output = {};
-    for (const [key, item] of Object.entries(value)) {
-      if (typeof item !== 'function' && item !== undefined) {
-        output[key] = stripNonSerializableTemplateValues(item);
-      }
-    }
-    return output;
-  }
-  if (typeof value === 'function' || value === undefined) {
-    return undefined;
-  }
-  return value;
-}
-
-function renderCmsTemplate(content, props, templateContext) {
-  const components = buildCmsComponentMap(templateContext);
-  return renderCmsTemplateContent(content, props, templateContext, components, 0);
-}
-
-function renderCmsTemplateContent(content, props, templateContext, components, depth) {
-  const loopsExpanded = expandCmsLoops(content, props, templateContext, components, depth);
-  const componentExpanded = expandCmsComponents(loopsExpanded, components, templateContext, props, depth);
-  const rawExpanded = componentExpanded.replace(/\{\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}\}/g, (_, pathName) => {
-    return stringifyTemplateValue(resolveTemplateValue(props, pathName));
-  });
-  const htmlEscaped = rawExpanded.replace(/\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}/g, (_, pathName) => {
-    return escapeHtml(stringifyTemplateValue(resolveTemplateValue(props, pathName)));
-  });
-  return expandLegacyCommonPlaceholders(htmlEscaped, templateContext);
-}
-
-function buildCmsComponentMap(templateContext) {
-  const components = new Map();
-
-  for (const item of listPublishedComponents()) {
-    components.set(String(item.code || '').toLowerCase(), {
-      code: item.code || '',
-      engine: item.engine || 'html',
-      content: item.content || ''
-    });
-  }
-
-  for (const [name, content] of templateContext.customLabels.entries()) {
-    const code = legacyLabelToComponentCode(name);
-    if (code && (!components.has(code) || !components.get(code)?.content)) {
-      components.set(code, {
-        code,
-        engine: 'html',
-        content: content || ''
-      });
-    }
-  }
-
-  return components;
-}
-
-function expandCmsComponents(content, components, templateContext, props, depth) {
-  let html = String(content || '');
-  for (let pass = 0; pass < 10; pass += 1) {
-    let changed = false;
-    html = html.replace(/#component\(\s*["']([A-Za-z0-9_-]+)["']\s*\)#/g, (_, code) => {
-      changed = true;
-      return renderCmsComponent(code, components, templateContext, props, depth + 1);
-    });
-    if (!changed) {
-      break;
-    }
-  }
-  return html;
-}
-
-function renderCmsComponent(code, components, templateContext, props, depth) {
-  if (depth > 10) {
-    return '';
-  }
-  const component = components.get(String(code || '').toLowerCase());
-  if (!component?.content) {
-    return '';
-  }
-
-  if (component.engine === 'tsx') {
-    const templateProps = {
-      ...props,
-      component: (nestedCode, extraProps = {}) => renderCmsComponent(nestedCode, components, templateContext, { ...props, ...extraProps }, depth + 1)
-    };
-    return expandLegacyCommonPlaceholders(renderTsxTemplate(component.content, templateProps), templateContext);
-  }
-
-  return renderCmsTemplateContent(component.content, props, templateContext, components, depth + 1);
-}
-
-function expandCmsLoops(content, props, templateContext, components, depth) {
-  return String(content || '').replace(/#loop\(([A-Za-z0-9_.-]+)\)#([\s\S]*?)#\/loop#/g, (_, pathName, rowTemplate) => {
-    const items = resolveTemplateValue(props, pathName);
-    if (!Array.isArray(items)) {
-      return '';
-    }
-    return items.map((item) => {
-      const rowProps = { ...props, item };
-      return renderCmsTemplateContent(rowTemplate, rowProps, templateContext, components, depth + 1);
-    }).join('');
-  });
-}
-
-function resolveTemplateValue(source, pathName) {
-  const parts = String(pathName || '').split('.').filter(Boolean);
-  let current = source;
-  for (const part of parts) {
-    if (current == null) {
-      return '';
-    }
-    current = current[part];
-  }
-  return current ?? '';
-}
-
-function stringifyTemplateValue(value) {
-  if (value == null) {
-    return '';
-  }
-  if (typeof value === 'string') {
-    return value;
-  }
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-  return '';
 }
 
 function legacyLabelToComponentCode(value) {
@@ -1746,40 +1532,6 @@ function cleanupManagedStaticFiles(outputRoot) {
   }
 }
 
-function cleanupTemplateClientBundles(outputRoot) {
-  const dirPath = path.resolve(outputRoot, TEMPLATE_CLIENT_ASSET_DIR);
-  if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
-    fs.rmSync(dirPath, { recursive: true, force: true });
-  }
-}
-
-function buildRegisteredTsxClientBundles(outputRoot) {
-  if (registeredTsxClientTemplates.size === 0) {
-    return;
-  }
-
-  const manifestPath = path.join(outputRoot, '.cms-template-client-manifest.json');
-  const manifest = {
-    templates: Array.from(registeredTsxClientTemplates.values())
-  };
-
-  try {
-    fs.writeFileSync(manifestPath, JSON.stringify(manifest), 'utf8');
-    execFileSync(process.execPath, [
-      path.join(SERVER_ROOT, 'scripts', 'build-template-client-bundles.mjs'),
-      manifestPath,
-      outputRoot
-    ], {
-      stdio: 'inherit'
-    });
-  } finally {
-    registeredTsxClientTemplates.clear();
-    if (fs.existsSync(manifestPath)) {
-      fs.unlinkSync(manifestPath);
-    }
-  }
-}
-
 function cleanupHtmlFilesRecursive(currentPath) {
   for (const entry of fs.readdirSync(currentPath, { withFileTypes: true })) {
     const fullPath = path.join(currentPath, entry.name);
@@ -1803,14 +1555,6 @@ function writeTextFile(outputRoot, relativePath, content) {
   const filePath = path.resolve(outputRoot, relativePath);
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, normalizeLegacyRichTextHtml(content), 'utf8');
-}
-
-function sanitizeTemplateCode(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '_')
-    .replace(/^_+|_+$/g, '');
 }
 
 function groupBy(items, keyFn) {

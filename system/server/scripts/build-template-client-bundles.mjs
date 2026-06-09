@@ -87,7 +87,9 @@ import * as TemplateModule from './template.tsx';
 
 const templateCode = ${JSON.stringify(code)};
 const pageProps = readPageProps(templateCode);
-const roots = Array.from(document.querySelectorAll('[data-cms-client-root]'));
+const roots = Array.from(document.querySelectorAll('[data-cms-client-root]')).filter((root) => {
+  return (root.getAttribute('data-cms-client-template') || templateCode) === templateCode;
+});
 
 for (const root of roots) {
   const name = root.getAttribute('data-cms-client-root') || 'default';

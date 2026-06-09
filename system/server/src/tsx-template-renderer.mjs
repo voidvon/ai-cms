@@ -1,5 +1,6 @@
 import vm from 'node:vm';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { ADMIN_APP_ROOT } from './config.mjs';
 
@@ -8,15 +9,59 @@ const adminRequire = createRequire(path.join(ADMIN_APP_ROOT, 'package.json'));
 let cachedReact = null;
 let cachedRenderToStaticMarkup = null;
 let cachedSucrase = null;
+const compiledTemplateCache = new Map();
+const MAX_COMPILED_TEMPLATE_CACHE_SIZE = 200;
 
-export function renderTsxTemplate(source, props = {}) {
+export function renderTsxTemplate(source, props = {}, options = {}) {
   const React = loadReact();
   const renderToStaticMarkup = loadRenderToStaticMarkup();
   const rawFragments = [];
-  const Component = compileTsxComponent(source, React);
-  const element = React.createElement(Component, buildTemplateProps(props, React, rawFragments));
+  const Component = getCompiledTsxComponent(source, React, options);
+  const element = React.createElement(Component, buildTemplateProps(props, React, rawFragments, options));
   const markup = replaceRawMarkers(renderToStaticMarkup(element), rawFragments);
   return markup.startsWith('<html') ? `<!DOCTYPE html>${markup}` : markup;
+}
+
+export function clearTsxTemplateCache() {
+  compiledTemplateCache.clear();
+}
+
+export function getTsxTemplateCacheStats() {
+  return {
+    size: compiledTemplateCache.size,
+    maxSize: MAX_COMPILED_TEMPLATE_CACHE_SIZE
+  };
+}
+
+function getCompiledTsxComponent(source, React, options = {}) {
+  const cacheKey = buildCompiledTemplateCacheKey(source, options);
+  if (compiledTemplateCache.has(cacheKey)) {
+    const cached = compiledTemplateCache.get(cacheKey);
+    compiledTemplateCache.delete(cacheKey);
+    compiledTemplateCache.set(cacheKey, cached);
+    return cached;
+  }
+
+  const Component = compileTsxComponent(source, React);
+  compiledTemplateCache.set(cacheKey, Component);
+  pruneCompiledTemplateCache();
+  return Component;
+}
+
+function buildCompiledTemplateCacheKey(source, options = {}) {
+  const templateCode = String(options.templateCode || '').trim();
+  const hash = createHash('sha256').update(String(source || '')).digest('hex');
+  return `${templateCode}:${hash}`;
+}
+
+function pruneCompiledTemplateCache() {
+  while (compiledTemplateCache.size > MAX_COMPILED_TEMPLATE_CACHE_SIZE) {
+    const oldestKey = compiledTemplateCache.keys().next().value;
+    if (!oldestKey) {
+      return;
+    }
+    compiledTemplateCache.delete(oldestKey);
+  }
 }
 
 function compileTsxComponent(source, React) {
@@ -60,7 +105,9 @@ function compileTsxComponent(source, React) {
   return Component;
 }
 
-function buildTemplateProps(props, React, rawFragments) {
+function buildTemplateProps(props, React, rawFragments, options = {}) {
+  const templateCode = String(options.templateCode || '').trim();
+
   function raw(value) {
     return { __html: String(value ?? '') };
   }
@@ -74,10 +121,14 @@ function buildTemplateProps(props, React, rawFragments) {
   }
 
   function ClientOnly({ name = 'default', props: clientProps = {}, children }) {
-    return React.createElement('div', {
+    const attributes = {
       'data-cms-client-root': String(name || 'default'),
       'data-cms-client-props': JSON.stringify(clientProps ?? {})
-    }, children);
+    };
+    if (templateCode) {
+      attributes['data-cms-client-template'] = templateCode;
+    }
+    return React.createElement('div', attributes, children);
   }
 
   return {

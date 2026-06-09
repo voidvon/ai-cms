@@ -1,4 +1,6 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
+import { renderTsxTemplate } from '../tsx-template-renderer.mjs';
+import { escapeHtml } from '../utils/html.mjs';
 
 export const TEMPLATE_TYPES = ['home', 'list', 'content', 'component'];
 export const TEMPLATE_ENGINES = ['html', 'tsx'];
@@ -301,6 +303,7 @@ export function publishTemplate(id, note = null) {
   if (!existing) {
     return null;
   }
+  validateTemplateForPublish(existing);
 
   const nextVersion = (queryOne('SELECT coalesce(max(version_no), 0) + 1 AS next_version FROM template_versions WHERE template_id = ?', [id])?.next_version) || 1;
   if (existing.published_content != null) {
@@ -328,6 +331,14 @@ export function deleteTemplate(id) {
   if (!existing) {
     return null;
   }
+  const dependencyInfo = getTemplateDependencyInfo(id);
+  if (dependencyInfo.referenced_by.length > 0) {
+    const names = dependencyInfo.referenced_by.map((item) => item.code).join(', ');
+    throw new Error(`模板正在被其他模板引用，不能删除：${names}`);
+  }
+  if (dependencyInfo.bindings.length > 0) {
+    throw new Error('模板已绑定到分类或站点，不能删除，请先取消模板绑定');
+  }
   execute('DELETE FROM templates WHERE id = ?', [id]);
   return existing;
 }
@@ -343,6 +354,841 @@ export function listTemplateVersions(templateId) {
     `,
     [templateId]
   );
+}
+
+export function restoreTemplateVersion(templateId, versionId) {
+  const template = getTemplateById(templateId);
+  if (!template) {
+    return null;
+  }
+
+  const version = queryOne(
+    `
+      SELECT id, template_id, version_no, engine, content, note, created_at
+      FROM template_versions
+      WHERE id = ? AND template_id = ?
+      LIMIT 1
+    `,
+    [versionId, template.id]
+  );
+  if (!version) {
+    return null;
+  }
+
+  const updated = updateTemplate(template.id, {
+    ...template,
+    engine: version.engine || template.engine || 'html',
+    content: version.content || ''
+  });
+  return publishTemplate(updated.id, `恢复版本 #${version.version_no}`);
+}
+
+export function getTemplateDependencyInfo(templateId) {
+  ensureTemplatesSchema();
+  const template = getTemplateById(templateId);
+  if (!template) {
+    return null;
+  }
+
+  const allTemplates = listTemplates();
+  const byCode = new Map(allTemplates.map((item) => [normalizeCode(item.code), item]));
+  const targetCode = normalizeCode(template.code);
+  const references = extractLiteralComponentReferences(template.content).map((code) => {
+    const referenced = byCode.get(code);
+    return {
+      code,
+      exists: Boolean(referenced),
+      template_id: referenced?.id || null,
+      name: referenced?.name || '',
+      type: referenced?.type || '',
+      status: referenced?.status || ''
+    };
+  });
+
+  const referencedBy = [];
+  for (const item of allTemplates) {
+    if (item.id === template.id) {
+      continue;
+    }
+    const refs = extractLiteralComponentReferences(item.content);
+    if (!refs.includes(targetCode)) {
+      continue;
+    }
+    referencedBy.push({
+      id: item.id,
+      code: item.code,
+      name: item.name,
+      type: item.type,
+      status: item.status
+    });
+  }
+
+  const bindings = queryAll(
+    `
+      SELECT id, target_type, target_id, template_type, template_id, created_at, updated_at
+      FROM template_bindings
+      WHERE template_id = ?
+      ORDER BY target_type ASC, coalesce(target_id, 0) ASC, template_type ASC
+    `,
+    [template.id]
+  );
+
+  return {
+    template: {
+      id: template.id,
+      code: template.code,
+      name: template.name,
+      type: template.type,
+      status: template.status
+    },
+    references,
+    referenced_by: referencedBy,
+    bindings
+  };
+}
+
+export function validateTemplateForPublish(template) {
+  ensureTemplatesSchema();
+  const normalizedTemplate = normalizeTemplateInput(template);
+  const content = normalizedTemplate.content || '';
+  const errors = [];
+
+  for (const componentCode of extractLiteralComponentReferences(content)) {
+    const component = getTemplateByCode(componentCode);
+    const isSelf = normalizeCode(componentCode) === normalizedTemplate.code;
+    if (!component) {
+      errors.push(`组件不存在：${componentCode}`);
+      continue;
+    }
+    if (component.type !== 'component') {
+      errors.push(`引用的不是组件模板：${componentCode}`);
+      continue;
+    }
+    if (!isSelf && component.status !== 'published') {
+      errors.push(`组件未发布：${componentCode}`);
+    }
+  }
+
+  if (normalizedTemplate.engine === 'html') {
+    validateHtmlTemplateContent(content, errors);
+  }
+
+  if (normalizedTemplate.engine === 'tsx') {
+    try {
+      renderTsxTemplate(content, buildTemplateValidationProps(normalizedTemplate));
+    } catch (error) {
+      errors.push(`TSX 编译或渲染失败：${formatTemplateValidationError(error)}`);
+    }
+  }
+
+  if (errors.length > 0) {
+    throw new Error(`模板发布校验失败：${errors.join('；')}`);
+  }
+
+  return { valid: true };
+}
+
+export function renderTemplatePreview(input) {
+  ensureTemplatesSchema();
+  const template = normalizeTemplateInput(input);
+  validateTemplateForPublish(template);
+  const components = buildPreviewComponentMap(template);
+  const props = buildTemplatePreviewProps(template, input?.preview_context);
+  const html = ensurePreviewBaseHref(renderPreviewTemplate(template, props, components, 0));
+  return { html };
+}
+
+function buildTemplatePreviewProps(template, previewContext = {}) {
+  const mode = String(previewContext?.mode || 'auto').trim();
+  const props = buildTemplateValidationProps(template);
+  const effectiveMode = mode === 'auto' ? inferPreviewMode(template) : mode;
+
+  if (effectiveMode === 'home') {
+    return {
+      ...props,
+      currentPage: { type: 'home', title: props.meta['1']?.title || '首页', url: '/index.html' },
+      newsIndexHtml: buildPreviewArticleLinks('/news/detail', 10),
+      featuredProductsHtml: buildPreviewFeaturedProductsHtml(),
+      featuredProductLinksHtml: buildPreviewProductLinksHtml(),
+      serviceIndexHtml: buildPreviewArticleLinks('/service/detail', 10)
+    };
+  }
+
+  if (effectiveMode === 'product-list') {
+    const category = getPreviewProductCategory();
+    const products = getPreviewProducts(8);
+    return {
+      ...props,
+      ...buildPreviewPageContext({
+        pageType: 'product-list',
+        title: category.name,
+        url: `/valve/${category.id}.html`,
+        section: { type: 'product', name: '产品展示', url: '/valve/' },
+        category,
+        content: null,
+        breadcrumbItems: [
+          { label: '产品展示', url: '/valve/' },
+          { label: category.name, url: '' }
+        ]
+      }),
+      smallName: category.name,
+      bigId: category.parent_id || category.id,
+      bigName: category.name,
+      prodKeywords: category.seo_keywords || category.name,
+      productsSmallCatHtml: `<span class="abv">【<a href="/products/${category.id}.html">${escapeHtml(category.name)}</a>】</span>`,
+      items: products.map((item) => ({
+        id: item.id,
+        name: item.name || '',
+        url: `/Product/${item.id}.html`,
+        image: item.small_image || '/skin/dfpic.gif',
+        summary: item.summary || ''
+      })),
+      pagerHtml: '<div class="page_list">共 8 条信息 1/1 页</div>'
+    };
+  }
+
+  if (effectiveMode === 'product-detail') {
+    const product = getPreviewProduct();
+    const category = getPreviewProductCategory(product.category_id);
+    return {
+      ...props,
+      ...buildPreviewPageContext({
+        pageType: 'product-detail',
+        title: product.name,
+        url: `/product/${product.id}.html`,
+        section: { type: 'product', name: '产品展示', url: '/valve/' },
+        category,
+        content: { id: product.id, title: product.name, name: product.name, type: 'product', url: `/product/${product.id}.html` },
+        breadcrumbItems: [
+          { label: '产品展示', url: '/valve/' },
+          { label: category.name, url: `/valve/${category.id}.html` },
+          { label: product.name, url: '' }
+        ]
+      }),
+      title: product.name,
+      prodKeywords: product.keywords || product.name,
+      prodDescription: product.summary || '',
+      image: product.small_image || '/skin/dfpic.gif',
+      code: product.code || '',
+      relatedProductsHtml: buildPreviewProductLinksHtml(4),
+      bodyHtml: product.content_html || product.summary || ''
+    };
+  }
+
+  if (effectiveMode === 'article-list') {
+    const category = getPreviewNewsCategory();
+    const articles = getPreviewArticles(6);
+    return {
+      ...props,
+      ...buildPreviewPageContext({
+        pageType: 'article-list',
+        title: category.name,
+        url: `/news/${category.id}.html`,
+        section: { type: 'news', name: '新闻资讯', url: '/news/' },
+        category,
+        content: null,
+        breadcrumbItems: [
+          { label: '新闻资讯', url: '/news/' },
+          { label: category.name, url: '' }
+        ]
+      }),
+      section: 'news',
+      sectionDir: 'news',
+      sectionLabel: '新闻资讯',
+      sectionCategoryHtml: `<a href="/news/${category.id}.html">${escapeHtml(category.name)}</a>`,
+      categoryId: category.id,
+      title: category.name,
+      items: articles.map((item) => ({
+        id: item.id,
+        title: item.title || '',
+        url: `detail/${item.id}.html`,
+        date: formatPreviewDate(item.created_at),
+        summary: item.summary || '',
+        summaryClassName: 'Font_000000_a'
+      })),
+      pagerHtml: '<div class="page_list">共 6 条信息 1/1 页</div>'
+    };
+  }
+
+  if (effectiveMode === 'article-detail') {
+    const article = getPreviewArticle();
+    const category = getPreviewNewsCategory(article.category_id);
+    return {
+      ...props,
+      ...buildPreviewPageContext({
+        pageType: 'article-detail',
+        title: article.title,
+        url: `/news/detail/${article.id}.html`,
+        section: { type: 'news', name: '新闻资讯', url: '/news/' },
+        category,
+        content: { id: article.id, title: article.title, name: article.title, type: 'news-article', url: `/news/detail/${article.id}.html` },
+        breadcrumbItems: [
+          { label: '新闻资讯', url: '/news/' },
+          { label: category.name, url: `/news/${category.id}.html` },
+          { label: article.title, url: '' }
+        ]
+      }),
+      section: 'news',
+      sectionDir: 'news',
+      sectionLabel: '新闻资讯',
+      sectionCategoryHtml: `<a href="/news/${category.id}.html">${escapeHtml(category.name)}</a>`,
+      title: article.title,
+      newsKeywords: article.keywords || article.title,
+      newsDescription: article.summary || '',
+      typeId: article.category_id || category.id,
+      catName: category.name,
+      bodyHtml: article.content_html || article.summary || '',
+      previousHtml: '<span class="Font_2e4690_a">没有上一篇</span>',
+      nextHtml: '<span class="Font_2e4690_a">没有下一篇</span>'
+    };
+  }
+
+  if (effectiveMode === 'content') {
+    const category = getPreviewCorporationCategory();
+    return {
+      ...props,
+      ...buildPreviewPageContext({
+        pageType: 'content',
+        title: category.name,
+        url: `/about/about-${category.id}.html`,
+        section: { type: 'corporation', name: '公司栏目', url: '/about/' },
+        category,
+        content: null,
+        breadcrumbItems: [{ label: category.name, url: '' }]
+      }),
+      title: category.name,
+      contentHtml: category.content_html || '公司栏目内容预览'
+    };
+  }
+
+  if (effectiveMode === 'contact') {
+    return {
+      ...props,
+      ...buildPreviewPageContext({
+        pageType: 'contact',
+        title: '联系我们',
+        url: '/contact.html',
+        section: { type: 'content', name: '联系我们', url: '/contact.html' },
+        category: null,
+        content: null,
+        breadcrumbItems: [{ label: '联系我们', url: '' }]
+      }),
+      contactTableHtml: '<table><tr><td>电话</td><td>021-00000000</td></tr><tr><td>地址</td><td>示例地址</td></tr></table>'
+    };
+  }
+
+  if (effectiveMode === 'message') {
+    return {
+      ...props,
+      ...buildPreviewPageContext({
+        pageType: 'message',
+        title: '在线留言',
+        url: '/msg.html',
+        section: { type: 'content', name: '在线留言', url: '/msg.html' },
+        category: null,
+        content: null,
+        breadcrumbItems: [{ label: '在线留言', url: '' }]
+      }),
+      messageSidebarProductsHtml: buildPreviewProductLinksHtml(4)
+    };
+  }
+
+  if (effectiveMode === 'job-list') {
+    return {
+      ...props,
+      ...buildPreviewPageContext({
+        pageType: 'job-list',
+        title: '招聘管理',
+        url: '/job/1.html',
+        section: { type: 'job', name: '招聘管理', url: '/job/' },
+        category: null,
+        content: null,
+        breadcrumbItems: [{ label: '招聘管理', url: '' }]
+      }),
+      items: [
+        { id: 1, title: '销售工程师', url: 'detail/1.html', openings: '2', address: '上海', date: '2026-06-09' },
+        { id: 2, title: '技术支持', url: 'detail/2.html', openings: '1', address: '上海', date: '2026-06-09' }
+      ],
+      pagerHtml: '<div class="page_list">共 2 条信息 1/1 页</div>'
+    };
+  }
+
+  return props;
+}
+
+function inferPreviewMode(template) {
+  if (template.type === 'home') {
+    return 'home';
+  }
+  if (template.code === 'list_product') {
+    return 'product-list';
+  }
+  if (template.code === 'list_article') {
+    return 'article-list';
+  }
+  if (template.code === 'list_job') {
+    return 'job-list';
+  }
+  if (template.code === 'content_product') {
+    return 'product-detail';
+  }
+  if (template.code === 'content_article') {
+    return 'article-detail';
+  }
+  if (template.code === 'content_contact') {
+    return 'contact';
+  }
+  if (template.code === 'content_message') {
+    return 'message';
+  }
+  if (template.type === 'content') {
+    return 'content';
+  }
+  return 'generic';
+}
+
+function ensurePreviewBaseHref(html) {
+  const markup = String(html || '');
+  if (/<base\b/i.test(markup)) {
+    return markup.replace(/<base\b(?![^>]*\bhref=)/i, '<base href="/"');
+  }
+  if (/<head[^>]*>/i.test(markup)) {
+    return markup.replace(/<head[^>]*>/i, (head) => `${head}<base href="/" />`);
+  }
+  return markup;
+}
+
+function buildPreviewPageContext({ pageType, title, url, section, category, content, breadcrumbItems }) {
+  const normalizedCategory = category ? {
+    id: toInteger(category.id, 0),
+    type: section?.type || '',
+    name: category.name || '',
+    url: category.url || url || '',
+    parentId: toInteger(category.parent_id, 0),
+    parentName: '',
+    seoKeywords: category.seo_keywords || '',
+    seoDescription: category.seo_description || ''
+  } : null;
+  const normalizedItems = [
+    { label: '公司主页', url: '/index.html' },
+    ...(breadcrumbItems || [])
+  ];
+
+  return {
+    currentPage: { type: pageType || '', title: title || '', url: url || '' },
+    currentSection: section ? { type: section.type || '', name: section.name || '', url: section.url || '' } : null,
+    currentCategory: normalizedCategory ? [normalizedCategory] : [],
+    currentCategoryItem: normalizedCategory,
+    parentCategory: null,
+    currentContent: content ? {
+      id: toInteger(content.id, 0),
+      type: content.type || '',
+      title: content.title || content.name || '',
+      name: content.name || content.title || '',
+      url: content.url || ''
+    } : null,
+    breadcrumb: {
+      prefixHtml: '<span>当前位置 : </span>',
+      separatorHtml: ' - ',
+      html: normalizedItems.map((item) => item.url ? `<a href="${escapeHtml(item.url)}">${escapeHtml(item.label)}</a>` : escapeHtml(item.label)).join(' - '),
+      items: normalizedItems
+    }
+  };
+}
+
+function getPreviewProduct() {
+  return queryOne(
+    `
+      SELECT id, category_id, name, code, summary, content_html, small_image, keywords
+      FROM products
+      ORDER BY is_featured_home DESC, sort_order ASC, id DESC
+      LIMIT 1
+    `
+  ) || {
+    id: 1,
+    category_id: 1,
+    name: '示例产品',
+    code: 'DEMO',
+    summary: '示例产品摘要',
+    content_html: '示例产品正文',
+    small_image: '/skin/dfpic.gif',
+    keywords: '示例关键词'
+  };
+}
+
+function getPreviewProducts(limit = 8) {
+  const rows = queryAll(
+    `
+      SELECT id, category_id, name, code, summary, content_html, small_image, keywords
+      FROM products
+      ORDER BY is_featured_home DESC, sort_order ASC, id DESC
+      LIMIT ?
+    `,
+    [limit]
+  );
+  return rows.length > 0 ? rows : [getPreviewProduct()];
+}
+
+function getPreviewProductCategory(id = null) {
+  const row = id ? queryOne(
+    `
+      SELECT id, name, parent_id, seo_keywords, seo_description
+      FROM product_categories
+      WHERE id = ?
+      LIMIT 1
+    `,
+    [id]
+  ) : queryOne(
+    `
+      SELECT id, name, parent_id, seo_keywords, seo_description
+      FROM product_categories
+      ORDER BY parent_id ASC, sort_order ASC, id ASC
+      LIMIT 1
+    `
+  );
+  return row || { id: 1, name: '产品展示', parent_id: 0, seo_keywords: '产品展示', seo_description: '' };
+}
+
+function getPreviewArticle() {
+  return queryOne(
+    `
+      SELECT id, category_id, title, summary, content_html, keywords, created_at
+      FROM news
+      ORDER BY coalesce(created_at, '') DESC, id DESC
+      LIMIT 1
+    `
+  ) || {
+    id: 1,
+    category_id: 1,
+    title: '示例文章',
+    summary: '示例文章摘要',
+    content_html: '示例文章正文',
+    keywords: '示例关键词',
+    created_at: new Date().toISOString()
+  };
+}
+
+function getPreviewArticles(limit = 6) {
+  const rows = queryAll(
+    `
+      SELECT id, category_id, title, summary, content_html, keywords, created_at
+      FROM news
+      ORDER BY coalesce(created_at, '') DESC, id DESC
+      LIMIT ?
+    `,
+    [limit]
+  );
+  return rows.length > 0 ? rows : [getPreviewArticle()];
+}
+
+function getPreviewNewsCategory(id = null) {
+  const row = id ? queryOne(
+    `
+      SELECT id, name, parent_id
+      FROM news_categories
+      WHERE id = ?
+      LIMIT 1
+    `,
+    [id]
+  ) : queryOne(
+    `
+      SELECT id, name, parent_id
+      FROM news_categories
+      ORDER BY parent_id ASC, sort_order ASC, id ASC
+      LIMIT 1
+    `
+  );
+  return row || { id: 1, name: '新闻资讯', parent_id: 0 };
+}
+
+function getPreviewCorporationCategory() {
+  const row = queryOne(
+    `
+      SELECT id, name, parent_id, legacy_extra
+      FROM corporation_categories
+      WHERE coalesce(is_external, 0) = 0
+      ORDER BY parent_id ASC, sort_order ASC, id ASC
+      LIMIT 1
+    `
+  );
+  if (!row) {
+    return { id: 1, name: '关于我们', parent_id: 0, content_html: '公司栏目内容预览' };
+  }
+  const legacyExtra = parsePreviewLegacyExtra(row.legacy_extra);
+  return {
+    ...row,
+    content_html: String(legacyExtra.Centern ?? legacyExtra.content_html ?? '公司栏目内容预览')
+  };
+}
+
+function parsePreviewLegacyExtra(value) {
+  if (!value) {
+    return {};
+  }
+  try {
+    return JSON.parse(value);
+  } catch {
+    return {};
+  }
+}
+
+function buildPreviewFeaturedProductsHtml() {
+  return getPreviewProducts(8).map((item) => (
+    `<li><img src="${escapeHtml(item.small_image || '/skin/dfpic.gif')}" width="120" height="120" border="0" alt="${escapeHtml(item.name || '')}"><li><a href="/Product/${item.id}.html" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${escapeHtml(item.summary || '')}</li></li>`
+  )).join('');
+}
+
+function buildPreviewProductLinksHtml(limit = 8) {
+  return getPreviewProducts(limit).map((item) => `<li><a href="/Product/${item.id}.html">${escapeHtml(item.name || '')}</a></li>`).join('');
+}
+
+function buildPreviewArticleLinks(prefix, limit = 10) {
+  return getPreviewArticles(limit).map((item) => `<li><a href="${prefix}/${item.id}.html">${escapeHtml(item.title || '')}</a></li>`).join('');
+}
+
+function formatPreviewDate(value) {
+  return String(value || '').slice(0, 10);
+}
+
+function buildPreviewComponentMap(currentTemplate) {
+  const components = new Map();
+  for (const item of listTemplates({ type: 'component' })) {
+    components.set(normalizeCode(item.code), {
+      code: item.code,
+      engine: item.engine || 'html',
+      content: item.content || ''
+    });
+  }
+
+  if (currentTemplate.type === 'component') {
+    components.set(currentTemplate.code, {
+      code: currentTemplate.code,
+      engine: currentTemplate.engine,
+      content: currentTemplate.content
+    });
+  }
+
+  return components;
+}
+
+function renderPreviewTemplate(template, props, components, depth) {
+  if (template.engine === 'tsx') {
+    const templateProps = {
+      ...props,
+      component: (code, extraProps = {}) => renderPreviewComponent(code, components, { ...props, ...extraProps }, depth + 1)
+    };
+    return renderTsxTemplate(template.content, templateProps, {
+      templateCode: template.code
+    });
+  }
+
+  return renderPreviewHtmlContent(template.content, props, components, depth);
+}
+
+function renderPreviewComponent(code, components, props, depth) {
+  if (depth > 10) {
+    return '';
+  }
+  const component = components.get(normalizeCode(code));
+  if (!component?.content) {
+    return `<!-- missing component: ${escapeHtml(code)} -->`;
+  }
+  return renderPreviewTemplate(component, props, components, depth + 1);
+}
+
+function renderPreviewHtmlContent(content, props, components, depth) {
+  const loopsExpanded = String(content || '').replace(/#loop\(([A-Za-z0-9_.-]+)\)#([\s\S]*?)#\/loop#/g, (_, pathName, rowTemplate) => {
+    const items = resolvePreviewValue(props, pathName);
+    if (!Array.isArray(items)) {
+      return '';
+    }
+    return items.map((item) => renderPreviewHtmlContent(rowTemplate, { ...props, item }, components, depth + 1)).join('');
+  });
+  const componentExpanded = loopsExpanded.replace(/#component\(\s*["']([A-Za-z0-9_-]+)["']\s*\)#/g, (_, code) => {
+    return renderPreviewComponent(code, components, props, depth + 1);
+  });
+  const rawExpanded = componentExpanded.replace(/\{\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}\}/g, (_, pathName) => {
+    return stringifyPreviewValue(resolvePreviewValue(props, pathName));
+  });
+  return rawExpanded.replace(/\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}/g, (_, pathName) => {
+    return escapeHtml(stringifyPreviewValue(resolvePreviewValue(props, pathName)));
+  });
+}
+
+function resolvePreviewValue(source, pathName) {
+  const parts = String(pathName || '').split('.').filter(Boolean);
+  let current = source;
+  for (const part of parts) {
+    if (current == null) {
+      return '';
+    }
+    current = current[part];
+  }
+  return current ?? '';
+}
+
+function stringifyPreviewValue(value) {
+  if (value == null) {
+    return '';
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  return '';
+}
+
+function getTemplateByCode(code) {
+  ensureTemplatesSchema();
+  return queryOne(
+    `
+      SELECT id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
+      FROM templates
+      WHERE code = ?
+      LIMIT 1
+    `,
+    [normalizeCode(code)]
+  ) || null;
+}
+
+function extractLiteralComponentReferences(content) {
+  const refs = new Set();
+  const source = String(content || '');
+  const patterns = [
+    /#component\(\s*["']([A-Za-z0-9_-]+)["']\s*\)#/g,
+    /\bcomponent\(\s*["']([A-Za-z0-9_-]+)["']/g
+  ];
+
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(source)) !== null) {
+      refs.add(normalizeCode(match[1]));
+    }
+  }
+
+  return Array.from(refs).filter(Boolean);
+}
+
+function validateHtmlTemplateContent(content, errors) {
+  const source = String(content || '');
+  const loopStarts = source.match(/#loop\([A-Za-z0-9_.-]+\)#/g) || [];
+  const loopEnds = source.match(/#\/loop#/g) || [];
+  if (loopStarts.length !== loopEnds.length) {
+    errors.push(`HTML 循环标签不匹配：开始 ${loopStarts.length} 个，结束 ${loopEnds.length} 个`);
+  }
+}
+
+function buildTemplateValidationProps(template) {
+  const common = {
+    site: {
+      web_name: '示例网站',
+      company_name: '示例公司',
+      company_phone: '021-00000000',
+      company_fax: '021-00000001',
+      web_mobile: '13800000000',
+      company_email: 'demo@example.com',
+      company_address: '示例地址',
+      web_url: '/',
+      icp_number: '',
+      web_qq: '',
+      web_author: '',
+      web_copyright: ''
+    },
+    meta: {
+      1: { title: '首页标题', meta_keywords: '首页关键词', meta_descriptions: '首页描述' },
+      5: { title: '招聘标题', meta_keywords: '招聘关键词', meta_descriptions: '招聘描述' },
+      12: { title: '留言标题', meta_keywords: '留言关键词', meta_descriptions: '留言描述' }
+    },
+    fragments: {
+      indextopHtml: '',
+      topHtml: '',
+      bottomHtml: '',
+      indexFootHtml: '',
+      aboutHtml: '',
+      productsMenuHtml: '',
+      productsMenuCompactHtml: '',
+      aboutCategoryHtml: '',
+      newsCategoryHtml: '',
+      serviceCategoryHtml: ''
+    },
+    currentPage: { type: template.type || '', title: template.name || '', url: '/' },
+    currentSection: { type: '', name: '', url: '' },
+    currentCategory: [
+      { id: 1, type: 'demo', name: '父级分类', url: '/parent.html', parentId: 0, parentName: '', seoKeywords: '', seoDescription: '' },
+      { id: 2, type: 'demo', name: '当前分类', url: '/current.html', parentId: 1, parentName: '父级分类', seoKeywords: '', seoDescription: '' }
+    ],
+    currentCategoryItem: { id: 2, type: 'demo', name: '当前分类', url: '/current.html', parentId: 1, parentName: '父级分类', seoKeywords: '', seoDescription: '' },
+    parentCategory: { id: 1, type: 'demo', name: '父级分类', url: '/parent.html', parentId: 0, parentName: '', seoKeywords: '', seoDescription: '' },
+    currentContent: { id: 1, type: 'demo', title: '示例内容', name: '示例内容', url: '/detail.html' },
+    breadcrumb: {
+      prefixHtml: '<span>当前位置 : </span>',
+      separatorHtml: ' - ',
+      html: '<a href="/index.html">公司主页</a> - 示例内容',
+      items: [
+        { label: '公司主页', url: '/index.html' },
+        { label: '示例内容', url: '' }
+      ]
+    },
+    component: () => '',
+    item: {
+      id: 1,
+      name: '示例产品',
+      title: '示例标题',
+      url: '/detail.html',
+      image: '/skin/dfpic.gif',
+      summary: '示例摘要',
+      summaryClassName: '',
+      openings: '1',
+      address: '上海',
+      date: '2026-06-09'
+    },
+    items: [],
+    pagerHtml: '',
+    title: '示例标题',
+    bodyHtml: '',
+    contentHtml: '',
+    contactTableHtml: '',
+    messageSidebarProductsHtml: '',
+    relatedProductsHtml: '',
+    previousHtml: '',
+    nextHtml: '',
+    sectionCategoryHtml: '',
+    newsIndexHtml: '',
+    featuredProductsHtml: '',
+    featuredProductLinksHtml: '',
+    serviceIndexHtml: '',
+    productsSmallCatHtml: '',
+    smallName: '示例分类',
+    bigId: 1,
+    bigName: '示例父级分类',
+    prodKeywords: '示例关键词',
+    prodDescription: '示例描述',
+    image: '/skin/dfpic.gif',
+    code: 'DEMO',
+    section: 'news',
+    sectionDir: 'news',
+    sectionLabel: '新闻资讯',
+    categoryId: 1,
+    newsKeywords: '示例关键词',
+    newsDescription: '示例描述',
+    typeId: 1,
+    catName: '示例分类',
+    address: '上海',
+    openings: '1',
+    requirementsHtml: '',
+    contactPerson: '联系人',
+    phone: '021-00000000',
+    date: '2026-06-09'
+  };
+
+  return common;
+}
+
+function formatTemplateValidationError(error) {
+  const message = String(error?.message || error || '未知错误').replace(/\s+/g, ' ').trim();
+  return message || '未知错误';
 }
 
 function normalizeBindingInput(input) {

@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { CorporationCategory, ProductPhoto, Template, TemplateBinding, TemplateVariant, ApiResponse } from '@/types'
+import type { ContentModel, CorporationCategory, ProductPhoto, Template, TemplateBinding, TemplateDependencyInfo, TemplatePreview, TemplateVariant, TemplateVersion, ApiResponse } from '@/types'
 
 // 公司信息分类 API
 export const corporationCategoriesApi = {
@@ -109,6 +109,11 @@ export const templatesApi = {
     return response.data
   },
 
+  preview: async (data: Partial<Template> & { preview_context?: { mode?: string } }) => {
+    const response = await apiClient.post<ApiResponse<TemplatePreview>>('/templates/preview', data)
+    return response.data
+  },
+
   update: async (id: number, data: Partial<Template>) => {
     const response = await apiClient.put<ApiResponse<Template>>(`/templates/${id}`, data)
     return response.data
@@ -116,6 +121,21 @@ export const templatesApi = {
 
   publish: async (id: number, note?: string) => {
     const response = await apiClient.post<ApiResponse<Template>>(`/templates/${id}/publish`, { note })
+    return response.data
+  },
+
+  getDependencies: async (id: number) => {
+    const response = await apiClient.get<ApiResponse<TemplateDependencyInfo>>(`/templates/${id}/dependencies`)
+    return response.data
+  },
+
+  listVersions: async (id: number) => {
+    const response = await apiClient.get<ApiResponse<TemplateVersion[]>>(`/templates/${id}/versions`)
+    return response.data
+  },
+
+  restoreVersion: async (id: number, versionId: number) => {
+    const response = await apiClient.post<ApiResponse<Template>>(`/templates/${id}/versions/${versionId}/restore`)
     return response.data
   },
 
@@ -136,6 +156,18 @@ export const templatesApi = {
 
   deleteBinding: async (id: number) => {
     const response = await apiClient.delete<ApiResponse<TemplateBinding>>(`/template-bindings/${id}`)
+    return response.data
+  },
+}
+
+export const contentModelsApi = {
+  list: async () => {
+    const response = await apiClient.get<ApiResponse<ContentModel[]>>('/content-models')
+    return response.data
+  },
+
+  get: async (id: number) => {
+    const response = await apiClient.get<ApiResponse<ContentModel>>(`/content-models/${id}`)
     return response.data
   },
 }

@@ -158,6 +158,72 @@ export interface TemplateBinding {
   template_code?: string;
 }
 
+export interface TemplateDependencyRef {
+  code: string;
+  exists: boolean;
+  template_id?: number | null;
+  name?: string;
+  type?: Template['type'] | '';
+  status?: Template['status'] | '';
+}
+
+export interface TemplateDependencyUser {
+  id: number;
+  code: string;
+  name: string;
+  type: Template['type'];
+  status: Template['status'];
+}
+
+export interface TemplateDependencyInfo {
+  template: Pick<Template, 'id' | 'code' | 'name' | 'type' | 'status'>;
+  references: TemplateDependencyRef[];
+  referenced_by: TemplateDependencyUser[];
+  bindings: TemplateBinding[];
+}
+
+export interface TemplateVersion {
+  id: number;
+  template_id: number;
+  version_no: number;
+  engine: Template['engine'];
+  content: string;
+  note?: string | null;
+  created_at?: string;
+}
+
+export interface TemplatePreview {
+  html: string;
+}
+
+export interface ContentModelField {
+  id: number;
+  model_id: number;
+  field_name: string;
+  field_label: string;
+  field_type: 'text' | 'richtext' | 'image' | 'boolean' | 'datetime' | 'number' | string;
+  db_type?: string;
+  is_required: number;
+  is_primary: number;
+  is_system: number;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ContentModel {
+  id: number;
+  code: string;
+  name: string;
+  source_table?: string;
+  description?: string;
+  is_system: number;
+  sort_order: number;
+  fields: ContentModelField[];
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface ProductPhoto {
   id: number;
   product_id?: number;
