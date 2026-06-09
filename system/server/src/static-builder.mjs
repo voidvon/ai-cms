@@ -1,13 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { CONTENT_ROOT, SYSTEM_ROOT, TEMPLATE_ROOT } from './config.mjs';
-import { getDb, queryAll, queryOne } from './db.mjs';
+import { CONTENT_ROOT } from './config.mjs';
+import { getDb, queryAll } from './db.mjs';
 import { listContacts } from './services/contacts.mjs';
 import { listNewsCategories } from './services/news-categories.mjs';
 import { listNews } from './services/news.mjs';
 import { listProductCategories } from './services/product-categories.mjs';
 import { listProducts } from './services/products.mjs';
 import { getSiteConfig } from './services/site.mjs';
+import { renderSitePage } from './site-renderer.mjs';
 import { escapeHtml } from './utils/html.mjs';
 import { looksLikeLegacyMojibake } from './utils/legacy-text.mjs';
 
@@ -94,8 +95,7 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
 
 export function buildIndexPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   const templateContext = getLegacyTemplateContext();
-  const template = requireLegacyTemplate(templateContext.variant?.home_index, '首页模板');
-  const html = renderLegacyIndexPage(template, templateContext);
+  const html = renderSitePage('legacy-home', buildLegacyHomePageProps(templateContext), { outputRoot });
 
   writeTextFile(outputRoot, 'index.html', html);
   return createBuildResult('index', '首页', 1, 1);
@@ -103,9 +103,7 @@ export function buildIndexPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
 
 export function buildContactPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   const templateContext = getLegacyTemplateContext();
-  const templatePath = templateContext.variant?.contact || guessSiblingTemplatePath(templateContext.variant?.home_index, 'contact.htm');
-  const template = requireLegacyTemplate(templatePath, '联系页面模板');
-  const html = renderLegacyContactPage(template, templateContext);
+  const html = renderSitePage('legacy-contact', buildLegacyContactPageProps(templateContext), { outputRoot });
 
   writeTextFile(outputRoot, 'contact.html', html);
   return createBuildResult('contact', '联系页面', 1, 1);
@@ -113,9 +111,7 @@ export function buildContactPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
 
 export function buildMessagePage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   const templateContext = getLegacyTemplateContext();
-  const templatePath = templateContext.variant?.msg_index || guessSiblingTemplatePath(templateContext.variant?.home_index, 'msg.htm');
-  const template = requireLegacyTemplate(templatePath, '留言页面模板');
-  const html = renderLegacyMessagePage(template, templateContext);
+  const html = renderSitePage('legacy-message', buildLegacyMessagePageProps(templateContext), { outputRoot });
 
   writeTextFile(outputRoot, 'msg.html', html);
   return createBuildResult('msg', '留言页面', 1, 1);
@@ -123,14 +119,13 @@ export function buildMessagePage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
 
 export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   const templateContext = getLegacyTemplateContext();
-  const template = requireLegacyTemplate(templateContext.variant?.co_index, '公司栏目模板');
   const items = templateContext.corporationCategories
     .filter((item) => normalizeInteger(item.parent_id, 0) === CORPORATION_ROOT_ID && normalizeInteger(item.is_external, 0) === 0);
 
   let filesWritten = 0;
 
   for (const [index, item] of items.entries()) {
-    const html = renderLegacyCorporationPage({ template, templateContext, item });
+    const html = renderSitePage('legacy-content', buildLegacyContentPageProps(templateContext, item), { outputRoot });
 
     writeTextFile(outputRoot, path.join('about', `about-${item.id}.html`), html);
     filesWritten += 1;
@@ -151,7 +146,6 @@ export function buildNewsCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}
     dirName: 'news',
     sectionKey: 'news-lists',
     sectionLabel: '新闻分类页',
-    templateField: 'news_sort1',
     summaryClassName: 'Font_000000_a'
   });
 }
@@ -163,7 +157,6 @@ export function buildServiceCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } =
     dirName: 'service',
     sectionKey: 'service-lists',
     sectionLabel: '服务分类页',
-    templateField: 'service_sort1',
     summaryClassName: '0a'
   });
 }
@@ -172,7 +165,6 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } =
   const categories = listProductCategories();
   const products = listProducts({ visibleOnly: false, limit: 10000 });
   const templateContext = getLegacyTemplateContext();
-  const template = requireLegacyTemplate(templateContext.variant?.produts_sort2, '产品分类模板');
   const categoryMap = new Map(categories.map((item) => [item.id, item]));
   const childrenByParent = groupBy(categories, (item) => normalizeInteger(item.parent_id, 0));
   const productsByCategory = groupBy(products, (item) => normalizeInteger(item.category_id, 0));
@@ -189,7 +181,6 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } =
 
   filesWritten += writeProductCategoryPageSet({
     outputRoot,
-    template,
     templateContext,
     category: rootCategory,
     parent: null,
@@ -213,7 +204,6 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } =
     const children = childrenByParent.get(categoryId) || [];
     filesWritten += writeProductCategoryPageSet({
       outputRoot,
-      template,
       templateContext,
       category,
       parent,
@@ -245,7 +235,6 @@ export function buildJobIndexPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
     `
   );
   const templateContext = getLegacyTemplateContext();
-  const template = requireLegacyTemplate(templateContext.variant?.job_index, '招聘列表模板');
   const pages = paginate(items, JOB_LIST_PAGE_SIZE);
   const pageList = pages.length > 0 ? pages : [[]];
   let filesWritten = 0;
@@ -253,14 +242,13 @@ export function buildJobIndexPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   for (let index = 0; index < pageList.length; index += 1) {
     const pageNumber = index + 1;
     const pageItems = pageList[index];
-    const html = renderLegacyJobIndexPage({
-      template,
+    const html = renderSitePage('legacy-job-list', buildLegacyJobListPageProps({
       templateContext,
       pageItems,
       pageNumber,
       pageCount: pageList.length,
       totalRecords: items.length
-    });
+    }), { outputRoot });
 
     writeTextFile(outputRoot, path.join('job', `${pageNumber}.html`), html);
     filesWritten += 1;
@@ -277,19 +265,17 @@ export function buildJobIndexPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
 export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange } = {}) {
   const products = filterByIdRange(listProducts({ visibleOnly: false, limit: 10000 }), idRange);
   const templateContext = getLegacyTemplateContext();
-  const template = requireLegacyTemplate(templateContext.variant?.produts_detail, '产品详情模板');
   const productMap = groupBy(products, (item) => normalizeInteger(item.category_id, 0));
   let filesWritten = 0;
 
   for (const product of products) {
     const categoryProducts = (productMap.get(normalizeInteger(product.category_id, 0)) || []).filter((item) => item.id !== product.id);
     const relatedProducts = categoryProducts.slice().sort(compareBySortAndId).slice(0, 4);
-    const html = renderLegacyProductDetailPage({
-      template,
+    const html = renderSitePage('legacy-product-detail', buildLegacyProductDetailPageProps({
       templateContext,
       product,
       relatedProducts
-    });
+    }), { outputRoot });
 
     writeTextFile(outputRoot, path.join('product', `${product.id}.html`), html);
     filesWritten += 1;
@@ -305,8 +291,7 @@ export function buildNewsDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange
     rootId: NEWS_ROOT_ID,
     dirName: 'news',
     sectionKey: 'news-details',
-    sectionLabel: '新闻详情页',
-    templateField: 'news_detail'
+    sectionLabel: '新闻详情页'
   });
 }
 
@@ -317,8 +302,7 @@ export function buildServiceDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
     rootId: SERVICE_ROOT_ID,
     dirName: 'service',
     sectionKey: 'service-details',
-    sectionLabel: '服务详情页',
-    templateField: 'service_detail'
+    sectionLabel: '服务详情页'
   });
 }
 
@@ -341,11 +325,10 @@ export function buildJobDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange 
     `
   ), idRange);
   const templateContext = getLegacyTemplateContext();
-  const template = requireLegacyTemplate(templateContext.variant?.job_detail, '招聘详情模板');
   let filesWritten = 0;
 
   for (const job of jobs) {
-    const html = renderLegacyJobDetailPage({ template, templateContext, job });
+    const html = renderSitePage('legacy-job-detail', buildLegacyJobDetailPageProps(templateContext, job), { outputRoot });
 
     writeTextFile(outputRoot, path.join('job', 'detail', `${job.id}.html`), html);
     filesWritten += 1;
@@ -360,12 +343,10 @@ function buildLegacyNewsSectionCategoryPages({
   dirName,
   sectionKey,
   sectionLabel,
-  templateField,
   summaryClassName
 }) {
   const categories = listNewsCategories();
   const templateContext = getLegacyTemplateContext();
-  const template = requireLegacyTemplate(templateContext.variant?.[templateField], `${sectionLabel}模板`);
   const categoryList = categories.filter((item) => normalizeInteger(item.parent_id, 0) === rootId);
   const items = listNews({ limit: 10000 });
   const categoryBuckets = groupBy(items, (item) => normalizeInteger(item.category_id, 0));
@@ -379,9 +360,9 @@ function buildLegacyNewsSectionCategoryPages({
     for (let pageIndex = 0; pageIndex < pageList.length; pageIndex += 1) {
       const pageNumber = pageIndex + 1;
       const currentItems = pageList[pageIndex];
-      const html = renderLegacyNewsCategoryPage({
-        template,
+      const html = renderSitePage('legacy-article-list', buildLegacyArticleListPageProps({
         templateContext,
+        section: dirName === 'service' ? 'service' : 'news',
         category,
         pageItems: currentItems,
         pageNumber,
@@ -389,7 +370,7 @@ function buildLegacyNewsSectionCategoryPages({
         totalRecords: pageItems.length,
         dirName,
         summaryClassName
-      });
+      }), { outputRoot });
 
       const fileName = pageNumber === 1 ? `${category.id}.html` : `${category.id}-${pageNumber}.html`;
       writeTextFile(outputRoot, path.join(dirName, fileName), html);
@@ -415,22 +396,18 @@ function buildLegacyNewsSectionDetailPages({
   rootId,
   dirName,
   sectionKey,
-  sectionLabel,
-  templateField
+  sectionLabel
 }) {
   const categories = listNewsCategories();
   const templateContext = getLegacyTemplateContext();
-  const template = requireLegacyTemplate(templateContext.variant?.[templateField], `${sectionLabel}模板`);
   const allowedCategoryIds = new Set(getDescendantNewsCategoryIds(categories, rootId));
   const categoryMap = new Map(categories.map((item) => [item.id, item]));
-  const items = filterByIdRange(
-    listNews({ limit: 10000 })
-      .filter((item) => allowedCategoryIds.has(normalizeInteger(item.category_id, 0)))
-      .slice()
-      .sort((left, right) => left.id - right.id),
-    idRange
-  );
-  const categoryBuckets = groupBy(items, (item) => normalizeInteger(item.category_id, 0));
+  const allItems = listNews({ limit: 10000 })
+    .filter((item) => allowedCategoryIds.has(normalizeInteger(item.category_id, 0)))
+    .slice()
+    .sort((left, right) => left.id - right.id);
+  const items = filterByIdRange(allItems, idRange);
+  const categoryBuckets = groupBy(allItems, (item) => normalizeInteger(item.category_id, 0));
   let filesWritten = 0;
 
   for (const item of items) {
@@ -439,14 +416,14 @@ function buildLegacyNewsSectionDetailPages({
     const previous = currentIndex > 0 ? siblings[currentIndex - 1] : null;
     const next = currentIndex >= 0 && currentIndex < siblings.length - 1 ? siblings[currentIndex + 1] : null;
     const category = categoryMap.get(normalizeInteger(item.category_id, 0));
-    const html = renderLegacyNewsDetailPage({
-      template,
+    const html = renderSitePage('legacy-article-detail', buildLegacyArticleDetailPageProps({
       templateContext,
+      section: dirName === 'service' ? 'service' : 'news',
       item,
       category,
       previous,
       next
-    });
+    }), { outputRoot });
 
     writeTextFile(outputRoot, path.join(dirName, 'detail', `${item.id}.html`), html);
     filesWritten += 1;
@@ -455,117 +432,81 @@ function buildLegacyNewsSectionDetailPages({
   return createBuildResult(sectionKey, sectionLabel, items.length, filesWritten);
 }
 
-function renderLegacyProductCategoryPage({ template, templateContext, category, parent, children, pageItems, pageNumber, pageCount, totalRecords }) {
-  const siblingCategories = parent
-    ? templateContext.productCategories.filter((item) => normalizeInteger(item.parent_id, 0) === normalizeInteger(parent.id, 0))
-    : children;
-  const fileStem = normalizeInteger(category.id, 0) === 0 ? 'index' : String(category.id);
-  const pageBody = buildLegacyProductCategoryBody(pageItems, fileStem, pageNumber, pageCount, totalRecords);
-  return applyLegacyTemplateCommon(template, templateContext)
-    .replaceAll('#Hope_SmallName#', category.name || '')
-    .replaceAll('#Hope_BigID#', String(normalizeInteger(parent?.id, category.id)))
-    .replaceAll('#Hope_BigName#', parent?.name || category.name || '')
-    .replaceAll('#Hope_ProductsSmallCat#', buildLegacyProductSmallCategories(siblingCategories.length > 0 ? siblingCategories : [category]))
-    .replaceAll('#Hope_body#', pageBody)
-    .replaceAll('#HOPE_prodKeywords#', category.seo_keywords || category.name || '');
+
+function getLegacyTemplateContext() {
+  const site = getSiteConfig();
+  const customLabels = new Map(
+    queryAll('SELECT name, content FROM custom_labels').map((row) => [
+      row.name,
+      normalizeLegacyTemplateMarkup(row.content || '', site)
+    ])
+  );
+  const metaTypes = new Map(queryAll('SELECT id, title, meta_keywords, meta_descriptions FROM meta_types').map((row) => [row.id, row]));
+
+  return {
+    customLabels,
+    metaTypes,
+    site,
+    corporationCategories: queryAll(
+      `
+        SELECT id, name, parent_id, sort_order, is_external, external_url, legacy_extra
+        FROM corporation_categories
+        ORDER BY parent_id ASC, sort_order ASC, id ASC
+      `
+    ).map(normalizeCorporationCategoryRecord),
+    productCategories: listProductCategories().slice().sort(compareCategoryOrder),
+    newsCategories: listNewsCategories().slice().sort(compareCategoryOrder)
+  };
 }
 
-function renderLegacyCorporationPage({ template, templateContext, item }) {
-  return applyLegacyTemplateCommon(template, templateContext)
-    .replaceAll('#HOPE_Title#', item.name || '')
-    .replaceAll('#HOPE_TITLE#', item.name || '')
-    .replaceAll('#HOPE_Co_Centern#', normalizeLegacyRichTextHtml(item.content_html) || '');
+function buildLegacyCommonProps(templateContext) {
+  const meta = {};
+  for (const [id, row] of templateContext.metaTypes.entries()) {
+    meta[String(id)] = row;
+  }
+
+  return {
+    site: templateContext.site,
+    meta,
+    fragments: {
+      indextopHtml: getCustomLabel(templateContext, '#BM_indextop#'),
+      topHtml: getCustomLabel(templateContext, '#BM_top#'),
+      bottomHtml: getCustomLabel(templateContext, '#BM_botten#'),
+      indexFootHtml: getCustomLabel(templateContext, '#BM_indexfoot#'),
+      aboutHtml: getCustomLabel(templateContext, '#BM_about#'),
+      productsMenuHtml: buildLegacyProductsMenu(templateContext.productCategories),
+      productsMenuCompactHtml: buildLegacyProductsMenuCompact(templateContext.productCategories),
+      aboutCategoryHtml: buildLegacyAboutCategoryList(templateContext.corporationCategories, CORPORATION_ROOT_ID),
+      newsCategoryHtml: buildLegacyNewsCategoryList(templateContext.newsCategories, NEWS_ROOT_ID, 'news'),
+      serviceCategoryHtml: buildLegacyNewsCategoryList(templateContext.newsCategories, SERVICE_ROOT_ID, 'service')
+    }
+  };
 }
 
-function renderLegacyIndexPage(template, templateContext) {
-  return applyLegacyTemplateCommon(template, templateContext)
-    .replaceAll('#newsindex()#', buildLegacyIndexNews())
-    .replaceAll('#prodIndex()#', buildLegacyIndexFeaturedProducts())
-    .replaceAll('#prodIndex1()#', buildLegacyIndexFeaturedProductLinks())
-    .replaceAll('#serviceindex()#', buildLegacyServiceIndex());
+function getCustomLabel(templateContext, name) {
+  let value = '';
+  if (templateContext.customLabels.has(name)) {
+    value = templateContext.customLabels.get(name) || '';
+  } else {
+    const lowerName = String(name).toLowerCase();
+    for (const [key, content] of templateContext.customLabels.entries()) {
+      if (String(key).toLowerCase() === lowerName) {
+        value = content || '';
+        break;
+      }
+    }
+  }
+  return expandLegacyCommonPlaceholders(value, templateContext);
 }
 
-function renderLegacyContactPage(template, templateContext) {
-  return applyLegacyTemplateCommon(template, templateContext)
-    .replaceAll('#HOPE_Contact()#', buildLegacyContactTable());
-}
-
-function renderLegacyMessagePage(template, templateContext) {
-  return applyLegacyTemplateCommon(template, templateContext)
-    .replaceAll('#msgIndex()#', buildLegacyMessageSidebarProducts());
-}
-
-function renderLegacyProductDetailPage({ template, templateContext, product, relatedProducts }) {
-  return applyLegacyTemplateCommon(template, templateContext)
-    .replaceAll('#HOPE_TITLE#', product.name || '')
-    .replaceAll('#HOPE_prodKeywords#', product.keywords || '')
-    .replaceAll('#HOPE_prodDescription#', product.summary || '')
-    .replaceAll('#HOPE_IMG#', product.small_image || '/skin/dfpic.gif')
-    .replaceAll('#HOPE_ProdCode#', product.code || '')
-    .replaceAll('#Hope_Random#', buildLegacyRelatedProducts(relatedProducts))
-    .replaceAll('#HOPE_BODY#', normalizeLegacyRichTextHtml(product.content_html) || '');
-}
-
-function renderLegacyNewsDetailPage({ template, templateContext, item, category, previous, next }) {
-  return applyLegacyTemplateCommon(template, templateContext)
-    .replaceAll('#HOPE_TITLE#', item.title || '')
-    .replaceAll('#HOPE_NewsKeywords#', item.keywords || '')
-    .replaceAll('#HOPE_NewsDescription#', resolveRenderableNewsSummary(item) || '')
-    .replaceAll('#Hope_TypeID#', String(normalizeInteger(item.category_id, 0)))
-    .replaceAll('#Hope_Catname#', category?.name || '')
-    .replaceAll('#Hope_body#', normalizeLegacyRichTextHtml(item.content_html) || '')
-    .replaceAll('#Hope_Previous#', previous ? `<a href="${previous.id}.html" class="Font_2e4690_a ">${escapeHtml(previous.title || '')}</a>` : '<span class="Font_2e4690_a">没有上一篇</span>')
-    .replaceAll('#Hope_Next#', next ? `<a href="${next.id}.html" class="Font_2e4690_a ">${escapeHtml(next.title || '')}</a>` : '<span class="Font_2e4690_a">没有下一篇</span>');
-}
-
-function renderLegacyNewsCategoryPage({
-  template,
-  templateContext,
-  category,
-  pageItems,
-  pageNumber,
-  pageCount,
-  totalRecords,
-  dirName,
-  summaryClassName
-}) {
-  return applyLegacyTemplateCommon(template, templateContext)
-    .replaceAll('#HOPE_CatID#', String(normalizeInteger(category.id, 0)))
-    .replaceAll('#Hope_CatID#', String(normalizeInteger(category.id, 0)))
-    .replaceAll('#HOPE_Title#', category.name || '')
-    .replaceAll('#HOPE_TITLE#', category.name || '')
-    .replaceAll('#Hope_body#', buildLegacyNewsCategoryBody({
-      pageItems,
-      categoryId: normalizeInteger(category.id, 0),
-      pageNumber,
-      pageCount,
-      totalRecords,
-      summaryClassName
-    }));
-}
-
-function renderLegacyJobIndexPage({ template, templateContext, pageItems, pageNumber, pageCount, totalRecords }) {
-  return applyLegacyTemplateCommon(template, templateContext)
-    .replaceAll('#Hope_body#', buildLegacyJobListBody({ pageItems, pageNumber, pageCount, totalRecords }));
-}
-
-function renderLegacyJobDetailPage({ template, templateContext, job }) {
-  return applyLegacyTemplateCommon(template, templateContext)
-    .replaceAll('#Hope_TITLE#', job.name || '')
-    .replaceAll('#Hope_address#', job.address || '')
-    .replaceAll('#Hope_jobnob#', job.openings || '')
-    .replaceAll('#Hope_jobneed#', normalizeLegacyRichTextHtml(job.requirements_html) || '')
-    .replaceAll('#Hope_linkren#', job.contact_person || '')
-    .replaceAll('#Hope_phone#', job.phone || '')
-    .replaceAll('#Hope_date#', formatLegacyDateOnly(job.created_at) || '');
-}
-
-function applyLegacyTemplateCommon(template, templateContext) {
+function expandLegacyCommonPlaceholders(value, templateContext) {
   const site = templateContext.site;
-  let html = template;
+  let html = String(value || '');
 
   for (const [name, content] of templateContext.customLabels.entries()) {
-    html = html.replaceAll(name, content || '');
+    if (name) {
+      html = html.replaceAll(name, content || '');
+    }
   }
 
   html = html
@@ -602,31 +543,117 @@ function applyLegacyTemplateCommon(template, templateContext) {
   return normalizeLegacyTemplateMarkup(html, site);
 }
 
-function getLegacyTemplateContext() {
-  const variant = queryOne('SELECT * FROM template_variants WHERE is_selected = 1 ORDER BY id ASC LIMIT 1') || null;
-  const site = getSiteConfig();
-  const customLabels = new Map(
-    queryAll('SELECT name, content FROM custom_labels').map((row) => [
-      row.name,
-      normalizeLegacyTemplateMarkup(row.content || '', site)
-    ])
-  );
-  const metaTypes = new Map(queryAll('SELECT id, title, meta_keywords, meta_descriptions FROM meta_types').map((row) => [row.id, row]));
+function buildLegacyHomePageProps(templateContext) {
+  return {
+    ...buildLegacyCommonProps(templateContext),
+    newsIndexHtml: buildLegacyIndexNews(),
+    featuredProductsHtml: buildLegacyIndexFeaturedProducts(),
+    featuredProductLinksHtml: buildLegacyIndexFeaturedProductLinks(),
+    serviceIndexHtml: buildLegacyServiceIndex()
+  };
+}
+
+function buildLegacyContactPageProps(templateContext) {
+  return {
+    ...buildLegacyCommonProps(templateContext),
+    contactTableHtml: buildLegacyContactTable()
+  };
+}
+
+function buildLegacyMessagePageProps(templateContext) {
+  return {
+    ...buildLegacyCommonProps(templateContext),
+    messageSidebarProductsHtml: buildLegacyMessageSidebarProducts()
+  };
+}
+
+function buildLegacyContentPageProps(templateContext, item) {
+  return {
+    ...buildLegacyCommonProps(templateContext),
+    title: item.name || '',
+    contentHtml: normalizeLegacyRichTextHtml(item.content_html) || ''
+  };
+}
+
+function buildLegacyProductListPageProps({ templateContext, category, parent, children, pageItems, pageNumber, pageCount, totalRecords }) {
+  const siblingCategories = parent
+    ? templateContext.productCategories.filter((item) => normalizeInteger(item.parent_id, 0) === normalizeInteger(parent.id, 0))
+    : children;
+  const fileStem = normalizeInteger(category.id, 0) === 0 ? 'index' : String(category.id);
 
   return {
-    variant,
-    customLabels,
-    metaTypes,
-    site,
-    corporationCategories: queryAll(
-      `
-        SELECT id, name, parent_id, sort_order, is_external, external_url, legacy_extra
-        FROM corporation_categories
-        ORDER BY parent_id ASC, sort_order ASC, id ASC
-      `
-    ).map(normalizeCorporationCategoryRecord),
-    productCategories: listProductCategories().slice().sort(compareCategoryOrder),
-    newsCategories: listNewsCategories().slice().sort(compareCategoryOrder)
+    ...buildLegacyCommonProps(templateContext),
+    smallName: category.name || '',
+    bigId: normalizeInteger(parent?.id, category.id),
+    bigName: parent?.name || category.name || '',
+    productsSmallCatHtml: buildLegacyProductSmallCategories(siblingCategories.length > 0 ? siblingCategories : [category]),
+    bodyHtml: buildLegacyProductCategoryBody(pageItems, fileStem, pageNumber, pageCount, totalRecords),
+    prodKeywords: category.seo_keywords || category.name || ''
+  };
+}
+
+function buildLegacyProductDetailPageProps({ templateContext, product, relatedProducts }) {
+  return {
+    ...buildLegacyCommonProps(templateContext),
+    title: product.name || '',
+    prodKeywords: product.keywords || '',
+    prodDescription: product.summary || '',
+    image: product.small_image || '/skin/dfpic.gif',
+    code: product.code || '',
+    relatedProductsHtml: buildLegacyRelatedProducts(relatedProducts),
+    bodyHtml: normalizeLegacyRichTextHtml(product.content_html) || ''
+  };
+}
+
+function buildLegacyArticleListPageProps({ templateContext, section, category, pageItems, pageNumber, pageCount, totalRecords, summaryClassName }) {
+  return {
+    ...buildLegacyCommonProps(templateContext),
+    section,
+    categoryId: normalizeInteger(category.id, 0),
+    title: category.name || '',
+    bodyHtml: buildLegacyNewsCategoryBody({
+      pageItems,
+      categoryId: normalizeInteger(category.id, 0),
+      pageNumber,
+      pageCount,
+      totalRecords,
+      summaryClassName
+    })
+  };
+}
+
+function buildLegacyArticleDetailPageProps({ templateContext, section, item, category, previous, next }) {
+  return {
+    ...buildLegacyCommonProps(templateContext),
+    section,
+    title: item.title || '',
+    newsKeywords: item.keywords || '',
+    newsDescription: resolveRenderableNewsSummary(item) || '',
+    typeId: normalizeInteger(item.category_id, 0),
+    catName: category?.name || '',
+    bodyHtml: normalizeLegacyRichTextHtml(item.content_html) || '',
+    previousHtml: previous ? `<a href="${previous.id}.html" class="Font_2e4690_a ">${escapeHtml(previous.title || '')}</a>` : '<span class="Font_2e4690_a">没有上一篇</span>',
+    nextHtml: next ? `<a href="${next.id}.html" class="Font_2e4690_a ">${escapeHtml(next.title || '')}</a>` : '<span class="Font_2e4690_a">没有下一篇</span>'
+  };
+}
+
+function buildLegacyJobListPageProps({ templateContext, pageItems, pageNumber, pageCount, totalRecords }) {
+  return {
+    ...buildLegacyCommonProps(templateContext),
+    bodyHtml: buildLegacyJobListBody({ pageItems, pageNumber, pageCount, totalRecords })
+  };
+}
+
+function buildLegacyJobDetailPageProps(templateContext, job) {
+  return {
+    ...buildLegacyCommonProps(templateContext),
+    title: job.name || '',
+    address: job.address || '',
+    openings: job.openings || '',
+    requirementsHtml: normalizeLegacyRichTextHtml(job.requirements_html) || '',
+    contactPerson: job.contact_person || '',
+    phone: job.phone || '',
+    date: formatLegacyDateOnly(job.created_at) || ''
   };
 }
 
@@ -673,87 +700,6 @@ function buildLegacyTelText(companyPhone, companyMobile) {
     return `TEL:${companyMobile}`;
   }
   return '';
-}
-
-function requireLegacyTemplate(templatePath, label) {
-  const template = loadLegacyTemplate(templatePath);
-  if (!template) {
-    const displayPath = String(templatePath || '').trim() || '(未配置)';
-    throw new Error(`${label}不存在或无法加载: ${displayPath}`);
-  }
-  return template;
-}
-
-function loadLegacyTemplate(templatePath) {
-  if (!templatePath) {
-    return null;
-  }
-  const filePath = resolveCaseInsensitivePath(String(templatePath));
-  if (!filePath) {
-    return null;
-  }
-  return fs.readFileSync(filePath, 'utf8');
-}
-
-function guessSiblingTemplatePath(sourcePath, fileName) {
-  const cleanPath = String(sourcePath || '').trim();
-  if (!cleanPath) {
-    return null;
-  }
-  const normalized = cleanPath.replace(/\\/g, '/');
-  const lastSlashIndex = normalized.lastIndexOf('/');
-  if (lastSlashIndex < 0) {
-    return null;
-  }
-  return `${normalized.slice(0, lastSlashIndex + 1)}${fileName}`;
-}
-
-function resolveCaseInsensitivePath(relativePath) {
-  const cleanPath = String(relativePath || '').replace(/^[/\\]+/, '');
-  if (!cleanPath) {
-    return null;
-  }
-
-  const candidates = [cleanPath];
-  const normalized = cleanPath.replace(/\\/g, '/');
-  if (normalized.toLowerCase().startsWith('templates/')) {
-    candidates.push(normalized.slice('templates/'.length));
-  }
-  if (normalized.toLowerCase().startsWith('templets/')) {
-    candidates.push(normalized.slice('templets/'.length));
-  }
-
-  for (const candidate of candidates) {
-    const resolved = resolveCaseInsensitiveWithinRoot(SYSTEM_ROOT, candidate);
-    if (resolved) {
-      return resolved;
-    }
-    const resolvedTemplate = resolveCaseInsensitiveWithinRoot(TEMPLATE_ROOT, candidate);
-    if (resolvedTemplate) {
-      return resolvedTemplate;
-    }
-  }
-
-  return null;
-}
-
-function resolveCaseInsensitiveWithinRoot(rootDir, relativePath) {
-  const directPath = path.join(rootDir, relativePath);
-  if (fs.existsSync(directPath)) {
-    return directPath;
-  }
-
-  let currentPath = rootDir;
-  for (const segment of String(relativePath).split(/[\\/]+/).filter(Boolean)) {
-    const entries = fs.readdirSync(currentPath, { withFileTypes: true });
-    const match = entries.find((entry) => entry.name.toLowerCase() === segment.toLowerCase());
-    if (!match) {
-      return null;
-    }
-    currentPath = path.join(currentPath, match.name);
-  }
-
-  return currentPath;
 }
 
 function buildLegacyProductsMenu(categories) {
@@ -842,7 +788,6 @@ function buildLegacyProductCategoryBody(pageItems, fileStem, pageNumber, pageCou
 
 function writeProductCategoryPageSet({
   outputRoot,
-  template,
   templateContext,
   category,
   parent,
@@ -857,8 +802,7 @@ function writeProductCategoryPageSet({
   for (let index = 0; index < pageList.length; index += 1) {
     const pageNumber = index + 1;
     const pageItems = pageList[index];
-    const html = renderLegacyProductCategoryPage({
-      template,
+    const legacyHtml = renderSitePage('legacy-product-list', buildLegacyProductListPageProps({
       templateContext,
       category,
       parent,
@@ -867,19 +811,19 @@ function writeProductCategoryPageSet({
       pageNumber,
       pageCount: pageList.length,
       totalRecords: items.length
-    });
+    }), { outputRoot });
 
     const fileName = buildLegacyListFileName(fileStem, pageNumber);
-    writeTextFile(outputRoot, path.join('products', fileName), html);
+    writeTextFile(outputRoot, path.join('products', fileName), legacyHtml);
     filesWritten += 1;
-    writeTextFile(outputRoot, path.join('valve', fileName), html);
+    writeTextFile(outputRoot, path.join('valve', fileName), legacyHtml);
     filesWritten += 1;
 
     if (pageNumber === 1) {
       const firstPageFileName = `${fileStem}.html`;
-      writeTextFile(outputRoot, path.join('products', firstPageFileName), html);
+      writeTextFile(outputRoot, path.join('products', firstPageFileName), legacyHtml);
       filesWritten += 1;
-      writeTextFile(outputRoot, path.join('valve', firstPageFileName), html);
+      writeTextFile(outputRoot, path.join('valve', firstPageFileName), legacyHtml);
       filesWritten += 1;
     }
   }

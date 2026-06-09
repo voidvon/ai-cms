@@ -13,7 +13,7 @@ async function main() {
 
   await copyServer();
   await copyAdminDist();
-  await copyTemplates();
+  await copyAdminSiteSource();
   await createRuntimeDirs();
   await writeDeployReadme();
 
@@ -51,8 +51,12 @@ async function copyAdminDist() {
   await copyDir('system/admin/dist', 'system/admin/dist', { allowDist: true });
 }
 
-async function copyTemplates() {
-  await copyDir('system/templates');
+async function copyAdminSiteSource() {
+  await copyDir('system/admin/package.json');
+  await copyDir('system/admin/package-lock.json');
+  await copyDir('system/admin/src/site');
+  await copyDir('system/admin/tsconfig.json');
+  await copyDir('system/admin/tsconfig.node.json');
 }
 
 async function createRuntimeDirs() {
@@ -92,6 +96,7 @@ This directory is the deployable runtime package.
 
 \`\`\`bash
 npm --prefix system/server install --omit=dev
+npm --prefix system/admin install
 npm run build:site
 PORT=3000 HOST=0.0.0.0 NODE_ENV=production npm start
 \`\`\`
@@ -99,6 +104,7 @@ PORT=3000 HOST=0.0.0.0 NODE_ENV=production npm start
 ## Runtime Data
 
 - \`html/\` is generated on the server by \`npm run build:site\`.
+- \`system/admin/src/site/\` contains editable React templates. After changing them, click the admin generate button or run \`npm run build:site\`; the latest source is compiled at generation time.
 - \`data/site.sqlite\` is runtime data and is not included in this package.
 - For a fresh server, initialize or restore the database before generating HTML.
 \`\`\`bash

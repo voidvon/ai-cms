@@ -7,7 +7,6 @@ export const SERVER_ROOT = path.resolve(__dirname, '..');
 export const SYSTEM_ROOT = path.resolve(SERVER_ROOT, '..');
 export const PROJECT_ROOT = path.resolve(SYSTEM_ROOT, '..');
 export const CONTENT_ROOT = path.join(PROJECT_ROOT, 'html');
-export const TEMPLATE_ROOT = path.join(SYSTEM_ROOT, 'templates');
 export const ADMIN_APP_ROOT = path.join(SYSTEM_ROOT, 'admin');
 export const ADMIN_DIST_ROOT = path.join(ADMIN_APP_ROOT, 'dist');
 export const DATA_DIR = path.join(PROJECT_ROOT, 'data');
