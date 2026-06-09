@@ -4,434 +4,7 @@ export const TEMPLATE_TYPES = ['home', 'list', 'content', 'component'];
 export const TEMPLATE_ENGINES = ['html', 'tsx'];
 const MAX_TEMPLATE_VERSIONS = 10;
 
-const DEFAULT_PAGE_TEMPLATES = [
-  {
-    type: 'home',
-    code: 'home_default',
-    name: '默认首页模板',
-    sort_order: 10,
-    content: `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-  <title>{{meta.1.title}}</title>
-  <meta name="robots" content="all" />
-  <meta name="keywords" content="{{meta.1.meta_keywords}}" />
-  <meta name="description" content="{{meta.1.meta_descriptions}}" />
-  <meta http-equiv="X-UA-Compatible" content="IE=EmulateIE7" />
-  <link rel="icon" href="/favicon.ico" type="image/x-icon" />
-  <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
-  <link href="css/webmain.css" rel="stylesheet" type="text/css" />
-  <base target="_blank" />
-</head>
-<body>
-#component("indextop")#
-<div id="index_main" class="clearfix">
-  <div class="index-left">
-    <div class="index-news">
-      <h2><span>新闻中心</span><a href="/news"><img src="images/more.gif" width="32" height="5" alt="新闻中心" /></a></h2>
-      <ul>{{{newsIndexHtml}}}</ul>
-    </div>
-    <div class="index-about">
-      <h2><span>关于我们</span><a href="/about"><img src="images/more.gif" width="32" height="5" alt="关于我们" /></a></h2>
-      <p><img src="images/index_aboutpic.jpg" alt="关于我们" width="145" height="181" />#component("about")#</p>
-    </div>
-    <div class="index-newproducts">
-      <h2><a href="/valve"><img src="images/more.gif" width="32" height="5" alt="产品展示" /></a></h2>
-      <div class="productsroll"><ul id="ScrollBox" class="clearfix">{{{featuredProductsHtml}}}</ul></div>
-    </div>
-    <div class="index-products">
-      <h2><span>产品展示</span><a href="/valve"><img src="images/more.gif" width="32" height="5" alt="产品展示" /></a></h2>
-      <ul class="clearfix">{{{featuredProductLinksHtml}}}</ul>
-    </div>
-  </div>
-  <div class="index-right">
-    <div class="index-search"><h2><span>站内搜索</span></h2>#component("search")#</div>
-    <div class="index-jobs">
-      <h2><span>阀门知识</span><a href="/service/"><img src="images/more.gif" width="32" height="5" alt="阀门知识" /></a></h2>
-      <ul>{{{serviceIndexHtml}}}</ul>
-    </div>
-    <div class="index-contact">
-      <h2><span>联系我们</span></h2>
-      <p>地址: {{site.company_address}}<br />电话: {{site.company_phone}}<br />传真: {{site.company_fax}}<br />手机: {{site.web_mobile}}<br />邮箱: {{site.company_email}}</p>
-    </div>
-  </div>
-</div>
-#component("indexfoot")#
-</body>
-</html>`
-  },
-  {
-    type: 'list',
-    code: 'list_product',
-    name: '产品列表模板',
-    engine: 'tsx',
-    sort_order: 20,
-    content: `export default function ListTemplate({
-  site,
-  smallName,
-  bigName,
-  prodKeywords,
-  productsSmallCatHtml,
-  fragments,
-  items,
-  pagerHtml,
-  component,
-  Raw,
-}) {
-  const rows = []
-  for (let index = 0; index < items.length; index += 2) {
-    rows.push(items.slice(index, index + 2))
-  }
-
-  return (
-    <html xmlns="http://www.w3.org/1999/xhtml">
-      <head>
-        <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
-        <title>{smallName + '|' + smallName + '型号|' + smallName + '尺寸|' + site.web_name}</title>
-        <meta name="keywords" content={prodKeywords || ''} />
-        <meta name="description" content={smallName + '制造标准：中国GB、美标API、德标DIN等标准生产。'} />
-        <link href="/css/c.css" rel="stylesheet" type="text/css" />
-      </head>
-      <body>
-        <Raw html={component('indextop')} />
-        <div id="page_main" className="clearfix">
-          <div className="page-right">
-            <div className="site-nav">
-              <span>当前位置 : </span>
-              <a href="/index.html">公司主页</a> - <a href="/valve/">产品展示</a> - {bigName} - {smallName}
-            </div>
-            <table width="100%" border={0} cellPadding={0} cellSpacing={0}>
-              <tbody>
-                <tr><td><Raw html={productsSmallCatHtml} /></td></tr>
-              </tbody>
-            </table>
-            <div className="page-products">
-              <ul className="clearfix">
-                <table width="98%" border={0} cellPadding={0} cellSpacing={0} align="center">
-                  <tbody>
-                    {rows.map((row, rowIndex) => (
-                      <tr key={rowIndex}>
-                        {row.map((item) => (
-                          <td key={item.id} width="50%" valign="top" className="in6" height="100">
-                            <table width="100%" height="100" border={0} cellPadding={0} cellSpacing={0}>
-                              <tbody>
-                                <tr>
-                                  <td width="39%" rowSpan={2}>
-                                    <img src={item.image} alt={item.name} width="180" height="138" />
-                                  </td>
-                                  <td width="61%" height="20">
-                                    <a href={item.url} className="Font_2E4690_a in4">{item.name}</a>
-                                  </td>
-                                </tr>
-                                <tr><td valign="top"><Raw html={item.summary} /></td></tr>
-                              </tbody>
-                            </table>
-                          </td>
-                        ))}
-                        {row.length === 1 && <td width="50%" valign="top" className="in6" height="100">&nbsp;</td>}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-                <Raw html={pagerHtml} />
-              </ul>
-            </div>
-          </div>
-          <div className="page-left">
-            <div className="left-products">
-              <h2><span>产品展示 TSX</span></h2>
-              <div id="LeftMenu" className="ddsmoothmenu-v">
-                <ul><Raw html={fragments.productsMenuHtml} /></ul>
-              </div>
-            </div>
-          </div>
-        </div>
-        <Raw html={component('botten')} />
-      </body>
-    </html>
-  )
-}`
-  },
-  {
-    type: 'list',
-    code: 'list_article',
-    name: '文章列表模板',
-    sort_order: 30,
-    content: `<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-  <title>{{title}}_{{site.web_name}}</title>
-  <meta name="keywords" content="{{title}}" />
-  <meta name="description" content="{{title}}" />
-  <link href="/img/css.css" type="text/css" rel="stylesheet" />
-  <link href="/css/webmain.css" rel="stylesheet" type="text/css" />
-</head>
-<body>
-#component("top")#
-<table width="972" border="0" align="center" cellpadding="0" cellspacing="0">
-  <tr>
-    <td width="173" valign="top"><div class="Corporation_left">{{{sectionCategoryHtml}}}</div><div class="Corporation_left">{{{fragments.productsMenuHtml}}}</div></td>
-    <td width="812" valign="top">
-      <div class="site-nav"><a href="/">首页</a> - <a href="/{{sectionDir}}/">{{sectionLabel}}</a> - {{title}}</div>
-      <div class="page-products">
-        #loop(items)#
-          #component("article_list_item")#
-        #/loop#
-        {{{pagerHtml}}}
-      </div>
-    </td>
-  </tr>
-</table>
-#component("botten")#
-</body>
-</html>`
-  },
-  {
-    type: 'list',
-    code: 'list_job',
-    name: '招聘列表模板',
-    sort_order: 40,
-    content: `<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-  <title>{{meta.5.title}} - {{site.web_name}}</title>
-  <meta name="keywords" content="{{meta.5.meta_keywords}}" />
-  <meta name="description" content="{{meta.5.meta_descriptions}}" />
-  <link href="/img/css.css" type="text/css" rel="stylesheet" />
-</head>
-<body>
-#component("top")#
-<table width="986" border="0" align="center" cellpadding="0" cellspacing="0">
-  <tr><td width="173" valign="top">{{{fragments.productsMenuHtml}}}</td><td width="824" valign="top">
-    <table width="100%" border="1" cellpadding="0" cellspacing="0" bordercolor="#CCCCCC">
-      #loop(items)#
-        #component("job_list_item")#
-      #/loop#
-    </table>
-    {{{pagerHtml}}}
-  </td></tr>
-</table>
-#component("botten")#
-</body>
-</html>`
-  },
-  {
-    type: 'content',
-    code: 'content_default',
-    name: '默认内容模板',
-    sort_order: 50,
-    content: `<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-  <title>{{title}}_{{site.web_name}}</title>
-  <meta name="keywords" content="{{title}}" />
-  <meta name="description" content="{{title}}" />
-  <link href="/css/c.css" rel="stylesheet" type="text/css" />
-</head>
-<body>
-#component("indextop")#
-<div id="page_main" class="clearfix">
-  <div class="page-right">
-    <div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> &gt;&gt; {{title}}</div>
-    <div class="page-products"><ul class="clearfix">{{{contentHtml}}}</ul></div>
-  </div>
-  <div class="page-left">{{{fragments.aboutCategoryHtml}}}</div>
-</div>
-#component("botten")#
-</body>
-</html>`
-  },
-  {
-    type: 'content',
-    code: 'content_product',
-    name: '产品内容模板',
-    sort_order: 60,
-    content: `<!DOCTYPE html>
-<html>
-<head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-  <title>{{title}}|{{prodKeywords}}</title>
-  <meta name="keywords" content="{{prodKeywords}}" />
-  <meta name="description" content="{{prodDescription}}" />
-  <link href="/css/c.css" rel="stylesheet" type="text/css" />
-</head>
-<body>
-#component("indextop")#
-<div id="page_main" class="clearfix">
-  <div class="page-right">
-    <div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> - <a href="/valve/">产品展示</a> - {{title}}</div>
-    <table width="100%" border="0" cellpadding="0" cellspacing="0" class="in4">
-      <tr><td width="19%" align="center" valign="top"><img src="{{image}}" alt="{{title}}" width="160" height="134" /></td><td valign="top"><strong>{{title}}</strong><br />产品型号：{{code}}<br />咨询电话：{{site.company_phone}}</td><td width="40%" valign="top">{{{relatedProductsHtml}}}</td></tr>
-    </table>
-    <div class="page-products"><ul class="clearfix"><table width="100%" border="0"><tr><td height="30" class="prod_bottom_dasheds">产品介绍</td></tr><tr><td class="prod_sp">{{{bodyHtml}}}</td></tr></table></ul></div>
-  </div>
-  <div class="page-left"><div id="LeftMenu" class="ddsmoothmenu-v"><ul>{{{fragments.productsMenuHtml}}}</ul></div></div>
-</div>
-#component("botten")#
-</body>
-</html>`
-  },
-  {
-    type: 'content',
-    code: 'content_article',
-    name: '文章内容模板',
-    sort_order: 70,
-    content: `<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-  <title>{{title}}_{{site.web_name}}</title>
-  <meta name="keywords" content="{{title}},{{newsKeywords}}" />
-  <meta name="description" content="{{newsDescription}}" />
-  <link href="/img/css.css" type="text/css" rel="stylesheet" />
-  <link href="/css/webmain.css" rel="stylesheet" type="text/css" />
-</head>
-<body>
-#component("top")#
-<table width="972" border="0" align="center" cellpadding="0" cellspacing="0">
-  <tr><td width="173" valign="top"><div class="Corporation_left">{{{sectionCategoryHtml}}}</div><div class="Corporation_left">{{{fragments.productsMenuHtml}}}</div></td>
-  <td width="812" valign="top">
-    <div class="site-nav"><a href="/">首页</a> - <a href="/{{sectionDir}}/">{{sectionLabel}}</a> - {{catName}}</div>
-    <h1 class="Font-Weight Font_Size in4" align="center">{{title}}</h1>
-    <div class="news_sp in4">{{{bodyHtml}}}</div>
-    <table width="95%" border="0" align="center"><tr><td height="30" class="Font-Weight">&nbsp;上一条：{{{previousHtml}}} &nbsp;&nbsp;&nbsp;&nbsp; 下一条：{{{nextHtml}}}</td></tr></table>
-  </td></tr>
-</table>
-#component("botten")#
-</body>
-</html>`
-  },
-  {
-    type: 'content',
-    code: 'content_contact',
-    name: '联系页面模板',
-    sort_order: 80,
-    content: `<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-  <title>联系{{site.web_name}}</title>
-  <meta name="keywords" content="{{meta.1.meta_keywords}}" />
-  <meta name="description" content="{{meta.1.meta_descriptions}}" />
-  <link href="/css/c.css" rel="stylesheet" type="text/css" />
-</head>
-<body>
-#component("indextop")#
-<div id="page_main" class="clearfix"><div class="page-right"><div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> &gt;&gt; 联系我们</div><div class="page-products">{{{contactTableHtml}}}</div></div><div class="page-left">{{{fragments.productsMenuHtml}}}</div></div>
-#component("botten")#
-</body>
-</html>`
-  },
-  {
-    type: 'content',
-    code: 'content_message',
-    name: '留言页面模板',
-    sort_order: 90,
-    content: `<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-  <title>在线留言_{{site.web_name}}</title>
-  <meta name="keywords" content="{{meta.12.meta_keywords}}" />
-  <meta name="description" content="{{meta.12.meta_descriptions}}" />
-  <link href="/css/c.css" rel="stylesheet" type="text/css" />
-</head>
-<body>
-#component("indextop")#
-<div id="page_main" class="clearfix"><div class="page-right"><div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> &gt;&gt; 在线留言</div><form id="addform" name="addform" method="post" action="/ajaxcode/prodmsg?action=msgadd"><table width="98%" border="0" align="center"><tr><td>姓名：</td><td><input name="name" type="text" id="name" /></td></tr><tr><td>电话：</td><td><input name="phone" type="text" id="phone" /></td></tr><tr><td>Email：</td><td><input name="email" type="text" id="email" /></td></tr><tr><td>主题：</td><td><input name="Title" type="text" id="Title" size="62" /></td></tr><tr><td>内容：</td><td><textarea name="content" cols="60" rows="6" id="content"></textarea></td></tr><tr><td colspan="2" align="center"><input type="submit" value="提交留言" /></td></tr></table></form></div><div class="page-left">{{{messageSidebarProductsHtml}}}</div></div>
-#component("botten")#
-</body>
-</html>`
-  },
-  {
-    type: 'content',
-    code: 'content_job',
-    name: '招聘内容模板',
-    sort_order: 100,
-    content: `<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-  <title>{{title}} - {{site.web_name}}</title>
-  <meta name="keywords" content="{{meta.5.meta_keywords}}" />
-  <meta name="description" content="{{meta.5.meta_descriptions}}" />
-  <link href="/img/css.css" type="text/css" rel="stylesheet" />
-</head>
-<body>
-#component("top")#
-<table width="986" border="0" align="center" cellpadding="0" cellspacing="0"><tr><td width="173" valign="top">{{{fragments.productsMenuHtml}}}</td><td width="824" valign="top"><table width="95%" border="1" align="center" cellpadding="0" cellspacing="0"><tr><td width="11%" height="25">职位名称</td><td>{{title}}</td></tr><tr><td>工作地点</td><td>{{address}}</td></tr><tr><td>需求人数</td><td>{{openings}}</td></tr><tr><td>发布日期</td><td>{{date}}</td></tr><tr><td>联系人</td><td>{{contactPerson}}</td></tr><tr><td>联系电话</td><td>{{phone}}</td></tr><tr><td>具体要求</td><td>{{{requirementsHtml}}}</td></tr></table></td></tr></table>
-#component("botten")#
-</body>
-</html>`
-  },
-  {
-    type: 'component',
-    code: 'search',
-    name: '站内搜索组件',
-    sort_order: 200,
-    content: `<form id="form2" name="form2" method="post" action="/search"><p><input name="ProductsName" type="text" id="ProductsName" value="找找看" size="18" class="Font_666666_a" onfocus="this.value='';" /><input name="searchbutton" type="submit" id="searchbutton" value="" /></p></form>`
-  },
-  {
-    type: 'component',
-    code: 'product_list_item',
-    name: '产品列表项组件',
-    sort_order: 210,
-    content: `{{{item.rowOpenHtml}}}
-<td width="50%" valign="top" class="in6" height="100">
-  <table width="100%" height="100" border="0" cellpadding="0" cellspacing="0">
-    <tr>
-      <td width="39%" rowspan="2"><img src="{{item.image}}" alt="{{item.name}}" width="180" height="138" /></td>
-      <td width="61%" height="20"><a href="{{item.url}}" class="Font_2E4690_a in4">{{item.name}}</a></td>
-    </tr>
-    <tr><td valign="top">{{{item.summary}}}</td></tr>
-  </table>
-</td>
-{{{item.placeholderHtml}}}
-{{{item.rowCloseHtml}}}`
-  },
-  {
-    type: 'component',
-    code: 'article_list_item',
-    name: '文章列表项组件',
-    sort_order: 220,
-    content: `<table width="100%" border="0" align="center" cellpadding="0" cellspacing="0">
-  <tr>
-    <td width="19" height="20" align="center" valign="middle" class="news_bottom_line">&nbsp;<img src="../../Skin/blue/Images/triangle.jpg" width="3" height="5" /></td>
-    <td width="726" valign="middle" class="news_bottom_line Font-Weight"><a href="{{item.url}}" class="Font_2e4690_a ">{{item.title}}</a> | {{item.date}}  </td>
-  </tr>
-  <tr>
-    <td height="50" colspan="2" valign="middle" class="news_bottom_line news_sp {{item.summaryClassName}}" >{{{item.summary}}}</td>
-  </tr>
-</table>`
-  },
-  {
-    type: 'component',
-    code: 'job_list_item',
-    name: '招聘列表项组件',
-    sort_order: 230,
-    content: `<tr>
-  <td width="59%" height="30">&nbsp;&nbsp;◆&nbsp;&nbsp;<a href="{{item.url}}" class="Font_000000_B_a">{{item.title}}</a></td>
-  <td width="13%" align="center">{{item.openings}}</td>
-  <td width="18%" align="center">{{item.address}}</td>
-  <td width="10%" align="center">{{item.date}}</td>
-</tr>`
-  }
-];
-
-const LEGACY_COMPONENT_NAMES = [
-  ['#BM_indextop#', 'indextop', '首页头部组件'],
-  ['#BM_top#', 'top', '通用头部组件'],
-  ['#BM_botten#', 'botten', '底部组件'],
-  ['#BM_indexfoot#', 'indexfoot', '首页底部组件'],
-  ['#BM_about#', 'about', '关于我们组件']
-];
-
 let schemaEnsured = false;
-let defaultsEnsured = false;
 
 export function ensureTemplatesSchema() {
   if (schemaEnsured) {
@@ -490,47 +63,8 @@ export function ensureTemplatesSchema() {
   schemaEnsured = true;
 }
 
-export function ensureDefaultTemplates() {
-  ensureTemplatesSchema();
-  if (defaultsEnsured) {
-    return;
-  }
-
-  for (const template of DEFAULT_PAGE_TEMPLATES) {
-    insertTemplateIfMissing(template);
-  }
-
-  for (const [labelName, code, fallbackName] of LEGACY_COMPONENT_NAMES) {
-    const label = queryOne('SELECT content FROM custom_labels WHERE lower(name) = lower(?) LIMIT 1', [labelName]);
-    insertTemplateIfMissing({
-      type: 'component',
-      code,
-      name: fallbackName,
-      sort_order: 150,
-      content: label?.content || ''
-    });
-  }
-
-  const labels = queryAll('SELECT name, content FROM custom_labels ORDER BY id ASC');
-  for (const label of labels) {
-    const code = legacyLabelNameToComponentCode(label.name);
-    if (!code) {
-      continue;
-    }
-    insertTemplateIfMissing({
-      type: 'component',
-      code,
-      name: `${code} 组件`,
-      sort_order: 300,
-      content: label.content || ''
-    });
-  }
-
-  defaultsEnsured = true;
-}
-
 export function listTemplates({ type } = {}) {
-  ensureDefaultTemplates();
+  ensureTemplatesSchema();
   const params = [];
   let where = '';
   if (type) {
@@ -553,7 +87,7 @@ export function listTemplates({ type } = {}) {
 }
 
 export function getTemplateById(id) {
-  ensureDefaultTemplates();
+  ensureTemplatesSchema();
   return queryOne(
     `
       SELECT id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
@@ -565,7 +99,7 @@ export function getTemplateById(id) {
 }
 
 export function getPublishedTemplateByCode(code) {
-  ensureDefaultTemplates();
+  ensureTemplatesSchema();
   return queryOne(
     `
       SELECT id, name, type, code, engine, coalesce(published_content, content) AS content
@@ -578,7 +112,7 @@ export function getPublishedTemplateByCode(code) {
 }
 
 export function getPublishedTemplateById(id) {
-  ensureDefaultTemplates();
+  ensureTemplatesSchema();
   return queryOne(
     `
       SELECT id, name, type, code, engine, coalesce(published_content, content) AS content
@@ -591,7 +125,7 @@ export function getPublishedTemplateById(id) {
 }
 
 export function resolvePublishedTemplate({ templateType, targets = [], fallbackCode }) {
-  ensureDefaultTemplates();
+  ensureTemplatesSchema();
 
   for (const target of targets) {
     const binding = getTemplateBinding(target.target_type, target.target_id ?? null, templateType);
@@ -608,7 +142,7 @@ export function resolvePublishedTemplate({ templateType, targets = [], fallbackC
 }
 
 export function listPublishedComponents() {
-  ensureDefaultTemplates();
+  ensureTemplatesSchema();
   return queryAll(
     `
       SELECT code, engine, coalesce(published_content, content) AS content
@@ -620,7 +154,7 @@ export function listPublishedComponents() {
 }
 
 export function listTemplateBindings() {
-  ensureDefaultTemplates();
+  ensureTemplatesSchema();
   return queryAll(
     `
       SELECT
@@ -794,9 +328,6 @@ export function deleteTemplate(id) {
   if (!existing) {
     return null;
   }
-  if (existing.is_default === 1) {
-    throw new Error('default template cannot be deleted');
-  }
   execute('DELETE FROM templates WHERE id = ?', [id]);
   return existing;
 }
@@ -850,33 +381,6 @@ function normalizeBindingTarget(targetType, targetId, templateType) {
   };
 }
 
-function insertTemplateIfMissing(template) {
-  const code = normalizeCode(template.code);
-  const existing = queryOne('SELECT id FROM templates WHERE code = ? LIMIT 1', [code]);
-  if (existing) {
-    return;
-  }
-  const now = new Date().toISOString();
-  execute(
-    `
-      INSERT INTO templates (name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at)
-      VALUES (?, ?, ?, ?, ?, ?, 'published', 1, ?, ?, ?, ?)
-    `,
-    [
-      template.name,
-      template.type,
-      code,
-      template.engine || 'html',
-      template.content || '',
-      template.content || '',
-      template.sort_order || 0,
-      now,
-      now,
-      now
-    ]
-  );
-}
-
 function normalizeTemplateInput(input) {
   const type = String(input.type || '').trim();
   if (!TEMPLATE_TYPES.includes(type)) {
@@ -898,7 +402,7 @@ function normalizeTemplateInput(input) {
     engine: normalizeTemplateEngine(input.engine),
     content: String(input.content ?? ''),
     status: input.status === 'published' ? 'published' : 'draft',
-    is_default: toBooleanInt(input.is_default, 0),
+    is_default: 0,
     sort_order: toInteger(input.sort_order, 0)
   };
 }
@@ -943,23 +447,7 @@ function normalizeCode(value) {
     .replace(/^_+|_+$/g, '');
 }
 
-function legacyLabelNameToComponentCode(value) {
-  const normalized = String(value || '')
-    .trim()
-    .replace(/^#/, '')
-    .replace(/#$/, '')
-    .replace(/^BM_/i, '');
-  return normalizeCode(normalized);
-}
-
 function toInteger(value, fallback = 0) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
   return Number.isNaN(parsed) ? fallback : parsed;
-}
-
-function toBooleanInt(value, fallback = 0) {
-  if (value === undefined || value === null || String(value).trim() === '') {
-    return fallback;
-  }
-  return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase()) ? 1 : 0;
 }

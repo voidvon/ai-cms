@@ -7,7 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
+import { TemplateCodeEditor } from '@/components/TemplateCodeEditor'
+import { TemplateVariableReference } from '@/components/TemplateVariableReference'
 import { toast } from 'sonner'
 import type { Template } from '@/types'
 
@@ -178,7 +179,6 @@ export default function TemplateVariantsPage() {
                       <div className="mt-1 truncate text-xs text-muted-foreground">{template.code}</div>
                     </div>
                     <div className="flex shrink-0 gap-1">
-                      {template.is_default === 1 && <Badge variant="secondary">默认</Badge>}
                       <Badge variant={template.status === 'published' ? 'default' : 'outline'}>
                         {template.status === 'published' ? '已发布' : '草稿'}
                       </Badge>
@@ -259,12 +259,15 @@ export default function TemplateVariantsPage() {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="template-content">模板内容</Label>
-                  <Textarea
-                    id="template-content"
-                    value={formData.content}
-                    onChange={(event) => setFormData({ ...formData, content: event.target.value })}
-                    className="min-h-[520px] font-mono text-xs leading-relaxed"
-                  />
+                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
+                    <TemplateCodeEditor
+                      id="template-content"
+                      value={formData.content}
+                      engine={formData.engine}
+                      onChange={(content) => setFormData({ ...formData, content })}
+                    />
+                    <TemplateVariableReference type={formData.type} engine={formData.engine} />
+                  </div>
                 </div>
               </div>
             ) : (

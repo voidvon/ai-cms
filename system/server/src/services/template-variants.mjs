@@ -171,7 +171,7 @@ function normalizeTemplateVariantInput(input, options = {}) {
   }
 
   return {
-    template_name: toNullableString(input.template_name ?? input.tempname) || options.existing?.template_name || '默认模板',
+    template_name: toNullableString(input.template_name ?? input.tempname) || options.existing?.template_name || '未命名模板',
     is_selected: toBooleanInt(input.is_selected ?? input.selected ?? options.existing?.is_selected, options.existing?.is_selected ? 1 : 0),
     home_index: toNullableString(input.home_index),
     co_index: toNullableString(input.co_index ?? input.Co_index),

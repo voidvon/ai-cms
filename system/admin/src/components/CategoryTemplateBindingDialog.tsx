@@ -109,7 +109,7 @@ export default function CategoryTemplateBindingDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={DEFAULT_VALUE}>使用默认模板</SelectItem>
+                  <SelectItem value={DEFAULT_VALUE}>不单独绑定</SelectItem>
                   {templates
                     .filter((template: Template) => template.type === type)
                     .map((template: Template) => (

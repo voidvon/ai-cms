@@ -28,10 +28,17 @@ function compileTsxComponent(source, React) {
 
   const module = { exports: {} };
   const exports = module.exports;
+  const require = (id) => {
+    if (id === 'react') {
+      return React;
+    }
+    throw new Error(`TSX template cannot import "${id}". Only "react" is available.`);
+  };
   const sandbox = {
     React,
     module,
-    exports
+    exports,
+    require
   };
   const context = vm.createContext(sandbox, {
     name: 'cms-tsx-template',
@@ -66,10 +73,18 @@ function buildTemplateProps(props, React, rawFragments) {
     });
   }
 
+  function ClientOnly({ name = 'default', props: clientProps = {}, children }) {
+    return React.createElement('div', {
+      'data-cms-client-root': String(name || 'default'),
+      'data-cms-client-props': JSON.stringify(clientProps ?? {})
+    }, children);
+  }
+
   return {
     ...props,
     raw,
-    Raw
+    Raw,
+    ClientOnly
   };
 }
 
