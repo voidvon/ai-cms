@@ -435,9 +435,48 @@ function renderSecondaryMenu(items = []) {
     : null;
   return renderMenu(items, {
     menuClass: 'page-secondary-menu',
-    toggleLabel: activeItem?.label || '当前栏目',
+    toggleLabel: activeItem?.label || '站点导航',
     attrPrefix: 'secondary'
   });
+}
+
+function resolveRootColumnActive(column, currentPage = {}, currentSection = {}) {
+  const pageType = String(currentPage?.type || '');
+  const sectionType = String(currentSection?.type || '');
+  const sourceType = String(column?.sourceType || '');
+  const sourceId = Number(column?.sourceId || 0);
+
+  if (sourceType === 'product_root') {
+    return sectionType === 'product';
+  }
+  if (sourceType === 'corporation_root') {
+    return sectionType === 'corporation';
+  }
+  if (sourceType === 'contact_page') {
+    return pageType === 'contact';
+  }
+  if (sourceType === 'message_page') {
+    return pageType === 'message';
+  }
+  if (sourceType === 'news_category' && sourceId === 4) {
+    return sectionType === 'news';
+  }
+  if (sourceType === 'news_category' && sourceId === 12) {
+    return sectionType === 'service';
+  }
+
+  return false;
+}
+
+function buildRootColumnMenuItems(siteColumns = [], currentPage = {}, currentSection = {}) {
+  return (Array.isArray(siteColumns) ? siteColumns : [])
+    .filter((item) => item && Number(item.parentId || 0) === 0 && item.url)
+    .filter((item) => !['contact_page', 'message_page'].includes(String(item?.sourceType || '')))
+    .map((item) => ({
+      label: item.name || '',
+      url: item.url,
+      active: Boolean(item.active) || resolveRootColumnActive(item, currentPage, currentSection)
+    }));
 }
 
 export function client() {
@@ -533,14 +572,15 @@ export function client() {
   }
 }
 
-export default function DefaultPageHeaderComponent({ eyebrow = '', title = '', primaryMenuItems = [], breadcrumbItems = [], secondaryMenuItems = [] }) {
+export default function DefaultPageHeaderComponent({ eyebrow = '', title = '', breadcrumbItems = [], secondaryMenuItems = [], siteColumns = [], currentPage = {}, currentSection = {} }) {
+  const menuItems = buildRootColumnMenuItems(siteColumns, currentPage, currentSection);
+
   return (
     <header className="page-header">
       <div className="page-eyebrow">{eyebrow || '页面标题'}</div>
       <h1 className="page-title">{title || '标题'}</h1>
-      {renderPrimaryMenu(primaryMenuItems)}
+      {renderSecondaryMenu(menuItems.length > 0 ? menuItems : secondaryMenuItems)}
       {renderBreadcrumb(Array.isArray(breadcrumbItems) ? breadcrumbItems : [])}
-      {renderSecondaryMenu(secondaryMenuItems)}
     </header>
   );
 }
@@ -569,87 +609,6 @@ export default function DefaultPageHeaderComponent({ eyebrow = '', title = '', p
     type: 'home',
     sort_order: 200,
     content: withScss(buildScss(String.raw`
-.home-hero {
-  padding: 36px;
-  border-radius: 32px;
-  background:
-    radial-gradient(circle at top right, rgba(255, 255, 255, 0.28), transparent 28%),
-    linear-gradient(135deg, var(--brand-deep), var(--brand));
-  color: #ffffff;
-
-  p {
-    max-width: 720px;
-    margin: 12px 0 0;
-    color: rgba(255, 255, 255, 0.86);
-  }
-}
-
-.home-hero .page-header {
-  max-width: none;
-}
-
-.home-hero .page-eyebrow,
-.home-hero .page-title {
-  color: #ffffff;
-}
-
-.home-hero .page-secondary-menu {
-  border-top-color: rgba(255, 255, 255, 0.18);
-}
-
-.home-hero .page-secondary-menu__panel {
-  background: rgba(255, 255, 255, 0.14);
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.16),
-    0 16px 36px rgba(15, 23, 42, 0.18);
-  backdrop-filter: blur(16px);
-}
-
-.home-hero .page-secondary-menu__link {
-  color: rgba(255, 255, 255, 0.82);
-}
-
-.home-hero .page-secondary-menu__link::before {
-  background: rgba(255, 255, 255, 0);
-}
-
-.home-hero .page-secondary-menu__link:hover {
-  color: #ffffff;
-}
-
-.home-hero .page-secondary-menu__link:hover::before {
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.home-hero .page-secondary-menu__link.is-active {
-  color: #ffffff;
-}
-
-.home-hero .page-secondary-menu__link.is-active::before {
-  background: rgba(255, 255, 255, 0.14);
-}
-
-.home-hero .page-secondary-menu__indicator {
-  background: linear-gradient(90deg, rgba(255, 255, 255, 0.9), #ffffff);
-  box-shadow: none;
-}
-
-.home-hero .page-secondary-menu__toggle {
-  background: rgba(255, 255, 255, 0.14);
-  border-color: rgba(255, 255, 255, 0.18);
-  color: #ffffff;
-  box-shadow: none;
-}
-
-.home-hero .page-secondary-menu__toggle:hover {
-  border-color: rgba(255, 255, 255, 0.32);
-  box-shadow: none;
-}
-
-.home-hero .page-secondary-menu__toggle-icon {
-  color: rgba(255, 255, 255, 0.78);
-}
-
 .home-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -683,36 +642,21 @@ export default function DefaultPageHeaderComponent({ eyebrow = '', title = '', p
   }
 }
 `), String.raw`
-function buildHomeMenuItems() {
-  return [
-    { label: '首页', url: '/index.html', active: true },
-    { label: '公司栏目', url: '/about/' },
-    { label: '产品展示', url: '/valve/' },
-    { label: '新闻资讯', url: '/news/' },
-    { label: '阀门知识', url: '/service/' },
-    { label: '联系我们', url: '/contact.html' },
-    { label: '在线留言', url: '/msg.html' }
-  ];
-}
-
-export default function DefaultHomeTemplate({ site = {}, newsIndexHtml = '', featuredProductLinksHtml = '', serviceIndexHtml = '', Raw, component }) {
+export default function DefaultHomeTemplate({ site = {}, siteColumns = [], currentPage = {}, currentSection = {}, secondaryMenuItems = [], newsIndexHtml = '', featuredProductLinksHtml = '', serviceIndexHtml = '', Raw, component }) {
   const title = site.web_name || '网站首页';
-  const secondaryMenuItems = buildHomeMenuItems();
 
   return (
     component('default_page_shell_component', {
       pageTitle: title,
       slots: {
-        header: (
-          <section className="home-hero">
-            {component('default_page_header_component', {
-              eyebrow: site.company_name || 'Default Theme',
-              title,
-              secondaryMenuItems
-            })}
-            <p>{site.web_copyright || site.company_address || '这是一个基于 TSX 渲染的默认主题首页示例。'}</p>
-          </section>
-        )
+        header: component('default_page_header_component', {
+          eyebrow: site.company_name || 'Default Theme',
+          title,
+          siteColumns,
+          currentPage,
+          currentSection,
+          secondaryMenuItems
+        })
       },
       children: (
         <>
@@ -769,7 +713,7 @@ function renderBreadcrumb(items = []) {
   );
 }
 
-export default function DefaultContentTemplate({ site = {}, title = '', contentHtml = '', breadcrumb = {}, currentSection = {}, secondaryMenuItems = [], Raw, component }) {
+export default function DefaultContentTemplate({ site = {}, title = '', contentHtml = '', breadcrumb = {}, siteColumns = [], currentPage = {}, currentSection = {}, secondaryMenuItems = [], Raw, component }) {
   const items = Array.isArray(breadcrumb?.items) ? breadcrumb.items : [];
   const pageTitle = title ? title + ' - ' + (site.web_name || '') : site.web_name || '';
 
@@ -781,6 +725,9 @@ export default function DefaultContentTemplate({ site = {}, title = '', contentH
           eyebrow: currentSection?.name || '公司栏目',
           title: title || site.web_name || '',
           breadcrumbItems: items,
+          siteColumns,
+          currentPage,
+          currentSection,
           secondaryMenuItems
         })
       },
@@ -866,7 +813,7 @@ function renderBreadcrumb(items = []) {
   );
 }
 
-export default function DefaultProductListTemplate({ site = {}, title = '', items = [], pagerHtml = '', productsSmallCatHtml = '', breadcrumb = {}, secondaryMenuItems = [], Raw, component }) {
+export default function DefaultProductListTemplate({ site = {}, title = '', items = [], pagerHtml = '', productsSmallCatHtml = '', breadcrumb = {}, siteColumns = [], currentPage = {}, currentSection = {}, secondaryMenuItems = [], Raw, component }) {
   const breadcrumbItems = Array.isArray(breadcrumb?.items) ? breadcrumb.items : [];
   const pageTitle = title ? title + ' - ' + (site.web_name || '') : site.web_name || '';
 
@@ -878,6 +825,9 @@ export default function DefaultProductListTemplate({ site = {}, title = '', item
           eyebrow: '产品展示',
           title: title || '产品列表',
           breadcrumbItems,
+          siteColumns,
+          currentPage,
+          currentSection,
           secondaryMenuItems
         })
       },
@@ -961,7 +911,7 @@ function renderBreadcrumb(items = []) {
   );
 }
 
-export default function DefaultProductDetailTemplate({ site = {}, title = '', image = '', code = '', bodyHtml = '', relatedProductsHtml = '', breadcrumb = {}, secondaryMenuItems = [], Raw, component }) {
+export default function DefaultProductDetailTemplate({ site = {}, title = '', image = '', code = '', bodyHtml = '', relatedProductsHtml = '', breadcrumb = {}, siteColumns = [], currentPage = {}, currentSection = {}, secondaryMenuItems = [], Raw, component }) {
   const items = Array.isArray(breadcrumb?.items) ? breadcrumb.items : [];
   const pageTitle = title ? title + ' - ' + (site.web_name || '') : site.web_name || '';
 
@@ -973,6 +923,9 @@ export default function DefaultProductDetailTemplate({ site = {}, title = '', im
           eyebrow: '产品详情',
           title: title || '产品详情',
           breadcrumbItems: items,
+          siteColumns,
+          currentPage,
+          currentSection,
           secondaryMenuItems
         })
       },
@@ -1070,7 +1023,7 @@ function renderBreadcrumb(items = []) {
   );
 }
 
-export default function DefaultArticleListTemplate({ site = {}, title = '', items = [], pagerHtml = '', sectionCategoryHtml = '', currentSection = {}, breadcrumb = {}, secondaryMenuItems = [], Raw, component }) {
+export default function DefaultArticleListTemplate({ site = {}, title = '', items = [], pagerHtml = '', sectionCategoryHtml = '', siteColumns = [], currentPage = {}, currentSection = {}, breadcrumb = {}, secondaryMenuItems = [], Raw, component }) {
   const breadcrumbItems = Array.isArray(breadcrumb?.items) ? breadcrumb.items : [];
   const pageTitle = title ? title + ' - ' + (site.web_name || '') : site.web_name || '';
 
@@ -1082,6 +1035,9 @@ export default function DefaultArticleListTemplate({ site = {}, title = '', item
           eyebrow: currentSection?.name || '文章列表',
           title: title || '分类',
           breadcrumbItems,
+          siteColumns,
+          currentPage,
+          currentSection,
           secondaryMenuItems
         })
       },
@@ -1151,7 +1107,7 @@ function renderBreadcrumb(items = []) {
   );
 }
 
-export default function DefaultArticleDetailTemplate({ site = {}, title = '', bodyHtml = '', previousHtml = '', nextHtml = '', currentSection = {}, breadcrumb = {}, secondaryMenuItems = [], Raw, component }) {
+export default function DefaultArticleDetailTemplate({ site = {}, title = '', bodyHtml = '', previousHtml = '', nextHtml = '', siteColumns = [], currentPage = {}, currentSection = {}, breadcrumb = {}, secondaryMenuItems = [], Raw, component }) {
   const breadcrumbItems = Array.isArray(breadcrumb?.items) ? breadcrumb.items : [];
   const pageTitle = title ? title + ' - ' + (site.web_name || '') : site.web_name || '';
 
@@ -1163,6 +1119,9 @@ export default function DefaultArticleDetailTemplate({ site = {}, title = '', bo
           eyebrow: currentSection?.name || '文章详情',
           title: title || '文章详情',
           breadcrumbItems,
+          siteColumns,
+          currentPage,
+          currentSection,
           secondaryMenuItems
         })
       },
@@ -1225,7 +1184,7 @@ function renderBreadcrumb(items = []) {
   );
 }
 
-export default function DefaultContactTemplate({ site = {}, breadcrumb = {}, secondaryMenuItems = [], component }) {
+export default function DefaultContactTemplate({ site = {}, breadcrumb = {}, siteColumns = [], currentPage = {}, currentSection = {}, secondaryMenuItems = [], component }) {
   const items = Array.isArray(breadcrumb?.items) ? breadcrumb.items : [];
   const pageTitle = '联系我们 - ' + (site.web_name || '');
 
@@ -1237,6 +1196,9 @@ export default function DefaultContactTemplate({ site = {}, breadcrumb = {}, sec
           eyebrow: 'Contact',
           title: '联系我们',
           breadcrumbItems: items,
+          siteColumns,
+          currentPage,
+          currentSection,
           secondaryMenuItems
         })
       },
@@ -1335,7 +1297,7 @@ function renderBreadcrumb(items = []) {
   );
 }
 
-export default function DefaultMessageTemplate({ site = {}, breadcrumb = {}, secondaryMenuItems = [], raw, component }) {
+export default function DefaultMessageTemplate({ site = {}, breadcrumb = {}, siteColumns = [], currentPage = {}, currentSection = {}, secondaryMenuItems = [], raw, component }) {
   const script = "document.addEventListener('DOMContentLoaded',function(){var form=document.getElementById('default-message-form');if(!form)return;form.addEventListener('submit',async function(event){event.preventDefault();var body=new URLSearchParams(new FormData(form)).toString();var response=await fetch('/ajaxcode/msg?action=msgadd',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'},body:body});if(response.ok){alert('留言提交成功');form.reset();}else{var text=await response.text();alert(text||'留言提交失败');}});});";
   const items = Array.isArray(breadcrumb?.items) ? breadcrumb.items : [];
   const pageTitle = '在线留言 - ' + (site.web_name || '');
@@ -1348,6 +1310,9 @@ export default function DefaultMessageTemplate({ site = {}, breadcrumb = {}, sec
           eyebrow: 'Message',
           title: '在线留言',
           breadcrumbItems: items,
+          siteColumns,
+          currentPage,
+          currentSection,
           secondaryMenuItems
         })
       },

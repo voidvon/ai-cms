@@ -533,7 +533,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
     return {
       ...props,
       currentPage: { type: 'home', title: '首页', url: '/index.html' },
-      primaryMenuItems: buildPreviewPrimaryMenuItems('home'),
+      secondaryMenuItems: buildPreviewRootColumnMenuItems(),
       newsIndexHtml: buildPreviewArticleLinks('/news/detail', 10),
       featuredProductsHtml: buildPreviewFeaturedProductsHtml(),
       featuredProductLinksHtml: buildPreviewProductLinksHtml(),
@@ -993,6 +993,57 @@ function buildPreviewCorporationMenuItems(activeId = 0) {
   }));
 }
 
+function buildPreviewRootColumnMenuItems() {
+  const rows = queryAll(
+    `
+      SELECT id, name, source_type, source_id
+      FROM columns
+      WHERE coalesce(parent_id, 0) = 0
+      ORDER BY sort_order ASC, id ASC
+    `
+  );
+
+  return rows
+    .filter((item) => !['contact_page', 'message_page'].includes(String(item?.source_type || '')))
+    .map((item) => ({
+      label: item.name || '',
+      url: buildPreviewColumnUrl(item),
+      active: false
+    }))
+    .filter((item) => item.url);
+}
+
+function buildPreviewSiteColumns() {
+  const rows = queryAll(
+    `
+      SELECT id, name, parent_id, model_code, source_type, source_id
+      FROM columns
+      ORDER BY coalesce(parent_id, 0) ASC, sort_order ASC, id ASC
+    `
+  );
+
+  if (rows.length === 0) {
+    return [
+      { id: 1, name: '产品展示', parentId: 0, modelCode: 'product', sourceType: 'product_root', sourceId: 0, url: '/valve/' },
+      { id: 2, name: '新闻资讯', parentId: 0, modelCode: 'news', sourceType: 'news_category', sourceId: NEWS_ROOT_ID, url: '/news/' },
+      { id: 3, name: '阀门知识', parentId: 0, modelCode: 'news', sourceType: 'news_category', sourceId: SERVICE_ROOT_ID, url: '/service/' },
+      { id: 4, name: '公司信息', parentId: 0, modelCode: 'corporation', sourceType: 'corporation_root', sourceId: 0, url: '/about/' }
+    ];
+  }
+
+  return rows.map((item) => ({
+    id: toInteger(item.id, 0),
+    name: item.name || '',
+    parentId: toInteger(item.parent_id, 0),
+    modelCode: item.model_code || '',
+    sourceType: item.source_type || '',
+    sourceId: toInteger(item.source_id, 0),
+    url: buildPreviewColumnUrl(item)
+  }))
+    .filter((item) => item.parentId === 0)
+    .filter((item) => !['contact_page', 'message_page'].includes(String(item?.sourceType || '')));
+}
+
 function buildPreviewPrimaryMenuItems(activeKey = '') {
   const items = [
     { key: 'home', label: '首页', url: '/index.html' },
@@ -1009,6 +1060,34 @@ function buildPreviewPrimaryMenuItems(activeKey = '') {
     url: item.url,
     active: item.key === activeKey
   }));
+}
+
+function buildPreviewColumnUrl(column) {
+  const sourceType = String(column?.source_type || '');
+  const sourceId = toInteger(column?.source_id, 0);
+
+  if (sourceType === 'product_root') {
+    return '/valve/';
+  }
+  if (sourceType === 'news_category') {
+    if (sourceId === NEWS_ROOT_ID) {
+      return '/news/';
+    }
+    if (sourceId === SERVICE_ROOT_ID) {
+      return '/service/';
+    }
+  }
+  if (sourceType === 'corporation_root') {
+    return '/about/';
+  }
+  if (sourceType === 'contact_page') {
+    return '/contact.html';
+  }
+  if (sourceType === 'message_page') {
+    return '/msg.html';
+  }
+
+  return '';
 }
 
 function buildPreviewNewsMenuItems(rootId, dirName, activeId = 0) {
@@ -1034,15 +1113,13 @@ function buildPreviewNewsMenuItems(rootId, dirName, activeId = 0) {
 
 function buildPreviewProductMenuItems(category) {
   const currentCategory = category || getPreviewProductCategory();
-  const parentId = toInteger(currentCategory?.parent_id, 0);
   const rows = queryAll(
     `
       SELECT id, name, parent_id
       FROM product_categories
-      WHERE parent_id = ?
+      WHERE parent_id = 0
       ORDER BY sort_order ASC, id ASC
-    `,
-    [parentId > 0 ? parentId : toInteger(currentCategory?.id, 0)]
+    `
   );
   const items = rows.length > 0
     ? rows
@@ -1352,6 +1429,7 @@ function buildTemplateValidationProps(template) {
         { label: '示例内容', url: '' }
       ]
     },
+    siteColumns: buildPreviewSiteColumns(),
     component: () => null,
     primaryMenuItems: buildPreviewPrimaryMenuItems('home'),
     item: {

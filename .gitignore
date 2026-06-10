@@ -1,22 +1,14 @@
-/index.html
-/contact.html
-/msg.html
-
-/about/**/*.html
-/job/**/*.html
-/news/**/*.html
-/product/**/*.html
-/products/**/*.html
-/service/**/*.html
-/valve/**/*.html
+/html/*.html
 /html/**/*.html
 !/html/.gitkeep
 
-node_modules
+node_modules/
 /dist
 /system/admin/dist
 /system/admin/site-dist
+/system/server/generated/**
 /system/server/generated-debug/**
+
 /data/site.sqlite*
 /data/*.bak
 !/data/.gitkeep

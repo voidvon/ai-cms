@@ -94,6 +94,24 @@ export function syncBuiltinColumns() {
     sort_order: 200
   });
 
+  upsertColumn({
+    name: '联系我们',
+    parent_id: null,
+    model_code: 'page',
+    source_type: 'contact_page',
+    source_id: 0,
+    sort_order: 300
+  });
+
+  upsertColumn({
+    name: '在线留言',
+    parent_id: null,
+    model_code: 'page',
+    source_type: 'message_page',
+    source_id: 0,
+    sort_order: 310
+  });
+
   const corporationRoot = getColumnBySource('corporation_root', 0);
   const corporationCategories = queryAll(
     `
