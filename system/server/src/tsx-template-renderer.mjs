@@ -16,10 +16,25 @@ export function renderTsxTemplate(source, props = {}, options = {}) {
   const React = loadReact();
   const renderToStaticMarkup = loadRenderToStaticMarkup();
   const rawFragments = [];
-  const Component = getCompiledTsxComponent(source, React, options);
-  const element = React.createElement(Component, buildTemplateProps(props, React, rawFragments, options));
+  const element = createTsxTemplateElement(source, props, options, {
+    React,
+    rawFragments
+  });
   const markup = replaceRawMarkers(renderToStaticMarkup(element), rawFragments);
   return markup.startsWith('<html') ? `<!DOCTYPE html>${markup}` : markup;
+}
+
+export function createTsxTemplateElement(source, props = {}, options = {}, runtimeContext = {}) {
+  const React = runtimeContext.React || loadReact();
+  const rawFragments = runtimeContext.rawFragments || [];
+  const { Component } = getCompiledTsxModule(source, React, options);
+  return React.createElement(Component, buildTemplateProps(props, React, rawFragments, options, runtimeContext));
+}
+
+export function getTsxTemplateModuleExports(source, options = {}) {
+  const React = loadReact();
+  const compiled = getCompiledTsxModule(source, React, options);
+  return compiled.exports;
 }
 
 export function clearTsxTemplateCache() {
@@ -33,7 +48,7 @@ export function getTsxTemplateCacheStats() {
   };
 }
 
-function getCompiledTsxComponent(source, React, options = {}) {
+function getCompiledTsxModule(source, React, options = {}) {
   const cacheKey = buildCompiledTemplateCacheKey(source, options);
   if (compiledTemplateCache.has(cacheKey)) {
     const cached = compiledTemplateCache.get(cacheKey);
@@ -42,10 +57,10 @@ function getCompiledTsxComponent(source, React, options = {}) {
     return cached;
   }
 
-  const Component = compileTsxComponent(source, React);
-  compiledTemplateCache.set(cacheKey, Component);
+  const compiled = compileTsxModule(source, React);
+  compiledTemplateCache.set(cacheKey, compiled);
   pruneCompiledTemplateCache();
-  return Component;
+  return compiled;
 }
 
 function buildCompiledTemplateCacheKey(source, options = {}) {
@@ -64,7 +79,7 @@ function pruneCompiledTemplateCache() {
   }
 }
 
-function compileTsxComponent(source, React) {
+function compileTsxModule(source, React) {
   const sucrase = loadSucrase();
   const result = sucrase.transform(String(source || ''), {
     transforms: ['typescript', 'jsx', 'imports'],
@@ -98,26 +113,40 @@ function compileTsxComponent(source, React) {
   });
   script.runInContext(context, { timeout: 1000 });
 
-  const Component = module.exports.default || module.exports.Template || exports.default || exports.Template;
+  const moduleExports = module.exports;
+  const Component = moduleExports.default || moduleExports.Template || exports.default || exports.Template;
   if (typeof Component !== 'function') {
     throw new Error('TSX template must export default a React component.');
   }
-  return Component;
+  return {
+    Component,
+    exports: moduleExports
+  };
 }
 
-function buildTemplateProps(props, React, rawFragments, options = {}) {
+function buildTemplateProps(props, React, rawFragments, options = {}, runtimeContext = {}) {
   const templateCode = String(options.templateCode || '').trim();
+  const helpers = {
+    runtimeContext: {
+      React,
+      rawFragments
+    }
+  };
 
   function raw(value) {
     return { __html: String(value ?? '') };
   }
 
-  function Raw({ html }) {
+  function renderHtml(html) {
     const id = rawFragments.length;
     rawFragments.push(String(html ?? ''));
     return React.createElement('cms-raw', {
       'data-raw-id': String(id)
     });
+  }
+
+  function Raw({ html }) {
+    return renderHtml(html);
   }
 
   function ClientOnly({ name = 'default', props: clientProps = {}, children }) {
@@ -131,11 +160,35 @@ function buildTemplateProps(props, React, rawFragments, options = {}) {
     return React.createElement('div', attributes, children);
   }
 
+  function component(code, extraProps = {}) {
+    if (typeof options.componentResolver === 'function') {
+      return options.componentResolver({
+        code,
+        props: extraProps,
+        helpers: {
+          ...helpers,
+          raw,
+          Raw,
+          renderHtml,
+          ClientOnly
+        },
+        React,
+        parentProps: props,
+        templateCode
+      });
+    }
+    if (typeof props.component === 'function') {
+      return props.component(code, extraProps);
+    }
+    return null;
+  }
+
   return {
     ...props,
     raw,
     Raw,
-    ClientOnly
+    ClientOnly,
+    component
   };
 }
 

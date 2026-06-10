@@ -1,4 +1,6 @@
 import { requireAuth } from '../../middleware/auth.mjs';
+import { CONTENT_ROOT } from '../../config.mjs';
+import { buildStaticSite } from '../../static-builder.mjs';
 import {
   createTemplateVariant,
   deleteTemplateVariant,
@@ -71,7 +73,21 @@ export default async function templateVariantsRoutes(app) {
       reply.code(404);
       return { success: false, message: '主题不存在' };
     }
-    return { success: true, data: variant, message: '主题已切换' };
+
+    const buildResult = buildStaticSite({
+      outputRoot: CONTENT_ROOT,
+      cleanExisting: true
+    });
+
+    return {
+      success: true,
+      data: variant,
+      message: '主题已切换并重新生成静态页面',
+      build: {
+        totalFiles: buildResult.totalFiles,
+        totalRecords: buildResult.totalRecords
+      }
+    };
   });
 
   app.delete('/template-variants/:id', {

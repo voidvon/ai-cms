@@ -89,6 +89,9 @@ export interface TemplateVariant {
   service_detail?: string;
   msg_index?: string;
   contact?: string;
+  manual_component_template_ids?: number[];
+  component_template_ids?: number[];
+  source_theme_id?: number;
 }
 
 export interface Template {

@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tree, type TreeItemData } from '@/components/ui/tree'
 import { TemplateCodeEditor } from '@/components/TemplateCodeEditor'
 import { TemplateVariableReference } from '@/components/TemplateVariableReference'
 import { toast } from 'sonner'
@@ -27,17 +28,84 @@ const previewModes = [
   { value: 'product-detail', label: '产品详情' },
   { value: 'article-list', label: '文章列表' },
   { value: 'article-detail', label: '文章详情' },
+  { value: 'service-list', label: '服务列表' },
+  { value: 'service-detail', label: '服务详情' },
   { value: 'content', label: '公司栏目' },
   { value: 'contact', label: '联系我们' },
   { value: 'message', label: '在线留言' },
 ]
 
 type TemplateForm = Pick<Template, 'name' | 'code' | 'type' | 'engine' | 'content' | 'sort_order'>
+type ThemeSlotKey =
+  'home' |
+  'corporation' |
+  'product_list' |
+  'product_detail' |
+  'news_list' |
+  'news_detail' |
+  'service_list' |
+  'service_detail' |
+  'message' |
+  'contact'
+
+const themeSlotConfigs: Array<{
+  key: ThemeSlotKey
+  label: string
+  description: string
+  templateType: Extract<Template['type'], 'home' | 'list' | 'content'>
+  field: keyof TemplateVariant
+}> = [
+  { key: 'home', label: '首页模板', description: '网站首页', templateType: 'home', field: 'home_index' },
+  { key: 'corporation', label: '公司栏目模板', description: '公司单页', templateType: 'content', field: 'co_index' },
+  { key: 'product_list', label: '产品列表模板', description: '产品分类列表', templateType: 'list', field: 'produts_sort1' },
+  { key: 'product_detail', label: '产品详情模板', description: '产品详情页', templateType: 'content', field: 'produts_detail' },
+  { key: 'news_list', label: '新闻列表模板', description: '新闻分类列表', templateType: 'list', field: 'news_sort1' },
+  { key: 'news_detail', label: '新闻详情模板', description: '新闻详情页', templateType: 'content', field: 'news_detail' },
+  { key: 'service_list', label: '服务列表模板', description: '服务分类列表', templateType: 'list', field: 'service_sort1' },
+  { key: 'service_detail', label: '服务详情模板', description: '服务详情页', templateType: 'content', field: 'service_detail' },
+  { key: 'message', label: '留言板模板', description: '在线留言页', templateType: 'content', field: 'msg_index' },
+  { key: 'contact', label: '联系页模板', description: '联系我们页', templateType: 'content', field: 'contact' },
+]
+
+type EditorTarget =
+  | { kind: 'slot'; slot: ThemeSlotKey }
+  | { kind: 'component'; templateId: number | null }
+
+type TemplateLibraryNode = {
+  kind: 'group' | 'slot' | 'component'
+  slotKey?: ThemeSlotKey
+  template?: Template | null
+}
+
+function resolvePreviewMode(previewMode: string, editorTarget: EditorTarget): string {
+  if (previewMode !== 'auto') {
+    return previewMode
+  }
+
+  if (editorTarget.kind !== 'slot') {
+    return 'auto'
+  }
+
+  const slotModeMap: Record<ThemeSlotKey, string> = {
+    home: 'home',
+    corporation: 'content',
+    product_list: 'product-list',
+    product_detail: 'product-detail',
+    news_list: 'article-list',
+    news_detail: 'article-detail',
+    service_list: 'service-list',
+    service_detail: 'service-detail',
+    message: 'message',
+    contact: 'contact',
+  }
+
+  return slotModeMap[editorTarget.slot]
+}
 
 export default function TemplateVariantsPage() {
   const queryClient = useQueryClient()
-  const [activeType, setActiveType] = useState<Template['type']>('home')
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+  const [activeThemeSlot, setActiveThemeSlot] = useState<ThemeSlotKey>('home')
+  const [editorTarget, setEditorTarget] = useState<EditorTarget>({ kind: 'slot', slot: 'home' })
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewHtml, setPreviewHtml] = useState('')
   const [previewMode, setPreviewMode] = useState('auto')
@@ -64,13 +132,122 @@ export default function TemplateVariantsPage() {
     () => themes.find((item) => item.is_selected === 1) || themes[0] || null,
     [themes],
   )
-  const filteredTemplates = useMemo(
-    () => templates.filter((item) => item.type === activeType),
-    [templates, activeType],
+  const componentTemplates = useMemo(
+    () => {
+      const componentIds = new Set(selectedTheme?.component_template_ids || [])
+      return templates.filter((item) => item.type === 'component' && componentIds.has(item.id))
+    },
+    [selectedTheme, templates],
+  )
+  const selectedSlotConfig = useMemo(
+    () => themeSlotConfigs.find((item) => item.key === activeThemeSlot) || themeSlotConfigs[0],
+    [activeThemeSlot],
+  )
+  const themeSlotItems = useMemo(() => {
+    return themeSlotConfigs.map((slot) => {
+      const code = selectedTheme?.[slot.field]
+      const template = templates.find((item) => item.code === code) || null
+      return {
+        ...slot,
+        code: typeof code === 'string' ? code : '',
+        template,
+      }
+    })
+  }, [selectedTheme, templates])
+  const templateLibraryItems = useMemo<TreeItemData<TemplateLibraryNode>[]>(() => {
+    const slotByKey = new Map(themeSlotItems.map((item) => [item.key, item]))
+    const createSlotLeaf = (slotKey: ThemeSlotKey) => {
+      const slot = slotByKey.get(slotKey) || null
+      return {
+        id: `slot:${slotKey}`,
+        label: (
+          <div className="min-w-0">
+            <div className="truncate">{slot?.label || slotKey}</div>
+            <div className="truncate text-xs text-muted-foreground">
+              {slot?.template?.name || slot?.description || '未绑定模板'}
+            </div>
+          </div>
+        ),
+        data: {
+          kind: 'slot' as const,
+          slotKey,
+          template: slot?.template || null,
+        },
+      }
+    }
+
+    return [
+      createSlotLeaf('home'),
+      {
+        id: 'group:list',
+        label: '列表模板',
+        selectable: false,
+        data: { kind: 'group' },
+        children: [
+          createSlotLeaf('product_list'),
+          createSlotLeaf('news_list'),
+          createSlotLeaf('service_list'),
+        ],
+      },
+      {
+        id: 'group:content',
+        label: '内容模板',
+        selectable: false,
+        data: { kind: 'group' },
+        children: [
+          createSlotLeaf('corporation'),
+          createSlotLeaf('product_detail'),
+          createSlotLeaf('news_detail'),
+          createSlotLeaf('service_detail'),
+          createSlotLeaf('contact'),
+        ],
+      },
+      createSlotLeaf('message'),
+      {
+        id: 'group:component',
+        label: '组件模板',
+        selectable: false,
+        data: { kind: 'group' },
+        children: componentTemplates.map((template) => ({
+          id: `component:${template.id}`,
+          label: (
+            <div className="min-w-0">
+              <div className="truncate">{template.name}</div>
+              <div className="truncate text-xs text-muted-foreground">{template.code}</div>
+            </div>
+          ),
+          data: {
+            kind: 'component' as const,
+            template,
+          },
+        })),
+      },
+    ]
+  }, [componentTemplates, themeSlotItems])
+  const selectedComponentTemplate = useMemo(
+    () => {
+      if (editorTarget.kind !== 'component') {
+        return componentTemplates[0] || null
+      }
+      return componentTemplates.find((item) => item.id === editorTarget.templateId) || componentTemplates[0] || null
+    },
+    [componentTemplates, editorTarget],
   )
   const selectedTemplate = useMemo(
-    () => templates.find((item) => item.id === selectedId) || filteredTemplates[0] || null,
-    [templates, selectedId, filteredTemplates],
+    () => {
+      if (editorTarget.kind === 'component') {
+        return selectedComponentTemplate
+      }
+      const code = selectedTheme?.[selectedSlotConfig.field]
+      return templates.find((item) => item.code === code) || null
+    },
+    [editorTarget, selectedTheme, selectedSlotConfig, templates, selectedComponentTemplate],
+  )
+  const selectedTreeValue = useMemo(
+    () => editorTarget.kind === 'component'
+      ? `component:${editorTarget.templateId || selectedComponentTemplate?.id || ''}`
+      : `slot:${activeThemeSlot}`,
+    [activeThemeSlot, editorTarget, selectedComponentTemplate],
   )
   const { data: dependencyData, isLoading: isDependenciesLoading } = useQuery({
     queryKey: ['template-dependencies', selectedTemplate?.id],
@@ -84,13 +261,25 @@ export default function TemplateVariantsPage() {
   })
 
   useEffect(() => {
-    if (!selectedTemplate) {
-      setSelectedId(null)
-      setFormData({ name: '', code: '', type: activeType, engine: 'html', content: '', sort_order: 0 })
+    if (editorTarget.kind === 'slot') {
       return
     }
-    if (selectedTemplate.id !== selectedId) {
-      setSelectedId(selectedTemplate.id)
+    if (selectedComponentTemplate && selectedComponentTemplate.id !== editorTarget.templateId) {
+      setEditorTarget({ kind: 'component', templateId: selectedComponentTemplate.id })
+    }
+  }, [editorTarget, selectedComponentTemplate])
+
+  useEffect(() => {
+    if (!selectedTemplate) {
+      setFormData({
+        name: '',
+        code: '',
+        type: editorTarget.kind === 'component' ? 'component' : selectedSlotConfig.templateType,
+        engine: 'html',
+        content: '',
+        sort_order: 0,
+      })
+      return
     }
     setFormData({
       name: selectedTemplate.name,
@@ -100,22 +289,7 @@ export default function TemplateVariantsPage() {
       content: selectedTemplate.content || '',
       sort_order: selectedTemplate.sort_order || 0,
     })
-  }, [activeType, selectedId, selectedTemplate])
-
-  const saveMutation = useMutation({
-    mutationFn: () => {
-      if (!selectedTemplate) {
-        throw new Error('未选择模板')
-      }
-      return templatesApi.update(selectedTemplate.id, formData)
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['templates'] })
-      queryClient.invalidateQueries({ queryKey: ['template-dependencies', selectedTemplate?.id] })
-      toast.success('模板已保存为草稿')
-    },
-    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '保存失败')),
-  })
+  }, [selectedSlotConfig, selectedTemplate])
 
   const publishMutation = useMutation({
     mutationFn: async () => {
@@ -129,31 +303,97 @@ export default function TemplateVariantsPage() {
       queryClient.invalidateQueries({ queryKey: ['templates'] })
       queryClient.invalidateQueries({ queryKey: ['template-dependencies', selectedTemplate?.id] })
       queryClient.invalidateQueries({ queryKey: ['template-versions', selectedTemplate?.id] })
-      toast.success('模板已发布')
+      toast.success('模板已保存并发布')
     },
-    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '发布失败')),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '保存失败')),
   })
 
   const createMutation = useMutation({
-    mutationFn: () => {
-      const code = `${activeType}_${Date.now()}`
-      return templatesApi.create({
-        name: '新模板',
+    mutationFn: async () => {
+      if (!selectedTheme) {
+        throw new Error('未选择主题')
+      }
+
+      const slotTemplates = themeSlotItems.filter((item) => item.templateType === selectedSlotConfig.templateType)
+      const code = `${selectedSlotConfig.key}_${Date.now()}`
+      const created = await templatesApi.create({
+        name: `${selectedSlotConfig.label}-新模板`,
         code,
-        type: activeType,
-        engine: 'html',
-        content: '',
-        sort_order: filteredTemplates.length + 1,
+        type: selectedSlotConfig.templateType,
+        engine: 'tsx',
+        content: 'export default function Template() {\n  return <div>新模板</div>\n}\n',
+        status: 'published',
+        sort_order: slotTemplates.length + 1,
       })
+
+      if (!created.data?.id) {
+        throw new Error('创建模板失败')
+      }
+
+      await templateVariantsApi.update(selectedTheme.id, buildThemeSlotUpdate(selectedSlotConfig.field, code))
+      return created
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['templates'] })
+      queryClient.invalidateQueries({ queryKey: ['themes'] })
+      queryClient.invalidateQueries({ queryKey: ['selected-theme'] })
+      toast.success('模板已创建、发布并绑定到当前主题')
+    },
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '创建失败')),
+  })
+
+  const createComponentMutation = useMutation({
+    mutationFn: async () => {
+      if (!selectedTheme) {
+        throw new Error('未选择主题')
+      }
+      const code = `component_${Date.now()}`
+      const created = await templatesApi.create({
+        name: '新组件模板',
+        code,
+        type: 'component',
+        engine: 'tsx',
+        status: 'published',
+        content: [
+          'export const scss = String.raw`',
+          '.component-root {',
+          '  display: block;',
+          '}',
+          '`;',
+          '',
+          'export default function ComponentTemplate({ children, slots = {}, title = "" }) {',
+          '  return (',
+          '    <section className="component-root">',
+          '      {slots.header}',
+          '      {title ? <h2>{title}</h2> : null}',
+          '      {children}',
+          '      {slots.footer}',
+          '    </section>',
+          '  )',
+          '}',
+          '',
+        ].join('\n'),
+        sort_order: componentTemplates.length + 1,
+      })
+      if (!created.data?.id) {
+        throw new Error('创建组件失败')
+      }
+      await templateVariantsApi.update(selectedTheme.id, {
+        manual_component_template_ids: [...(selectedTheme.manual_component_template_ids || []), created.data.id],
+      })
+      return created
     },
     onSuccess: (response) => {
       queryClient.invalidateQueries({ queryKey: ['templates'] })
-      if (response.data?.id) {
-        setSelectedId(response.data.id)
+      queryClient.invalidateQueries({ queryKey: ['themes'] })
+      queryClient.invalidateQueries({ queryKey: ['selected-theme'] })
+      const createdId = response.data?.id
+      if (createdId) {
+        setEditorTarget({ kind: 'component', templateId: createdId })
       }
-      toast.success('模板已创建')
+      toast.success('组件模板已创建并发布')
     },
-    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '创建失败')),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '创建组件失败')),
   })
 
   const createThemeMutation = useMutation({
@@ -179,7 +419,7 @@ export default function TemplateVariantsPage() {
   const previewMutation = useMutation({
     mutationFn: () => templatesApi.preview({
       ...formData,
-      preview_context: { mode: previewMode },
+      preview_context: { mode: resolvePreviewMode(previewMode, editorTarget) },
     }),
     onSuccess: (response) => {
       setPreviewHtml(response.data?.html || '')
@@ -200,7 +440,6 @@ export default function TemplateVariantsPage() {
       queryClient.invalidateQueries({ queryKey: ['template-dependencies', selectedTemplate?.id] })
       queryClient.invalidateQueries({ queryKey: ['template-versions', selectedTemplate?.id] })
       if (response.data) {
-        setSelectedId(response.data.id)
         setFormData({
           name: response.data.name,
           code: response.data.code,
@@ -215,11 +454,26 @@ export default function TemplateVariantsPage() {
     onError: (error: unknown) => toast.error(getApiErrorMessage(error, '恢复失败')),
   })
 
+  const handleSelectLibraryItem = (item: TreeItemData<TemplateLibraryNode>) => {
+    const data = item.data
+    if (!data || data.kind === 'group') {
+      return
+    }
+
+    if (data.kind === 'slot' && data.slotKey) {
+      setActiveThemeSlot(data.slotKey)
+      setEditorTarget({ kind: 'slot', slot: data.slotKey })
+      return
+    }
+
+    if (data.kind === 'component' && data.template?.id) {
+      setEditorTarget({ kind: 'component', templateId: data.template.id })
+    }
+  }
+
   if (isLoading || isThemesLoading) {
     return <div>加载中...</div>
   }
-
-  const selectedTypeInfo = templateTypes.find((item) => item.value === activeType)
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
@@ -261,7 +515,7 @@ export default function TemplateVariantsPage() {
         </CardHeader>
         <CardContent>
           <div className="text-sm text-muted-foreground">
-            切换主题后，下一次静态生成会按所选主题输出默认页面模板。
+            切换主题后会自动重新生成静态页面，并按所选主题输出默认页面模板。
           </div>
         </CardContent>
       </Card>
@@ -269,51 +523,37 @@ export default function TemplateVariantsPage() {
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)]">
         <Card className="flex min-h-0 flex-col overflow-hidden">
           <CardHeader className="shrink-0">
-            <CardTitle>主题模板库</CardTitle>
-            <CardDescription>{selectedTypeInfo?.label}，当前分类共 {filteredTemplates.length} 个模板</CardDescription>
-            <div className="grid gap-2 pt-2 md:grid-cols-2 xl:grid-cols-1">
-              {templateTypes.map((type) => (
-                <button
-                  key={type.value}
-                  type="button"
-                  onClick={() => {
-                    setActiveType(type.value)
-                    setSelectedId(null)
-                  }}
-                  className={`rounded border p-3 text-left transition-colors ${activeType === type.value ? 'border-primary bg-muted' : 'hover:bg-muted/60'}`}
-                >
-                  <div className="font-medium">{type.label}</div>
-                  <div className="mt-1 text-xs text-muted-foreground">{type.description}</div>
-                </button>
-              ))}
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <CardTitle>主题模板库</CardTitle>
+                <CardDescription>
+                  页面模板按当前主题绑定，组件模板可被当前主题里的 TSX 页面复用。
+                </CardDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => createComponentMutation.mutate()}
+                disabled={createComponentMutation.isPending}
+              >
+                新增组件
+              </Button>
             </div>
           </CardHeader>
           <CardContent className="min-h-0 flex-1 overflow-auto">
-            <div className="space-y-2 pr-1">
-              {filteredTemplates.map((template) => (
-                <button
-                  key={template.id}
-                  type="button"
-                  onClick={() => setSelectedId(template.id)}
-                  className={`w-full rounded border p-3 text-left transition-colors ${selectedTemplate?.id === template.id ? 'border-primary bg-muted' : 'hover:bg-muted/60'}`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="truncate font-medium">{template.name}</div>
-                      <div className="mt-1 truncate text-xs text-muted-foreground">{template.code}</div>
-                    </div>
-                    <div className="flex shrink-0 gap-1">
-                      <Badge variant={template.status === 'published' ? 'default' : 'outline'}>
-                        {template.status === 'published' ? '已发布' : '草稿'}
-                      </Badge>
-                    </div>
-                  </div>
-                </button>
-              ))}
-              {filteredTemplates.length === 0 && (
-                <div className="rounded border p-6 text-center text-sm text-muted-foreground">暂无模板</div>
-              )}
-            </div>
+            <Tree
+              items={templateLibraryItems}
+              value={selectedTreeValue}
+              defaultExpandedIds={['group:list', 'group:content', 'group:component']}
+              onValueChange={handleSelectLibraryItem}
+              className="pr-1"
+            />
+            {componentTemplates.length === 0 ? (
+              <div className="mt-4 rounded border border-dashed p-3 text-sm text-muted-foreground">
+                还没有组件模板，可新建布局、容器、按钮、导航等公共片段。
+              </div>
+            ) : null}
           </CardContent>
         </Card>
 
@@ -321,15 +561,23 @@ export default function TemplateVariantsPage() {
           <CardHeader className="shrink-0">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <CardTitle>{selectedTemplate ? selectedTemplate.name : '未选择模板'}</CardTitle>
+                <CardTitle>{selectedTemplate ? selectedTemplate.name : selectedSlotConfig.label}</CardTitle>
                 <CardDescription>
-                  模板是主题的组成单元。使用组件引用和占位符编辑模板，双花括号输出转义文本，三花括号输出 HTML。
+                  {editorTarget.kind === 'slot'
+                    ? `当前正在编辑主题「${selectedTheme?.template_name || '未选择'}」的 ${selectedSlotConfig.label}。`
+                    : '当前正在编辑可被 TSX 页面复用的组件模板，可用于 layout、容器、按钮和命名插槽。'}
                 </CardDescription>
               </div>
               <div className="flex gap-2">
-                <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
-                  新增模板
-                </Button>
+                {editorTarget.kind === 'slot' ? (
+                  <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
+                    新增并绑定模板
+                  </Button>
+                ) : (
+                  <Button onClick={() => createComponentMutation.mutate()} disabled={createComponentMutation.isPending}>
+                    新增组件
+                  </Button>
+                )}
                 <Select value={previewMode} onValueChange={setPreviewMode}>
                   <SelectTrigger className="w-[138px]">
                     <SelectValue />
@@ -343,11 +591,8 @@ export default function TemplateVariantsPage() {
                 <Button variant="outline" onClick={() => previewMutation.mutate()} disabled={!selectedTemplate || previewMutation.isPending}>
                   预览
                 </Button>
-                <Button variant="outline" onClick={() => saveMutation.mutate()} disabled={!selectedTemplate || saveMutation.isPending}>
-                  保存草稿
-                </Button>
                 <Button onClick={() => publishMutation.mutate()} disabled={!selectedTemplate || publishMutation.isPending}>
-                  发布
+                  保存并发布
                 </Button>
               </div>
             </div>
@@ -426,7 +671,11 @@ export default function TemplateVariantsPage() {
                 />
               </div>
             ) : (
-              <div className="rounded border p-8 text-center text-muted-foreground">请选择或新增模板</div>
+              <div className="rounded border p-8 text-center text-muted-foreground">
+                {editorTarget.kind === 'slot'
+                  ? '当前主题的这个槽位还没有绑定模板，可以直接点击“新增并绑定模板”。'
+                  : '还没有组件模板，可以先点击“新增组件”。'}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -444,6 +693,7 @@ export default function TemplateVariantsPage() {
 function buildNewThemePayload(baseTheme: TemplateVariant | null, nextIndex: number): Partial<TemplateVariant> {
   return {
     template_name: `新主题 ${nextIndex}`,
+    source_theme_id: baseTheme?.id,
     is_selected: 0,
     home_index: baseTheme?.home_index,
     co_index: baseTheme?.co_index,
@@ -458,6 +708,12 @@ function buildNewThemePayload(baseTheme: TemplateVariant | null, nextIndex: numb
     service_detail: baseTheme?.service_detail,
     msg_index: baseTheme?.msg_index,
     contact: baseTheme?.contact,
+  }
+}
+
+function buildThemeSlotUpdate(field: keyof TemplateVariant, code: string): Partial<TemplateVariant> {
+  return {
+    [field]: code,
   }
 }
 

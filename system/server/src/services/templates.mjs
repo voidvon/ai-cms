@@ -1,10 +1,15 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
-import { renderTsxTemplate } from '../tsx-template-renderer.mjs';
+import { getSelectedTemplateVariant, listTemplateVariantComponents } from './template-variants.mjs';
+import { createTsxTemplateElement, renderTsxTemplate } from '../tsx-template-renderer.mjs';
+import { getTsxTemplateStyleAsset } from '../tsx-template-styles.mjs';
 import { escapeHtml } from '../utils/html.mjs';
 
 export const TEMPLATE_TYPES = ['home', 'list', 'content', 'component'];
 export const TEMPLATE_ENGINES = ['html', 'tsx'];
 const MAX_TEMPLATE_VERSIONS = 10;
+const CORPORATION_ROOT_ID = 32;
+const NEWS_ROOT_ID = 4;
+const SERVICE_ROOT_ID = 12;
 
 let schemaEnsured = false;
 
@@ -488,6 +493,9 @@ export function validateTemplateForPublish(template) {
   if (normalizedTemplate.engine === 'tsx') {
     try {
       renderTsxTemplate(content, buildTemplateValidationProps(normalizedTemplate));
+      getTsxTemplateStyleAsset(content, {
+        templateCode: normalizedTemplate.code
+      });
     } catch (error) {
       errors.push(`TSX 编译或渲染失败：${formatTemplateValidationError(error)}`);
     }
@@ -506,7 +514,13 @@ export function renderTemplatePreview(input) {
   validateTemplateForPublish(template);
   const components = buildPreviewComponentMap(template);
   const props = buildTemplatePreviewProps(template, input?.preview_context);
-  const html = ensurePreviewBaseHref(renderPreviewTemplate(template, props, components, 0));
+  const previewState = {
+    styleAssets: new Map()
+  };
+  const html = ensurePreviewBaseHref(injectPreviewTsxStyles(
+    renderPreviewTemplate(template, props, components, 0, previewState),
+    previewState.styleAssets
+  ));
   return { html };
 }
 
@@ -519,6 +533,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
     return {
       ...props,
       currentPage: { type: 'home', title: '首页', url: '/index.html' },
+      primaryMenuItems: buildPreviewPrimaryMenuItems('home'),
       newsIndexHtml: buildPreviewArticleLinks('/news/detail', 10),
       featuredProductsHtml: buildPreviewFeaturedProductsHtml(),
       featuredProductLinksHtml: buildPreviewProductLinksHtml(),
@@ -544,10 +559,12 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         ]
       }),
       smallName: category.name,
+      primaryMenuItems: buildPreviewPrimaryMenuItems('product'),
       bigId: category.parent_id || category.id,
       bigName: category.name,
       prodKeywords: category.seo_keywords || category.name,
       productsSmallCatHtml: `<span class="abv">【<a href="/products/${category.id}.html">${escapeHtml(category.name)}</a>】</span>`,
+      secondaryMenuItems: buildPreviewProductMenuItems(category),
       items: products.map((item) => ({
         id: item.id,
         name: item.name || '',
@@ -578,36 +595,41 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         ]
       }),
       title: product.name,
+      primaryMenuItems: buildPreviewPrimaryMenuItems('product'),
       prodKeywords: product.keywords || product.name,
       prodDescription: product.summary || '',
       image: product.small_image || '/skin/dfpic.gif',
       code: product.code || '',
       relatedProductsHtml: buildPreviewProductLinksHtml(4),
-      bodyHtml: product.content_html || product.summary || ''
+      bodyHtml: product.content_html || product.summary || '',
+      secondaryMenuItems: buildPreviewProductMenuItems(category)
     };
   }
 
-  if (effectiveMode === 'article-list') {
+  if (effectiveMode === 'article-list' || effectiveMode === 'service-list') {
+    const sectionConfig = buildPreviewArticleSectionConfig(effectiveMode, template);
     const category = getPreviewNewsCategory();
     const articles = getPreviewArticles(6);
     return {
       ...props,
       ...buildPreviewPageContext({
-        pageType: 'article-list',
+        pageType: sectionConfig.pageType,
         title: category.name,
-        url: `/news/${category.id}.html`,
-        section: { type: 'news', name: '新闻资讯', url: '/news/' },
+        url: `/${sectionConfig.sectionDir}/${category.id}.html`,
+        section: { type: sectionConfig.sectionType, name: sectionConfig.sectionLabel, url: `/${sectionConfig.sectionDir}/` },
         category,
         content: null,
         breadcrumbItems: [
-          { label: '新闻资讯', url: '/news/' },
+          { label: sectionConfig.sectionLabel, url: `/${sectionConfig.sectionDir}/` },
           { label: category.name, url: '' }
         ]
       }),
-      section: 'news',
-      sectionDir: 'news',
-      sectionLabel: '新闻资讯',
-      sectionCategoryHtml: `<a href="/news/${category.id}.html">${escapeHtml(category.name)}</a>`,
+      section: sectionConfig.sectionType,
+      primaryMenuItems: buildPreviewPrimaryMenuItems(sectionConfig.sectionType),
+      sectionDir: sectionConfig.sectionDir,
+      sectionLabel: sectionConfig.sectionLabel,
+      sectionCategoryHtml: `<a href="/${sectionConfig.sectionDir}/${category.id}.html">${escapeHtml(category.name)}</a>`,
+      secondaryMenuItems: buildPreviewNewsMenuItems(sectionConfig.rootId, sectionConfig.sectionDir, category.id),
       categoryId: category.id,
       title: category.name,
       items: articles.map((item) => ({
@@ -622,28 +644,37 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
     };
   }
 
-  if (effectiveMode === 'article-detail') {
+  if (effectiveMode === 'article-detail' || effectiveMode === 'service-detail') {
+    const sectionConfig = buildPreviewArticleSectionConfig(effectiveMode, template);
     const article = getPreviewArticle();
     const category = getPreviewNewsCategory(article.category_id);
     return {
       ...props,
       ...buildPreviewPageContext({
-        pageType: 'article-detail',
+        pageType: sectionConfig.detailPageType,
         title: article.title,
-        url: `/news/detail/${article.id}.html`,
-        section: { type: 'news', name: '新闻资讯', url: '/news/' },
+        url: `/${sectionConfig.sectionDir}/detail/${article.id}.html`,
+        section: { type: sectionConfig.sectionType, name: sectionConfig.sectionLabel, url: `/${sectionConfig.sectionDir}/` },
         category,
-        content: { id: article.id, title: article.title, name: article.title, type: 'news-article', url: `/news/detail/${article.id}.html` },
+        content: {
+          id: article.id,
+          title: article.title,
+          name: article.title,
+          type: sectionConfig.contentType,
+          url: `/${sectionConfig.sectionDir}/detail/${article.id}.html`
+        },
         breadcrumbItems: [
-          { label: '新闻资讯', url: '/news/' },
-          { label: category.name, url: `/news/${category.id}.html` },
+          { label: sectionConfig.sectionLabel, url: `/${sectionConfig.sectionDir}/` },
+          { label: category.name, url: `/${sectionConfig.sectionDir}/${category.id}.html` },
           { label: article.title, url: '' }
         ]
       }),
-      section: 'news',
-      sectionDir: 'news',
-      sectionLabel: '新闻资讯',
-      sectionCategoryHtml: `<a href="/news/${category.id}.html">${escapeHtml(category.name)}</a>`,
+      section: sectionConfig.sectionType,
+      primaryMenuItems: buildPreviewPrimaryMenuItems(sectionConfig.sectionType),
+      sectionDir: sectionConfig.sectionDir,
+      sectionLabel: sectionConfig.sectionLabel,
+      sectionCategoryHtml: `<a href="/${sectionConfig.sectionDir}/${category.id}.html">${escapeHtml(category.name)}</a>`,
+      secondaryMenuItems: buildPreviewNewsMenuItems(sectionConfig.rootId, sectionConfig.sectionDir, category.id),
       title: article.title,
       newsKeywords: article.keywords || article.title,
       newsDescription: article.summary || '',
@@ -668,8 +699,10 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         content: null,
         breadcrumbItems: [{ label: category.name, url: '' }]
       }),
+      primaryMenuItems: buildPreviewPrimaryMenuItems('corporation'),
       title: category.name,
-      contentHtml: category.content_html || '公司栏目内容预览'
+      contentHtml: category.content_html || '公司栏目内容预览',
+      secondaryMenuItems: buildPreviewCorporationMenuItems(category.id)
     };
   }
 
@@ -685,6 +718,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         content: null,
         breadcrumbItems: [{ label: '联系我们', url: '' }]
       }),
+      primaryMenuItems: buildPreviewPrimaryMenuItems('contact'),
       contactTableHtml: '<table><tr><td>电话</td><td>021-00000000</td></tr><tr><td>地址</td><td>示例地址</td></tr></table>'
     };
   }
@@ -701,6 +735,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         content: null,
         breadcrumbItems: [{ label: '在线留言', url: '' }]
       }),
+      primaryMenuItems: buildPreviewPrimaryMenuItems('message'),
       messageSidebarProductsHtml: buildPreviewProductLinksHtml(4)
     };
   }
@@ -709,25 +744,26 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
 }
 
 function inferPreviewMode(template) {
+  const code = String(template.code || '').toLowerCase();
   if (template.type === 'home') {
     return 'home';
   }
-  if (template.code === 'list_product') {
+  if (template.code === 'list_product' || (template.type === 'list' && code.includes('product'))) {
     return 'product-list';
   }
-  if (template.code === 'list_article') {
+  if (template.code === 'list_article' || (template.type === 'list' && (code.includes('article') || code.includes('news') || code.includes('service')))) {
     return 'article-list';
   }
-  if (template.code === 'content_product') {
+  if (template.code === 'content_product' || (template.type === 'content' && code.includes('product'))) {
     return 'product-detail';
   }
-  if (template.code === 'content_article') {
+  if (template.code === 'content_article' || (template.type === 'content' && (code.includes('article') || code.includes('news') || code.includes('service')))) {
     return 'article-detail';
   }
-  if (template.code === 'content_contact') {
+  if (template.code === 'content_contact' || code.includes('contact')) {
     return 'contact';
   }
-  if (template.code === 'content_message') {
+  if (template.code === 'content_message' || code.includes('message')) {
     return 'message';
   }
   if (template.type === 'content') {
@@ -910,6 +946,115 @@ function getPreviewCorporationCategory() {
   };
 }
 
+function buildPreviewArticleSectionConfig(mode, template) {
+  const isService = mode === 'service-list'
+    || mode === 'service-detail'
+    || String(template?.code || '').toLowerCase().includes('service');
+
+  return isService
+    ? {
+        rootId: SERVICE_ROOT_ID,
+        sectionType: 'service',
+        sectionDir: 'service',
+        sectionLabel: '阀门知识',
+        pageType: 'service-list',
+        detailPageType: 'service-detail',
+        contentType: 'service-article'
+      }
+    : {
+        rootId: NEWS_ROOT_ID,
+        sectionType: 'news',
+        sectionDir: 'news',
+        sectionLabel: '新闻资讯',
+        pageType: 'article-list',
+        detailPageType: 'article-detail',
+        contentType: 'news-article'
+      };
+}
+
+function buildPreviewCorporationMenuItems(activeId = 0) {
+  const rows = queryAll(
+    `
+      SELECT id, name, is_external, external_url
+      FROM corporation_categories
+      WHERE parent_id = ? AND coalesce(is_external, 0) = 0
+      ORDER BY sort_order ASC, id ASC
+    `,
+    [CORPORATION_ROOT_ID]
+  );
+  const items = rows.length > 0
+    ? rows
+    : [{ id: activeId || 1, name: '关于我们', is_external: 0, external_url: '' }];
+
+  return items.map((item) => ({
+    label: item.name || '',
+    url: item.external_url || `/about/about-${toInteger(item.id, 0)}.html`,
+    active: toInteger(item.id, 0) === toInteger(activeId, 0)
+  }));
+}
+
+function buildPreviewPrimaryMenuItems(activeKey = '') {
+  const items = [
+    { key: 'home', label: '首页', url: '/index.html' },
+    { key: 'corporation', label: '公司栏目', url: '/about/' },
+    { key: 'product', label: '产品展示', url: '/valve/' },
+    { key: 'news', label: '新闻资讯', url: '/news/' },
+    { key: 'service', label: '阀门知识', url: '/service/' },
+    { key: 'contact', label: '联系我们', url: '/contact.html' },
+    { key: 'message', label: '在线留言', url: '/msg.html' }
+  ];
+
+  return items.map((item) => ({
+    label: item.label,
+    url: item.url,
+    active: item.key === activeKey
+  }));
+}
+
+function buildPreviewNewsMenuItems(rootId, dirName, activeId = 0) {
+  const rows = queryAll(
+    `
+      SELECT id, name
+      FROM news_categories
+      WHERE parent_id = ?
+      ORDER BY sort_order ASC, id ASC
+    `,
+    [rootId]
+  );
+  const items = rows.length > 0
+    ? rows
+    : [{ id: activeId || 1, name: '示例分类' }];
+
+  return items.map((item) => ({
+    label: item.name || '',
+    url: `/${dirName}/${toInteger(item.id, 0)}.html`,
+    active: toInteger(item.id, 0) === toInteger(activeId, 0)
+  }));
+}
+
+function buildPreviewProductMenuItems(category) {
+  const currentCategory = category || getPreviewProductCategory();
+  const parentId = toInteger(currentCategory?.parent_id, 0);
+  const rows = queryAll(
+    `
+      SELECT id, name, parent_id
+      FROM product_categories
+      WHERE parent_id = ?
+      ORDER BY sort_order ASC, id ASC
+    `,
+    [parentId > 0 ? parentId : toInteger(currentCategory?.id, 0)]
+  );
+  const items = rows.length > 0
+    ? rows
+    : [currentCategory].filter(Boolean);
+
+  return items.map((item) => ({
+    label: item.name || '',
+    url: `/products/${toInteger(item.id, 0)}.html`,
+    active: toInteger(item.id, 0) === toInteger(currentCategory?.id, 0)
+  }));
+}
+
 function parsePreviewLegacyExtra(value) {
   if (!value) {
     return {};
@@ -941,7 +1086,12 @@ function formatPreviewDate(value) {
 
 function buildPreviewComponentMap(currentTemplate) {
   const components = new Map();
-  for (const item of listTemplates({ type: 'component' })) {
+  const selectedTheme = getSelectedTemplateVariant();
+  const componentRows = selectedTheme?.id
+    ? listTemplateVariantComponents(selectedTheme.id, { publishedOnly: false })
+    : [];
+
+  for (const item of componentRows) {
     components.set(normalizeCode(item.code), {
       code: item.code,
       engine: item.engine || 'html',
@@ -960,21 +1110,57 @@ function buildPreviewComponentMap(currentTemplate) {
   return components;
 }
 
-function renderPreviewTemplate(template, props, components, depth) {
+function renderPreviewTemplate(template, props, components, depth, previewState) {
   if (template.engine === 'tsx') {
-    const templateProps = {
-      ...props,
-      component: (code, extraProps = {}) => renderPreviewComponent(code, components, { ...props, ...extraProps }, depth + 1)
-    };
-    return renderTsxTemplate(template.content, templateProps, {
-      templateCode: template.code
+    collectPreviewTsxStyle(template, previewState);
+    return renderTsxTemplate(template.content, props, {
+      templateCode: template.code,
+      componentResolver: ({ code, props: extraProps, helpers }) => {
+        return renderPreviewComponentElement(
+          code,
+          components,
+          mergePreviewComponentProps(props, extraProps),
+          depth + 1,
+          previewState,
+          helpers
+        );
+      }
     });
   }
 
-  return renderPreviewHtmlContent(template.content, props, components, depth);
+  return renderPreviewHtmlContent(template.content, props, components, depth, previewState);
 }
 
-function renderPreviewComponent(code, components, props, depth) {
+function renderPreviewComponentElement(code, components, props, depth, previewState, helpers) {
+  if (depth > 10) {
+    return null;
+  }
+  const component = components.get(normalizeCode(code));
+  if (!component?.content) {
+    return null;
+  }
+  collectPreviewTsxStyle(component, previewState);
+  if (component.engine === 'tsx') {
+    return createTsxTemplateElement(component.content, props, {
+      templateCode: component.code,
+      componentResolver: ({ code: nestedCode, props: nestedProps, helpers: nestedHelpers }) => {
+        return renderPreviewComponentElement(
+          nestedCode,
+          components,
+          mergePreviewComponentProps(props, nestedProps),
+          depth + 1,
+          previewState,
+          nestedHelpers
+        );
+      }
+    }, helpers?.runtimeContext);
+  }
+
+  const html = renderPreviewHtmlContent(component.content, props, components, depth + 1, previewState);
+  return helpers?.renderHtml ? helpers.renderHtml(html) : html;
+}
+
+function renderPreviewComponentMarkup(code, components, props, depth, previewState) {
   if (depth > 10) {
     return '';
   }
@@ -982,19 +1168,35 @@ function renderPreviewComponent(code, components, props, depth) {
   if (!component?.content) {
     return `<!-- missing component: ${escapeHtml(code)} -->`;
   }
-  return renderPreviewTemplate(component, props, components, depth + 1);
+  collectPreviewTsxStyle(component, previewState);
+  if (component.engine === 'tsx') {
+    return renderTsxTemplate(component.content, props, {
+      templateCode: component.code,
+      componentResolver: ({ code: nestedCode, props: nestedProps, helpers }) => {
+        return renderPreviewComponentElement(
+          nestedCode,
+          components,
+          mergePreviewComponentProps(props, nestedProps),
+          depth + 1,
+          previewState,
+          helpers
+        );
+      }
+    });
+  }
+  return renderPreviewTemplate(component, props, components, depth + 1, previewState);
 }
 
-function renderPreviewHtmlContent(content, props, components, depth) {
+function renderPreviewHtmlContent(content, props, components, depth, previewState) {
   const loopsExpanded = String(content || '').replace(/#loop\(([A-Za-z0-9_.-]+)\)#([\s\S]*?)#\/loop#/g, (_, pathName, rowTemplate) => {
     const items = resolvePreviewValue(props, pathName);
     if (!Array.isArray(items)) {
       return '';
     }
-    return items.map((item) => renderPreviewHtmlContent(rowTemplate, { ...props, item }, components, depth + 1)).join('');
+    return items.map((item) => renderPreviewHtmlContent(rowTemplate, { ...props, item }, components, depth + 1, previewState)).join('');
   });
   const componentExpanded = loopsExpanded.replace(/#component\(\s*["']([A-Za-z0-9_-]+)["']\s*\)#/g, (_, code) => {
-    return renderPreviewComponent(code, components, props, depth + 1);
+    return renderPreviewComponentMarkup(code, components, props, depth + 1, previewState);
   });
   const rawExpanded = componentExpanded.replace(/\{\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}\}/g, (_, pathName) => {
     return stringifyPreviewValue(resolvePreviewValue(props, pathName));
@@ -1002,6 +1204,41 @@ function renderPreviewHtmlContent(content, props, components, depth) {
   return rawExpanded.replace(/\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}/g, (_, pathName) => {
     return escapeHtml(stringifyPreviewValue(resolvePreviewValue(props, pathName)));
   });
+}
+
+function collectPreviewTsxStyle(template, previewState) {
+  if (!previewState?.styleAssets || template?.engine !== 'tsx') {
+    return;
+  }
+  const asset = getTsxTemplateStyleAsset(template.content, {
+    templateCode: template.code
+  });
+  if (!asset) {
+    return;
+  }
+  previewState.styleAssets.set(asset.code, asset);
+}
+
+function injectPreviewTsxStyles(html, styleAssets) {
+  if (!styleAssets || styleAssets.size === 0) {
+    return html;
+  }
+  const styleHtml = Array.from(styleAssets.values())
+    .map((asset) => `<style data-cms-template-style="${escapeHtml(asset.code)}">\n${asset.cssText}\n</style>`)
+    .join('\n');
+
+  if (/<\/head>/i.test(html)) {
+    return html.replace(/<\/head>/i, `${styleHtml}\n</head>`);
+  }
+  return `${styleHtml}\n${html}`;
+}
+
+function mergePreviewComponentProps(baseProps, extraProps) {
+  const { children: _children, slots: _slots, ...restBaseProps } = baseProps || {};
+  return {
+    ...restBaseProps,
+    ...(extraProps || {})
+  };
 }
 
 function resolvePreviewValue(source, pathName) {
@@ -1115,7 +1352,8 @@ function buildTemplateValidationProps(template) {
         { label: '示例内容', url: '' }
       ]
     },
-    component: () => '',
+    component: () => null,
+    primaryMenuItems: buildPreviewPrimaryMenuItems('home'),
     item: {
       id: 1,
       name: '示例产品',
@@ -1144,6 +1382,8 @@ function buildTemplateValidationProps(template) {
     featuredProductLinksHtml: '',
     serviceIndexHtml: '',
     productsSmallCatHtml: '',
+    primaryMenuLabel: '站点导航',
+    secondaryMenuItems: [],
     smallName: '示例分类',
     bigId: 1,
     bigName: '示例父级分类',

@@ -54,6 +54,15 @@ const tsxGroups: VariableGroup[] = [
     title: '面包屑',
     items: ['breadcrumb?.prefixHtml', 'breadcrumb?.html', 'breadcrumb?.items'],
   },
+  {
+    title: '组件与插槽',
+    items: [
+      "component('layout_shell', { children: <div />, slots: { header: <div /> } })",
+      'children',
+      'slots?.header',
+      'slots?.aside',
+    ],
+  },
 ]
 
 const listHtmlGroup: VariableGroup = {

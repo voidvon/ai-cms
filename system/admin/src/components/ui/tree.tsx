@@ -8,6 +8,7 @@ export interface TreeItemData<T = unknown> {
   label: React.ReactNode
   children?: TreeItemData<T>[]
   data?: T
+  selectable?: boolean
 }
 
 interface TreeProps<T = unknown> {
@@ -61,6 +62,7 @@ function TreeItem<T = unknown>({
 }) {
   const children = item.children || []
   const hasChildren = children.length > 0
+  const selectable = item.selectable !== false
   const active = value === item.id
   const defaultOpen = defaultExpandedIds.includes(item.id) || hasSelectedDescendant(item, value)
 
@@ -69,7 +71,7 @@ function TreeItem<T = unknown>({
       <div role="treeitem" aria-selected={active}>
         <div className="group/tree-item flex items-center" style={{ marginLeft: depth * 12 }}>
           <span className="h-8 w-7 shrink-0" aria-hidden="true" />
-          <TreeItemButton item={item} active={active} depth={0} onValueChange={onValueChange} />
+          <TreeItemButton item={item} active={active} depth={0} onValueChange={onValueChange} selectable={selectable} />
           {renderAction?.(item)}
         </div>
       </div>
@@ -90,7 +92,7 @@ function TreeItem<T = unknown>({
               <ChevronRight className="size-4 transition-transform group-data-[state=open]/tree-toggle:rotate-90" />
             </button>
           </CollapsibleTrigger>
-          <TreeItemButton item={item} active={active} depth={0} onValueChange={onValueChange} />
+          <TreeItemButton item={item} active={active} depth={0} onValueChange={onValueChange} selectable={selectable} />
           {renderAction?.(item)}
         </div>
       </div>
@@ -116,18 +118,26 @@ function TreeItemButton<T = unknown>({
   active,
   depth,
   onValueChange,
+  selectable,
 }: {
   item: TreeItemData<T>
   active: boolean
   depth: number
   onValueChange?: (item: TreeItemData<T>) => void
+  selectable: boolean
 }) {
   return (
     <button
       type="button"
-      onClick={() => onValueChange?.(item)}
+      onClick={() => {
+        if (selectable) {
+          onValueChange?.(item)
+        }
+      }}
+      disabled={!selectable}
       className={cn(
-        'min-h-8 min-w-0 flex-1 rounded px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted',
+        'min-h-8 min-w-0 flex-1 rounded px-2 py-1.5 text-left text-sm transition-colors',
+        selectable ? 'hover:bg-muted' : 'cursor-default text-muted-foreground',
         active && 'bg-muted font-medium'
       )}
       style={{ marginLeft: depth * 12 }}

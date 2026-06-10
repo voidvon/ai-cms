@@ -2,9 +2,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { SERVER_ROOT } from './config.mjs';
-import { resolveSelectedThemeTemplateCode } from './services/template-variants.mjs';
-import { listPublishedComponents, resolvePublishedTemplate } from './services/templates.mjs';
-import { renderTsxTemplate } from './tsx-template-renderer.mjs';
+import { listSelectedThemePublishedComponents, resolveSelectedThemeTemplateCode } from './services/template-variants.mjs';
+import { resolvePublishedTemplate } from './services/templates.mjs';
+import { createTsxTemplateElement, renderTsxTemplate } from './tsx-template-renderer.mjs';
+import { getTsxTemplateStyleAsset } from './tsx-template-styles.mjs';
 import { escapeHtml } from './utils/html.mjs';
 
 export function createCmsTemplateRuntime({
@@ -14,6 +15,7 @@ export function createCmsTemplateRuntime({
   expandLegacyCommonPlaceholders
 }) {
   const registeredTsxClientTemplates = new Map();
+  const registeredTsxStyleTemplates = new Map();
 
   function renderCmsSitePage(pageName, props, templateContext, options = {}) {
     const templateCode = templateByPage[pageName];
@@ -31,39 +33,53 @@ export function createCmsTemplateRuntime({
     }
 
     const clientTemplates = new Map();
+    const styleTemplates = new Map();
     let html = '';
 
     if (template.engine === 'tsx') {
-      if (hasTsxClientRuntime(template.content)) {
-        registerTsxClientTemplate(template, clientTemplates);
-      }
+      registerTsxTemplateAssets(template, { clientTemplates, styleTemplates });
       html = renderCmsTsxTemplate(template.content, props, templateContext, {
         clientTemplates,
+        styleTemplates,
         templateCode: template.code
       });
     } else {
       html = renderCmsTemplate(template.content, props, templateContext, {
-        clientTemplates
+        clientTemplates,
+        styleTemplates
       });
     }
 
-    return injectTsxClientRuntimes(html, clientTemplates, props);
+    return injectTsxPageAssets(html, { clientTemplates, styleTemplates, props });
   }
 
   function renderCmsTsxTemplate(content, props, templateContext, options = {}) {
     const components = buildCmsComponentMap(templateContext);
-    const templateProps = {
-      ...props,
-      component: (code, extraProps = {}) => {
-        return renderCmsComponent(code, components, templateContext, { ...props, ...extraProps }, 0, options);
+    return expandLegacyCommonPlaceholders(renderTsxTemplate(content, props, {
+      templateCode: options.templateCode || '',
+      componentResolver: ({ code, props: extraProps, helpers }) => {
+        return renderCmsComponentElement(
+          code,
+          components,
+          templateContext,
+          mergeComponentProps(props, extraProps),
+          0,
+          options,
+          helpers
+        );
       }
-    };
-    return expandLegacyCommonPlaceholders(renderTsxTemplate(content, templateProps, {
-      templateCode: options.templateCode || ''
     }), templateContext);
   }
 
+  function registerTsxTemplateAssets(template, registries = {}) {
+    registerTsxClientTemplate(template, registries.clientTemplates);
+    registerTsxStyleTemplate(template, registries.styleTemplates);
+  }
+
   function registerTsxClientTemplate(template, clientTemplates = null) {
+    if (!hasTsxClientRuntime(template.content)) {
+      return;
+    }
     const code = sanitizeTemplateCode(template.code);
     if (!code) {
       return;
@@ -76,6 +92,39 @@ export function createCmsTemplateRuntime({
     if (clientTemplates) {
       clientTemplates.set(code, runtimeTemplate);
     }
+  }
+
+  function registerTsxStyleTemplate(template, styleTemplates = null) {
+    const asset = getTsxTemplateStyleAsset(template.content, {
+      templateCode: template.code
+    });
+    if (!asset) {
+      return;
+    }
+    registeredTsxStyleTemplates.set(asset.code, asset);
+    if (styleTemplates) {
+      styleTemplates.set(asset.code, asset);
+    }
+  }
+
+  function injectTsxPageAssets(html, { clientTemplates, styleTemplates, props }) {
+    let nextHtml = injectTsxStylesheetLinks(html, styleTemplates);
+    nextHtml = injectTsxClientRuntimes(nextHtml, clientTemplates, props);
+    return nextHtml;
+  }
+
+  function injectTsxStylesheetLinks(html, styleTemplates) {
+    if (!styleTemplates || styleTemplates.size === 0) {
+      return html;
+    }
+    const linkHtml = Array.from(styleTemplates.values())
+      .map((asset) => `<link rel="stylesheet" href="/${templateClientAssetDir}/${asset.code}.css">`)
+      .join('\n');
+
+    if (/<\/head>/i.test(html)) {
+      return html.replace(/<\/head>/i, `${linkHtml}\n</head>`);
+    }
+    return `${linkHtml}\n${html}`;
   }
 
   function injectTsxClientRuntimes(html, clientTemplates, props) {
@@ -124,7 +173,7 @@ export function createCmsTemplateRuntime({
   function buildCmsComponentMap(templateContext) {
     const components = new Map();
 
-    for (const item of listPublishedComponents()) {
+    for (const item of listSelectedThemePublishedComponents()) {
       components.set(String(item.code || '').toLowerCase(), {
         code: item.code || '',
         engine: item.engine || 'html',
@@ -141,7 +190,7 @@ export function createCmsTemplateRuntime({
       let changed = false;
       html = html.replace(/#component\(\s*["']([A-Za-z0-9_-]+)["']\s*\)#/g, (_, code) => {
         changed = true;
-        return renderCmsComponent(code, components, templateContext, props, depth + 1, options);
+        return renderCmsComponentMarkup(code, components, templateContext, props, depth + 1, options);
       });
       if (!changed) {
         break;
@@ -150,7 +199,41 @@ export function createCmsTemplateRuntime({
     return html;
   }
 
-  function renderCmsComponent(code, components, templateContext, props, depth, options = {}) {
+  function renderCmsComponentElement(code, components, templateContext, props, depth, options = {}, helpers) {
+    if (depth > 10) {
+      return null;
+    }
+    const component = components.get(String(code || '').toLowerCase());
+    if (!component?.content) {
+      return null;
+    }
+
+    if (component.engine === 'tsx') {
+      registerTsxTemplateAssets(component, {
+        clientTemplates: options.clientTemplates,
+        styleTemplates: options.styleTemplates
+      });
+      return createTsxTemplateElement(component.content, props, {
+        templateCode: component.code,
+        componentResolver: ({ code: nestedCode, props: nestedProps, helpers: nestedHelpers }) => {
+          return renderCmsComponentElement(
+            nestedCode,
+            components,
+            templateContext,
+            mergeComponentProps(props, nestedProps),
+            depth + 1,
+            options,
+            nestedHelpers
+          );
+        }
+      }, helpers?.runtimeContext);
+    }
+
+    const html = renderCmsTemplateContent(component.content, props, templateContext, components, depth + 1, options);
+    return helpers?.renderHtml ? helpers.renderHtml(html) : html;
+  }
+
+  function renderCmsComponentMarkup(code, components, templateContext, props, depth, options = {}) {
     if (depth > 10) {
       return '';
     }
@@ -160,15 +243,23 @@ export function createCmsTemplateRuntime({
     }
 
     if (component.engine === 'tsx') {
-      if (hasTsxClientRuntime(component.content)) {
-        registerTsxClientTemplate(component, options.clientTemplates);
-      }
-      const templateProps = {
-        ...props,
-        component: (nestedCode, extraProps = {}) => renderCmsComponent(nestedCode, components, templateContext, { ...props, ...extraProps }, depth + 1, options)
-      };
-      return expandLegacyCommonPlaceholders(renderTsxTemplate(component.content, templateProps, {
-        templateCode: component.code
+      registerTsxTemplateAssets(component, {
+        clientTemplates: options.clientTemplates,
+        styleTemplates: options.styleTemplates
+      });
+      return expandLegacyCommonPlaceholders(renderTsxTemplate(component.content, props, {
+        templateCode: component.code,
+        componentResolver: ({ code: nestedCode, props: nestedProps, helpers }) => {
+          return renderCmsComponentElement(
+            nestedCode,
+            components,
+            templateContext,
+            mergeComponentProps(props, nestedProps),
+            depth + 1,
+            options,
+            helpers
+          );
+        }
       }), templateContext);
     }
 
@@ -192,6 +283,28 @@ export function createCmsTemplateRuntime({
     const dirPath = path.resolve(outputRoot, templateClientAssetDir);
     if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
       fs.rmSync(dirPath, { recursive: true, force: true });
+    }
+  }
+
+  function buildRegisteredTsxAssets(outputRoot) {
+    buildRegisteredTsxStyleAssets(outputRoot);
+    buildRegisteredTsxClientBundles(outputRoot);
+  }
+
+  function buildRegisteredTsxStyleAssets(outputRoot) {
+    if (registeredTsxStyleTemplates.size === 0) {
+      return;
+    }
+
+    const dirPath = path.resolve(outputRoot, templateClientAssetDir);
+    fs.mkdirSync(dirPath, { recursive: true });
+
+    try {
+      for (const asset of registeredTsxStyleTemplates.values()) {
+        fs.writeFileSync(path.join(dirPath, `${asset.code}.css`), asset.cssText, 'utf8');
+      }
+    } finally {
+      registeredTsxStyleTemplates.clear();
     }
   }
 
@@ -225,7 +338,7 @@ export function createCmsTemplateRuntime({
   return {
     renderCmsSitePage,
     cleanupTemplateClientBundles,
-    buildRegisteredTsxClientBundles
+    buildRegisteredTsxAssets
   };
 }
 
@@ -291,6 +404,14 @@ function stringifyTemplateValue(value) {
     return String(value);
   }
   return '';
+}
+
+function mergeComponentProps(baseProps, extraProps) {
+  const { children: _children, slots: _slots, ...restBaseProps } = baseProps || {};
+  return {
+    ...restBaseProps,
+    ...(extraProps || {})
+  };
 }
 
 function sanitizeTemplateCode(value) {

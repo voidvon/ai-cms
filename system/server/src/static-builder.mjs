@@ -65,7 +65,7 @@ const TEMPLATE_CLIENT_ASSET_DIR = path.join('assets', 'cms-templates');
 const {
   renderCmsSitePage,
   cleanupTemplateClientBundles,
-  buildRegisteredTsxClientBundles
+  buildRegisteredTsxAssets
 } = createCmsTemplateRuntime({
   templateByPage: CMS_TEMPLATE_BY_PAGE,
   templateTypeByPage: CMS_TEMPLATE_TYPE_BY_PAGE,
@@ -117,7 +117,7 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
   if (requestedSections.has('news-details')) {
     results.push(buildNewsDetailPages({ outputRoot: normalizedOutputRoot }));
   }
-  buildRegisteredTsxClientBundles(normalizedOutputRoot);
+  buildRegisteredTsxAssets(normalizedOutputRoot);
 
   return {
     outputRoot: normalizedOutputRoot,
@@ -135,7 +135,7 @@ export function buildIndexPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   });
 
   writeTextFile(outputRoot, 'index.html', html);
-  buildRegisteredTsxClientBundles(outputRoot);
+  buildRegisteredTsxAssets(outputRoot);
   return createBuildResult('index', '首页', 1, 1);
 }
 
@@ -147,7 +147,7 @@ export function buildContactPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   });
 
   writeTextFile(outputRoot, 'contact.html', html);
-  buildRegisteredTsxClientBundles(outputRoot);
+  buildRegisteredTsxAssets(outputRoot);
   return createBuildResult('contact', '联系页面', 1, 1);
 }
 
@@ -159,7 +159,7 @@ export function buildMessagePage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   });
 
   writeTextFile(outputRoot, 'msg.html', html);
-  buildRegisteredTsxClientBundles(outputRoot);
+  buildRegisteredTsxAssets(outputRoot);
   return createBuildResult('msg', '留言页面', 1, 1);
 }
 
@@ -189,7 +189,7 @@ export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {})
     }
   }
 
-  buildRegisteredTsxClientBundles(outputRoot);
+  buildRegisteredTsxAssets(outputRoot);
   return createBuildResult('corporation-pages', '公司栏目页', items.length, filesWritten);
 }
 
@@ -267,7 +267,7 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } =
     });
   }
 
-  buildRegisteredTsxClientBundles(outputRoot);
+  buildRegisteredTsxAssets(outputRoot);
   return createBuildResult('product-lists', '产品分类页', categories.filter((item) => normalizeInteger(item.id, 0) !== 0).length, filesWritten);
 }
 
@@ -301,7 +301,7 @@ export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
     filesWritten += 1;
   }
 
-  buildRegisteredTsxClientBundles(outputRoot);
+  buildRegisteredTsxAssets(outputRoot);
   return createBuildResult('product-details', '产品详情页', products.length, filesWritten);
 }
 
@@ -383,7 +383,7 @@ function buildLegacyNewsSectionCategoryPages({
     }
   }
 
-  buildRegisteredTsxClientBundles(outputRoot);
+  buildRegisteredTsxAssets(outputRoot);
   return createBuildResult(sectionKey, sectionLabel, categoryList.length, filesWritten);
 }
 
@@ -432,7 +432,7 @@ function buildLegacyNewsSectionDetailPages({
     filesWritten += 1;
   }
 
-  buildRegisteredTsxClientBundles(outputRoot);
+  buildRegisteredTsxAssets(outputRoot);
   return createBuildResult(sectionKey, sectionLabel, items.length, filesWritten);
 }
 
@@ -454,9 +454,10 @@ function getLegacyTemplateContext() {
   };
 }
 
-function buildLegacyCommonProps(templateContext) {
+function buildLegacyCommonProps(templateContext, activePrimaryNav = '') {
   return {
     site: templateContext.site,
+    primaryMenuItems: buildLegacyPrimaryMenuItems(templateContext, activePrimaryNav),
     fragments: {
       indextopHtml: '',
       topHtml: '',
@@ -506,7 +507,7 @@ function expandLegacyCommonPlaceholders(value, templateContext) {
 
 function buildLegacyHomePageProps(templateContext) {
   return {
-    ...buildLegacyCommonProps(templateContext),
+    ...buildLegacyCommonProps(templateContext, 'home'),
     newsIndexHtml: buildLegacyIndexNews(),
     featuredProductsHtml: buildLegacyIndexFeaturedProducts(),
     featuredProductLinksHtml: buildLegacyIndexFeaturedProductLinks(),
@@ -516,7 +517,7 @@ function buildLegacyHomePageProps(templateContext) {
 
 function buildLegacyContactPageProps(templateContext) {
   return {
-    ...buildLegacyCommonProps(templateContext),
+    ...buildLegacyCommonProps(templateContext, 'contact'),
     ...buildLegacyPageContextProps({
       pageType: 'contact',
       title: '联系我们',
@@ -531,7 +532,7 @@ function buildLegacyContactPageProps(templateContext) {
 
 function buildLegacyMessagePageProps(templateContext) {
   return {
-    ...buildLegacyCommonProps(templateContext),
+    ...buildLegacyCommonProps(templateContext, 'message'),
     ...buildLegacyPageContextProps({
       pageType: 'message',
       title: '在线留言',
@@ -547,7 +548,7 @@ function buildLegacyMessagePageProps(templateContext) {
 function buildLegacyContentPageProps(templateContext, item) {
   const parentCategory = templateContext.corporationCategories.find((entry) => normalizeInteger(entry.id, 0) === normalizeInteger(item.parent_id, 0)) || null;
   return {
-    ...buildLegacyCommonProps(templateContext),
+    ...buildLegacyCommonProps(templateContext, 'corporation'),
     ...buildLegacyPageContextProps({
       pageType: 'content',
       title: item.name || '',
@@ -568,7 +569,8 @@ function buildLegacyContentPageProps(templateContext, item) {
       breadcrumbOptions: { separatorHtml: ' &gt;&gt; ' }
     }),
     title: item.name || '',
-    contentHtml: normalizeLegacyRichTextHtml(item.content_html) || ''
+    contentHtml: normalizeLegacyRichTextHtml(item.content_html) || '',
+    secondaryMenuItems: buildLegacyCorporationMenuItems(templateContext.corporationCategories, CORPORATION_ROOT_ID, normalizeInteger(item.id, 0))
   };
 }
 
@@ -579,7 +581,7 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
   const fileStem = normalizeInteger(category.id, 0) === 0 ? 'index' : String(category.id);
 
   return {
-    ...buildLegacyCommonProps(templateContext),
+    ...buildLegacyCommonProps(templateContext, 'product'),
     ...buildLegacyPageContextProps({
       pageType: 'product-list',
       title: category.name || '',
@@ -602,6 +604,7 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
     bigId: normalizeInteger(parent?.id, category.id),
     bigName: parent?.name || category.name || '',
     productsSmallCatHtml: buildLegacyProductSmallCategories(siblingCategories.length > 0 ? siblingCategories : [category]),
+    secondaryMenuItems: buildLegacyProductMenuItems(siblingCategories.length > 0 ? siblingCategories : [category], normalizeInteger(category.id, 0)),
     items: buildLegacyProductListItems(pageItems),
     pagerHtml: buildLegacyProductPager(fileStem, pageNumber, pageCount, totalRecords),
     prodKeywords: category.seo_keywords || category.name || ''
@@ -609,8 +612,12 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
 }
 
 function buildLegacyProductDetailPageProps({ templateContext, product, relatedProducts, category, parent }) {
+  const siblingCategories = parent
+    ? templateContext.productCategories.filter((item) => normalizeInteger(item.parent_id, 0) === normalizeInteger(parent.id, 0))
+    : templateContext.productCategories.filter((item) => normalizeInteger(item.parent_id, 0) === normalizeInteger(category?.id, 0));
+
   return {
-    ...buildLegacyCommonProps(templateContext),
+    ...buildLegacyCommonProps(templateContext, 'product'),
     ...buildLegacyPageContextProps({
       pageType: 'product-detail',
       title: product.name || '',
@@ -642,7 +649,11 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
     image: product.small_image || '/skin/dfpic.gif',
     code: product.code || '',
     relatedProductsHtml: buildLegacyRelatedProducts(relatedProducts),
-    bodyHtml: normalizeLegacyRichTextHtml(product.content_html) || ''
+    bodyHtml: normalizeLegacyRichTextHtml(product.content_html) || '',
+    secondaryMenuItems: buildLegacyProductMenuItems(
+      siblingCategories.length > 0 ? siblingCategories : [category].filter(Boolean),
+      normalizeInteger(category?.id, 0)
+    )
   };
 }
 
@@ -651,7 +662,7 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
   const sectionDir = isService ? 'service' : 'news';
   const sectionLabel = isService ? '阀门知识' : '新闻资讯';
   return {
-    ...buildLegacyCommonProps(templateContext),
+    ...buildLegacyCommonProps(templateContext, isService ? 'service' : 'news'),
     ...buildLegacyPageContextProps({
       pageType: 'article-list',
       title: category.name || '',
@@ -675,6 +686,7 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
     sectionDir,
     sectionLabel,
     sectionCategoryHtml: isService ? buildLegacyNewsCategoryList(templateContext.newsCategories, SERVICE_ROOT_ID, 'service') : buildLegacyNewsCategoryList(templateContext.newsCategories, NEWS_ROOT_ID, 'news'),
+    secondaryMenuItems: buildLegacyNewsMenuItems(templateContext.newsCategories, isService ? SERVICE_ROOT_ID : NEWS_ROOT_ID, sectionDir, normalizeInteger(category.id, 0)),
     categoryId: normalizeInteger(category.id, 0),
     title: category.name || '',
     items: buildLegacyArticleListItems({ pageItems, summaryClassName }),
@@ -692,7 +704,7 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, item, cat
   const sectionDir = isService ? 'service' : 'news';
   const sectionLabel = isService ? '阀门知识' : '新闻资讯';
   return {
-    ...buildLegacyCommonProps(templateContext),
+    ...buildLegacyCommonProps(templateContext, isService ? 'service' : 'news'),
     ...buildLegacyPageContextProps({
       pageType: 'article-detail',
       title: item.title || '',
@@ -719,6 +731,7 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, item, cat
     sectionDir,
     sectionLabel,
     sectionCategoryHtml: isService ? buildLegacyNewsCategoryList(templateContext.newsCategories, SERVICE_ROOT_ID, 'service') : buildLegacyNewsCategoryList(templateContext.newsCategories, NEWS_ROOT_ID, 'news'),
+    secondaryMenuItems: buildLegacyNewsMenuItems(templateContext.newsCategories, isService ? SERVICE_ROOT_ID : NEWS_ROOT_ID, sectionDir, normalizeInteger(category?.id, 0)),
     title: item.title || '',
     newsKeywords: item.keywords || '',
     newsDescription: resolveRenderableNewsSummary(item) || '',
@@ -993,6 +1006,44 @@ function buildLegacyAboutCategoryList(categories, rootId) {
   return html;
 }
 
+function buildLegacyCorporationMenuItems(categories, rootId, activeId = 0) {
+  return categories
+    .filter((item) => normalizeInteger(item.parent_id, 0) === normalizeInteger(rootId, 0))
+    .map((item) => ({
+      label: item.name || '',
+      url: normalizeInteger(item.is_external, 0) === 1 && item.external_url
+        ? item.external_url
+        : `/about/about-${normalizeInteger(item.id, 0)}.html`,
+      active: normalizeInteger(item.id, 0) === normalizeInteger(activeId, 0)
+    }));
+}
+
+function buildLegacyPrimaryMenuItems(templateContext, activeKey = '') {
+  const corporationRoot = templateContext.corporationCategories.find((item) => normalizeInteger(item.id, 0) === CORPORATION_ROOT_ID) || null;
+  const firstCorporationChild = templateContext.corporationCategories.find((item) => normalizeInteger(item.parent_id, 0) === CORPORATION_ROOT_ID) || null;
+  const newsRoot = templateContext.newsCategories.find((item) => normalizeInteger(item.id, 0) === NEWS_ROOT_ID) || null;
+  const serviceRoot = templateContext.newsCategories.find((item) => normalizeInteger(item.id, 0) === SERVICE_ROOT_ID) || null;
+  const items = [
+    { key: 'home', label: '首页', url: '/index.html' },
+    {
+      key: 'corporation',
+      label: corporationRoot?.name || '公司栏目',
+      url: firstCorporationChild ? `/about/about-${normalizeInteger(firstCorporationChild.id, 0)}.html` : '/about/'
+    },
+    { key: 'product', label: '产品展示', url: '/valve/' },
+    { key: 'news', label: newsRoot?.name || '新闻资讯', url: '/news/' },
+    { key: 'service', label: serviceRoot?.name || '阀门知识', url: '/service/' },
+    { key: 'contact', label: '联系我们', url: '/contact.html' },
+    { key: 'message', label: '在线留言', url: '/msg.html' }
+  ];
+
+  return items.map((item) => ({
+    label: item.label,
+    url: item.url,
+    active: item.key === activeKey
+  }));
+}
+
 function buildLegacyNewsCategoryList(categories, rootId, dirName) {
   const items = categories.filter((item) => normalizeInteger(item.parent_id, 0) === normalizeInteger(rootId, 0));
   let html = '<table width="80%" border="0" align="center" cellpadding="0" cellspacing="0">';
@@ -1007,6 +1058,16 @@ function buildLegacyNewsCategoryList(categories, rootId, dirName) {
   return html;
 }
 
+function buildLegacyNewsMenuItems(categories, rootId, dirName, activeId = 0) {
+  return categories
+    .filter((item) => normalizeInteger(item.parent_id, 0) === normalizeInteger(rootId, 0))
+    .map((item) => ({
+      label: item.name || '',
+      url: `/${dirName}/${normalizeInteger(item.id, 0)}.html`,
+      active: normalizeInteger(item.id, 0) === normalizeInteger(activeId, 0)
+    }));
+}
+
 function buildLegacyProductSmallCategories(categories) {
   let html = '<table width="95%" border="0" align="center" cellpadding="0" cellspacing="0"><tr><td><span class=abv>';
   categories.forEach((item) => {
@@ -1014,6 +1075,16 @@ function buildLegacyProductSmallCategories(categories) {
   });
   html += '</span></td></tr></table>';
   return html;
+}
+
+function buildLegacyProductMenuItems(categories, activeId = 0) {
+  return (categories || [])
+    .filter(Boolean)
+    .map((item) => ({
+      label: item.name || '',
+      url: `/products/${normalizeInteger(item.id, 0)}.html`,
+      active: normalizeInteger(item.id, 0) === normalizeInteger(activeId, 0)
+    }));
 }
 
 function buildLegacyProductListItems(pageItems) {
