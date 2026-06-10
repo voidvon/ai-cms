@@ -4,6 +4,7 @@ import LoginPage from '@/pages/LoginPage'
 import DashboardLayout from '@/layouts/DashboardLayout'
 import ColumnsPage from '@/pages/ColumnsPage'
 import MessagesPage from '@/pages/MessagesPage'
+import MediaAssetsPage from '@/pages/MediaAssetsPage'
 import TemplateVariantsPage from '@/pages/TemplateVariantsPage'
 import ContentModelsPage from '@/pages/ContentModelsPage'
 import AdminsPage from '@/pages/AdminsPage'
@@ -23,6 +24,7 @@ function App() {
           <Route path="messages" element={<MessagesPage />} />
           <Route path="templates" element={<TemplateVariantsPage />} />
           <Route path="content-models" element={<ContentModelsPage />} />
+          <Route path="media-assets" element={<MediaAssetsPage />} />
           <Route path="template-variants" element={<Navigate to="/templates" replace />} />
           <Route path="admins" element={<AdminsPage />} />
           <Route path="static-gen" element={<StaticGenerationPage />} />

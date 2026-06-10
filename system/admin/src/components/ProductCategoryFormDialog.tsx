@@ -91,7 +91,7 @@ export default function ProductCategoryFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="w-[80vw] max-w-[80vw] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === 'create' ? '添加产品分类' : '编辑产品分类'}</DialogTitle>
           <DialogDescription>

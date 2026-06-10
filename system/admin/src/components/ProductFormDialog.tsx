@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import ImageUploadField from '@/components/ImageUploadField'
 import RichTextEditor from '@/components/RichTextEditor'
 import { toast } from 'sonner'
 import type { Product } from '@/types'
@@ -93,7 +94,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="w-[80vw] max-w-[80vw] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === 'create' ? '添加产品' : '编辑产品'}</DialogTitle>
           <DialogDescription>
@@ -144,15 +145,16 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
               value={formData.content_html}
               onChange={(content_html) => setFormData({ ...formData, content_html })}
               placeholder="请输入详细内容"
-              uploadType="prod"
+              uploadPurpose="richtext_image"
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="small_image">封面图片</Label>
-            <Input
+            <ImageUploadField
               id="small_image"
               value={formData.small_image}
-              onChange={(e) => setFormData({ ...formData, small_image: e.target.value })}
+              onChange={(small_image) => setFormData({ ...formData, small_image })}
+              purpose="product_cover"
               placeholder="请输入封面图片路径"
             />
           </div>

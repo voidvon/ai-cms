@@ -2,13 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import Quill from 'quill'
 import 'quill/dist/quill.snow.css'
 import { toast } from 'sonner'
-import { uploadsApi } from '@/api/uploads'
+import { mediaApi, type MediaPurpose } from '@/api/media'
 
 interface RichTextEditorProps {
   value: string
   onChange: (value: string) => void
   placeholder?: string
-  uploadType?: 'prod' | 'news'
+  uploadPurpose?: MediaPurpose
   className?: string
 }
 
@@ -21,7 +21,7 @@ export default function RichTextEditor({
   value,
   onChange,
   placeholder = '请输入内容',
-  uploadType = 'prod',
+  uploadPurpose = 'richtext_image',
   className = '',
 }: RichTextEditorProps) {
   const editorRef = useRef<HTMLDivElement | null>(null)
@@ -114,12 +114,12 @@ export default function RichTextEditor({
 
     setIsUploading(true)
     try {
-      const result = await uploadsApi.upload(file, uploadType)
+      const result = await mediaApi.upload(file, uploadPurpose)
       const quill = quillRef.current
       const range = quill.getSelection(true)
       const insertIndex = range?.index ?? quill.getLength()
 
-      quill.insertEmbed(insertIndex, 'image', result.relativePath, 'user')
+      quill.insertEmbed(insertIndex, 'image', result.data.relative_path, 'user')
       quill.setSelection(insertIndex + 1, 0, 'silent')
       toast.success('图片已插入')
     } catch (error: any) {

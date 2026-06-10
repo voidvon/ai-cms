@@ -1,5 +1,5 @@
 import { execute, queryAll, queryOne } from '../db.mjs';
-import { deleteUploadedFile } from './uploads.mjs';
+import { markMediaAssetStatusByPath } from './media-assets.mjs';
 import { looksLikeLegacyMojibake } from '../utils/legacy-text.mjs';
 
 const LEGACY_MARKETING_PATTERNS = [
@@ -10,6 +10,11 @@ const LEGACY_MARKETING_PATTERNS = [
   /彪维传热介绍[，,]*/gi,
   /[,，]?\s*彪维公司始终站在蒸汽利用的历史前沿[\s\S]*$/gi
 ];
+const DEFAULT_NEWS_IMAGE = '/UploadFile/nopicture.gif';
+const LEGACY_NEWS_PLACEHOLDERS = new Set([
+  DEFAULT_NEWS_IMAGE,
+  '/UploadFile/Newsuppic/nopicture.gif',
+]);
 
 export function listNews({ limit = 20 } = {}) {
   const safeLimit = clampLimit(limit);
@@ -153,7 +158,9 @@ export function createNews(input) {
     ]
   );
 
-  return getNewsById(result.lastInsertRowid);
+  const news = getNewsById(result.lastInsertRowid);
+  markNewsPictureActive(news?.picture);
+  return news;
 }
 
 export function updateNews(id, input) {
@@ -190,14 +197,13 @@ export function updateNews(id, input) {
     ]
   );
 
-  if (existing.picture !== payload.picture &&
-    existing.picture &&
-    existing.picture !== '/UploadFile/nopicture.gif' &&
-    existing.picture !== '/UploadFile/Newsuppic/nopicture.gif') {
-    deleteUploadedFile(existing.picture);
+  if (existing.picture !== payload.picture) {
+    markNewsPictureOrphaned(existing.picture);
   }
 
-  return getNewsById(id);
+  const news = getNewsById(id);
+  markNewsPictureActive(news?.picture);
+  return news;
 }
 
 export function deleteNews(id) {
@@ -207,9 +213,7 @@ export function deleteNews(id) {
   }
 
   execute('DELETE FROM news WHERE id = ?', [id]);
-  if (existing.picture && existing.picture !== '/UploadFile/nopicture.gif' && existing.picture !== '/UploadFile/Newsuppic/nopicture.gif') {
-    deleteUploadedFile(existing.picture);
-  }
+  markNewsPictureOrphaned(existing.picture);
   return existing;
 }
 
@@ -224,7 +228,7 @@ export function normalizeNewsInput(input) {
     title,
     summary: toNullableString(input.summary),
     content_html: toNullableString(input.content_html),
-    picture: toNullableString(input.picture) || '/UploadFile/nopicture.gif',
+    picture: toNullableString(input.picture) || DEFAULT_NEWS_IMAGE,
     keywords: toNullableString(input.keywords),
     is_featured_home: toBooleanInt(input.is_featured_home),
     created_at: toNullableString(input.created_at) || new Date().toISOString()
@@ -233,6 +237,25 @@ export function normalizeNewsInput(input) {
 
 function clampLimit(limit) {
   return Math.min(Math.max(Number.parseInt(String(limit), 10) || 20, 1), 10000);
+}
+
+function markNewsPictureActive(relativePath) {
+  if (!isManagedNewsPicture(relativePath)) {
+    return;
+  }
+  markMediaAssetStatusByPath(relativePath, 'active');
+}
+
+function markNewsPictureOrphaned(relativePath) {
+  if (!isManagedNewsPicture(relativePath)) {
+    return;
+  }
+  markMediaAssetStatusByPath(relativePath, 'orphaned');
+}
+
+function isManagedNewsPicture(relativePath) {
+  const normalizedPath = String(relativePath || '').trim();
+  return normalizedPath !== '' && !LEGACY_NEWS_PLACEHOLDERS.has(normalizedPath);
 }
 
 function normalizeNewsRecord(row) {

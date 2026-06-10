@@ -1,5 +1,5 @@
 import { execute, queryAll, queryOne } from '../db.mjs';
-import { deleteUploadedFile } from './uploads.mjs';
+import { markMediaAssetStatusByPath } from './media-assets.mjs';
 import { looksLikeLegacyMojibake } from '../utils/legacy-text.mjs';
 
 const LEGACY_MARKETING_PATTERNS = [
@@ -14,6 +14,7 @@ const LEGACY_PRODUCT_BRAND_PATTERNS = [
   /(?:美国|进口)?彪维(?=[\u4E00-\u9FFFA-Za-z0-9])/gi,
   /[-,，\s]*中国驰名商标/gi
 ];
+const DEFAULT_PRODUCT_IMAGE = '/skin/dfpic.gif';
 
 export function listProducts({ featured = false, visibleOnly = true, limit = 20 } = {}) {
   const safeLimit = clampLimit(limit);
@@ -312,7 +313,9 @@ export function createProduct(input) {
     ]
   );
 
-  return getProductById(result.lastInsertRowid);
+  const product = getProductById(result.lastInsertRowid);
+  markProductCoverActive(product?.small_image);
+  return product;
 }
 
 export function getNextProductSortOrder() {
@@ -358,7 +361,13 @@ export function updateProduct(id, input) {
     ]
   );
 
-  return getProductById(id);
+  if (existing.small_image !== payload.small_image) {
+    markProductCoverOrphaned(existing.small_image);
+  }
+
+  const product = getProductById(id);
+  markProductCoverActive(product?.small_image);
+  return product;
 }
 
 export function deleteProduct(id) {
@@ -368,7 +377,7 @@ export function deleteProduct(id) {
   }
 
   execute('DELETE FROM products WHERE id = ?', [id]);
-  deleteUploadedFile(existing.small_image);
+  markProductCoverOrphaned(existing.small_image);
   return existing;
 }
 
@@ -384,7 +393,7 @@ export function normalizeProductInput(input) {
     code: toNullableString(input.code),
     summary: toNullableString(input.summary),
     content_html: toNullableString(input.content_html),
-    small_image: toNullableString(input.small_image) || '/skin/dfpic.gif',
+    small_image: toNullableString(input.small_image) || DEFAULT_PRODUCT_IMAGE,
     keywords: toNullableString(input.keywords),
     is_featured_home: toBooleanInt(input.is_featured_home),
     is_visible: toBooleanInt(input.is_visible, 1),
@@ -394,6 +403,25 @@ export function normalizeProductInput(input) {
 
 function clampLimit(limit) {
   return Math.min(Math.max(Number.parseInt(String(limit), 10) || 20, 1), 10000);
+}
+
+function markProductCoverActive(relativePath) {
+  if (!isManagedProductCover(relativePath)) {
+    return;
+  }
+  markMediaAssetStatusByPath(relativePath, 'active');
+}
+
+function markProductCoverOrphaned(relativePath) {
+  if (!isManagedProductCover(relativePath)) {
+    return;
+  }
+  markMediaAssetStatusByPath(relativePath, 'orphaned');
+}
+
+function isManagedProductCover(relativePath) {
+  const normalizedPath = String(relativePath || '').trim();
+  return normalizedPath !== '' && normalizedPath !== DEFAULT_PRODUCT_IMAGE;
 }
 
 function normalizeProductRecord(row) {

@@ -203,6 +203,21 @@ export interface PaginationInfo {
   totalPages: number;
 }
 
+export interface MediaAsset {
+  id: number;
+  storage_driver: string;
+  purpose: string;
+  original_name?: string;
+  mime_type?: string;
+  file_ext?: string;
+  file_size: number;
+  relative_path: string;
+  fs_path: string;
+  status: 'active' | 'orphaned' | string;
+  file_exists?: boolean;
+  created_at?: string;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;

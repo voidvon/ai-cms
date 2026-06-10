@@ -516,20 +516,16 @@ export default function ColumnsPage() {
         </CardContent>
       </Card>
 
-      <Card className="flex min-h-0 flex-col overflow-hidden">
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <CardTitle>{pageTitle}</CardTitle>
-            </div>
-            {!isCorporationColumn && (
-              <Button onClick={handleAdd}>
-                新增内容
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="flex min-h-0 flex-1 flex-col">
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div className="flex items-start justify-between gap-3">
+          <CardTitle>{pageTitle}</CardTitle>
+          {!isCorporationColumn && (
+            <Button onClick={handleAdd}>
+              新增内容
+            </Button>
+          )}
+        </div>
+        <div className="mt-4 min-h-0 flex flex-1 flex-col">
           {isCorporationColumn ? (
             <div className="min-h-0 flex-1">
               <CorporationColumnPanel column={selectedColumn} />
@@ -537,7 +533,7 @@ export default function ColumnsPage() {
           ) : activeLoading ? (
             <div className="flex min-h-0 flex-1 items-center justify-center rounded border p-8 text-center text-muted-foreground">加载中...</div>
           ) : (
-            <div className="min-h-0 flex-1 overflow-auto rounded border">
+            <>
               {isNewsColumn ? (
                 <NewsTable
                   items={activeItems as News[]}
@@ -551,7 +547,7 @@ export default function ColumnsPage() {
                   onDelete={(id) => handleDelete({ type: 'product', id })}
                 />
               )}
-            </div>
+            </>
           )}
 
           {activePagination && (
@@ -617,8 +613,8 @@ export default function ColumnsPage() {
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <ProductFormDialog
         open={productFormOpen}
@@ -805,7 +801,7 @@ function ProductTable({
   onDelete: (id: number) => void
 }) {
   return (
-    <Table>
+    <Table containerClassName="min-h-0 flex-1 rounded border">
       <TableHeader>
         <TableRow>
           <TableHead>ID</TableHead>
@@ -833,7 +829,7 @@ function ProductTable({
               <TableCell>{product.is_featured_home === 1 ? <Badge>是</Badge> : <Badge variant="outline">否</Badge>}</TableCell>
               <TableCell className="text-right">
                 <Button variant="ghost" size="sm" onClick={() => onEdit(product)}>编辑</Button>
-                <Button variant="ghost" size="sm" onClick={() => onDelete(product.id)}>删除</Button>
+                <Button variant="destructiveGhost" size="sm" onClick={() => onDelete(product.id)}>删除</Button>
               </TableCell>
             </TableRow>
           ))
@@ -853,7 +849,7 @@ function NewsTable({
   onDelete: (id: number) => void
 }) {
   return (
-    <Table>
+    <Table containerClassName="min-h-0 flex-1 rounded border">
       <TableHeader>
         <TableRow>
           <TableHead>ID</TableHead>
@@ -879,7 +875,7 @@ function NewsTable({
               <TableCell>{item.created_at ? new Date(item.created_at).toLocaleDateString('zh-CN') : '-'}</TableCell>
               <TableCell className="text-right">
                 <Button variant="ghost" size="sm" onClick={() => onEdit(item)}>编辑</Button>
-                <Button variant="ghost" size="sm" onClick={() => onDelete(item.id)}>删除</Button>
+                <Button variant="destructiveGhost" size="sm" onClick={() => onDelete(item.id)}>删除</Button>
               </TableCell>
             </TableRow>
           ))

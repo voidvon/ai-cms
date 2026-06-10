@@ -84,7 +84,7 @@ export default function NewsCategoryFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="w-[80vw] max-w-[80vw] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === 'create' ? '添加新闻分类' : '编辑新闻分类'}</DialogTitle>
           <DialogDescription>

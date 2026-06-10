@@ -78,7 +78,7 @@ function buildFileName(extension) {
   return `${stamp}_${suffix}${extension}`;
 }
 
-function resolveUploadedFilePath(relativePath) {
+export function resolveUploadedFilePath(relativePath) {
   const normalized = String(relativePath || '').trim().replaceAll('\\', '/');
   if (!normalized) {
     return null;

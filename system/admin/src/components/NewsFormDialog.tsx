@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import ImageUploadField from '@/components/ImageUploadField'
 import RichTextEditor from '@/components/RichTextEditor'
 import { toast } from 'sonner'
 import type { News } from '@/types'
@@ -84,7 +85,7 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+      <DialogContent className="w-[80vw] max-w-[80vw] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === 'create' ? '添加新闻' : '编辑新闻'}</DialogTitle>
           <DialogDescription>
@@ -126,16 +127,17 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
               value={formData.content_html}
               onChange={(content_html) => setFormData({ ...formData, content_html })}
               placeholder="请输入详细内容"
-              uploadType="news"
+              uploadPurpose="richtext_image"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="picture">图片路径</Label>
-            <Input
+            <Label htmlFor="picture">封面图片</Label>
+            <ImageUploadField
               id="picture"
               value={formData.picture}
-              onChange={(e) => setFormData({ ...formData, picture: e.target.value })}
-              placeholder="请输入图片路径"
+              onChange={(picture) => setFormData({ ...formData, picture })}
+              purpose="news_cover"
+              placeholder="请输入封面图片路径"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">

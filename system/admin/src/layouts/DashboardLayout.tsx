@@ -77,6 +77,7 @@ export default function DashboardLayout() {
       items: [
         { path: '/templates', label: '模板管理' },
         { path: '/content-models', label: '数据模型' },
+        { path: '/media-assets', label: '附件管理' },
       ]
     },
     {

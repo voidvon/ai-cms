@@ -47,6 +47,22 @@ CREATE TABLE IF NOT EXISTS products (
   FOREIGN KEY (category_id) REFERENCES product_categories(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS media_assets (
+  id INTEGER PRIMARY KEY,
+  storage_driver TEXT NOT NULL DEFAULT 'local',
+  purpose TEXT NOT NULL,
+  original_name TEXT,
+  mime_type TEXT,
+  file_ext TEXT,
+  file_size INTEGER NOT NULL DEFAULT 0,
+  relative_path TEXT NOT NULL UNIQUE,
+  fs_path TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'active',
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_media_assets_purpose ON media_assets(purpose, id);
+CREATE INDEX IF NOT EXISTS idx_media_assets_status ON media_assets(status, id);
+
 CREATE TABLE IF NOT EXISTS news_categories (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
