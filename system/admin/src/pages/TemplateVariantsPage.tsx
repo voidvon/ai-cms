@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { templatesApi } from '@/api/advanced'
+import { templateVariantsApi, templatesApi } from '@/api/advanced'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { TemplateCodeEditor } from '@/components/TemplateCodeEditor'
 import { TemplateVariableReference } from '@/components/TemplateVariableReference'
 import { toast } from 'sonner'
-import type { Template, TemplateVersion } from '@/types'
+import type { Template, TemplateVariant, TemplateVersion } from '@/types'
 
 const templateTypes: Array<{ value: Template['type']; label: string; description: string }> = [
   { value: 'home', label: '首页模板', description: '生成首页' },
@@ -49,12 +49,21 @@ export default function TemplateVariantsPage() {
     content: '',
     sort_order: 0,
   })
+  const { data: themesData, isLoading: isThemesLoading } = useQuery({
+    queryKey: ['themes'],
+    queryFn: () => templateVariantsApi.list(),
+  })
   const { data, isLoading } = useQuery({
     queryKey: ['templates'],
     queryFn: () => templatesApi.list(),
   })
 
-  const templates = data?.data || []
+  const themes = themesData?.data ?? []
+  const templates = data?.data ?? []
+  const selectedTheme = useMemo(
+    () => themes.find((item) => item.is_selected === 1) || themes[0] || null,
+    [themes],
+  )
   const filteredTemplates = useMemo(
     () => templates.filter((item) => item.type === activeType),
     [templates, activeType],
@@ -105,7 +114,7 @@ export default function TemplateVariantsPage() {
       queryClient.invalidateQueries({ queryKey: ['template-dependencies', selectedTemplate?.id] })
       toast.success('模板已保存为草稿')
     },
-    onError: (error: any) => toast.error(error.response?.data?.message || '保存失败'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '保存失败')),
   })
 
   const publishMutation = useMutation({
@@ -122,7 +131,7 @@ export default function TemplateVariantsPage() {
       queryClient.invalidateQueries({ queryKey: ['template-versions', selectedTemplate?.id] })
       toast.success('模板已发布')
     },
-    onError: (error: any) => toast.error(error.response?.data?.message || '发布失败'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '发布失败')),
   })
 
   const createMutation = useMutation({
@@ -144,7 +153,27 @@ export default function TemplateVariantsPage() {
       }
       toast.success('模板已创建')
     },
-    onError: (error: any) => toast.error(error.response?.data?.message || '创建失败'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '创建失败')),
+  })
+
+  const createThemeMutation = useMutation({
+    mutationFn: () => templateVariantsApi.create(buildNewThemePayload(selectedTheme, themes.length + 1)),
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['themes'] })
+      queryClient.invalidateQueries({ queryKey: ['selected-theme'] })
+      toast.success('主题已创建')
+    },
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '创建主题失败')),
+  })
+
+  const selectThemeMutation = useMutation({
+    mutationFn: (id: number) => templateVariantsApi.select(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['themes'] })
+      queryClient.invalidateQueries({ queryKey: ['selected-theme'] })
+      toast.success('主题已切换')
+    },
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '切换主题失败')),
   })
 
   const previewMutation = useMutation({
@@ -156,7 +185,7 @@ export default function TemplateVariantsPage() {
       setPreviewHtml(response.data?.html || '')
       setPreviewOpen(true)
     },
-    onError: (error: any) => toast.error(error.response?.data?.message || '预览失败'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '预览失败')),
   })
 
   const restoreVersionMutation = useMutation({
@@ -183,57 +212,84 @@ export default function TemplateVariantsPage() {
       }
       toast.success('模板版本已恢复并发布')
     },
-    onError: (error: any) => toast.error(error.response?.data?.message || '恢复失败'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '恢复失败')),
   })
 
-  if (isLoading) {
+  if (isLoading || isThemesLoading) {
     return <div>加载中...</div>
   }
 
   const selectedTypeInfo = templateTypes.find((item) => item.value === activeType)
 
   return (
-    <div className="space-y-4">
-      <Card>
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
+      <Card className="shrink-0">
         <CardHeader>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <CardTitle>模板管理</CardTitle>
-              <CardDescription>按首页、列表、内容、组件四类管理数据库模板。静态生成只读取已发布模板。</CardDescription>
+              <CardTitle>主题管理</CardTitle>
+              <CardDescription>
+                当前主题：{selectedTheme?.template_name || '未选择'}。主题决定静态生成时各页面默认使用的已发布模板，下方模板库用于编辑具体模板内容。
+              </CardDescription>
             </div>
-            <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
-              新增模板
-            </Button>
+            <div className="flex items-center gap-2">
+              <Select
+                value={selectedTheme ? String(selectedTheme.id) : undefined}
+                onValueChange={(value) => {
+                  const nextId = Number(value)
+                  if (!Number.isNaN(nextId) && nextId !== selectedTheme?.id) {
+                    selectThemeMutation.mutate(nextId)
+                  }
+                }}
+              >
+                <SelectTrigger className="w-[220px]">
+                  <SelectValue placeholder="选择主题" />
+                </SelectTrigger>
+                <SelectContent>
+                  {themes.map((theme) => (
+                    <SelectItem key={theme.id} value={String(theme.id)}>
+                      {theme.template_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Button onClick={() => createThemeMutation.mutate()} disabled={createThemeMutation.isPending}>
+                新增主题
+              </Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-2 md:grid-cols-4">
-            {templateTypes.map((type) => (
-              <button
-                key={type.value}
-                type="button"
-                onClick={() => {
-                  setActiveType(type.value)
-                  setSelectedId(null)
-                }}
-                className={`rounded border p-3 text-left transition-colors ${activeType === type.value ? 'border-primary bg-muted' : 'hover:bg-muted/60'}`}
-              >
-                <div className="font-medium">{type.label}</div>
-                <div className="mt-1 text-xs text-muted-foreground">{type.description}</div>
-              </button>
-            ))}
+          <div className="text-sm text-muted-foreground">
+            切换主题后，下一次静态生成会按所选主题输出默认页面模板。
           </div>
         </CardContent>
       </Card>
 
-      <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <Card>
-          <CardHeader>
-            <CardTitle>{selectedTypeInfo?.label}</CardTitle>
-            <CardDescription>当前分类共 {filteredTemplates.length} 个模板</CardDescription>
+      <div className="grid min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)]">
+        <Card className="flex min-h-0 flex-col overflow-hidden">
+          <CardHeader className="shrink-0">
+            <CardTitle>主题模板库</CardTitle>
+            <CardDescription>{selectedTypeInfo?.label}，当前分类共 {filteredTemplates.length} 个模板</CardDescription>
+            <div className="grid gap-2 pt-2 md:grid-cols-2 xl:grid-cols-1">
+              {templateTypes.map((type) => (
+                <button
+                  key={type.value}
+                  type="button"
+                  onClick={() => {
+                    setActiveType(type.value)
+                    setSelectedId(null)
+                  }}
+                  className={`rounded border p-3 text-left transition-colors ${activeType === type.value ? 'border-primary bg-muted' : 'hover:bg-muted/60'}`}
+                >
+                  <div className="font-medium">{type.label}</div>
+                  <div className="mt-1 text-xs text-muted-foreground">{type.description}</div>
+                </button>
+              ))}
+            </div>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
+          <CardContent className="min-h-0 flex-1 overflow-auto">
+            <div className="space-y-2 pr-1">
               {filteredTemplates.map((template) => (
                 <button
                   key={template.id}
@@ -261,16 +317,19 @@ export default function TemplateVariantsPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
+        <Card className="flex min-h-0 flex-col overflow-hidden">
+          <CardHeader className="shrink-0">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <CardTitle>{selectedTemplate ? selectedTemplate.name : '未选择模板'}</CardTitle>
                 <CardDescription>
-                  使用组件引用和占位符编辑模板，双花括号输出转义文本，三花括号输出 HTML。
+                  模板是主题的组成单元。使用组件引用和占位符编辑模板，双花括号输出转义文本，三花括号输出 HTML。
                 </CardDescription>
               </div>
               <div className="flex gap-2">
+                <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
+                  新增模板
+                </Button>
                 <Select value={previewMode} onValueChange={setPreviewMode}>
                   <SelectTrigger className="w-[138px]">
                     <SelectValue />
@@ -293,9 +352,9 @@ export default function TemplateVariantsPage() {
               </div>
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="min-h-0 flex-1 overflow-auto">
             {selectedTemplate ? (
-              <div className="space-y-4">
+              <div className="flex min-h-0 flex-col gap-4 pr-1">
                 <div className="grid gap-4 md:grid-cols-[1fr_220px_150px_120px]">
                   <div className="space-y-2">
                     <Label htmlFor="template-name">模板名称</Label>
@@ -338,16 +397,20 @@ export default function TemplateVariantsPage() {
                     </Select>
                   </div>
                 </div>
-                <div className="space-y-2">
+                <div className="flex min-h-0 flex-1 flex-col space-y-2">
                   <Label htmlFor="template-content">模板内容</Label>
-                  <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
+                  <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
                     <TemplateCodeEditor
                       id="template-content"
                       value={formData.content}
                       engine={formData.engine}
                       onChange={(content) => setFormData({ ...formData, content })}
+                      height="100%"
+                      className="h-full min-h-[420px]"
                     />
-                    <TemplateVariableReference type={formData.type} engine={formData.engine} />
+                    <div className="min-h-0 overflow-auto">
+                      <TemplateVariableReference type={formData.type} engine={formData.engine} />
+                    </div>
                   </div>
                 </div>
                 <TemplateDependencyPanel
@@ -376,6 +439,39 @@ export default function TemplateVariantsPage() {
       />
     </div>
   )
+}
+
+function buildNewThemePayload(baseTheme: TemplateVariant | null, nextIndex: number): Partial<TemplateVariant> {
+  return {
+    template_name: `新主题 ${nextIndex}`,
+    is_selected: 0,
+    home_index: baseTheme?.home_index,
+    co_index: baseTheme?.co_index,
+    produts_index: baseTheme?.produts_index,
+    produts_sort1: baseTheme?.produts_sort1,
+    produts_sort2: baseTheme?.produts_sort2,
+    produts_detail: baseTheme?.produts_detail,
+    news_index: baseTheme?.news_index,
+    news_sort1: baseTheme?.news_sort1,
+    news_detail: baseTheme?.news_detail,
+    service_sort1: baseTheme?.service_sort1,
+    service_detail: baseTheme?.service_detail,
+    msg_index: baseTheme?.msg_index,
+    contact: baseTheme?.contact,
+  }
+}
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === 'object' && 'response' in error) {
+    const response = (error as { response?: { data?: { message?: string } } }).response
+    if (response?.data?.message) {
+      return response.data.message
+    }
+  }
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+  return fallback
 }
 
 function TemplatePreviewDialog({

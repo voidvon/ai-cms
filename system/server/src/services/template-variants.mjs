@@ -1,8 +1,52 @@
-import { execute, queryAll, queryOne } from '../db.mjs';
+import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 
-const EXTRA_FIELDS = ['service_index', 'Contact'];
+const THEME_TEMPLATE_SLOT_FIELDS = {
+  home: 'home_index',
+  corporation: 'co_index',
+  product_list: 'produts_sort1',
+  product_detail: 'produts_detail',
+  news_list: 'news_sort1',
+  news_detail: 'news_detail',
+  service_list: 'service_sort1',
+  service_detail: 'service_detail',
+  message: 'msg_index',
+  contact: 'contact'
+};
+
+let schemaEnsured = false;
+
+export function ensureTemplateVariantsSchema() {
+  if (schemaEnsured) {
+    return;
+  }
+
+  getDb().exec(`
+    CREATE TABLE IF NOT EXISTS template_variants (
+      id INTEGER PRIMARY KEY,
+      template_name TEXT NOT NULL,
+      is_selected INTEGER NOT NULL DEFAULT 0,
+      home_index TEXT,
+      co_index TEXT,
+      produts_index TEXT,
+      produts_sort1 TEXT,
+      produts_sort2 TEXT,
+      produts_detail TEXT,
+      news_index TEXT,
+      news_sort1 TEXT,
+      news_detail TEXT,
+      service_sort1 TEXT,
+      service_detail TEXT,
+      msg_index TEXT,
+      contact TEXT,
+      legacy_extra TEXT
+    );
+  `);
+
+  schemaEnsured = true;
+}
 
 export function listTemplateVariants() {
+  ensureTemplateVariantsSchema();
   return queryAll(
     `
       SELECT
@@ -30,6 +74,7 @@ export function listTemplateVariants() {
 }
 
 export function getTemplateVariantById(id) {
+  ensureTemplateVariantsSchema();
   const row = queryOne(
     `
       SELECT
@@ -58,7 +103,93 @@ export function getTemplateVariantById(id) {
   return row ? normalizeTemplateVariantRecord(row) : null;
 }
 
+export function getSelectedTemplateVariant() {
+  ensureTemplateVariantsSchema();
+  const row = queryOne(
+    `
+      SELECT
+        id,
+        template_name,
+        is_selected,
+        home_index,
+        co_index,
+        produts_index,
+        produts_sort1,
+        produts_sort2,
+        produts_detail,
+        news_index,
+        news_sort1,
+        news_detail,
+        service_sort1,
+        service_detail,
+        msg_index,
+        contact,
+        legacy_extra
+      FROM template_variants
+      WHERE is_selected = 1
+      ORDER BY id ASC
+      LIMIT 1
+    `
+  );
+  return row ? normalizeTemplateVariantRecord(row) : null;
+}
+
+export function createTemplateVariant(input = {}) {
+  ensureTemplateVariantsSchema();
+  const count = queryOne('SELECT COUNT(*) AS count FROM template_variants')?.count || 0;
+  const payload = normalizeTemplateVariantInput(input, {
+    defaultSelected: count === 0
+  });
+  const result = execute(
+    `
+      INSERT INTO template_variants (
+        template_name,
+        is_selected,
+        home_index,
+        co_index,
+        produts_index,
+        produts_sort1,
+        produts_sort2,
+        produts_detail,
+        news_index,
+        news_sort1,
+        news_detail,
+        service_sort1,
+        service_detail,
+        msg_index,
+        contact,
+        legacy_extra
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      payload.template_name,
+      payload.is_selected,
+      payload.home_index,
+      payload.co_index,
+      payload.produts_index,
+      payload.produts_sort1,
+      payload.produts_sort2,
+      payload.produts_detail,
+      payload.news_index,
+      payload.news_sort1,
+      payload.news_detail,
+      payload.service_sort1,
+      payload.service_detail,
+      payload.msg_index,
+      payload.contact,
+      payload.legacy_extra
+    ]
+  );
+
+  if (payload.is_selected === 1) {
+    execute('UPDATE template_variants SET is_selected = 0 WHERE id <> ?', [result.lastInsertRowid]);
+  }
+
+  return getTemplateVariantById(result.lastInsertRowid);
+}
+
 export function updateTemplateVariant(id, input) {
+  ensureTemplateVariantsSchema();
   const existing = getTemplateVariantById(id);
   if (!existing) {
     return null;
@@ -116,6 +247,7 @@ export function updateTemplateVariant(id, input) {
 }
 
 export function setSelectedTemplateVariant(id) {
+  ensureTemplateVariantsSchema();
   const existing = getTemplateVariantById(id);
   if (!existing) {
     return null;
@@ -127,6 +259,7 @@ export function setSelectedTemplateVariant(id) {
 }
 
 export function deleteTemplateVariant(id) {
+  ensureTemplateVariantsSchema();
   const existing = getTemplateVariantById(id);
   if (!existing) {
     return null;
@@ -149,50 +282,60 @@ export function deleteTemplateVariant(id) {
   return existing;
 }
 
-function normalizeTemplateVariantInput(input, options = {}) {
-  const existingExtra = parseLegacyExtra(options.existing?.legacy_extra);
-  const mergedExtra = { ...existingExtra };
+export function resolveSelectedThemeTemplateCode(slot) {
+  const selected = getSelectedTemplateVariant();
+  return selected ? getThemeTemplateCode(selected, slot) : null;
+}
 
-  for (const field of EXTRA_FIELDS) {
-    const value = toNullableString(input[field] ?? mergedExtra[field]);
-    if (value == null) {
-      delete mergedExtra[field];
-    } else {
-      mergedExtra[field] = value;
-    }
+export function getThemeTemplateCode(variant, slot) {
+  const field = THEME_TEMPLATE_SLOT_FIELDS[slot];
+  if (!field) {
+    return null;
   }
 
+  return normalizeThemeTemplateCode(variant[field]);
+}
+
+function normalizeTemplateVariantInput(input, options = {}) {
   return {
-    template_name: toNullableString(input.template_name ?? input.tempname) || options.existing?.template_name || '未命名模板',
-    is_selected: toBooleanInt(input.is_selected ?? input.selected ?? options.existing?.is_selected, options.existing?.is_selected ? 1 : 0),
-    home_index: toNullableString(input.home_index),
-    co_index: toNullableString(input.co_index ?? input.Co_index),
-    produts_index: toNullableString(input.produts_index),
-    produts_sort1: toNullableString(input.produts_sort1),
-    produts_sort2: toNullableString(input.produts_sort2),
-    produts_detail: toNullableString(input.produts_detail),
-    news_index: toNullableString(input.news_index),
-    news_sort1: toNullableString(input.news_sort1 ?? input.News_sort1),
-    news_detail: toNullableString(input.news_detail),
-    service_sort1: toNullableString(input.service_sort1),
-    service_detail: toNullableString(input.service_detail),
-    msg_index: toNullableString(input.msg_index),
-    contact: toNullableString(input.contact ?? input.Contact),
-    legacy_extra: Object.keys(mergedExtra).length > 0 ? JSON.stringify(mergedExtra) : null
+    template_name: toNullableString(input.template_name) || options.existing?.template_name || '未命名主题',
+    is_selected: toBooleanInt(
+      input.is_selected ?? options.existing?.is_selected,
+      options.existing?.is_selected ? 1 : (options.defaultSelected ? 1 : 0)
+    ),
+    home_index: normalizeThemeTemplateCode(input.home_index),
+    co_index: normalizeThemeTemplateCode(input.co_index),
+    produts_index: normalizeThemeTemplateCode(input.produts_index),
+    produts_sort1: normalizeThemeTemplateCode(input.produts_sort1),
+    produts_sort2: normalizeThemeTemplateCode(input.produts_sort2),
+    produts_detail: normalizeThemeTemplateCode(input.produts_detail),
+    news_index: normalizeThemeTemplateCode(input.news_index),
+    news_sort1: normalizeThemeTemplateCode(input.news_sort1),
+    news_detail: normalizeThemeTemplateCode(input.news_detail),
+    service_sort1: normalizeThemeTemplateCode(input.service_sort1),
+    service_detail: normalizeThemeTemplateCode(input.service_detail),
+    msg_index: normalizeThemeTemplateCode(input.msg_index),
+    contact: normalizeThemeTemplateCode(input.contact),
+    legacy_extra: options.existing?.legacy_extra ?? null
   };
 }
 
 function normalizeTemplateVariantRecord(row) {
-  const legacyExtra = parseLegacyExtra(row.legacy_extra);
-  return {
-    ...row,
-    tempname: row.template_name,
-    selected: row.is_selected,
-    service_index: toNullableString(legacyExtra.service_index) || '',
-    Contact: toNullableString(legacyExtra.Contact) || row.contact || '',
-    News_sort1: row.news_sort1 || '',
-    Co_index: row.co_index || ''
-  };
+  return { ...row };
+}
+
+function normalizeThemeTemplateCode(value) {
+  const normalized = toNullableString(value);
+  if (!normalized || normalized === '没有模板') {
+    return null;
+  }
+
+  const lowered = normalized.toLowerCase();
+  if (lowered.includes('/') || lowered.includes('\\')) {
+    throw new Error(`invalid theme template code: ${normalized}`);
+  }
+
+  return normalized;
 }
 
 function parseLegacyExtra(value) {

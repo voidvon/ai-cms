@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { templateVariantsApi } from '@/api/advanced'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { toast } from 'sonner'
@@ -19,6 +20,10 @@ const buildClient = axios.create({
 
 export default function StaticGenerationPage() {
   const [building, setBuilding] = useState(false)
+  const { data: selectedThemeData } = useQuery({
+    queryKey: ['selected-theme'],
+    queryFn: () => templateVariantsApi.getSelected(),
+  })
 
   const buildMutation = useMutation({
     mutationFn: async (section: string) => {
@@ -33,8 +38,8 @@ export default function StaticGenerationPage() {
       }
       setBuilding(false)
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || '生成失败')
+    onError: (error: unknown) => {
+      toast.error(getApiErrorMessage(error, '生成失败'))
       setBuilding(false)
     },
   })
@@ -70,7 +75,9 @@ export default function StaticGenerationPage() {
       <Card>
         <CardHeader>
           <CardTitle>静态页面生成</CardTitle>
-          <CardDescription>生成静态HTML文件到 `html/` 目录</CardDescription>
+          <CardDescription>
+            生成静态HTML文件到 `html/` 目录。当前默认主题：{selectedThemeData?.data?.template_name || '未选择'}
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           {sections.map((section) => (
@@ -104,4 +111,17 @@ export default function StaticGenerationPage() {
       </Card>
     </div>
   )
+}
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (error && typeof error === 'object' && 'response' in error) {
+    const response = (error as { response?: { data?: { message?: string } } }).response
+    if (response?.data?.message) {
+      return response.data.message
+    }
+  }
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+  return fallback
 }

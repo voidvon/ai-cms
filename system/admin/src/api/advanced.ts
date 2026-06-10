@@ -51,6 +51,11 @@ export const templateVariantsApi = {
     return response.data
   },
 
+  create: async (data: Partial<TemplateVariant>) => {
+    const response = await apiClient.post<ApiResponse<TemplateVariant>>('/template-variants', data)
+    return response.data
+  },
+
   update: async (id: number, data: Partial<TemplateVariant>) => {
     const response = await apiClient.put<ApiResponse<TemplateVariant>>(`/template-variants/${id}`, data)
     return response.data
@@ -58,6 +63,11 @@ export const templateVariantsApi = {
 
   select: async (id: number) => {
     const response = await apiClient.post<ApiResponse<TemplateVariant>>(`/template-variants/${id}/select`)
+    return response.data
+  },
+
+  delete: async (id: number) => {
+    const response = await apiClient.delete<ApiResponse<TemplateVariant>>(`/template-variants/${id}`)
     return response.data
   },
 }

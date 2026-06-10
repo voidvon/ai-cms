@@ -130,6 +130,7 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
 export function buildIndexPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   const templateContext = getLegacyTemplateContext();
   const html = renderCmsSitePage('legacy-home', buildLegacyHomePageProps(templateContext), templateContext, {
+    themeSlot: 'home',
     targets: [{ target_type: 'site', target_id: null }]
   });
 
@@ -141,6 +142,7 @@ export function buildIndexPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
 export function buildContactPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   const templateContext = getLegacyTemplateContext();
   const html = renderCmsSitePage('legacy-contact', buildLegacyContactPageProps(templateContext), templateContext, {
+    themeSlot: 'contact',
     targets: [{ target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.contact }]
   });
 
@@ -152,6 +154,7 @@ export function buildContactPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
 export function buildMessagePage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   const templateContext = getLegacyTemplateContext();
   const html = renderCmsSitePage('legacy-message', buildLegacyMessagePageProps(templateContext), templateContext, {
+    themeSlot: 'message',
     targets: [{ target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.message }]
   });
 
@@ -170,6 +173,7 @@ export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {})
 
   for (const item of items) {
     const html = renderCmsSitePage('legacy-content', buildLegacyContentPageProps(templateContext, item), templateContext, {
+      themeSlot: 'corporation',
       targets: [
         { target_type: 'corporation_category', target_id: item.id },
         { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.corporation }
@@ -286,6 +290,7 @@ export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
       category,
       parent
     }), templateContext, {
+      themeSlot: 'product_detail',
       targets: [
         { target_type: 'product_category', target_id: normalizeInteger(product.category_id, 0) },
         { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.product }
@@ -356,6 +361,7 @@ function buildLegacyNewsSectionCategoryPages({
         dirName,
         summaryClassName
       }), templateContext, {
+        themeSlot: dirName === 'service' ? 'service_list' : 'news_list',
         targets: [
           { target_type: 'news_category', target_id: category.id },
           { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.article }
@@ -415,6 +421,7 @@ function buildLegacyNewsSectionDetailPages({
       previous,
       next
     }), templateContext, {
+      themeSlot: dirName === 'service' ? 'service_detail' : 'news_detail',
       targets: [
         { target_type: 'news_category', target_id: normalizeInteger(item.category_id, 0) },
         { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.article }
@@ -1059,6 +1066,7 @@ function writeProductCategoryPageSet({
       pageCount: pageList.length,
       totalRecords: items.length
     }), templateContext, {
+      themeSlot: 'product_list',
       targets: [
         { target_type: 'product_category', target_id: normalizeInteger(category.id, 0) },
         { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.product }

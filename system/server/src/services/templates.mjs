@@ -126,7 +126,7 @@ export function getPublishedTemplateById(id) {
   ) || null;
 }
 
-export function resolvePublishedTemplate({ templateType, targets = [], fallbackCode }) {
+export function resolvePublishedTemplate({ templateType, targets = [], fallbackCode, fallbackCodes = [] }) {
   ensureTemplatesSchema();
 
   for (const target of targets) {
@@ -140,7 +140,19 @@ export function resolvePublishedTemplate({ templateType, targets = [], fallbackC
     }
   }
 
-  return getPublishedTemplateByCode(fallbackCode);
+  const candidates = [
+    ...fallbackCodes,
+    fallbackCode
+  ].filter(Boolean);
+
+  for (const code of candidates) {
+    const template = getPublishedTemplateByCode(code);
+    if (template) {
+      return template;
+    }
+  }
+
+  return null;
 }
 
 export function listPublishedComponents() {

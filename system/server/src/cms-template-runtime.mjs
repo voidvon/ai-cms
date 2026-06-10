@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { SERVER_ROOT } from './config.mjs';
+import { resolveSelectedThemeTemplateCode } from './services/template-variants.mjs';
 import { listPublishedComponents, resolvePublishedTemplate } from './services/templates.mjs';
 import { renderTsxTemplate } from './tsx-template-renderer.mjs';
 import { escapeHtml } from './utils/html.mjs';
@@ -17,10 +18,12 @@ export function createCmsTemplateRuntime({
   function renderCmsSitePage(pageName, props, templateContext, options = {}) {
     const templateCode = templateByPage[pageName];
     const templateType = options.templateType || templateTypeByPage[pageName];
+    const themeTemplateCode = options.themeSlot ? resolveSelectedThemeTemplateCode(options.themeSlot) : null;
     const template = templateCode && templateType ? resolvePublishedTemplate({
       templateType,
       targets: options.targets || [],
-      fallbackCode: templateCode
+      fallbackCode: templateCode,
+      fallbackCodes: themeTemplateCode ? [themeTemplateCode] : []
     }) : null;
 
     if (!template?.content) {

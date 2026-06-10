@@ -22,10 +22,11 @@ function App() {
           <Route path="columns" element={<ColumnsPage />} />
           <Route path="corporation-categories" element={<Navigate to="/columns" replace />} />
           <Route path="messages" element={<MessagesPage />} />
-          <Route path="templates" element={<TemplateVariantsPage />} />
+          <Route path="themes" element={<TemplateVariantsPage />} />
+          <Route path="templates" element={<Navigate to="/themes" replace />} />
           <Route path="content-models" element={<ContentModelsPage />} />
           <Route path="media-assets" element={<MediaAssetsPage />} />
-          <Route path="template-variants" element={<Navigate to="/templates" replace />} />
+          <Route path="template-variants" element={<Navigate to="/themes" replace />} />
           <Route path="admins" element={<AdminsPage />} />
           <Route path="static-gen" element={<StaticGenerationPage />} />
           <Route path="site-config" element={<SiteConfigPage />} />
