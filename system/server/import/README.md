@@ -11,18 +11,12 @@ npm run db:import
 - `benming_master.csv`
 - `benming_ch_ProdCat.csv`
 - `benming_ch_prod.csv`
-- `benming_ch_prodphoto.csv`
 - `benming_ch_NewsCat.csv`
 - `benming_ch_news.csv`
-- `benming_ch_job.csv`
 - `benming_ch_Msg.csv`
-- `benming_ch_Contact.csv`
 - `benming_ch_Cocat.csv`
-- `benming_ch_MetaType.csv`
 - `benming_ch_config.csv`
 - `benming_ch_worldec_Temp.csv`
-- `benming_ch_cuskind.csv`
-- `benming_ch_cuslabel.csv`
 
 如果导出的 CSV 是 GBK/GB2312 编码：
 

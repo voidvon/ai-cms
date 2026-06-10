@@ -2,17 +2,8 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
 import LoginPage from '@/pages/LoginPage'
 import DashboardLayout from '@/layouts/DashboardLayout'
-import ProductsPage from '@/pages/ProductsPage'
-import ProductCategoriesPage from '@/pages/ProductCategoriesPage'
-import ProductPhotosPage from '@/pages/ProductPhotosPage'
-import NewsPage from '@/pages/NewsPage'
-import NewsCategoriesPage from '@/pages/NewsCategoriesPage'
-import CorporationCategoriesPage from '@/pages/CorporationCategoriesPage'
-import JobsPage from '@/pages/JobsPage'
+import ColumnsPage from '@/pages/ColumnsPage'
 import MessagesPage from '@/pages/MessagesPage'
-import ContactsPage from '@/pages/ContactsPage'
-import CustomLabelsPage from '@/pages/CustomLabelsPage'
-import MetaTypesPage from '@/pages/MetaTypesPage'
 import TemplateVariantsPage from '@/pages/TemplateVariantsPage'
 import ContentModelsPage from '@/pages/ContentModelsPage'
 import AdminsPage from '@/pages/AdminsPage'
@@ -25,19 +16,11 @@ function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/" element={<DashboardLayout />}>
-          <Route index element={<Navigate to="/products" replace />} />
-          <Route path="dashboard" element={<Navigate to="/products" replace />} />
-          <Route path="products" element={<ProductsPage />} />
-          <Route path="product-categories" element={<ProductCategoriesPage />} />
-          <Route path="product-photos" element={<ProductPhotosPage />} />
-          <Route path="news" element={<NewsPage />} />
-          <Route path="news-categories" element={<NewsCategoriesPage />} />
-          <Route path="corporation-categories" element={<CorporationCategoriesPage />} />
-          <Route path="jobs" element={<JobsPage />} />
+          <Route index element={<Navigate to="/columns" replace />} />
+          <Route path="dashboard" element={<Navigate to="/columns" replace />} />
+          <Route path="columns" element={<ColumnsPage />} />
+          <Route path="corporation-categories" element={<Navigate to="/columns" replace />} />
           <Route path="messages" element={<MessagesPage />} />
-          <Route path="contacts" element={<ContactsPage />} />
-          <Route path="custom-labels" element={<CustomLabelsPage />} />
-          <Route path="meta-types" element={<MetaTypesPage />} />
           <Route path="templates" element={<TemplateVariantsPage />} />
           <Route path="content-models" element={<ContentModelsPage />} />
           <Route path="template-variants" element={<Navigate to="/templates" replace />} />

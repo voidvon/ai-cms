@@ -15,18 +15,12 @@ TABLE_FILES = [
     ("benming_master", "benming_master.csv"),
     ("benming_ch_ProdCat", "benming_ch_ProdCat.csv"),
     ("benming_ch_prod", "benming_ch_prod.csv"),
-    ("benming_ch_prodphoto", "benming_ch_prodphoto.csv"),
     ("benming_ch_NewsCat", "benming_ch_NewsCat.csv"),
     ("benming_ch_news", "benming_ch_news.csv"),
-    ("benming_ch_job", "benming_ch_job.csv"),
     ("benming_ch_Msg", "benming_ch_Msg.csv"),
-    ("benming_ch_Contact", "benming_ch_Contact.csv"),
     ("benming_ch_Cocat", "benming_ch_Cocat.csv"),
-    ("benming_ch_MetaType", "benming_ch_MetaType.csv"),
     ("benming_ch_config", "benming_ch_config.csv"),
     ("benming_ch_worldec_Temp", "benming_ch_worldec_Temp.csv"),
-    ("benming_ch_cuskind", "benming_ch_cuskind.csv"),
-    ("benming_ch_cuslabel", "benming_ch_cuslabel.csv"),
 ]
 
 

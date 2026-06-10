@@ -87,6 +87,7 @@ export default function ProductCategoryFormDialog({
   }
 
   const categoryOptions = categoriesData?.data || []
+  const isEditingWithoutCategory = mode === 'edit' && !category
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -158,7 +159,7 @@ export default function ProductCategoryFormDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               取消
             </Button>
-            <Button type="submit" disabled={mutation.isPending}>
+            <Button type="submit" disabled={mutation.isPending || isEditingWithoutCategory}>
               {mutation.isPending ? '提交中...' : '确定'}
             </Button>
           </DialogFooter>

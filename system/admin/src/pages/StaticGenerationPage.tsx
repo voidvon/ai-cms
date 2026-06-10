@@ -63,10 +63,6 @@ export default function StaticGenerationPage() {
       { label: '生成服务分类列表', value: 'service-lists' },
       { label: '生成服务详情页', value: 'service-details' },
     ]},
-    { title: '招聘相关', items: [
-      { label: '生成招聘列表', value: 'job-lists' },
-      { label: '生成招聘详情页', value: 'job-details' },
-    ]},
   ]
 
   return (

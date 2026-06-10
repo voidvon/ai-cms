@@ -506,7 +506,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
   if (effectiveMode === 'home') {
     return {
       ...props,
-      currentPage: { type: 'home', title: props.meta['1']?.title || '首页', url: '/index.html' },
+      currentPage: { type: 'home', title: '首页', url: '/index.html' },
       newsIndexHtml: buildPreviewArticleLinks('/news/detail', 10),
       featuredProductsHtml: buildPreviewFeaturedProductsHtml(),
       featuredProductLinksHtml: buildPreviewProductLinksHtml(),
@@ -693,26 +693,6 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
     };
   }
 
-  if (effectiveMode === 'job-list') {
-    return {
-      ...props,
-      ...buildPreviewPageContext({
-        pageType: 'job-list',
-        title: '招聘管理',
-        url: '/job/1.html',
-        section: { type: 'job', name: '招聘管理', url: '/job/' },
-        category: null,
-        content: null,
-        breadcrumbItems: [{ label: '招聘管理', url: '' }]
-      }),
-      items: [
-        { id: 1, title: '销售工程师', url: 'detail/1.html', openings: '2', address: '上海', date: '2026-06-09' },
-        { id: 2, title: '技术支持', url: 'detail/2.html', openings: '1', address: '上海', date: '2026-06-09' }
-      ],
-      pagerHtml: '<div class="page_list">共 2 条信息 1/1 页</div>'
-    };
-  }
-
   return props;
 }
 
@@ -725,9 +705,6 @@ function inferPreviewMode(template) {
   }
   if (template.code === 'list_article') {
     return 'article-list';
-  }
-  if (template.code === 'list_job') {
-    return 'job-list';
   }
   if (template.code === 'content_product') {
     return 'product-detail';
@@ -1095,11 +1072,6 @@ function buildTemplateValidationProps(template) {
       web_qq: '',
       web_author: '',
       web_copyright: ''
-    },
-    meta: {
-      1: { title: '首页标题', meta_keywords: '首页关键词', meta_descriptions: '首页描述' },
-      5: { title: '招聘标题', meta_keywords: '招聘关键词', meta_descriptions: '招聘描述' },
-      12: { title: '留言标题', meta_keywords: '留言关键词', meta_descriptions: '留言描述' }
     },
     fragments: {
       indextopHtml: '',

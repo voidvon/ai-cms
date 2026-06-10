@@ -12,11 +12,11 @@ export interface Product {
   summary?: string;
   content_html?: string;
   small_image?: string;
-  large_image?: string;
   keywords?: string;
   is_featured_home: number;
   is_visible: number;
   sort_order: number;
+  category_name?: string;
 }
 
 export interface News {
@@ -26,22 +26,13 @@ export interface News {
   summary?: string;
   content_html?: string;
   image?: string;
+  picture?: string;
   keywords?: string;
-  is_featured: number;
+  is_featured?: number;
+  is_featured_home?: number;
   sort_order: number;
   created_at: string;
-}
-
-export interface Job {
-  id: number;
-  title: string;
-  location?: string;
-  description?: string;
-  requirements?: string;
-  visible: number;
-  sort_order: number;
-  created_at: string;
-  updated_at: string;
+  category_name?: string;
 }
 
 export interface Message {
@@ -54,17 +45,6 @@ export interface Message {
   status: number;
   created_at: string;
   updated_at?: string;
-}
-
-export interface Contact {
-  id: number;
-  office_name: string;
-  address?: string;
-  phone?: string;
-  fax?: string;
-  contact_person?: string;
-  email?: string;
-  postal_code?: string;
 }
 
 export interface ProductCategory {
@@ -92,25 +72,6 @@ export interface CorporationCategory {
   external_url?: string;
 }
 
-export interface CustomLabelKind {
-  id: number;
-  name: string;
-}
-
-export interface CustomLabel {
-  id: number;
-  kind_id?: number;
-  name: string;
-  content?: string;
-}
-
-export interface MetaType {
-  id: number;
-  title?: string;
-  meta_keywords?: string;
-  meta_descriptions?: string;
-}
-
 export interface TemplateVariant {
   id: number;
   template_name: string;
@@ -126,8 +87,6 @@ export interface TemplateVariant {
   news_detail?: string;
   service_sort1?: string;
   service_detail?: string;
-  job_index?: string;
-  job_detail?: string;
   msg_index?: string;
   contact?: string;
 }
@@ -224,12 +183,17 @@ export interface ContentModel {
   updated_at?: string;
 }
 
-export interface ProductPhoto {
+export interface Column {
   id: number;
-  product_id?: number;
-  name?: string;
-  image_path: string;
+  name: string;
+  parent_id?: number | null;
+  model_code: 'product' | 'news' | string;
+  source_type: 'product_root' | 'product_category' | 'news_category' | string;
+  source_id: number;
+  sort_order: number;
+  is_system: number;
   created_at?: string;
+  updated_at?: string;
 }
 
 export interface PaginationInfo {

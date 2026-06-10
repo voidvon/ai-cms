@@ -30,7 +30,6 @@ const previewModes = [
   { value: 'content', label: '公司栏目' },
   { value: 'contact', label: '联系我们' },
   { value: 'message', label: '在线留言' },
-  { value: 'job-list', label: '招聘列表' },
 ]
 
 type TemplateForm = Pick<Template, 'name' | 'code' | 'type' | 'engine' | 'content' | 'sort_order'>

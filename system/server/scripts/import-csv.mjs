@@ -54,23 +54,10 @@ const TABLES = [
       summary: fromText('remark'),
       content_html: fromText('itemize'),
       small_image: fromText('smallpic'),
-      large_image: fromText('bigpic'),
       keywords: fromText('key'),
       is_featured_home: fromBoolLike('tjhome'),
       is_visible: fromLegacyVisibility('show', 1),
       sort_order: fromInt('orderid', 0)
-    }
-  },
-  {
-    file: 'benming_ch_prodphoto.csv',
-    table: 'product_photos',
-    key: 'id',
-    columns: {
-      id: fromInt('id'),
-      product_id: fromNullablePositiveInt('prodid'),
-      name: fromText('photoName'),
-      image_path: fromText('photopic'),
-      created_at: fromText('date')
     }
   },
   {
@@ -101,22 +88,6 @@ const TABLES = [
     }
   },
   {
-    file: 'benming_ch_job.csv',
-    table: 'jobs',
-    key: 'id',
-    columns: {
-      id: fromInt('id'),
-      name: fromText('jobName'),
-      address: fromText('address'),
-      openings: fromText('jobnob'),
-      contact_person: fromText('linkren'),
-      phone: fromText('phone'),
-      is_active: fromBoolLike('state', 1),
-      requirements_html: fromText('jobneed'),
-      created_at: fromText('date')
-    }
-  },
-  {
     file: 'benming_ch_Msg.csv',
     table: 'messages',
     key: 'id',
@@ -136,21 +107,6 @@ const TABLES = [
     }
   },
   {
-    file: 'benming_ch_Contact.csv',
-    table: 'contacts',
-    key: 'id',
-    columns: {
-      id: fromInt('id'),
-      office_name: fromText('offname'),
-      address: fromText('address'),
-      phone: fromText('phone'),
-      fax: fromText('fax'),
-      contact_person: fromText('linkren'),
-      email: fromText('Email'),
-      postal_code: fromText('Post')
-    }
-  },
-  {
     file: 'benming_ch_Cocat.csv',
     table: 'corporation_categories',
     key: 'id',
@@ -161,17 +117,6 @@ const TABLES = [
       sort_order: fromInt('orderid', 0),
       is_external: fromBoolLike('sitepath'),
       external_url: fromText('siteurl')
-    }
-  },
-  {
-    file: 'benming_ch_MetaType.csv',
-    table: 'meta_types',
-    key: 'id',
-    columns: {
-      id: fromInt('id'),
-      title: fromText('title'),
-      meta_keywords: fromText('meta_keywords'),
-      meta_descriptions: fromText('meta_descriptions')
     }
   },
   {
@@ -215,30 +160,8 @@ const TABLES = [
       news_detail: fromText('news_detail'),
       service_sort1: fromText('service_sort1'),
       service_detail: fromText('service_detail'),
-      job_index: fromText('job_index'),
-      job_detail: fromText('Job_detail'),
       msg_index: fromText('msg_index'),
       contact: fromText('contact')
-    }
-  },
-  {
-    file: 'benming_ch_cuskind.csv',
-    table: 'custom_label_kinds',
-    key: 'id',
-    columns: {
-      id: fromInt('id'),
-      name: fromText('kindname')
-    }
-  },
-  {
-    file: 'benming_ch_cuslabel.csv',
-    table: 'custom_labels',
-    key: 'id',
-    columns: {
-      id: fromInt('id'),
-      kind_id: fromNullableInt('lkind'),
-      name: fromText('lname'),
-      content: fromText('lcontent')
     }
   }
 ];

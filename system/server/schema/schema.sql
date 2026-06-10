@@ -39,23 +39,12 @@ CREATE TABLE IF NOT EXISTS products (
   summary TEXT,
   content_html TEXT,
   small_image TEXT,
-  large_image TEXT,
   keywords TEXT,
   is_featured_home INTEGER NOT NULL DEFAULT 0,
   is_visible INTEGER NOT NULL DEFAULT 1,
   sort_order INTEGER NOT NULL DEFAULT 0,
   legacy_extra TEXT,
   FOREIGN KEY (category_id) REFERENCES product_categories(id) ON DELETE SET NULL
-);
-
-CREATE TABLE IF NOT EXISTS product_photos (
-  id INTEGER PRIMARY KEY,
-  product_id INTEGER,
-  name TEXT,
-  image_path TEXT NOT NULL,
-  created_at TEXT,
-  legacy_extra TEXT,
-  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS news_categories (
@@ -81,19 +70,6 @@ CREATE TABLE IF NOT EXISTS news (
   FOREIGN KEY (category_id) REFERENCES news_categories(id) ON DELETE SET NULL
 );
 
-CREATE TABLE IF NOT EXISTS jobs (
-  id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL,
-  address TEXT,
-  openings TEXT,
-  contact_person TEXT,
-  phone TEXT,
-  is_active INTEGER NOT NULL DEFAULT 1,
-  requirements_html TEXT,
-  created_at TEXT,
-  legacy_extra TEXT
-);
-
 CREATE TABLE IF NOT EXISTS messages (
   id INTEGER PRIMARY KEY,
   contact_name TEXT NOT NULL,
@@ -111,18 +87,6 @@ CREATE TABLE IF NOT EXISTS messages (
   FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
 );
 
-CREATE TABLE IF NOT EXISTS contacts (
-  id INTEGER PRIMARY KEY,
-  office_name TEXT NOT NULL,
-  address TEXT,
-  phone TEXT,
-  fax TEXT,
-  contact_person TEXT,
-  email TEXT,
-  postal_code TEXT,
-  legacy_extra TEXT
-);
-
 CREATE TABLE IF NOT EXISTS corporation_categories (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
@@ -130,14 +94,6 @@ CREATE TABLE IF NOT EXISTS corporation_categories (
   sort_order INTEGER NOT NULL DEFAULT 0,
   is_external INTEGER NOT NULL DEFAULT 0,
   external_url TEXT,
-  legacy_extra TEXT
-);
-
-CREATE TABLE IF NOT EXISTS meta_types (
-  id INTEGER PRIMARY KEY,
-  title TEXT,
-  meta_keywords TEXT,
-  meta_descriptions TEXT,
   legacy_extra TEXT
 );
 
@@ -175,26 +131,9 @@ CREATE TABLE IF NOT EXISTS template_variants (
   news_detail TEXT,
   service_sort1 TEXT,
   service_detail TEXT,
-  job_index TEXT,
-  job_detail TEXT,
   msg_index TEXT,
   contact TEXT,
   legacy_extra TEXT
-);
-
-CREATE TABLE IF NOT EXISTS custom_label_kinds (
-  id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL,
-  legacy_extra TEXT
-);
-
-CREATE TABLE IF NOT EXISTS custom_labels (
-  id INTEGER PRIMARY KEY,
-  kind_id INTEGER,
-  name TEXT NOT NULL,
-  content TEXT,
-  legacy_extra TEXT,
-  FOREIGN KEY (kind_id) REFERENCES custom_label_kinds(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS templates (

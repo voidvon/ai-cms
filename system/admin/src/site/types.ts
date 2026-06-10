@@ -29,17 +29,6 @@ export type NewsSummary = {
   created_at?: string | null
 }
 
-export type Contact = {
-  id: number
-  office_name?: string | null
-  address?: string | null
-  phone?: string | null
-  fax?: string | null
-  contact_person?: string | null
-  email?: string | null
-  postal_code?: string | null
-}
-
 export type CategorySummary = {
   id: number
   name?: string | null
@@ -105,28 +94,6 @@ export type ArticleDetailPageProps = {
   next?: NewsSummary | null
 }
 
-export type JobSummary = {
-  id: number
-  name?: string | null
-  address?: string | null
-  openings?: string | number | null
-  contact_person?: string | null
-  phone?: string | null
-  requirements_html?: string | null
-  created_at?: string | null
-}
-
-export type JobListPageProps = {
-  site: SiteConfig
-  jobs: JobSummary[]
-  pagination: Pagination
-}
-
-export type JobDetailPageProps = {
-  site: SiteConfig
-  job: JobSummary
-}
-
 export type HomePageProps = {
   site: SiteConfig
   featuredProducts: ProductSummary[]
@@ -135,7 +102,6 @@ export type HomePageProps = {
 
 export type ContactPageProps = {
   site: SiteConfig
-  contacts: Contact[]
 }
 
 export type MessagePageProps = {
@@ -159,16 +125,9 @@ export type LegacyCommonFragments = {
   serviceCategoryHtml?: string
 }
 
-export type LegacyMetaMap = Record<string, {
-  title?: string | null
-  meta_keywords?: string | null
-  meta_descriptions?: string | null
-}>
-
 export type LegacyPageBaseProps = {
   site: SiteConfig
   fragments: LegacyCommonFragments
-  meta: LegacyMetaMap
 }
 
 export type LegacyHomePageProps = LegacyPageBaseProps & {
@@ -227,18 +186,4 @@ export type LegacyArticleDetailPageProps = LegacyPageBaseProps & {
   bodyHtml: string
   previousHtml: string
   nextHtml: string
-}
-
-export type LegacyJobListPageProps = LegacyPageBaseProps & {
-  bodyHtml: string
-}
-
-export type LegacyJobDetailPageProps = LegacyPageBaseProps & {
-  title: string
-  address: string
-  openings: string | number
-  requirementsHtml: string
-  contactPerson: string
-  phone: string
-  date: string
 }

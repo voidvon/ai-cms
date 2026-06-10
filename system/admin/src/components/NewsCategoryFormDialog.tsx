@@ -13,6 +13,7 @@ interface NewsCategoryFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   category?: NewsCategory
+  currentParentId?: number
   mode: 'create' | 'edit'
 }
 
@@ -20,6 +21,7 @@ export default function NewsCategoryFormDialog({
   open,
   onOpenChange,
   category,
+  currentParentId = 0,
   mode
 }: NewsCategoryFormDialogProps) {
   const queryClient = useQueryClient()
@@ -44,11 +46,11 @@ export default function NewsCategoryFormDialog({
     } else if (mode === 'create') {
       setFormData({
         name: '',
-        parent_id: 0,
+        parent_id: currentParentId,
         sort_order: 0,
       })
     }
-  }, [category, mode])
+  }, [category, currentParentId, mode])
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -78,6 +80,7 @@ export default function NewsCategoryFormDialog({
   }
 
   const categoryOptions = categoriesData?.data || []
+  const isEditingWithoutCategory = mode === 'edit' && !category
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -130,7 +133,7 @@ export default function NewsCategoryFormDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               取消
             </Button>
-            <Button type="submit" disabled={mutation.isPending}>
+            <Button type="submit" disabled={mutation.isPending || isEditingWithoutCategory}>
               {mutation.isPending ? '提交中...' : '确定'}
             </Button>
           </DialogFooter>

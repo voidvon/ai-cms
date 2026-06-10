@@ -20,8 +20,6 @@ export function listTemplateVariants() {
         news_detail,
         service_sort1,
         service_detail,
-        job_index,
-        job_detail,
         msg_index,
         contact,
         legacy_extra
@@ -49,8 +47,6 @@ export function getTemplateVariantById(id) {
         news_detail,
         service_sort1,
         service_detail,
-        job_index,
-        job_detail,
         msg_index,
         contact,
         legacy_extra
@@ -86,8 +82,6 @@ export function updateTemplateVariant(id, input) {
         news_detail = ?,
         service_sort1 = ?,
         service_detail = ?,
-        job_index = ?,
-        job_detail = ?,
         msg_index = ?,
         contact = ?,
         legacy_extra = ?
@@ -107,8 +101,6 @@ export function updateTemplateVariant(id, input) {
       payload.news_detail,
       payload.service_sort1,
       payload.service_detail,
-      payload.job_index,
-      payload.job_detail,
       payload.msg_index,
       payload.contact,
       payload.legacy_extra,
@@ -184,8 +176,6 @@ function normalizeTemplateVariantInput(input, options = {}) {
     news_detail: toNullableString(input.news_detail),
     service_sort1: toNullableString(input.service_sort1),
     service_detail: toNullableString(input.service_detail),
-    job_index: toNullableString(input.job_index),
-    job_detail: toNullableString(input.job_detail ?? input.Job_detail),
     msg_index: toNullableString(input.msg_index),
     contact: toNullableString(input.contact ?? input.Contact),
     legacy_extra: Object.keys(mergedExtra).length > 0 ? JSON.stringify(mergedExtra) : null
@@ -201,7 +191,6 @@ function normalizeTemplateVariantRecord(row) {
     service_index: toNullableString(legacyExtra.service_index) || '',
     Contact: toNullableString(legacyExtra.Contact) || row.contact || '',
     News_sort1: row.news_sort1 || '',
-    Job_detail: row.job_detail || '',
     Co_index: row.co_index || ''
   };
 }

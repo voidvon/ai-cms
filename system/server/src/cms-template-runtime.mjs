@@ -10,8 +10,7 @@ export function createCmsTemplateRuntime({
   templateByPage,
   templateTypeByPage,
   templateClientAssetDir,
-  expandLegacyCommonPlaceholders,
-  legacyLabelToComponentCode
+  expandLegacyCommonPlaceholders
 }) {
   const registeredTsxClientTemplates = new Map();
 
@@ -128,17 +127,6 @@ export function createCmsTemplateRuntime({
         engine: item.engine || 'html',
         content: item.content || ''
       });
-    }
-
-    for (const [name, content] of templateContext.customLabels.entries()) {
-      const code = legacyLabelToComponentCode(name);
-      if (code && (!components.has(code) || !components.get(code)?.content)) {
-        components.set(code, {
-          code,
-          engine: 'html',
-          content: content || ''
-        });
-      }
     }
 
     return components;

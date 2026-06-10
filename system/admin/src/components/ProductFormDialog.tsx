@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import RichTextEditor from '@/components/RichTextEditor'
 import { toast } from 'sonner'
 import type { Product } from '@/types'
 
@@ -15,18 +16,18 @@ interface ProductFormDialogProps {
   onOpenChange: (open: boolean) => void
   product?: Product
   mode: 'create' | 'edit'
+  defaultCategoryId?: number
 }
 
-export default function ProductFormDialog({ open, onOpenChange, product, mode }: ProductFormDialogProps) {
+export default function ProductFormDialog({ open, onOpenChange, product, mode, defaultCategoryId = 1 }: ProductFormDialogProps) {
   const queryClient = useQueryClient()
   const [formData, setFormData] = useState({
     name: '',
     code: '',
-    category_id: 1,
+    category_id: defaultCategoryId,
     summary: '',
     content_html: '',
     small_image: '',
-    large_image: '',
     keywords: '',
     is_featured_home: 0,
     is_visible: 1,
@@ -42,7 +43,6 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode }:
         summary: product.summary || '',
         content_html: product.content_html || '',
         small_image: product.small_image || '',
-        large_image: product.large_image || '',
         keywords: product.keywords || '',
         is_featured_home: product.is_featured_home || 0,
         is_visible: product.is_visible || 1,
@@ -52,18 +52,17 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode }:
       setFormData({
         name: '',
         code: '',
-        category_id: 1,
+        category_id: defaultCategoryId,
         summary: '',
         content_html: '',
         small_image: '',
-        large_image: '',
         keywords: '',
         is_featured_home: 0,
         is_visible: 1,
         sort_order: 0,
       })
     }
-  }, [product, mode])
+  }, [product, mode, defaultCategoryId])
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -141,30 +140,20 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode }:
           </div>
           <div className="space-y-2">
             <Label htmlFor="content_html">详细内容</Label>
-            <Textarea
-              id="content_html"
+            <RichTextEditor
               value={formData.content_html}
-              onChange={(e) => setFormData({ ...formData, content_html: e.target.value })}
+              onChange={(content_html) => setFormData({ ...formData, content_html })}
               placeholder="请输入详细内容"
-              rows={5}
+              uploadType="prod"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="small_image">小图路径</Label>
+            <Label htmlFor="small_image">封面图片</Label>
             <Input
               id="small_image"
               value={formData.small_image}
               onChange={(e) => setFormData({ ...formData, small_image: e.target.value })}
-              placeholder="请输入小图路径"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="large_image">大图路径</Label>
-            <Input
-              id="large_image"
-              value={formData.large_image}
-              onChange={(e) => setFormData({ ...formData, large_image: e.target.value })}
-              placeholder="请输入大图路径"
+              placeholder="请输入封面图片路径"
             />
           </div>
           <div className="space-y-2">

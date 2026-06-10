@@ -36,7 +36,6 @@ export function runLegacyEncodingRepair({ write = false, logger = console.log } 
   repairProductMetadata(db, state);
   repairProductCategories(db, state);
   repairNewsMetadata(db, state);
-  repairCustomLabels(db, state);
 
   const summary = state.changedFields === 0
     ? 'No legacy-encoding issues detected.'
@@ -218,27 +217,6 @@ function repairNewsMetadata(db, state) {
     }
 
     applyRowUpdates(db, state, 'news', 'id', row.id, dedupeUpdates(updates));
-  }
-}
-
-function repairCustomLabels(db, state) {
-  const site = getSiteConfig();
-  const rows = db.prepare(`
-    SELECT id, name, content
-    FROM custom_labels
-    WHERE coalesce(content, '') <> ''
-    ORDER BY id ASC
-  `).all();
-
-  for (const row of rows) {
-    const normalized = normalizeCustomLabelContent(row.content, site);
-    if (!normalized || normalized === row.content) {
-      continue;
-    }
-
-    applyRowUpdates(db, state, 'custom_labels', 'id', row.id, [
-      { column: 'content', before: row.content, after: normalized }
-    ]);
   }
 }
 
@@ -516,27 +494,6 @@ function hasLegacyProductBrandText(value) {
     pattern.lastIndex = 0;
     return pattern.test(text);
   });
-}
-
-function normalizeCustomLabelContent(value, site) {
-  const companyName = site.company_name || site.web_name || '';
-  const companyPhone = site.company_phone || '';
-  const companyFax = site.company_fax || '';
-  const companyMobile = site.web_mobile || '';
-  const companyEmail = site.company_email || '';
-  const siteUrl = site.web_url || '/';
-
-  return String(value || '')
-    .replace(/https?:\/\/(?:www\.)?bilvie\.com\/?/gi, siteUrl)
-    .replace(/https?:\/\/(?:www\.)?bilwe\.com\/?/gi, siteUrl)
-    .replace(/彪维阀门品牌/gi, '斯派莎克阀门品牌')
-    .replace(/彪维流体设备/gi, companyName)
-    .replace(/彪维流体设备（上海）有限公司|彪维流体设备\(上海\)有限公司|彪维阀门有限公司/gi, companyName)
-    .replace(/全国服务电话：\s*021-51602737/gi, companyPhone ? `全国服务电话：${companyPhone}` : '')
-    .replace(/TEL:\s*021-51602737\s*18121314445/gi, buildLegacyTelText(companyPhone, companyMobile))
-    .replace(/电话:\s*021-51602737/gi, companyPhone ? `电话:${companyPhone}` : '')
-    .replace(/传真:\s*021-51062757/gi, companyFax ? `传真:${companyFax}` : '')
-    .replace(/info@(?:<strong>)?spiraxsarcocn(?:<\/strong>)?\.com/gi, companyEmail);
 }
 
 function buildLegacyTelText(companyPhone, companyMobile) {

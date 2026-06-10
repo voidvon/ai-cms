@@ -5,8 +5,6 @@ import type {
   LegacyContactPageProps,
   LegacyContentPageProps,
   LegacyHomePageProps,
-  LegacyJobDetailPageProps,
-  LegacyJobListPageProps,
   LegacyMessagePageProps,
   LegacyPageBaseProps,
   LegacyProductDetailPageProps,
@@ -23,10 +21,6 @@ function html(value: string | number | null | undefined): string {
 
 function raw(value: string | null | undefined) {
   return { __html: value || '' }
-}
-
-function meta(props: LegacyPageBaseProps, id: number) {
-  return props.meta[String(id)] || {}
 }
 
 function legacySearchForm(buttonName = 'searchbutton') {
@@ -76,7 +70,6 @@ ${legacySearchForm()}
 }
 
 export function LegacyHomePage(props: LegacyHomePageProps) {
-  const m = meta(props, 1)
   const body = `${props.fragments.indextopHtml || ''}
 <div id="index_main" class="clearfix"><div class="index-left">
 <div class="index-news">
@@ -115,10 +108,10 @@ ${legacySearchForm()}</div>
     <html xmlns="http://www.w3.org/1999/xhtml">
       <head>
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
-        <title>{m.title || props.site.web_name || ''}</title>
+        <title>{props.site.web_name || ''}</title>
         <meta name="robots" content="all" />
-        <meta name="keywords" content={m.meta_keywords || ''} />
-        <meta name="description" content={m.meta_descriptions || ''} />
+        <meta name="keywords" content="" />
+        <meta name="description" content="" />
         <meta httpEquiv="X-UA-Compatible" content="IE=EmulateIE7" />
         <link rel="icon" href="/favicon.ico" type="image/x-icon" />
         <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
@@ -132,7 +125,6 @@ ${legacySearchForm()}</div>
 }
 
 export function LegacyContactPage(props: LegacyContactPageProps) {
-  const m = meta(props, 1)
   const rightHtml = `<div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> &gt;&gt; <a href="/Contact.html" title="联系我们">联系我们</a> </div>
 	  <div class="page-products">
       <ul class="clearfix">
@@ -161,8 +153,8 @@ ${props.contactTableHtml}</ul><div class="page_list"><div class="list_info"></di
       {cCssHead(<>
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
         <title>{`联系${props.site.web_name || ''}`}</title>
-        <meta name="keywords" content={m.meta_keywords || ''} />
-        <meta name="description" content={m.meta_descriptions || ''} />
+        <meta name="keywords" content="" />
+        <meta name="description" content="" />
       </>)}
       <body dangerouslySetInnerHTML={raw(cLayoutBody(props, rightHtml, '', 'span'))} />
     </html>
@@ -170,7 +162,6 @@ ${props.contactTableHtml}</ul><div class="page_list"><div class="list_info"></di
 }
 
 export function LegacyMessagePage(props: LegacyMessagePageProps) {
-  const m = meta(props, 12)
   const rightHtml = `<div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> &gt;&gt; <a href="/msg.html" title="在线留言">在线留言</a> </div>
 	  <div class="page-products">
       <ul class="clearfix"><table width="705" border="0" cellpadding="0" cellspacing="0"><tr><td width="567" valign="top">
@@ -189,8 +180,8 @@ export function LegacyMessagePage(props: LegacyMessagePageProps) {
       <head>
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
         <title>{`在线留言_${props.site.web_name || ''}`}</title>
-        <meta name="keywords" content={m.meta_keywords || ''} />
-        <meta name="description" content={m.meta_descriptions || ''} />
+        <meta name="keywords" content="" />
+        <meta name="description" content="" />
         <link href="/css/c.css" rel="stylesheet" type="text/css" />
         <script language="javascript" type="text/javascript" src="/js/ajaxrequest.js"></script>
         <script language="javascript" dangerouslySetInnerHTML={raw('function add(){if(document.addform.name.value==""){alert("姓名不能为空!");document.addform.name.focus();return false;}if(document.addform.address.value==""){alert("地址不能为空!");document.addform.address.focus();return false;}if(document.addform.phone.value==""){alert("电话不能为空!");document.addform.phone.focus();return false;}if(document.addform.email.value==""){alert("Email不能为空!");document.addform.email.focus();return false;}if(document.addform.Title.value==""){alert("主题不能为空!");document.addform.Title.focus();return false;}var ajax=new AJAXRequest;ajax.setcharset("GB2312");ajax.postf(document.getElementById("addform"),function(obj) { if(obj.responseText=="true"){alert("留言成功")}; });}')} />
@@ -201,7 +192,6 @@ export function LegacyMessagePage(props: LegacyMessagePageProps) {
 }
 
 export function LegacyContentPage(props: LegacyContentPageProps) {
-  const m = meta(props, 2)
   const rightHtml = `<div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> &gt;&gt; ${html(props.title)} </div>
 	  <div class="page-products"><ul class="clearfix">${props.contentHtml}
 </ul><div class="page_list"><div class="list_info"></div></div></div>`
@@ -209,9 +199,9 @@ export function LegacyContentPage(props: LegacyContentPageProps) {
     <html xmlns="http://www.w3.org/1999/xhtml">
       {cCssHead(<>
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
-        <title>{`${m.title || ''}_${props.site.web_name || ''}`}</title>
-        <meta name="keywords" content={m.meta_keywords || ''} />
-        <meta name="description" content={m.meta_descriptions || ''} />
+        <title>{`${props.title || ''}_${props.site.web_name || ''}`}</title>
+        <meta name="keywords" content={props.title || ''} />
+        <meta name="description" content={props.title || ''} />
       </>)}
       <body dangerouslySetInnerHTML={raw(cLayoutBody(props, rightHtml, props.fragments.aboutCategoryHtml || ''))} />
     </html>
@@ -279,17 +269,15 @@ function articleSidebar(props: LegacyArticleListPageProps | LegacyArticleDetailP
 <td width="155" align="center" background="/Skin/blue/Images/menu_bg.jpg" class="F_a Font-Weight">产品分类</td>
 <td width="5"><img src="/Skin/blue/Images/menu_right.jpg" width="5" height="29" /></td></tr><tr><td colspan="3" bgcolor="#F4F4F4" class="Corporation_left">
 ${props.fragments.productsMenuHtml || ''}</td></tr></table><DIV style="clear:both;"></DIV><DIV style="PADDING-TOP:3px"></DIV>
-<table width="165" border="0" align="left" cellpadding="0" cellspacing="0" class="Table_boder"><tr><td width="71" rowspan="4" align="right">
+<table width="165" border="0" align="left" cellpadding="0" cellspacing="0" class="Table_boder"><tr><td width="71" rowspan="3" align="right">
 <img src="../../Skin/blue/Images/service.jpg" width="70" height="130" /></td>
     <td width="81">&nbsp;<A href="/Contact.html" class="0a">业务联系</A></td></tr><tr>
-      <td height="30">&nbsp;<a href="/job/" class="0a">人才招聘</a></td></tr><tr>
   <td height="30">&nbsp;<a href="/Contact.html" class="0a">客服电话</a></td></tr><tr>
     <td height="30">&nbsp;<a href="/msg.html" class="0a">在线联系</a></td></tr></table>`
 }
 
 export function LegacyArticleListPage(props: LegacyArticleListPageProps) {
   const isService = props.section === 'service'
-  const m = meta(props, isService ? 11 : 3)
   const label = isService ? '阀门知识' : '新闻资讯'
   const dir = isService ? 'service' : 'news'
   const body = `${props.fragments.topHtml || ''}<table width="${isService ? '986' : '972'}" border="0" align="center" cellpadding="0" cellspacing="0"><tr><td width="173" valign="top">
@@ -305,9 +293,9 @@ ${articleSidebar(props)}</td><td width="${isService ? '821' : '812'}" valign="to
     <html xmlns="http://www.w3.org/1999/xhtml">
       <head>
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
-        <title>{`${m.title || ''}_${props.title}_${props.site.web_name || ''}`}</title>
-        <meta name="keywords" content={isService ? `${m.title || ''},${props.title},${m.meta_keywords || ''}` : m.meta_keywords || ''} />
-        <meta name="description" content={m.meta_descriptions || ''} />
+        <title>{`${props.title || label}_${props.site.web_name || ''}`}</title>
+        <meta name="keywords" content={props.title || label} />
+        <meta name="description" content={props.title || label} />
         <meta content="阀门，球阀，闸阀" name="classification" />
         <link href="/img/css.css" type="text/css" rel="stylesheet" />
         <link href="/css/webmain.css" rel="stylesheet" type="text/css" />
@@ -344,20 +332,4 @@ ${articleSidebar(props)}</td><td width="812" valign="top" ><table width="812" bo
       <body onContextMenu={() => false} onCopy={() => false} onCut={() => false} onSelect={() => false} dangerouslySetInnerHTML={raw(body)} />
     </html>
   )
-}
-
-function jobShell(props: LegacyJobListPageProps | LegacyJobDetailPageProps, contentHtml: string) {
-  return `<div align=center>${props.fragments.topHtml || ''}<table width=986 border=0 align=center cellpadding=0 cellspacing=0><tr><td width=173 valign=top><table width=165 border=0 align=left cellpadding=0 cellspacing=0><tr><td width=5><img src="/Skin/blue/Images/menu_left.jpg" width=5 height=29 /></td><td width=155 align=center background="/Skin/blue/Images/menu_bg.jpg" class="Font_FFFFFF_a Font-Weight">产品分类</td><td width=5><img src="/Skin/blue/Images/menu_right.jpg" width=5 height=29 /></td></tr><tr><td colspan=3 bgcolor="#F4F4F4" class="Corporation_left"><DIV style="PADDING-TOP:3px"></DIV>${props.fragments.productsMenuHtml || ''}</td></tr></table><DIV style="clear:both;"></DIV><DIV style="PADDING-TOP:10px"></DIV><table width=165 border=0 align=left cellpadding=0 cellspacing=0><tr><td width=165 height=30 colspan=3 bgcolor="#F4F4F4" class="Right_dasheds_line Right_solid_line top_dasheds_line Font-Weight">&nbsp;产品搜索</td></tr><tr><td colspan=3 bgcolor="#F4F4F4" class="Right_dasheds_line Right_solid_line top_dasheds_line bottom_dasheds_line"><form id=form1 name=form1 method=post action="/search"><table width="100%" border=0 align=center cellpadding=0 cellspacing=0><tr><td height=30 align=center><input name=ProductsName type=text id=ProductsName value="输入产品名称" size=15 class="Font_666666_a" onfocus="this.value='';"/></td></tr><tr><td align=center><DIV style="PADDING-TOP:2px"></DIV><input name=image type=image src="/skin/blue/Images/cp_21.jpg" /><DIV style="PADDING-TOP:2px"></DIV></td></tr></table></form></td></tr></table><DIV style="clear:both;"></DIV><DIV style="PADDING-TOP:8px"></DIV><table width=165 border=0 align=left cellpadding=0 cellspacing=0 class="Table_boder"><tr><td width=71 rowspan=4 align=right><img src="../../Skin/blue/Images/service.jpg" width=70 height=130 /></td><td width=18 height=30 align=right><img src="../../Skin/blue/Images/triangle.jpg" width=3 height=5 /></td><td width=74>&nbsp;<A href="/Contact.html" class="Font_000000_a">业务联系</A></td></tr><tr><td height=30 align=right><img src="../../Skin/blue/Images/triangle.jpg" width=3 height=5 /></td><td height=30>&nbsp;<a href="/job/" class="Font_000000_a">人才招聘</a></td></tr><tr><td height=30 align=right><img src="../../Skin/blue/Images/triangle.jpg" width=3 height=5 /></td><td height=30>&nbsp;<a href="/Contact.html" class="Font_000000_a">客服电话</a></td></tr><tr><td height=30 align=right><img src="../../Skin/blue/Images/triangle.jpg" width=3 height=5 /></td><td height=30>&nbsp;<a href="/msg.html" class="Font_000000_a">在线联系</a></td></tr></table></td><td width=824 valign=top>${contentHtml}</td></tr></table>${props.fragments.bottomHtml || ''}</div>`
-}
-
-export function LegacyJobListPage(props: LegacyJobListPageProps) {
-  const m = meta(props, 5)
-  const content = `<table width="100%" border=0 align=right cellpadding=0 cellspacing=0><tr><td width=5><img src="/Skin/blue/Images/menu_left.jpg" width=5 height=29 /></td><td width=28 align=right background="/Skin/blue/Images/menu_bg.jpg" class="Font_FFFFFF_a Font-Weight"><span class="Font-Weight Font_FFFFFF_a"><img src="/Skin/blue/Images/index_01.jpg" width=12 height=5 /></span>&nbsp;</td><td width=395 background="/Skin/blue/Images/menu_bg.jpg" class="Font_FFFFFF_a Font-Weight">&nbsp;人才招聘</td><td width=395 align=right background="/Skin/blue/Images/menu_bg.jpg" class="Font_FFFFFF_a Font-Weight"><A href="/" class="Font_FFFFFF_a">首页</A> - <span class="Font_FFFFFF_a">人才招聘</span> &nbsp;&nbsp;&nbsp;&nbsp;</td><td width=6><img src="/Skin/blue/Images/menu_right.jpg" width=5 height=29 /></td></tr><tr><td colspan=5 valign=top><DIV style="PADDING-TOP:8px"></DIV><table width=720 border=0 cellpadding=0 cellspacing=0><tr><td width=720><table width="100%" border=0 cellpadding=0 cellspacing=0><tr><td width="59%" height=35 align=center bgcolor="#E4E4E4">招聘职位</td><td width="13%" align=center bgcolor="#E4E4E4">招聘人数</td><td width="18%" align=center bgcolor="#E4E4E4">工作地点</td><td width="10%" align=center bgcolor="#E4E4E4">发布时间</td></tr><tr><td height=30 colspan=4>${props.bodyHtml}</td></tr></table></td></tr></table></td></tr></table>`
-  return <html xmlns="http://www.w3.org/1999/xhtml"><head><meta httpEquiv="Content-Type" content="text/html; charset=utf-8" /><title>{`${m.title || ''} - ${props.site.web_name || ''}`}</title><meta name="keywords" content={m.meta_keywords || ''} /><meta name="description" content={m.meta_descriptions || ''} /><meta content="阀门，球阀，闸阀" name="classification" /><link href="/img/css.css" type="text/css" rel="stylesheet" /></head><body dangerouslySetInnerHTML={raw(jobShell(props, content))} /></html>
-}
-
-export function LegacyJobDetailPage(props: LegacyJobDetailPageProps) {
-  const m = meta(props, 5)
-  const content = `<table width="100%" border=0 align=right cellpadding=0 cellspacing=0><tr><td width=5><img src="/Skin/blue/Images/menu_left.jpg" width=5 height=29 /></td><td width=28 align=right background="/Skin/blue/Images/menu_bg.jpg" class="Font_FFFFFF_a Font-Weight"><span class="Font-Weight Font_FFFFFF_a"><img src="/Skin/blue/Images/index_01.jpg" width=12 height=5 /></span>&nbsp;</td><td width=395 background="/Skin/blue/Images/menu_bg.jpg" class="Font_FFFFFF_a Font-Weight">&nbsp;人才招聘</td><td width=395 align=right background="/Skin/blue/Images/menu_bg.jpg" class="Font_FFFFFF_a Font-Weight"><A href="/" class="Font_FFFFFF_a">首页</A> - <a href="/job/" class="Font_FFFFFF_a">人才招聘</a> &nbsp;&nbsp;&nbsp;&nbsp;</td><td width=6><img src="/Skin/blue/Images/menu_right.jpg" width=5 height=29 /></td></tr><tr><td colspan=5 valign=top><DIV style="PADDING-TOP:8px"><table width="100%" border=0 cellpadding=0 cellspacing=0><tr><td width="100%" height=30 colspan=4><table width="95%" border=1 align=center cellpadding=0 cellspacing=0 bordercolor=eceee7><tr><td width="11%" height=25 bgcolor="#fafaf9" class=Font-Weight>&nbsp;职位名称</td><td width="89%">&nbsp;${html(props.title)}</td></tr><tr><td height=25 class=Font-Weight>&nbsp;工作地点</td><td>&nbsp;${html(props.address)}</td></tr><tr><td height=25 class=Font-Weight>&nbsp;需求人数</td><td>&nbsp;${html(props.openings)}名</td></tr><tr><td height=25 class=Font-Weight>&nbsp;发布日期</td><td>&nbsp;${html(props.date)}</td></tr><tr><td height=25 class=Font-Weight>&nbsp;联系人</td><td>&nbsp;${html(props.contactPerson)}</td></tr><tr><td height=25 class=Font-Weight>&nbsp;联系电话</td><td>&nbsp;${html(props.phone)}</td></tr><tr><td height=25 class=Font-Weight>&nbsp;具体要求</td><td height=120 valign=top class="job_sp"><DIV style="PADDING-TOP:8px"></DIV>${props.requirementsHtml}<DIV style="PADDING-TOP:8px"></DIV></td></tr></table></td></tr></table></DIV></td></tr></table>`
-  return <html xmlns="http://www.w3.org/1999/xhtml"><head><meta httpEquiv="Content-Type" content="text/html; charset=utf-8" /><title>{`${m.title || ''} - ${props.site.web_name || ''}`}</title><meta name="keywords" content={m.meta_keywords || ''} /><meta name="description" content={m.meta_descriptions || ''} /><meta content="阀门，球阀，闸阀" name="classification" /><link href="/img/css.css" type="text/css" rel="stylesheet" /></head><body dangerouslySetInnerHTML={raw(jobShell(props, content))} /></html>
 }

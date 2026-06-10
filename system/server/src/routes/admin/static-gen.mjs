@@ -10,9 +10,7 @@ import {
   buildProductCategoryPages,
   buildProductDetailPages,
   buildServiceCategoryPages,
-  buildServiceDetailPages,
-  buildJobIndexPages,
-  buildJobDetailPages
+  buildServiceDetailPages
 } from '../../static-builder.mjs';
 
 export default async function staticGenRoutes(app) {
@@ -63,12 +61,6 @@ export default async function staticGenRoutes(app) {
         case 'service-details':
           result = buildServiceDetailPages({ outputRoot: CONTENT_ROOT });
           break;
-        case 'job-lists':
-          result = buildJobIndexPages({ outputRoot: CONTENT_ROOT });
-          break;
-        case 'job-details':
-          result = buildJobDetailPages({ outputRoot: CONTENT_ROOT });
-          break;
         case 'all':
           const results = [
             buildIndexPage({ outputRoot: CONTENT_ROOT }),
@@ -80,9 +72,7 @@ export default async function staticGenRoutes(app) {
             buildNewsCategoryPages({ outputRoot: CONTENT_ROOT }),
             buildNewsDetailPages({ outputRoot: CONTENT_ROOT }),
             buildServiceCategoryPages({ outputRoot: CONTENT_ROOT }),
-            buildServiceDetailPages({ outputRoot: CONTENT_ROOT }),
-            buildJobIndexPages({ outputRoot: CONTENT_ROOT }),
-            buildJobDetailPages({ outputRoot: CONTENT_ROOT })
+            buildServiceDetailPages({ outputRoot: CONTENT_ROOT })
           ];
           result = {
             outputRoot: CONTENT_ROOT,

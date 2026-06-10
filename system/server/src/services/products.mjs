@@ -38,7 +38,6 @@ export function listProducts({ featured = false, visibleOnly = true, limit = 20 
         summary,
         content_html,
         small_image,
-        large_image,
         keywords,
         is_featured_home,
         is_visible,
@@ -52,13 +51,38 @@ export function listProducts({ featured = false, visibleOnly = true, limit = 20 
   ).map(normalizeProductRecord);
 }
 
-export function listProductsAdmin({ page = 1, limit = 50 } = {}) {
+export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, includeDescendants = false } = {}) {
   const safeLimit = Math.min(Math.max(Number.parseInt(String(limit), 10) || 50, 1), 200);
   const safePage = Math.max(Number.parseInt(String(page), 10) || 1, 1);
+  const safeCategoryId = Number.parseInt(String(categoryId ?? ''), 10);
+  const hasCategoryFilter = Number.isInteger(safeCategoryId) && safeCategoryId > 0;
+  const withDescendants = Boolean(includeDescendants);
   const offset = (safePage - 1) * safeLimit;
+  const categoryTree = hasCategoryFilter && withDescendants
+    ? `
+      WITH RECURSIVE category_tree(id) AS (
+        SELECT id FROM product_categories WHERE id = ?
+        UNION ALL
+        SELECT child.id
+        FROM product_categories child
+        INNER JOIN category_tree parent ON child.parent_id = parent.id
+      )
+    `
+    : '';
+  const where = hasCategoryFilter
+    ? withDescendants
+      ? 'WHERE p.category_id IN (SELECT id FROM category_tree)'
+      : 'WHERE p.category_id = ?'
+    : '';
+  const countWhere = hasCategoryFilter
+    ? withDescendants
+      ? 'WHERE category_id IN (SELECT id FROM category_tree)'
+      : 'WHERE category_id = ?'
+    : '';
 
   const items = queryAll(
     `
+      ${categoryTree}
       SELECT
         p.id,
         p.category_id,
@@ -67,7 +91,6 @@ export function listProductsAdmin({ page = 1, limit = 50 } = {}) {
         p.summary,
         p.content_html,
         p.small_image,
-        p.large_image,
         p.keywords,
         p.is_featured_home,
         p.is_visible,
@@ -75,14 +98,23 @@ export function listProductsAdmin({ page = 1, limit = 50 } = {}) {
         c.name AS category_name
       FROM products p
       LEFT JOIN product_categories c ON c.id = p.category_id
+      ${where}
       ORDER BY p.sort_order ASC, p.id DESC
       LIMIT ?
       OFFSET ?
     `,
-    [safeLimit, offset]
+    hasCategoryFilter ? [safeCategoryId, safeLimit, offset] : [safeLimit, offset]
   ).map(normalizeProductRecord);
 
-  const total = queryOne('SELECT COUNT(*) AS count FROM products')?.count || 0;
+  const total = queryOne(
+    `
+      ${categoryTree}
+      SELECT COUNT(*) AS count
+      FROM products
+      ${countWhere}
+    `,
+    hasCategoryFilter ? [safeCategoryId] : []
+  )?.count || 0;
   return {
     items,
     pagination: {
@@ -105,7 +137,6 @@ export function getProductById(id) {
         summary,
         content_html,
         small_image,
-        large_image,
         keywords,
         is_featured_home,
         is_visible,
@@ -136,7 +167,6 @@ export function searchProducts(rawQuery, limit = 20) {
         summary,
         content_html,
         small_image,
-        large_image,
         keywords,
         is_featured_home,
         is_visible,
@@ -172,7 +202,6 @@ export function searchProductsPaged(rawQuery, { page = 1, limit = 20 } = {}) {
           summary,
           content_html,
           small_image,
-          large_image,
           keywords,
           is_featured_home,
           is_visible,
@@ -209,7 +238,6 @@ export function searchProductsPaged(rawQuery, { page = 1, limit = 20 } = {}) {
         summary,
         content_html,
         small_image,
-        large_image,
         keywords,
         is_featured_home,
         is_visible,
@@ -264,7 +292,6 @@ export function createProduct(input) {
         summary,
         content_html,
         small_image,
-        large_image,
         keywords,
         is_featured_home,
         is_visible,
@@ -278,7 +305,6 @@ export function createProduct(input) {
       payload.summary,
       payload.content_html,
       payload.small_image,
-      payload.large_image,
       payload.keywords,
       payload.is_featured_home,
       payload.is_visible,
@@ -311,7 +337,6 @@ export function updateProduct(id, input) {
         summary = ?,
         content_html = ?,
         small_image = ?,
-        large_image = ?,
         keywords = ?,
         is_featured_home = ?,
         is_visible = ?,
@@ -325,7 +350,6 @@ export function updateProduct(id, input) {
       payload.summary,
       payload.content_html,
       payload.small_image,
-      payload.large_image,
       payload.keywords,
       payload.is_featured_home,
       payload.is_visible,
@@ -345,7 +369,6 @@ export function deleteProduct(id) {
 
   execute('DELETE FROM products WHERE id = ?', [id]);
   deleteUploadedFile(existing.small_image);
-  deleteUploadedFile(existing.large_image);
   return existing;
 }
 
@@ -362,7 +385,6 @@ export function normalizeProductInput(input) {
     summary: toNullableString(input.summary),
     content_html: toNullableString(input.content_html),
     small_image: toNullableString(input.small_image) || '/skin/dfpic.gif',
-    large_image: toNullableString(input.large_image) || '/skin/dfpic.gif',
     keywords: toNullableString(input.keywords),
     is_featured_home: toBooleanInt(input.is_featured_home),
     is_visible: toBooleanInt(input.is_visible, 1),

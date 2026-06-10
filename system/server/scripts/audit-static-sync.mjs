@@ -6,7 +6,7 @@ import { buildStaticSite } from '../src/static-builder.mjs';
 import { CONTENT_ROOT, PROJECT_ROOT, SERVER_ROOT } from '../src/config.mjs';
 
 const htmlExtensions = new Set(['.html', '.htm']);
-const frontDirs = new Set(['about', 'job', 'news', 'product', 'products', 'service', 'valve']);
+const frontDirs = new Set(['about', 'news', 'product', 'products', 'service', 'valve']);
 const frontFiles = new Set(['index.html', 'contact.html', 'msg.html', '404.html', 'sitemap.html']);
 const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'spirax-static-audit-'));
 

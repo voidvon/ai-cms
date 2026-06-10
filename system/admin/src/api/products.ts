@@ -2,7 +2,7 @@ import apiClient from './client';
 import type { Product, ApiResponse, PaginationInfo } from '@/types';
 
 export const productsApi = {
-  list: async (params: { page?: number; limit?: number; category_id?: number }) => {
+  list: async (params: { page?: number; limit?: number; category_id?: number; include_descendants?: number | boolean }) => {
     const response = await apiClient.get<ApiResponse<Product[]> & { pagination: PaginationInfo }>('/products/admin', { params });
     return response.data;
   },

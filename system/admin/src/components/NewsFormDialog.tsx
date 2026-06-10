@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import RichTextEditor from '@/components/RichTextEditor'
 import { toast } from 'sonner'
 import type { News } from '@/types'
 
@@ -15,17 +16,18 @@ interface NewsFormDialogProps {
   onOpenChange: (open: boolean) => void
   news?: News
   mode: 'create' | 'edit'
+  defaultCategoryId?: number
 }
 
-export default function NewsFormDialog({ open, onOpenChange, news, mode }: NewsFormDialogProps) {
+export default function NewsFormDialog({ open, onOpenChange, news, mode, defaultCategoryId = 1 }: NewsFormDialogProps) {
   const queryClient = useQueryClient()
   const [formData, setFormData] = useState({
     title: '',
-    category_id: 1,
+    category_id: defaultCategoryId,
     summary: '',
-    content: '',
-    photo: '',
-    featured: 0,
+    content_html: '',
+    picture: '',
+    is_featured_home: 0,
     sort_order: 0,
   })
 
@@ -33,25 +35,25 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode }: NewsF
     if (news && mode === 'edit') {
       setFormData({
         title: news.title || '',
-        category_id: news.category_id || 1,
+        category_id: news.category_id || defaultCategoryId,
         summary: news.summary || '',
-        content: news.content || '',
-        photo: news.photo || '',
-        featured: news.featured || 0,
+        content_html: news.content_html || '',
+        picture: news.picture || news.image || '',
+        is_featured_home: news.is_featured_home || news.is_featured || 0,
         sort_order: news.sort_order || 0,
       })
     } else if (mode === 'create') {
       setFormData({
         title: '',
-        category_id: 1,
+        category_id: defaultCategoryId,
         summary: '',
-        content: '',
-        photo: '',
-        featured: 0,
+        content_html: '',
+        picture: '',
+        is_featured_home: 0,
         sort_order: 0,
       })
     }
-  }, [news, mode])
+  }, [news, mode, defaultCategoryId])
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -119,30 +121,29 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode }: NewsF
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="content">详细内容</Label>
-            <Textarea
-              id="content"
-              value={formData.content}
-              onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+            <Label htmlFor="content_html">详细内容</Label>
+            <RichTextEditor
+              value={formData.content_html}
+              onChange={(content_html) => setFormData({ ...formData, content_html })}
               placeholder="请输入详细内容"
-              rows={5}
+              uploadType="news"
             />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="photo">图片路径</Label>
+            <Label htmlFor="picture">图片路径</Label>
             <Input
-              id="photo"
-              value={formData.photo}
-              onChange={(e) => setFormData({ ...formData, photo: e.target.value })}
+              id="picture"
+              value={formData.picture}
+              onChange={(e) => setFormData({ ...formData, picture: e.target.value })}
               placeholder="请输入图片路径"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="featured">推荐</Label>
+              <Label htmlFor="is_featured_home">推荐</Label>
               <Select
-                value={formData.featured.toString()}
-                onValueChange={(value) => setFormData({ ...formData, featured: parseInt(value) })}
+                value={formData.is_featured_home.toString()}
+                onValueChange={(value) => setFormData({ ...formData, is_featured_home: parseInt(value) })}
               >
                 <SelectTrigger>
                   <SelectValue />

@@ -12,12 +12,6 @@ const BUILTIN_MODELS = [
     name: '新闻',
     source_table: 'news',
     description: '新闻列表和新闻详情'
-  },
-  {
-    code: 'job',
-    name: '招聘',
-    source_table: 'jobs',
-    description: '招聘列表和招聘详情'
   }
 ];
 
@@ -30,8 +24,7 @@ const FIELD_LABELS = {
   summary: '摘要',
   content_html: '正文内容',
   requirements_html: '具体要求',
-  small_image: '小图',
-  large_image: '大图',
+  small_image: '封面图片',
   picture: '图片',
   keywords: '关键词',
   is_featured_home: '首页推荐',

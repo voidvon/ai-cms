@@ -13,6 +13,7 @@ interface CorporationCategoryFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   category?: CorporationCategory
+  currentParentId?: number
   mode: 'create' | 'edit'
 }
 
@@ -20,6 +21,7 @@ export default function CorporationCategoryFormDialog({
   open,
   onOpenChange,
   category,
+  currentParentId = 0,
   mode
 }: CorporationCategoryFormDialogProps) {
   const queryClient = useQueryClient()
@@ -48,13 +50,13 @@ export default function CorporationCategoryFormDialog({
     } else if (mode === 'create') {
       setFormData({
         name: '',
-        parent_id: 0,
+        parent_id: currentParentId,
         sort_order: 0,
         is_external: 0,
         external_url: '',
       })
     }
-  }, [category, mode])
+  }, [category, currentParentId, mode])
 
   const mutation = useMutation({
     mutationFn: async () => {

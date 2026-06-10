@@ -32,25 +32,12 @@
 - `PUT /api/news/:id` - 更新新闻（需认证）
 - `DELETE /api/news/:id` - 删除新闻（需认证）
 
-#### 招聘相关
-- `GET /api/jobs` - 招聘列表
-- `GET /api/jobs/:id` - 招聘详情
-- `POST /api/jobs` - 创建招聘（需认证）
-- `PUT /api/jobs/:id` - 更新招聘（需认证）
-- `DELETE /api/jobs/:id` - 删除招聘（需认证）
-
 #### 留言相关
 - `POST /api/messages` - 提交留言（公开）
 - `GET /api/messages` - 留言列表（需认证）
 - `GET /api/messages/:id` - 留言详情（需认证）
 - `PUT /api/messages/:id` - 更新留言（需认证）
 - `DELETE /api/messages/:id` - 删除留言（需认证）
-
-#### 联系人相关
-- `GET /api/contacts` - 联系人列表
-- `POST /api/contacts` - 创建联系人（需认证）
-- `PUT /api/contacts/:id` - 更新联系人（需认证）
-- `DELETE /api/contacts/:id` - 删除联系人（需认证）
 
 #### 上传相关
 - `POST /api/uploads?utype=prod|news` - 文件上传（需认证）
@@ -167,9 +154,7 @@ src/
 │   ├── api/                  # REST API 路由
 │   │   ├── products.mjs
 │   │   ├── news.mjs
-│   │   ├── jobs.mjs
 │   │   ├── messages.mjs
-│   │   ├── contacts.mjs
 │   │   ├── uploads.mjs
 │   │   ├── admin.mjs
 │   │   └── site-config.mjs

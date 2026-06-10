@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { ContentModel, CorporationCategory, ProductPhoto, Template, TemplateBinding, TemplateDependencyInfo, TemplatePreview, TemplateVariant, TemplateVersion, ApiResponse } from '@/types'
+import type { ContentModel, CorporationCategory, Template, TemplateBinding, TemplateDependencyInfo, TemplatePreview, TemplateVariant, TemplateVersion, ApiResponse } from '@/types'
 
 // 公司信息分类 API
 export const corporationCategoriesApi = {
@@ -30,35 +30,6 @@ export const corporationCategoriesApi = {
 
   delete: async (id: number) => {
     const response = await apiClient.delete<ApiResponse<void>>(`/corporation-categories/${id}`)
-    return response.data
-  },
-}
-
-// 产品相册 API
-export const productPhotosApi = {
-  list: async (productId?: number) => {
-    const params = productId ? { product_id: productId } : {}
-    const response = await apiClient.get<ApiResponse<ProductPhoto[]>>('/product-photos', { params })
-    return response.data
-  },
-
-  get: async (id: number) => {
-    const response = await apiClient.get<ApiResponse<ProductPhoto>>(`/product-photos/${id}`)
-    return response.data
-  },
-
-  create: async (data: Partial<ProductPhoto>) => {
-    const response = await apiClient.post<ApiResponse<ProductPhoto>>('/product-photos', data)
-    return response.data
-  },
-
-  update: async (id: number, data: Partial<ProductPhoto>) => {
-    const response = await apiClient.put<ApiResponse<ProductPhoto>>(`/product-photos/${id}`, data)
-    return response.data
-  },
-
-  delete: async (id: number) => {
-    const response = await apiClient.delete<ApiResponse<void>>(`/product-photos/${id}`)
     return response.data
   },
 }

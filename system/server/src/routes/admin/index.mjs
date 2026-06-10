@@ -48,34 +48,12 @@ export default async function adminIndexRoutes(app) {
     return reply.type('text/html; charset=utf-8').send(html);
   });
 
-  // 招聘管理页面
-  app.get('/jobs', {
-    onRequest: [requireAuth]
-  }, async (request, reply) => {
-    const html = await fs.promises.readFile(
-      path.join(SERVER_ROOT, 'views/admin/jobs-list.html'),
-      'utf-8'
-    );
-    return reply.type('text/html; charset=utf-8').send(html);
-  });
-
   // 留言管理页面
   app.get('/messages', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
     const html = await fs.promises.readFile(
       path.join(SERVER_ROOT, 'views/admin/messages-list.html'),
-      'utf-8'
-    );
-    return reply.type('text/html; charset=utf-8').send(html);
-  });
-
-  // 联系方式管理页面
-  app.get('/contacts', {
-    onRequest: [requireAuth]
-  }, async (request, reply) => {
-    const html = await fs.promises.readFile(
-      path.join(SERVER_ROOT, 'views/admin/contacts-list.html'),
       'utf-8'
     );
     return reply.type('text/html; charset=utf-8').send(html);
@@ -120,28 +98,6 @@ export default async function adminIndexRoutes(app) {
   }, async (request, reply) => {
     const html = await fs.promises.readFile(
       path.join(SERVER_ROOT, 'views/admin/news-form.html'),
-      'utf-8'
-    );
-    return reply.type('text/html; charset=utf-8').send(html);
-  });
-
-  // 招聘添加/编辑页面
-  app.get('/jobs/:action', {
-    onRequest: [requireAuth]
-  }, async (request, reply) => {
-    const html = await fs.promises.readFile(
-      path.join(SERVER_ROOT, 'views/admin/jobs-form.html'),
-      'utf-8'
-    );
-    return reply.type('text/html; charset=utf-8').send(html);
-  });
-
-  // 联系方式添加/编辑页面
-  app.get('/contacts/:action', {
-    onRequest: [requireAuth]
-  }, async (request, reply) => {
-    const html = await fs.promises.readFile(
-      path.join(SERVER_ROOT, 'views/admin/contacts-form.html'),
       'utf-8'
     );
     return reply.type('text/html; charset=utf-8').send(html);

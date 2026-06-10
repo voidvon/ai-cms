@@ -6,8 +6,6 @@ import {
   LegacyContactPage,
   LegacyContentPage,
   LegacyHomePage,
-  LegacyJobDetailPage,
-  LegacyJobListPage,
   LegacyMessagePage,
   LegacyProductDetailPage,
   LegacyProductListPage,
@@ -18,8 +16,6 @@ import type {
   LegacyContactPageProps,
   LegacyContentPageProps,
   LegacyHomePageProps,
-  LegacyJobDetailPageProps,
-  LegacyJobListPageProps,
   LegacyMessagePageProps,
   LegacyProductDetailPageProps,
   LegacyProductListPageProps,
@@ -34,8 +30,6 @@ type PageName =
   | 'legacy-product-detail'
   | 'legacy-article-list'
   | 'legacy-article-detail'
-  | 'legacy-job-list'
-  | 'legacy-job-detail'
 
 type PageProps =
   | LegacyHomePageProps
@@ -46,8 +40,6 @@ type PageProps =
   | LegacyProductDetailPageProps
   | LegacyArticleListPageProps
   | LegacyArticleDetailPageProps
-  | LegacyJobListPageProps
-  | LegacyJobDetailPageProps
 
 export function renderPage(pageName: PageName, props: PageProps): string {
   const page = resolveLegacyPage(pageName, props)
@@ -72,10 +64,6 @@ function resolveLegacyPage(pageName: PageName, props: PageProps): React.ReactEle
       return <LegacyArticleListPage {...props as LegacyArticleListPageProps} />
     case 'legacy-article-detail':
       return <LegacyArticleDetailPage {...props as LegacyArticleDetailPageProps} />
-    case 'legacy-job-list':
-      return <LegacyJobListPage {...props as LegacyJobListPageProps} />
-    case 'legacy-job-detail':
-      return <LegacyJobDetailPage {...props as LegacyJobDetailPageProps} />
     default:
       throw new Error(`Unknown legacy site page: ${pageName}`)
   }

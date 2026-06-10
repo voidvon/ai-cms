@@ -33,13 +33,38 @@ export function listNews({ limit = 20 } = {}) {
   ).map(normalizeNewsRecord);
 }
 
-export function listNewsAdmin({ page = 1, limit = 15 } = {}) {
+export function listNewsAdmin({ page = 1, limit = 15, categoryId = null, includeDescendants = false } = {}) {
   const safeLimit = Math.min(Math.max(Number.parseInt(String(limit), 10) || 15, 1), 200);
   const safePage = Math.max(Number.parseInt(String(page), 10) || 1, 1);
+  const safeCategoryId = Number.parseInt(String(categoryId ?? ''), 10);
+  const hasCategoryFilter = Number.isInteger(safeCategoryId) && safeCategoryId > 0;
+  const withDescendants = Boolean(includeDescendants);
   const offset = (safePage - 1) * safeLimit;
+  const categoryTree = hasCategoryFilter && withDescendants
+    ? `
+      WITH RECURSIVE category_tree(id) AS (
+        SELECT id FROM news_categories WHERE id = ?
+        UNION ALL
+        SELECT child.id
+        FROM news_categories child
+        INNER JOIN category_tree parent ON child.parent_id = parent.id
+      )
+    `
+    : '';
+  const where = hasCategoryFilter
+    ? withDescendants
+      ? 'WHERE n.category_id IN (SELECT id FROM category_tree)'
+      : 'WHERE n.category_id = ?'
+    : '';
+  const countWhere = hasCategoryFilter
+    ? withDescendants
+      ? 'WHERE category_id IN (SELECT id FROM category_tree)'
+      : 'WHERE category_id = ?'
+    : '';
 
   const items = queryAll(
     `
+      ${categoryTree}
       SELECT
         n.id,
         n.category_id,
@@ -53,14 +78,23 @@ export function listNewsAdmin({ page = 1, limit = 15 } = {}) {
         c.name AS category_name
       FROM news n
       LEFT JOIN news_categories c ON c.id = n.category_id
+      ${where}
       ORDER BY n.id DESC
       LIMIT ?
       OFFSET ?
     `,
-    [safeLimit, offset]
+    hasCategoryFilter ? [safeCategoryId, safeLimit, offset] : [safeLimit, offset]
   ).map(normalizeNewsRecord);
 
-  const total = queryOne('SELECT COUNT(*) AS count FROM news')?.count || 0;
+  const total = queryOne(
+    `
+      ${categoryTree}
+      SELECT COUNT(*) AS count
+      FROM news
+      ${countWhere}
+    `,
+    hasCategoryFilter ? [safeCategoryId] : []
+  )?.count || 0;
   return {
     items,
     pagination: {

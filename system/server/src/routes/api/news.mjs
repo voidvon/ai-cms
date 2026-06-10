@@ -13,11 +13,15 @@ export default async function newsRoutes(app) {
   app.get('/news/admin', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
-    const { page, limit } = request.query;
+    const { page, limit, category_id, categoryId, include_descendants, includeDescendants } = request.query;
+    const selectedCategoryId = category_id ?? categoryId;
+    const selectedIncludeDescendants = include_descendants ?? includeDescendants;
 
     const result = listNewsAdmin({
       page: page ? parseInt(page) : undefined,
-      limit: limit ? parseInt(limit) : undefined
+      limit: limit ? parseInt(limit) : undefined,
+      categoryId: selectedCategoryId ? parseInt(selectedCategoryId) : undefined,
+      includeDescendants: selectedIncludeDescendants === '1' || selectedIncludeDescendants === 'true'
     });
 
     return { success: true, ...result };

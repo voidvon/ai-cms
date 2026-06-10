@@ -69,7 +69,67 @@
   * {
     @apply border-border;
   }
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
   body {
     @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .rich-text-editor {
+    @apply overflow-hidden rounded-md border border-input bg-background;
+  }
+
+  .rich-text-editor .ql-toolbar {
+    @apply border-0 border-b bg-muted/40;
+  }
+
+  .rich-text-editor .ql-container {
+    @apply border-0 bg-background text-foreground;
+    font-family: inherit;
+  }
+
+  .rich-text-editor .ql-editor {
+    min-height: 260px;
+    font-size: 14px;
+    line-height: 1.7;
+  }
+
+  .rich-text-editor .ql-editor.ql-blank::before {
+    color: hsl(var(--muted-foreground));
+    font-style: normal;
+  }
+
+  .rich-text-editor .ql-snow .ql-stroke {
+    stroke: hsl(var(--foreground));
+  }
+
+  .rich-text-editor .ql-snow .ql-fill {
+    fill: hsl(var(--foreground));
+  }
+
+  .rich-text-editor .ql-snow .ql-picker {
+    color: hsl(var(--foreground));
+  }
+
+  .rich-text-editor .ql-snow .ql-picker-options {
+    background: hsl(var(--popover));
+    border-color: hsl(var(--border));
+    color: hsl(var(--popover-foreground));
+  }
+
+  .rich-text-editor .ql-snow .ql-tooltip {
+    background: hsl(var(--popover));
+    border-color: hsl(var(--border));
+    color: hsl(var(--popover-foreground));
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  }
+
+  .dark .rich-text-editor .ql-toolbar {
+    @apply bg-muted/20;
   }
 }
