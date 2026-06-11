@@ -71,8 +71,14 @@ function TreeItem<T = unknown>({
       <div role="treeitem" aria-selected={active}>
         <div className="group/tree-item flex items-center" style={{ marginLeft: depth * 12 }}>
           <span className="h-8 w-7 shrink-0" aria-hidden="true" />
-          <TreeItemButton item={item} active={active} depth={0} onValueChange={onValueChange} selectable={selectable} />
-          {renderAction?.(item)}
+          <TreeItemButton
+            item={item}
+            active={active}
+            depth={0}
+            onValueChange={onValueChange}
+            selectable={selectable}
+            action={renderAction?.(item)}
+          />
         </div>
       </div>
     )
@@ -92,8 +98,14 @@ function TreeItem<T = unknown>({
               <ChevronRight className="size-4 transition-transform group-data-[state=open]/tree-toggle:rotate-90" />
             </button>
           </CollapsibleTrigger>
-          <TreeItemButton item={item} active={active} depth={0} onValueChange={onValueChange} selectable={selectable} />
-          {renderAction?.(item)}
+          <TreeItemButton
+            item={item}
+            active={active}
+            depth={0}
+            onValueChange={onValueChange}
+            selectable={selectable}
+            action={renderAction?.(item)}
+          />
         </div>
       </div>
       <CollapsibleContent role="group">
@@ -119,12 +131,14 @@ function TreeItemButton<T = unknown>({
   depth,
   onValueChange,
   selectable,
+  action,
 }: {
   item: TreeItemData<T>
   active: boolean
   depth: number
   onValueChange?: (item: TreeItemData<T>) => void
   selectable: boolean
+  action?: React.ReactNode
 }) {
   return (
     <button
@@ -136,13 +150,21 @@ function TreeItemButton<T = unknown>({
       }}
       disabled={!selectable}
       className={cn(
-        'min-h-8 min-w-0 flex-1 rounded px-2 py-1.5 text-left text-sm transition-colors',
+        'min-h-8 min-w-0 flex flex-1 items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors',
         selectable ? 'hover:bg-muted' : 'cursor-default text-muted-foreground',
         active && 'bg-muted font-medium'
       )}
       style={{ marginLeft: depth * 12 }}
     >
-      <span className="block truncate">{item.label}</span>
+      <span className="block min-w-0 flex-1 truncate">{item.label}</span>
+      {action ? (
+        <span
+          className="shrink-0"
+          onClick={(event) => event.stopPropagation()}
+        >
+          {action}
+        </span>
+      ) : null}
     </button>
   )
 }

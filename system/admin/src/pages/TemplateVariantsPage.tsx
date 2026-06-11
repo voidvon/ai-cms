@@ -1,14 +1,27 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Ellipsis, Pencil, Plus, Trash2 } from 'lucide-react'
 import { templateVariantsApi, templatesApi } from '@/api/advanced'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tree, type TreeItemData } from '@/components/ui/tree'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { TemplateCodeEditor } from '@/components/TemplateCodeEditor'
 import { TemplateVariableReference } from '@/components/TemplateVariableReference'
 import { toast } from 'sonner'
@@ -34,6 +47,13 @@ const previewModes = [
   { value: 'contact', label: '联系我们' },
   { value: 'message', label: '在线留言' },
 ]
+
+const templateTypeLabelMap: Record<Template['type'], string> = {
+  home: '首页模板',
+  list: '列表模板',
+  content: '内容模板',
+  component: '组件模板',
+}
 
 type TemplateForm = Pick<Template, 'name' | 'code' | 'type' | 'engine' | 'content' | 'sort_order'>
 type ThemeSlotKey =
@@ -67,51 +87,38 @@ const themeSlotConfigs: Array<{
   { key: 'contact', label: '联系页模板', description: '联系我们页', templateType: 'content', field: 'contact' },
 ]
 
-type EditorTarget =
-  | { kind: 'slot'; slot: ThemeSlotKey }
-  | { kind: 'component'; templateId: number | null }
+type EditorTarget = {
+  templateId: number | null
+}
 
 type TemplateLibraryNode = {
-  kind: 'group' | 'slot' | 'component'
-  slotKey?: ThemeSlotKey
+  kind: 'group' | 'template'
+  templateType?: Template['type']
   template?: Template | null
 }
 
-function resolvePreviewMode(previewMode: string, editorTarget: EditorTarget): string {
+function resolvePreviewMode(previewMode: string): string {
   if (previewMode !== 'auto') {
     return previewMode
   }
-
-  if (editorTarget.kind !== 'slot') {
-    return 'auto'
-  }
-
-  const slotModeMap: Record<ThemeSlotKey, string> = {
-    home: 'home',
-    corporation: 'content',
-    product_list: 'product-list',
-    product_detail: 'product-detail',
-    news_list: 'article-list',
-    news_detail: 'article-detail',
-    service_list: 'service-list',
-    service_detail: 'service-detail',
-    message: 'message',
-    contact: 'contact',
-  }
-
-  return slotModeMap[editorTarget.slot]
+  return 'auto'
 }
 
 export default function TemplateVariantsPage() {
   const queryClient = useQueryClient()
-  const [activeThemeSlot, setActiveThemeSlot] = useState<ThemeSlotKey>('home')
-  const [editorTarget, setEditorTarget] = useState<EditorTarget>({ kind: 'slot', slot: 'home' })
+  const [editorTarget, setEditorTarget] = useState<EditorTarget>({ templateId: null })
   const [previewOpen, setPreviewOpen] = useState(false)
   const [previewHtml, setPreviewHtml] = useState('')
   const [versionPopoverOpen, setVersionPopoverOpen] = useState(false)
   const [versionPreview, setVersionPreview] = useState<TemplateVersion | null>(null)
   const [previewMode, setPreviewMode] = useState('auto')
   const [attachComponentId, setAttachComponentId] = useState<string>('')
+  const [deleteThemeDialogOpen, setDeleteThemeDialogOpen] = useState(false)
+  const [templateDeleteDialogOpen, setTemplateDeleteDialogOpen] = useState(false)
+  const [deletingTreeItem, setDeletingTreeItem] = useState<TemplateLibraryNode | null>(null)
+  const [renameDialogOpen, setRenameDialogOpen] = useState(false)
+  const [renamingTreeItem, setRenamingTreeItem] = useState<TemplateLibraryNode | null>(null)
+  const [renameForm, setRenameForm] = useState({ name: '', code: '' })
   const [formData, setFormData] = useState<TemplateForm>({
     name: '',
     code: '',
@@ -150,108 +157,88 @@ export default function TemplateVariantsPage() {
     [selectedTheme, templates],
   )
   const resolvedThemeComponentCount = selectedTheme?.component_template_ids?.length || 0
-  const selectedSlotConfig = useMemo(
-    () => themeSlotConfigs.find((item) => item.key === activeThemeSlot) || themeSlotConfigs[0],
-    [activeThemeSlot],
+  const homeTemplates = useMemo(
+    () => templates.filter((item) => item.type === 'home'),
+    [templates],
   )
-  const themeSlotItems = useMemo(() => {
-    return themeSlotConfigs.map((slot) => {
-      const code = selectedTheme?.[slot.field]
-      const template = templates.find((item) => item.code === code) || null
-      return {
-        ...slot,
-        code: typeof code === 'string' ? code : '',
-        template,
-      }
-    })
-  }, [selectedTheme, templates])
+  const primaryHomeTemplate = homeTemplates[0] || null
+  const listTemplates = useMemo(
+    () => templates.filter((item) => item.type === 'list'),
+    [templates],
+  )
+  const contentTemplates = useMemo(
+    () => templates.filter((item) => item.type === 'content'),
+    [templates],
+  )
   const templateLibraryItems = useMemo<TreeItemData<TemplateLibraryNode>[]>(() => {
-    const slotByKey = new Map(themeSlotItems.map((item) => [item.key, item]))
-    const createSlotLeaf = (slotKey: ThemeSlotKey) => {
-      const slot = slotByKey.get(slotKey) || null
+    const createTemplateLeaf = (template: Template) => {
       return {
-        id: `slot:${slotKey}`,
-        label: <div className="truncate">{getSlotLibraryLabel(slot)}</div>,
+        id: `template:${template.id}`,
+        label: (
+          <div className="min-w-0">
+            <div className="truncate">{template.name}</div>
+            <div className="truncate text-xs text-muted-foreground">{template.code}</div>
+          </div>
+        ),
         data: {
-          kind: 'slot' as const,
-          slotKey,
-          template: slot?.template || null,
+          kind: 'template' as const,
+          template,
         },
       }
     }
 
     return [
-      createSlotLeaf('home'),
+      primaryHomeTemplate
+        ? {
+            id: `template:${primaryHomeTemplate.id}`,
+            label: (
+              <div className="min-w-0">
+                <div className="truncate">首页模板</div>
+                <div className="truncate text-xs text-muted-foreground">{primaryHomeTemplate.code}</div>
+              </div>
+            ),
+            data: {
+              kind: 'template' as const,
+              template: primaryHomeTemplate,
+            },
+          }
+        : {
+            id: 'group:home',
+            label: '首页模板',
+            selectable: false,
+            data: { kind: 'group', templateType: 'home' },
+            children: [],
+          },
       {
         id: 'group:list',
         label: '列表模板',
         selectable: false,
-        data: { kind: 'group' },
-        children: [
-          createSlotLeaf('product_list'),
-          createSlotLeaf('news_list'),
-          createSlotLeaf('service_list'),
-        ],
+        data: { kind: 'group', templateType: 'list' },
+        children: listTemplates.map(createTemplateLeaf),
       },
       {
         id: 'group:content',
         label: '内容模板',
         selectable: false,
-        data: { kind: 'group' },
-        children: [
-          createSlotLeaf('corporation'),
-          createSlotLeaf('product_detail'),
-          createSlotLeaf('news_detail'),
-          createSlotLeaf('service_detail'),
-          createSlotLeaf('contact'),
-        ],
+        data: { kind: 'group', templateType: 'content' },
+        children: contentTemplates.map(createTemplateLeaf),
       },
-      createSlotLeaf('message'),
       {
         id: 'group:component',
         label: '组件模板',
         selectable: false,
-        data: { kind: 'group' },
-        children: themeComponentTemplates.map((template) => ({
-          id: `component:${template.id}`,
-          label: (
-            <div className="min-w-0">
-              <div className="truncate">{template.name}</div>
-              <div className="truncate text-xs text-muted-foreground">{template.code}</div>
-            </div>
-          ),
-          data: {
-            kind: 'component' as const,
-            template,
-          },
-        })),
+        data: { kind: 'group', templateType: 'component' },
+        children: themeComponentTemplates.map(createTemplateLeaf),
       },
     ]
-  }, [themeComponentTemplates, themeSlotItems])
-  const selectedComponentTemplate = useMemo(
-    () => {
-      if (editorTarget.kind !== 'component') {
-        return themeComponentTemplates[0] || null
-      }
-      return themeComponentTemplates.find((item) => item.id === editorTarget.templateId) || themeComponentTemplates[0] || null
-    },
-    [themeComponentTemplates, editorTarget],
-  )
+  }, [contentTemplates, listTemplates, primaryHomeTemplate, themeComponentTemplates])
   const selectedTemplate = useMemo(
-    () => {
-      if (editorTarget.kind === 'component') {
-        return selectedComponentTemplate
-      }
-      const code = selectedTheme?.[selectedSlotConfig.field]
-      return templates.find((item) => item.code === code) || null
-    },
-    [editorTarget, selectedTheme, selectedSlotConfig, templates, selectedComponentTemplate],
+    () => templates.find((item) => item.id === editorTarget.templateId) || null,
+    [editorTarget, templates],
   )
   const selectedTreeValue = useMemo(
-    () => editorTarget.kind === 'component'
-      ? `component:${editorTarget.templateId || selectedComponentTemplate?.id || ''}`
-      : `slot:${activeThemeSlot}`,
-    [activeThemeSlot, editorTarget, selectedComponentTemplate],
+    () => (selectedTemplate ? `template:${selectedTemplate.id}` : undefined),
+    [selectedTemplate],
   )
   const { data: dependencyData, isLoading: isDependenciesLoading } = useQuery({
     queryKey: ['template-dependencies', selectedTemplate?.id],
@@ -265,20 +252,11 @@ export default function TemplateVariantsPage() {
   })
 
   useEffect(() => {
-    if (editorTarget.kind === 'slot') {
-      return
-    }
-    if (selectedComponentTemplate && selectedComponentTemplate.id !== editorTarget.templateId) {
-      setEditorTarget({ kind: 'component', templateId: selectedComponentTemplate.id })
-    }
-  }, [editorTarget, selectedComponentTemplate])
-
-  useEffect(() => {
     if (!selectedTemplate) {
       setFormData({
         name: '',
         code: '',
-        type: editorTarget.kind === 'component' ? 'component' : selectedSlotConfig.templateType,
+        type: 'content',
         engine: 'tsx',
         content: '',
         sort_order: 0,
@@ -286,14 +264,24 @@ export default function TemplateVariantsPage() {
       return
     }
     setFormData({
-      name: getEditableTemplateName(selectedTemplate, selectedSlotConfig, editorTarget),
+      name: selectedTemplate.name,
       code: selectedTemplate.code,
       type: selectedTemplate.type,
       engine: selectedTemplate.engine || 'tsx',
       content: selectedTemplate.content || '',
       sort_order: selectedTemplate.sort_order || 0,
     })
-  }, [selectedSlotConfig, selectedTemplate])
+  }, [selectedTemplate])
+
+  useEffect(() => {
+    if (editorTarget.templateId || selectedTemplate) {
+      return
+    }
+    const firstTemplate = homeTemplates[0] || listTemplates[0] || contentTemplates[0] || themeComponentTemplates[0] || null
+    if (firstTemplate) {
+      setEditorTarget({ templateId: firstTemplate.id })
+    }
+  }, [contentTemplates, editorTarget.templateId, homeTemplates, listTemplates, selectedTemplate, themeComponentTemplates])
 
   const publishMutation = useMutation({
     mutationFn: async () => {
@@ -313,35 +301,31 @@ export default function TemplateVariantsPage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: async () => {
-      if (!selectedTheme) {
-        throw new Error('未选择主题')
-      }
-
-      const slotTemplates = themeSlotItems.filter((item) => item.templateType === selectedSlotConfig.templateType)
-      const code = `${selectedSlotConfig.key}_${Date.now()}`
+    mutationFn: async (templateType: Extract<Template['type'], 'home' | 'list' | 'content'>) => {
+      const templateCount = templates.filter((item) => item.type === templateType).length
+      const code = `${templateType}_${Date.now()}`
       const created = await templatesApi.create({
-        name: `${selectedSlotConfig.label}-新模板`,
+        name: `${templateTypeLabelMap[templateType]}-新模板`,
         code,
-        type: selectedSlotConfig.templateType,
+        type: templateType,
         engine: 'tsx',
         content: 'export default function Template() {\n  return <div>新模板</div>\n}\n',
         status: 'published',
-        sort_order: slotTemplates.length + 1,
+        sort_order: templateCount + 1,
       })
 
       if (!created.data?.id) {
         throw new Error('创建模板失败')
       }
-
-      await templateVariantsApi.update(selectedTheme.id, buildThemeSlotUpdate(selectedSlotConfig.field, code))
       return created
     },
-    onSuccess: () => {
+    onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['templates'] })
-      queryClient.invalidateQueries({ queryKey: ['themes'] })
-      queryClient.invalidateQueries({ queryKey: ['selected-theme'] })
-      toast.success('模板已创建、发布并绑定到当前主题')
+      const createdId = result.data?.id
+      if (createdId) {
+        setEditorTarget({ templateId: createdId })
+      }
+      toast.success('模板已创建并发布')
     },
     onError: (error: unknown) => toast.error(getApiErrorMessage(error, '创建失败')),
   })
@@ -393,7 +377,7 @@ export default function TemplateVariantsPage() {
       queryClient.invalidateQueries({ queryKey: ['selected-theme'] })
       const createdId = response.data?.id
       if (createdId) {
-        setEditorTarget({ kind: 'component', templateId: createdId })
+        setEditorTarget({ templateId: createdId })
       }
       toast.success('组件模板已创建并发布')
     },
@@ -459,10 +443,95 @@ export default function TemplateVariantsPage() {
     onError: (error: unknown) => toast.error(getApiErrorMessage(error, '切换主题失败')),
   })
 
+  const deleteThemeMutation = useMutation({
+    mutationFn: (id: number) => templateVariantsApi.delete(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['themes'] })
+      queryClient.invalidateQueries({ queryKey: ['selected-theme'] })
+      setDeleteThemeDialogOpen(false)
+      toast.success('主题已删除')
+    },
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '删除主题失败')),
+  })
+
+  const deleteTemplateMutation = useMutation({
+    mutationFn: async (node: TemplateLibraryNode) => {
+      if (!node.template?.id) {
+        throw new Error('未找到模板')
+      }
+
+      for (const theme of themes) {
+        const updatePayload: Partial<TemplateVariant> = {}
+
+        if ((theme.manual_component_template_ids || []).includes(node.template.id)) {
+          updatePayload.manual_component_template_ids = (theme.manual_component_template_ids || []).filter((id) => id !== node.template!.id)
+        }
+
+        for (const slotConfig of themeSlotConfigs) {
+          if (theme[slotConfig.field] === node.template.code) {
+            updatePayload[slotConfig.field] = ''
+          }
+        }
+
+        if (Object.keys(updatePayload).length > 0) {
+          await templateVariantsApi.update(theme.id, updatePayload)
+        }
+      }
+
+      await templatesApi.delete(node.template.id)
+      return node
+    },
+    onSuccess: (node) => {
+      queryClient.invalidateQueries({ queryKey: ['templates'] })
+      queryClient.invalidateQueries({ queryKey: ['themes'] })
+      queryClient.invalidateQueries({ queryKey: ['selected-theme'] })
+      if (node.template?.id) {
+        queryClient.invalidateQueries({ queryKey: ['template-dependencies', node.template.id] })
+        queryClient.invalidateQueries({ queryKey: ['template-versions', node.template.id] })
+      }
+      if (editorTarget.templateId === node.template?.id) {
+        setEditorTarget({ templateId: null })
+      }
+      setTemplateDeleteDialogOpen(false)
+      setDeletingTreeItem(null)
+      toast.success('模板已删除')
+    },
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '删除模板失败')),
+  })
+
+  const renameTemplateMutation = useMutation({
+    mutationFn: async ({ templateId, name, code }: { templateId: number; name: string; code: string }) => {
+      const normalizedName = name.trim()
+      const normalizedCode = code.trim()
+      if (!normalizedName) {
+        throw new Error('模板名称不能为空')
+      }
+      if (!normalizedCode) {
+        throw new Error('模板ID不能为空')
+      }
+      return templatesApi.update(templateId, { name: normalizedName, code: normalizedCode })
+    },
+    onSuccess: (response) => {
+      queryClient.invalidateQueries({ queryKey: ['templates'] })
+      if (selectedTemplate?.id === response.data?.id && response.data) {
+        setFormData((current) => ({
+          ...current,
+          name: response.data!.name,
+          code: response.data!.code,
+        }))
+      }
+      setRenameDialogOpen(false)
+      setRenamingTreeItem(null)
+      setRenameForm({ name: '', code: '' })
+      toast.success('模板信息已更新')
+    },
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '重命名失败')),
+  })
+
   const previewMutation = useMutation({
     mutationFn: () => templatesApi.preview({
       ...formData,
-      preview_context: { mode: resolvePreviewMode(previewMode, editorTarget) },
+      preview_context: { mode: resolvePreviewMode(previewMode) },
     }),
     onSuccess: (response) => {
       setPreviewHtml(response.data?.html || '')
@@ -503,15 +572,93 @@ export default function TemplateVariantsPage() {
       return
     }
 
-    if (data.kind === 'slot' && data.slotKey) {
-      setActiveThemeSlot(data.slotKey)
-      setEditorTarget({ kind: 'slot', slot: data.slotKey })
-      return
+    if (data.kind === 'template' && data.template?.id) {
+      setEditorTarget({ templateId: data.template.id })
+    }
+  }
+
+  const renderTreeAction = (item: TreeItemData<TemplateLibraryNode>) => {
+    const data = item.data
+    if (!data) {
+      return null
     }
 
-    if (data.kind === 'component' && data.template?.id) {
-      setEditorTarget({ kind: 'component', templateId: data.template.id })
+    const groupId = String(item.id)
+    const canCreate = data.kind === 'group' && ['group:home', 'group:list', 'group:content', 'group:component'].includes(groupId)
+    const canManageTemplate = data.kind === 'template' && Boolean(data.template?.id)
+
+    if (!canCreate && !canManageTemplate) {
+      return null
     }
+
+    const createTarget = data.kind === 'group' ? data.templateType || null : null
+
+    return (
+      <div className="mr-1 opacity-0 transition-opacity group-hover/tree-item:opacity-100 focus-within:opacity-100">
+        {canCreate && createTarget ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-full"
+            onClick={(event) => {
+              event.stopPropagation()
+              if (createTarget === 'component') {
+                createComponentMutation.mutate()
+              } else if (createTarget === 'home' || createTarget === 'list' || createTarget === 'content') {
+                createMutation.mutate(createTarget)
+              }
+            }}
+            disabled={createMutation.isPending || createComponentMutation.isPending}
+            aria-label="新增"
+          >
+            <Plus className="size-4" />
+          </Button>
+        ) : null}
+        {canManageTemplate ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8"
+                onClick={(event) => event.stopPropagation()}
+              >
+                <Ellipsis className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onSelect={() => {
+                  setRenamingTreeItem(data)
+                  setRenameForm({
+                    name: data.template?.name || '',
+                    code: data.template?.code || '',
+                  })
+                  setRenameDialogOpen(true)
+                }}
+                disabled={renameTemplateMutation.isPending}
+              >
+                <Pencil className="size-4" />
+                重命名
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="text-destructive focus:text-destructive"
+                onSelect={() => {
+                  setDeletingTreeItem(data)
+                  setTemplateDeleteDialogOpen(true)
+                }}
+                disabled={deleteTemplateMutation.isPending}
+              >
+                <Trash2 className="size-4" />
+                删除
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+      </div>
+    )
   }
 
   if (isLoading || isThemesLoading) {
@@ -520,68 +667,63 @@ export default function TemplateVariantsPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
-      <Card className="shrink-0">
-        <CardHeader>
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <CardTitle>主题管理</CardTitle>
-              <CardDescription>
-                当前主题：{selectedTheme?.template_name || '未选择'}。主题决定静态生成时各页面默认使用的已发布模板，下方模板库用于编辑具体模板内容。
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <Select
-                value={selectedTheme ? String(selectedTheme.id) : undefined}
-                onValueChange={(value) => {
-                  const nextId = Number(value)
-                  if (!Number.isNaN(nextId) && nextId !== selectedTheme?.id) {
-                    selectThemeMutation.mutate(nextId)
-                  }
-                }}
-              >
-                <SelectTrigger className="w-[220px]">
-                  <SelectValue placeholder="选择主题" />
-                </SelectTrigger>
-                <SelectContent>
-                  {themes.map((theme) => (
-                    <SelectItem key={theme.id} value={String(theme.id)}>
-                      {theme.template_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Button onClick={() => createThemeMutation.mutate()} disabled={createThemeMutation.isPending}>
-                新增主题
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div className="text-sm text-muted-foreground">
-            切换主题后会自动重新生成静态页面，并按所选主题输出默认页面模板。
-          </div>
-        </CardContent>
-      </Card>
-
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)]">
         <Card className="flex min-h-0 flex-col overflow-hidden">
           <CardHeader className="shrink-0">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <CardTitle>主题模板库</CardTitle>
-                <CardDescription>
-                  页面模板按当前主题绑定。这里展示的是当前主题直属组件，组件源码统一保存在数据库。
-                </CardDescription>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <TooltipProvider delayDuration={150}>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          size="icon"
+                          className="rounded-full"
+                          onClick={() => createThemeMutation.mutate()}
+                          disabled={createThemeMutation.isPending}
+                          aria-label="新增主题"
+                        >
+                          <Plus className="size-4" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>新增主题</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                  <Select
+                    value={selectedTheme ? String(selectedTheme.id) : undefined}
+                    onValueChange={(value) => {
+                      if (value === '__delete_current_theme__') {
+                        setDeleteThemeDialogOpen(true)
+                        return
+                      }
+                      const nextId = Number(value)
+                      if (!Number.isNaN(nextId) && nextId !== selectedTheme?.id) {
+                        selectThemeMutation.mutate(nextId)
+                      }
+                    }}
+                  >
+                    <SelectTrigger className="w-[180px]">
+                      <SelectValue placeholder="选择主题" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {themes.map((theme) => (
+                        <SelectItem key={theme.id} value={String(theme.id)}>
+                          {theme.template_name}
+                        </SelectItem>
+                      ))}
+                      <SelectSeparator />
+                      <SelectItem
+                        value="__delete_current_theme__"
+                        disabled={!selectedTheme || themes.length <= 1}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        删除当前主题
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => createComponentMutation.mutate()}
-                disabled={createComponentMutation.isPending}
-              >
-                新增组件
-              </Button>
             </div>
           </CardHeader>
           <CardContent className="min-h-0 flex-1 overflow-auto">
@@ -590,6 +732,7 @@ export default function TemplateVariantsPage() {
               value={selectedTreeValue}
               defaultExpandedIds={['group:list', 'group:content', 'group:component']}
               onValueChange={handleSelectLibraryItem}
+              renderAction={renderTreeAction}
               className="pr-1"
             />
             <div className="mt-4 space-y-3 rounded border p-3">
@@ -662,20 +805,7 @@ export default function TemplateVariantsPage() {
           <CardHeader className="shrink-0">
             <div className="flex items-center justify-between gap-3">
               {selectedTemplate ? (
-                <div className="grid flex-1 gap-4 md:grid-cols-[320px_180px_80px_auto]">
-                  <Input
-                    id="template-name"
-                    placeholder="模板名称"
-                    value={formData.name}
-                    onChange={(event) => setFormData({ ...formData, name: event.target.value })}
-                    disabled={!isTemplateNameEditable(editorTarget, selectedSlotConfig)}
-                  />
-                  <Input
-                    id="template-code"
-                    placeholder="模板编码"
-                    value={formData.code}
-                    onChange={(event) => setFormData({ ...formData, code: event.target.value })}
-                  />
+                <div className="grid flex-1 gap-4 md:grid-cols-[80px_auto]">
                   <Input
                     id="template-sort"
                     type="number"
@@ -712,15 +842,6 @@ export default function TemplateVariantsPage() {
                 </div>
               ) : <div className="flex-1" />}
               <div className="flex gap-2">
-                {editorTarget.kind === 'slot' ? (
-                  <Button onClick={() => createMutation.mutate()} disabled={createMutation.isPending}>
-                    新增并绑定模板
-                  </Button>
-                ) : (
-                  <Button onClick={() => createComponentMutation.mutate()} disabled={createComponentMutation.isPending}>
-                    新增组件
-                  </Button>
-                )}
                 <Select value={previewMode} onValueChange={setPreviewMode}>
                   <SelectTrigger className="w-[138px]">
                     <SelectValue />
@@ -765,9 +886,7 @@ export default function TemplateVariantsPage() {
               </div>
             ) : (
               <div className="rounded border p-8 text-center text-muted-foreground">
-                {editorTarget.kind === 'slot'
-                  ? '当前主题的这个槽位还没有绑定模板，可以直接点击“新增并绑定模板”。'
-                  : '还没有组件模板，可以先点击“新增组件”。'}
+                暂无可编辑模板，可点击左侧分组右侧的 + 新建模板。
               </div>
             )}
           </CardContent>
@@ -789,6 +908,134 @@ export default function TemplateVariantsPage() {
         templateName={selectedTemplate?.name || '模板'}
         version={versionPreview}
       />
+      <AlertDialog open={deleteThemeDialogOpen} onOpenChange={setDeleteThemeDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除主题</AlertDialogTitle>
+            <AlertDialogDescription>
+              {themes.length <= 1
+                ? '至少需要保留一个主题，当前主题无法删除。'
+                : `确定删除当前主题“${selectedTheme?.template_name || ''}”吗？`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (selectedTheme && themes.length > 1) {
+                  deleteThemeMutation.mutate(selectedTheme.id)
+                }
+              }}
+            >
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog
+        open={templateDeleteDialogOpen}
+        onOpenChange={(open) => {
+          setTemplateDeleteDialogOpen(open)
+          if (!open) {
+            setDeletingTreeItem(null)
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除模板</AlertDialogTitle>
+            <AlertDialogDescription>
+              {deletingTreeItem?.template
+                ? `确定删除模板“${deletingTreeItem.template.name}”吗？`
+                : '确定删除当前模板吗？'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deletingTreeItem) {
+                  deleteTemplateMutation.mutate(deletingTreeItem)
+                }
+              }}
+            >
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <Dialog
+        open={renameDialogOpen}
+        onOpenChange={(open) => {
+          setRenameDialogOpen(open)
+          if (!open) {
+            setRenamingTreeItem(null)
+            setRenameForm({ name: '', code: '' })
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>重命名模板</DialogTitle>
+            <DialogDescription>
+              {renamingTreeItem?.template
+                ? `修改模板“${renamingTreeItem.template.name}”的名称和 ID。`
+                : '修改当前模板信息。'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Input
+              value={renameForm.name}
+              onChange={(event) => setRenameForm((current) => ({ ...current, name: event.target.value }))}
+              placeholder="请输入模板名称"
+            />
+            <Input
+              value={renameForm.code}
+              onChange={(event) => setRenameForm((current) => ({ ...current, code: event.target.value }))}
+              placeholder="请输入模板ID"
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' && renamingTreeItem?.template?.id && !renameTemplateMutation.isPending) {
+                  renameTemplateMutation.mutate({
+                    templateId: renamingTreeItem.template.id,
+                    name: renameForm.name,
+                    code: renameForm.code,
+                  })
+                }
+              }}
+            />
+            <div className="flex justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setRenameDialogOpen(false)
+                  setRenamingTreeItem(null)
+                  setRenameForm({ name: '', code: '' })
+                }}
+              >
+                取消
+              </Button>
+              <Button
+                type="button"
+                onClick={() => {
+                  if (renamingTreeItem?.template?.id) {
+                    renameTemplateMutation.mutate({
+                      templateId: renamingTreeItem.template.id,
+                      name: renameForm.name,
+                      code: renameForm.code,
+                    })
+                  }
+                }}
+                disabled={!renameForm.name.trim() || !renameForm.code.trim() || renameTemplateMutation.isPending}
+              >
+                保存
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
@@ -818,27 +1065,6 @@ function buildThemeSlotUpdate(field: keyof TemplateVariant, code: string): Parti
   return {
     [field]: code,
   }
-}
-
-function isTemplateNameEditable(
-  editorTarget: EditorTarget,
-  slotConfig: { label: string },
-) {
-  if (editorTarget.kind === 'component') {
-    return true
-  }
-  return false
-}
-
-function getEditableTemplateName(
-  template: Template,
-  slotConfig: { label: string },
-  editorTarget: EditorTarget,
-) {
-  if (editorTarget.kind === 'component') {
-    return template.name
-  }
-  return slotConfig.label
 }
 
 function getSlotLibraryLabel(
@@ -955,6 +1181,7 @@ function TemplateDependencyPanel({
           </div>
         )}
       </div>
+
     </div>
   )
 }
