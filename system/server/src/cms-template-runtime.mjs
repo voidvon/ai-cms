@@ -15,7 +15,9 @@ export function createCmsTemplateRuntime({
   expandLegacyCommonPlaceholders
 }) {
   const registeredClientTemplates = new Map();
+  const pageTemplateClientUsage = new Map();
   const registeredStyleTemplates = new Map();
+  const pageTemplateStyleUsage = new Map();
 
   function renderCmsSitePage(pageName, props, templateContext, options = {}) {
     const templateCode = templateByPage[pageName];
@@ -50,7 +52,12 @@ export function createCmsTemplateRuntime({
       });
     }
 
-    return injectPageAssets(html, { clientTemplates, styleTemplates, props });
+    return injectPageAssets(html, {
+      templateCode: template.code,
+      clientTemplates,
+      styleTemplates,
+      props
+    });
   }
 
   function renderCmsTsxTemplate(content, props, templateContext, options = {}) {
@@ -114,19 +121,27 @@ export function createCmsTemplateRuntime({
     }
   }
 
-  function injectPageAssets(html, { clientTemplates, styleTemplates, props }) {
-    let nextHtml = injectStylesheetLinks(html, styleTemplates);
-    nextHtml = injectClientRuntimes(nextHtml, clientTemplates, props);
+  function injectPageAssets(html, { templateCode, clientTemplates, styleTemplates, props }) {
+    let nextHtml = injectStylesheetLinks(html, templateCode, styleTemplates);
+    nextHtml = injectClientRuntimes(nextHtml, templateCode, clientTemplates, props);
     return nextHtml;
   }
 
-  function injectStylesheetLinks(html, styleTemplates) {
+  function injectStylesheetLinks(html, templateCode, styleTemplates) {
     if (!styleTemplates || styleTemplates.size === 0) {
       return html;
     }
-    const linkHtml = Array.from(styleTemplates.values())
-      .map((asset) => `<link rel="stylesheet" href="/${templateClientAssetDir}/${asset.code}.css">`)
-      .join('\n');
+
+    const normalizedTemplateCode = sanitizeTemplateCode(templateCode);
+    if (!normalizedTemplateCode) {
+      return html;
+    }
+
+    registerPageTemplateStyleUsage(normalizedTemplateCode, styleTemplates);
+    const linkHtml = `<!--cms-tsx-styles:${encodeRuntimePlaceholder({
+      pageTemplateCode: normalizedTemplateCode,
+      styleTemplateCodes: Array.from(styleTemplates.keys()).map((code) => sanitizeTemplateCode(code)).filter(Boolean)
+    })}-->`;
 
     if (/<\/head>/i.test(html)) {
       return html.replace(/<\/head>/i, `${linkHtml}\n</head>`);
@@ -134,21 +149,29 @@ export function createCmsTemplateRuntime({
     return `${linkHtml}\n${html}`;
   }
 
-  function injectClientRuntimes(html, clientTemplates, props) {
+  function injectClientRuntimes(html, templateCode, clientTemplates, props) {
     if (!clientTemplates || clientTemplates.size === 0) {
       return html;
     }
-    const runtimeParts = [];
-    for (const template of clientTemplates.values()) {
-      const code = sanitizeTemplateCode(template.code);
-      if (!code) {
-        continue;
-      }
-      if (template.kind === 'tsx-client' && hasImperativeTsxClientRuntime(template.source) && template.needsProps !== false) {
-        runtimeParts.push(`<script type="application/json" id="cms-tsx-props-${code}">${safeJsonForScript(props)}</script>`);
-      }
-      runtimeParts.push(`<script type="module" src="/${templateClientAssetDir}/${code}.js"></script>`);
+
+    const normalizedTemplateCode = sanitizeTemplateCode(templateCode);
+    if (!normalizedTemplateCode) {
+      return html;
     }
+
+    registerPageTemplateClientUsage(normalizedTemplateCode, clientTemplates);
+
+    const runtimeParts = [];
+    const needsProps = Array.from(clientTemplates.values()).some((template) => {
+      return template.kind === 'tsx-client' && hasImperativeTsxClientRuntime(template.source) && template.needsProps !== false;
+    });
+    if (needsProps) {
+      runtimeParts.push(`<script type="application/json" id="cms-tsx-page-props">${safeJsonForScript(props)}</script>`);
+    }
+    runtimeParts.push(`<!--cms-tsx-runtime:${encodeRuntimePlaceholder({
+      pageTemplateCode: normalizedTemplateCode,
+      clientTemplateCodes: Array.from(clientTemplates.keys()).map((code) => sanitizeTemplateCode(code)).filter(Boolean)
+    })}-->`);
     if (runtimeParts.length === 0) {
       return html;
     }
@@ -299,30 +322,39 @@ export function createCmsTemplateRuntime({
   }
 
   function buildRegisteredTsxStyleAssets(outputRoot) {
-    if (registeredStyleTemplates.size === 0) {
+    if (registeredStyleTemplates.size === 0 || pageTemplateStyleUsage.size === 0) {
       return;
     }
 
     const dirPath = path.resolve(outputRoot, templateClientAssetDir);
     fs.mkdirSync(dirPath, { recursive: true });
 
+    const bundlePlan = buildStyleBundlePlan({
+      pageTemplateStyleUsage,
+      registeredStyleTemplates
+    });
+
     try {
-      for (const asset of registeredStyleTemplates.values()) {
-        fs.writeFileSync(path.join(dirPath, `${asset.code}.css`), asset.cssText, 'utf8');
-      }
+      writeBundledStyleAssets(dirPath, bundlePlan);
+      replaceStyleRuntimePlaceholders(outputRoot, bundlePlan, templateClientAssetDir);
     } finally {
       registeredStyleTemplates.clear();
+      pageTemplateStyleUsage.clear();
     }
   }
 
   function buildRegisteredTsxClientBundles(outputRoot) {
-    if (registeredClientTemplates.size === 0) {
+    if (registeredClientTemplates.size === 0 || pageTemplateClientUsage.size === 0) {
       return;
     }
 
+    const bundlePlan = buildClientBundlePlan({
+      pageTemplateClientUsage,
+      registeredClientTemplates
+    });
     const manifestPath = path.join(outputRoot, '.cms-template-client-manifest.json');
     const manifest = {
-      templates: Array.from(registeredClientTemplates.values())
+      bundles: buildClientBundleManifest(bundlePlan)
     };
 
     try {
@@ -334,10 +366,38 @@ export function createCmsTemplateRuntime({
       ], {
         stdio: 'inherit'
       });
+      replaceClientRuntimePlaceholders(outputRoot, bundlePlan, templateClientAssetDir);
     } finally {
       registeredClientTemplates.clear();
+      pageTemplateClientUsage.clear();
       if (fs.existsSync(manifestPath)) {
         fs.unlinkSync(manifestPath);
+      }
+    }
+  }
+
+  function registerPageTemplateClientUsage(templateCode, clientTemplates) {
+    if (!pageTemplateClientUsage.has(templateCode)) {
+      pageTemplateClientUsage.set(templateCode, new Set());
+    }
+    const usage = pageTemplateClientUsage.get(templateCode);
+    for (const code of clientTemplates.keys()) {
+      const normalizedCode = sanitizeTemplateCode(code);
+      if (normalizedCode) {
+        usage.add(normalizedCode);
+      }
+    }
+  }
+
+  function registerPageTemplateStyleUsage(templateCode, styleTemplates) {
+    if (!pageTemplateStyleUsage.has(templateCode)) {
+      pageTemplateStyleUsage.set(templateCode, new Set());
+    }
+    const usage = pageTemplateStyleUsage.get(templateCode);
+    for (const code of styleTemplates.keys()) {
+      const normalizedCode = sanitizeTemplateCode(code);
+      if (normalizedCode) {
+        usage.add(normalizedCode);
       }
     }
   }
@@ -431,4 +491,253 @@ function sanitizeTemplateCode(value) {
     .toLowerCase()
     .replace(/[^a-z0-9_-]+/g, '_')
     .replace(/^_+|_+$/g, '');
+}
+
+function encodeRuntimePlaceholder(payload) {
+  return encodeURIComponent(JSON.stringify(payload || {}));
+}
+
+function decodeRuntimePlaceholder(serialized) {
+  try {
+    return JSON.parse(decodeURIComponent(String(serialized || '')));
+  } catch {
+    return null;
+  }
+}
+
+function buildClientBundlePlan({ pageTemplateClientUsage, registeredClientTemplates }) {
+  const usageCounts = new Map();
+
+  for (const clientCodes of pageTemplateClientUsage.values()) {
+    for (const clientCode of clientCodes) {
+      usageCounts.set(clientCode, (usageCounts.get(clientCode) || 0) + 1);
+    }
+  }
+
+  const sharedClientCodes = new Set(
+    Array.from(usageCounts.entries())
+      .filter(([, count]) => count > 2)
+      .map(([code]) => code)
+  );
+
+  const sharedBundle = buildBundleRuntimeTemplates(
+    'shared',
+    Array.from(sharedClientCodes.values()),
+    registeredClientTemplates
+  );
+
+  const pageBundles = new Map();
+  for (const [pageTemplateCode, clientCodes] of pageTemplateClientUsage.entries()) {
+    const pageSpecificCodes = Array.from(clientCodes.values()).filter((code) => !sharedClientCodes.has(code));
+    const bundle = buildBundleRuntimeTemplates(
+      `page-${pageTemplateCode}`,
+      pageSpecificCodes,
+      registeredClientTemplates
+    );
+    if (bundle) {
+      pageBundles.set(pageTemplateCode, bundle);
+    }
+  }
+
+  return {
+    sharedBundle,
+    pageBundles,
+    sharedClientCodes
+  };
+}
+
+function buildStyleBundlePlan({ pageTemplateStyleUsage, registeredStyleTemplates }) {
+  const usageCounts = new Map();
+
+  for (const styleCodes of pageTemplateStyleUsage.values()) {
+    for (const styleCode of styleCodes) {
+      usageCounts.set(styleCode, (usageCounts.get(styleCode) || 0) + 1);
+    }
+  }
+
+  const sharedStyleCodes = new Set(
+    Array.from(usageCounts.entries())
+      .filter(([, count]) => count > 2)
+      .map(([code]) => code)
+  );
+
+  const sharedBundle = buildBundleStyleAssets(
+    'shared',
+    Array.from(sharedStyleCodes.values()),
+    registeredStyleTemplates
+  );
+
+  const pageBundles = new Map();
+  for (const [pageTemplateCode, styleCodes] of pageTemplateStyleUsage.entries()) {
+    const pageSpecificCodes = Array.from(styleCodes.values()).filter((code) => !sharedStyleCodes.has(code));
+    const bundle = buildBundleStyleAssets(
+      `page-${pageTemplateCode}`,
+      pageSpecificCodes,
+      registeredStyleTemplates
+    );
+    if (bundle) {
+      pageBundles.set(pageTemplateCode, bundle);
+    }
+  }
+
+  return {
+    sharedBundle,
+    pageBundles,
+    sharedStyleCodes
+  };
+}
+
+function buildBundleRuntimeTemplates(bundleCode, clientCodes, registeredClientTemplates) {
+  const modules = clientCodes
+    .map((code) => registeredClientTemplates.get(code))
+    .filter(Boolean)
+    .map((template) => ({
+      code: template.code,
+      source: template.source,
+      needsProps: template.needsProps !== false
+    }));
+
+  if (modules.length === 0) {
+    return null;
+  }
+
+  return {
+    code: sanitizeTemplateCode(bundleCode),
+    modules,
+    needsProps: modules.some((module) => module.needsProps)
+  };
+}
+
+function buildBundleStyleAssets(bundleCode, styleCodes, registeredStyleTemplates) {
+  const assets = styleCodes
+    .map((code) => registeredStyleTemplates.get(code))
+    .filter(Boolean)
+    .map((asset) => ({
+      code: asset.code,
+      cssText: asset.cssText
+    }));
+
+  if (assets.length === 0) {
+    return null;
+  }
+
+  return {
+    code: sanitizeTemplateCode(bundleCode),
+    assets
+  };
+}
+
+function buildClientBundleManifest(bundlePlan) {
+  const bundles = [];
+  if (bundlePlan.sharedBundle) {
+    bundles.push(bundlePlan.sharedBundle);
+  }
+  for (const bundle of bundlePlan.pageBundles.values()) {
+    bundles.push(bundle);
+  }
+  return bundles;
+}
+
+function replaceClientRuntimePlaceholders(outputRoot, bundlePlan, templateClientAssetDir) {
+  for (const filePath of listHtmlFiles(outputRoot)) {
+    const source = fs.readFileSync(filePath, 'utf8');
+    const next = source.replace(/<!--cms-tsx-runtime:([\s\S]*?)-->/g, (_, encodedPayload) => {
+      const payload = decodeRuntimePlaceholder(encodedPayload);
+      if (!payload?.pageTemplateCode) {
+        return '';
+      }
+
+      const runtimeParts = [];
+      const clientCodes = new Set(Array.isArray(payload.clientTemplateCodes) ? payload.clientTemplateCodes : []);
+      const pageBundle = bundlePlan.pageBundles.get(payload.pageTemplateCode) || null;
+      const usesSharedBundle = Array.from(clientCodes.values()).some((code) => bundlePlan.sharedClientCodes.has(code));
+
+      if (pageBundle) {
+        runtimeParts.push(`<script type="module" src="/${templateClientAssetDir}/${pageBundle.code}.js"></script>`);
+      }
+      if (usesSharedBundle && bundlePlan.sharedBundle) {
+        runtimeParts.push(`<script type="module" src="/${templateClientAssetDir}/${bundlePlan.sharedBundle.code}.js"></script>`);
+      }
+
+      return runtimeParts.join('\n');
+    });
+
+    if (next !== source) {
+      fs.writeFileSync(filePath, next, 'utf8');
+    }
+  }
+}
+
+function writeBundledStyleAssets(dirPath, bundlePlan) {
+  const bundles = [];
+  if (bundlePlan.sharedBundle) {
+    bundles.push(bundlePlan.sharedBundle);
+  }
+  for (const bundle of bundlePlan.pageBundles.values()) {
+    bundles.push(bundle);
+  }
+
+  for (const bundle of bundles) {
+    const cssText = bundle.assets
+      .map((asset) => String(asset.cssText || '').trim())
+      .filter(Boolean)
+      .join('\n\n');
+    fs.writeFileSync(path.join(dirPath, `${bundle.code}.css`), cssText ? `${cssText}\n` : '', 'utf8');
+  }
+}
+
+function replaceStyleRuntimePlaceholders(outputRoot, bundlePlan, templateClientAssetDir) {
+  for (const filePath of listHtmlFiles(outputRoot)) {
+    const source = fs.readFileSync(filePath, 'utf8');
+    const next = source.replace(/<!--cms-tsx-styles:([\s\S]*?)-->/g, (_, encodedPayload) => {
+      const payload = decodeRuntimePlaceholder(encodedPayload);
+      if (!payload?.pageTemplateCode) {
+        return '';
+      }
+
+      const runtimeParts = [];
+      const styleCodes = new Set(Array.isArray(payload.styleTemplateCodes) ? payload.styleTemplateCodes : []);
+      const pageBundle = bundlePlan.pageBundles.get(payload.pageTemplateCode) || null;
+      const usesSharedBundle = Array.from(styleCodes.values()).some((code) => bundlePlan.sharedStyleCodes.has(code));
+
+      if (pageBundle) {
+        runtimeParts.push(`<link rel="stylesheet" href="/${templateClientAssetDir}/${pageBundle.code}.css">`);
+      }
+      if (usesSharedBundle && bundlePlan.sharedBundle) {
+        runtimeParts.push(`<link rel="stylesheet" href="/${templateClientAssetDir}/${bundlePlan.sharedBundle.code}.css">`);
+      }
+
+      return runtimeParts.join('\n');
+    });
+
+    if (next !== source) {
+      fs.writeFileSync(filePath, next, 'utf8');
+    }
+  }
+}
+
+function listHtmlFiles(rootDir) {
+  const files = [];
+  walkHtmlFiles(path.resolve(rootDir), files);
+  return files;
+}
+
+function walkHtmlFiles(currentPath, files) {
+  if (!fs.existsSync(currentPath)) {
+    return;
+  }
+  const stat = fs.statSync(currentPath);
+  if (!stat.isDirectory()) {
+    if (currentPath.toLowerCase().endsWith('.html')) {
+      files.push(currentPath);
+    }
+    return;
+  }
+
+  for (const entry of fs.readdirSync(currentPath, { withFileTypes: true })) {
+    if (entry.name.startsWith('.')) {
+      continue;
+    }
+    walkHtmlFiles(path.join(currentPath, entry.name), files);
+  }
 }

@@ -171,14 +171,7 @@ export default function TemplateVariantsPage() {
       const slot = slotByKey.get(slotKey) || null
       return {
         id: `slot:${slotKey}`,
-        label: (
-          <div className="min-w-0">
-            <div className="truncate">{slot?.label || slotKey}</div>
-            <div className="truncate text-xs text-muted-foreground">
-              {slot?.template?.name || slot?.description || '未绑定模板'}
-            </div>
-          </div>
-        ),
+        label: <div className="truncate">{getSlotLibraryLabel(slot)}</div>,
         data: {
           kind: 'slot' as const,
           slotKey,
@@ -293,7 +286,7 @@ export default function TemplateVariantsPage() {
       return
     }
     setFormData({
-      name: selectedTemplate.name,
+      name: getEditableTemplateName(selectedTemplate, selectedSlotConfig, editorTarget),
       code: selectedTemplate.code,
       type: selectedTemplate.type,
       engine: selectedTemplate.engine || 'tsx',
@@ -675,6 +668,7 @@ export default function TemplateVariantsPage() {
                     placeholder="模板名称"
                     value={formData.name}
                     onChange={(event) => setFormData({ ...formData, name: event.target.value })}
+                    disabled={!isTemplateNameEditable(editorTarget, selectedSlotConfig)}
                   />
                   <Input
                     id="template-code"
@@ -824,6 +818,39 @@ function buildThemeSlotUpdate(field: keyof TemplateVariant, code: string): Parti
   return {
     [field]: code,
   }
+}
+
+function isTemplateNameEditable(
+  editorTarget: EditorTarget,
+  slotConfig: { label: string },
+) {
+  if (editorTarget.kind === 'component') {
+    return true
+  }
+  return false
+}
+
+function getEditableTemplateName(
+  template: Template,
+  slotConfig: { label: string },
+  editorTarget: EditorTarget,
+) {
+  if (editorTarget.kind === 'component') {
+    return template.name
+  }
+  return slotConfig.label
+}
+
+function getSlotLibraryLabel(
+  slot?: {
+    label: string
+    template?: Template | null
+  } | null,
+) {
+  if (!slot) {
+    return ''
+  }
+  return slot.template?.name?.trim() || slot.label
 }
 
 function getApiErrorMessage(error: unknown, fallback: string) {

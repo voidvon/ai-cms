@@ -1009,7 +1009,7 @@ function buildPreviewRootColumnMenuItems() {
 function buildPreviewSiteColumns() {
   const rows = queryAll(
     `
-      SELECT id, name, parent_id, model_code, source_type, source_id
+      SELECT id, name, parent_id, model_code, source_type, source_id, column_kind, custom_url, route_path, open_in_new_tab
       FROM columns
       ORDER BY coalesce(parent_id, 0) ASC, sort_order ASC, id ASC
     `
@@ -1032,6 +1032,7 @@ function buildPreviewSiteColumns() {
     modelCode: item.model_code || '',
     sourceType: item.source_type || '',
     sourceId: toInteger(item.source_id, 0),
+    openInNewTab: toInteger(item.open_in_new_tab, 0),
     url: buildPreviewColumnUrl(item, rowsById)
   })).filter((item) => item.id !== 0);
 
@@ -1050,6 +1051,7 @@ function buildPreviewSiteColumns() {
       modelCode: item.modelCode,
       sourceType: item.sourceType,
       sourceId: item.sourceId,
+      openInNewTab: item.openInNewTab,
       url: item.url
     });
   }
@@ -1117,6 +1119,12 @@ function buildPreviewColumnUrl(column, rowsById = new Map()) {
   }
   if (sourceType === 'message_page') {
     return '/msg.html';
+  }
+  if (sourceType === 'custom_link') {
+    return String(column?.custom_url || '').trim();
+  }
+  if (sourceType === 'single_page') {
+    return String(column?.route_path || '').trim();
   }
 
   return '';
@@ -1484,7 +1492,7 @@ function normalizeBindingInput(input) {
 
 function normalizeBindingTarget(targetType, targetId, templateType) {
   const normalizedTargetType = String(targetType || '').trim().toLowerCase();
-  if (!['site', 'product_category', 'news_category', 'corporation_category', 'content_type'].includes(normalizedTargetType)) {
+  if (!['site', 'product_category', 'news_category', 'corporation_category', 'content_type', 'column'].includes(normalizedTargetType)) {
     throw new Error('invalid binding target type');
   }
   if (!['home', 'list', 'content'].includes(templateType)) {

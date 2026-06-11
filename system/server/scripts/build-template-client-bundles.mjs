@@ -20,38 +20,45 @@ if (!manifestPath || !outputRoot) {
 }
 
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
-const templates = Array.isArray(manifest.templates) ? manifest.templates : [];
+const bundles = Array.isArray(manifest.bundles) ? manifest.bundles : [];
 
-for (const template of templates) {
-  const code = sanitizeTemplateCode(template.code);
-  const source = String(template.source || '');
-  const kind = String(template.kind || 'tsx-client').trim();
-  const needsProps = template.needsProps !== false;
-  if (!code || !source) {
+for (const bundle of bundles) {
+  const code = sanitizeTemplateCode(bundle.code);
+  const modules = Array.isArray(bundle.modules) ? bundle.modules : [];
+  if (!code || modules.length === 0) {
     continue;
   }
-
-  if (kind === 'tsx-client') {
-    const clientSource = extractImperativeClientModule(source);
-    if (!clientSource) {
-      continue;
-    }
-    await buildOneTemplate({
-      code,
-      source: clientSource,
-      needsProps,
-      outputRoot: path.resolve(outputRoot)
-    });
-  }
+  await buildOneBundle({
+    code,
+    modules,
+    outputRoot: path.resolve(outputRoot)
+  });
 }
 
-async function buildOneTemplate({ code, source, needsProps, outputRoot }) {
+async function buildOneBundle({ code, modules, outputRoot }) {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `cms-template-${code}-`));
-  const sourcePath = path.join(tempRoot, 'template-client.ts');
   const entryPath = path.join(tempRoot, 'entry.ts');
+  const bundleModules = [];
 
-  fs.writeFileSync(sourcePath, source, 'utf8');
-  fs.writeFileSync(entryPath, buildEntrySource(code, { needsProps }), 'utf8');
+  for (const [index, module] of modules.entries()) {
+    const source = extractImperativeClientModule(String(module.source || ''));
+    if (!source) {
+      continue;
+    }
+    const sourcePath = path.join(tempRoot, `template-client-${index}.ts`);
+    fs.writeFileSync(sourcePath, source, 'utf8');
+    bundleModules.push({
+      path: `./template-client-${index}.ts`,
+      needsProps: module.needsProps !== false
+    });
+  }
+
+  if (bundleModules.length === 0) {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+    return;
+  }
+
+  fs.writeFileSync(entryPath, buildEntrySource(bundleModules), 'utf8');
 
   try {
     await vite.build({
@@ -78,21 +85,26 @@ async function buildOneTemplate({ code, source, needsProps, outputRoot }) {
   }
 }
 
-function buildEntrySource(code, options = {}) {
-  const needsProps = options.needsProps !== false;
-  return `import { client as runClient } from './template-client.ts';
-
-const templateCode = ${JSON.stringify(code)};
-const pageProps = ${needsProps ? 'readPageProps(templateCode)' : '{}'};
-
-if (typeof runClient === 'function') {
-  runClient({
-    props: pageProps
+function buildEntrySource(modules) {
+  const importLines = modules.map((module, index) => `import { client as runClient${index} } from ${JSON.stringify(module.path)};`).join('\n');
+  const runners = modules.map((module, index) => {
+    const propsExpr = module.needsProps ? 'pageProps' : '{}';
+    return `if (typeof runClient${index} === 'function') {
+  runClient${index}({
+    props: ${propsExpr}
   });
-}
+}`;
+  }).join('\n\n');
+  const anyNeedsProps = modules.some((module) => module.needsProps);
 
-${needsProps ? `function readPageProps(code) {
-  const node = document.getElementById('cms-tsx-props-' + code);
+  return `${importLines}
+
+const pageProps = ${anyNeedsProps ? 'readPageProps()' : '{}'};
+
+${runners}
+
+${anyNeedsProps ? `function readPageProps() {
+  const node = document.getElementById('cms-tsx-page-props');
   if (!node) {
     return {};
   }

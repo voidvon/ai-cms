@@ -112,7 +112,7 @@ export interface Template {
 
 export interface TemplateBinding {
   id: number;
-  target_type: 'site' | 'product_category' | 'news_category' | 'corporation_category' | 'content_type';
+  target_type: 'site' | 'product_category' | 'news_category' | 'corporation_category' | 'content_type' | 'column';
   target_id?: number | null;
   template_type: 'home' | 'list' | 'content';
   template_id: number;
@@ -190,9 +190,17 @@ export interface Column {
   id: number;
   name: string;
   parent_id?: number | null;
-  model_code: 'product' | 'news' | string;
-  source_type: 'product_root' | 'product_category' | 'news_category' | string;
+  model_code: 'product' | 'news' | 'corporation' | 'page' | 'link' | string;
+  source_type: 'product_root' | 'product_category' | 'news_category' | 'corporation_root' | 'corporation_category' | 'contact_page' | 'message_page' | 'custom_link' | 'single_page' | string;
   source_id: number;
+  column_kind: 'category' | 'link' | 'single' | string;
+  custom_url?: string | null;
+  route_path?: string | null;
+  open_in_new_tab?: number;
+  content_html?: string;
+  seo_title?: string | null;
+  seo_keywords?: string | null;
+  seo_description?: string | null;
   sort_order: number;
   is_system: number;
   created_at?: string;

@@ -89,34 +89,37 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
   }
 
   if (requestedSections.has('index')) {
-    results.push(buildIndexPage({ outputRoot: normalizedOutputRoot }));
+    results.push(buildIndexPage({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
   }
   if (requestedSections.has('contact')) {
-    results.push(buildContactPage({ outputRoot: normalizedOutputRoot }));
+    results.push(buildContactPage({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
   }
   if (requestedSections.has('msg')) {
-    results.push(buildMessagePage({ outputRoot: normalizedOutputRoot }));
+    results.push(buildMessagePage({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
+  }
+  if (requestedSections.has('column-pages')) {
+    results.push(buildManualSinglePageColumns({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
   }
   if (requestedSections.has('corporation-pages')) {
-    results.push(buildCorporationPages({ outputRoot: normalizedOutputRoot }));
+    results.push(buildCorporationPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
   }
   if (requestedSections.has('news-lists')) {
-    results.push(buildNewsCategoryPages({ outputRoot: normalizedOutputRoot }));
+    results.push(buildNewsCategoryPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
   }
   if (requestedSections.has('service-lists')) {
-    results.push(buildServiceCategoryPages({ outputRoot: normalizedOutputRoot }));
+    results.push(buildServiceCategoryPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
   }
   if (requestedSections.has('product-lists')) {
-    results.push(buildProductCategoryPages({ outputRoot: normalizedOutputRoot }));
+    results.push(buildProductCategoryPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
   }
   if (requestedSections.has('product-details')) {
-    results.push(buildProductDetailPages({ outputRoot: normalizedOutputRoot }));
+    results.push(buildProductDetailPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
   }
   if (requestedSections.has('service-details')) {
-    results.push(buildServiceDetailPages({ outputRoot: normalizedOutputRoot }));
+    results.push(buildServiceDetailPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
   }
   if (requestedSections.has('news-details')) {
-    results.push(buildNewsDetailPages({ outputRoot: normalizedOutputRoot }));
+    results.push(buildNewsDetailPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
   }
   buildRegisteredTsxAssets(normalizedOutputRoot);
 
@@ -128,7 +131,7 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
   };
 }
 
-export function buildIndexPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
+export function buildIndexPage({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true } = {}) {
   const templateContext = getLegacyTemplateContext();
   const html = renderCmsSitePage('legacy-home', buildLegacyHomePageProps(templateContext), templateContext, {
     themeSlot: 'home',
@@ -136,11 +139,13 @@ export function buildIndexPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   });
 
   writeTextFile(outputRoot, 'index.html', html);
-  buildRegisteredTsxAssets(outputRoot);
+  if (finalizeClientAssets) {
+    buildRegisteredTsxAssets(outputRoot);
+  }
   return createBuildResult('index', '首页', 1, 1);
 }
 
-export function buildContactPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
+export function buildContactPage({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true } = {}) {
   const templateContext = getLegacyTemplateContext();
   const html = renderCmsSitePage('legacy-contact', buildLegacyContactPageProps(templateContext), templateContext, {
     themeSlot: 'contact',
@@ -148,11 +153,13 @@ export function buildContactPage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   });
 
   writeTextFile(outputRoot, 'contact.html', html);
-  buildRegisteredTsxAssets(outputRoot);
+  if (finalizeClientAssets) {
+    buildRegisteredTsxAssets(outputRoot);
+  }
   return createBuildResult('contact', '联系页面', 1, 1);
 }
 
-export function buildMessagePage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
+export function buildMessagePage({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true } = {}) {
   const templateContext = getLegacyTemplateContext();
   const html = renderCmsSitePage('legacy-message', buildLegacyMessagePageProps(templateContext), templateContext, {
     themeSlot: 'message',
@@ -160,11 +167,41 @@ export function buildMessagePage({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
   });
 
   writeTextFile(outputRoot, 'msg.html', html);
-  buildRegisteredTsxAssets(outputRoot);
+  if (finalizeClientAssets) {
+    buildRegisteredTsxAssets(outputRoot);
+  }
   return createBuildResult('msg', '留言页面', 1, 1);
 }
 
-export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
+export function buildManualSinglePageColumns({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true } = {}) {
+  const templateContext = getLegacyTemplateContext();
+  const items = templateContext.columns.filter((item) => (
+    String(item.source_type || '') === 'single_page'
+    && String(item.column_kind || '') === 'single'
+    && String(item.route_path || '').trim()
+  ));
+  let filesWritten = 0;
+
+  for (const item of items) {
+    const html = renderCmsSitePage('legacy-content', buildLegacySingleColumnPageProps(templateContext, item), templateContext, {
+      themeSlot: 'corporation',
+      targets: [
+        { target_type: 'column', target_id: item.id },
+        { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.corporation }
+      ]
+    });
+
+    writeTextFile(outputRoot, resolveColumnRouteOutputPath(item.route_path), html);
+    filesWritten += 1;
+  }
+
+  if (finalizeClientAssets) {
+    buildRegisteredTsxAssets(outputRoot);
+  }
+  return createBuildResult('column-pages', '单页栏目', items.length, filesWritten);
+}
+
+export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true } = {}) {
   const templateContext = getLegacyTemplateContext();
   const items = templateContext.corporationCategories
     .filter((item) => normalizeInteger(item.id, 0) !== 0 && normalizeInteger(item.is_external, 0) === 0);
@@ -190,13 +227,16 @@ export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {})
     }
   }
 
-  buildRegisteredTsxAssets(outputRoot);
+  if (finalizeClientAssets) {
+    buildRegisteredTsxAssets(outputRoot);
+  }
   return createBuildResult('corporation-pages', '公司栏目页', items.length, filesWritten);
 }
 
-export function buildNewsCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
+export function buildNewsCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true } = {}) {
   return buildLegacyNewsSectionCategoryPages({
     outputRoot,
+    finalizeClientAssets,
     rootId: NEWS_ROOT_ID,
     dirName: 'news',
     sectionKey: 'news-lists',
@@ -205,9 +245,10 @@ export function buildNewsCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}
   });
 }
 
-export function buildServiceCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
+export function buildServiceCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true } = {}) {
   return buildLegacyNewsSectionCategoryPages({
     outputRoot,
+    finalizeClientAssets,
     rootId: SERVICE_ROOT_ID,
     dirName: 'service',
     sectionKey: 'service-lists',
@@ -216,7 +257,7 @@ export function buildServiceCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } =
   });
 }
 
-export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } = {}) {
+export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true } = {}) {
   const categories = listProductCategories();
   const products = listProducts({ visibleOnly: false, limit: 10000 });
   const templateContext = getLegacyTemplateContext();
@@ -268,11 +309,13 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT } =
     });
   }
 
-  buildRegisteredTsxAssets(outputRoot);
+  if (finalizeClientAssets) {
+    buildRegisteredTsxAssets(outputRoot);
+  }
   return createBuildResult('product-lists', '产品分类页', categories.filter((item) => normalizeInteger(item.id, 0) !== 0).length, filesWritten);
 }
 
-export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange } = {}) {
+export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange, finalizeClientAssets = true } = {}) {
   const products = filterByIdRange(listProducts({ visibleOnly: false, limit: 10000 }), idRange);
   const templateContext = getLegacyTemplateContext();
   const productMap = groupBy(products, (item) => normalizeInteger(item.category_id, 0));
@@ -302,14 +345,17 @@ export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
     filesWritten += 1;
   }
 
-  buildRegisteredTsxAssets(outputRoot);
+  if (finalizeClientAssets) {
+    buildRegisteredTsxAssets(outputRoot);
+  }
   return createBuildResult('product-details', '产品详情页', products.length, filesWritten);
 }
 
-export function buildNewsDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange } = {}) {
+export function buildNewsDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange, finalizeClientAssets = true } = {}) {
   return buildLegacyNewsSectionDetailPages({
     outputRoot,
     idRange,
+    finalizeClientAssets,
     rootId: NEWS_ROOT_ID,
     dirName: 'news',
     sectionKey: 'news-details',
@@ -317,10 +363,11 @@ export function buildNewsDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange
   });
 }
 
-export function buildServiceDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange } = {}) {
+export function buildServiceDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange, finalizeClientAssets = true } = {}) {
   return buildLegacyNewsSectionDetailPages({
     outputRoot,
     idRange,
+    finalizeClientAssets,
     rootId: SERVICE_ROOT_ID,
     dirName: 'service',
     sectionKey: 'service-details',
@@ -330,6 +377,7 @@ export function buildServiceDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
 
 function buildLegacyNewsSectionCategoryPages({
   outputRoot,
+  finalizeClientAssets = true,
   rootId,
   dirName,
   sectionKey,
@@ -384,13 +432,16 @@ function buildLegacyNewsSectionCategoryPages({
     }
   }
 
-  buildRegisteredTsxAssets(outputRoot);
+  if (finalizeClientAssets) {
+    buildRegisteredTsxAssets(outputRoot);
+  }
   return createBuildResult(sectionKey, sectionLabel, categoryList.length, filesWritten);
 }
 
 function buildLegacyNewsSectionDetailPages({
   outputRoot,
   idRange,
+  finalizeClientAssets = true,
   rootId,
   dirName,
   sectionKey,
@@ -433,7 +484,9 @@ function buildLegacyNewsSectionDetailPages({
     filesWritten += 1;
   }
 
-  buildRegisteredTsxAssets(outputRoot);
+  if (finalizeClientAssets) {
+    buildRegisteredTsxAssets(outputRoot);
+  }
   return createBuildResult(sectionKey, sectionLabel, items.length, filesWritten);
 }
 
@@ -526,9 +579,10 @@ function buildLegacyRootColumnMenuItems(columns) {
   })).filter((item) => item.url);
 }
 
-function buildLegacySiteColumns(columns) {
+function buildLegacySiteColumns(columns, options = {}) {
   const rows = Array.isArray(columns) ? columns : [];
   const rowsById = new Map(rows.map((item) => [normalizeInteger(item?.id, 0), item]));
+  const activeColumnId = normalizeInteger(options.activeColumnId, 0);
   const normalizedRows = rows.map((item) => ({
     id: normalizeInteger(item?.id, 0),
     name: item?.name || '',
@@ -536,6 +590,7 @@ function buildLegacySiteColumns(columns) {
     modelCode: item?.model_code || '',
     sourceType: item?.source_type || '',
     sourceId: normalizeInteger(item?.source_id, 0),
+    openInNewTab: normalizeInteger(item?.open_in_new_tab, 0),
     url: buildLegacyColumnUrl(item, rowsById)
   })).filter((item) => item.id !== 0);
 
@@ -554,6 +609,8 @@ function buildLegacySiteColumns(columns) {
       modelCode: item.modelCode,
       sourceType: item.sourceType,
       sourceId: item.sourceId,
+      active: activeColumnId !== 0 && item.id === activeColumnId,
+      openInNewTab: item.openInNewTab,
       url: item.url
     });
   }
@@ -563,7 +620,12 @@ function buildLegacySiteColumns(columns) {
     .filter((item) => !['contact_page', 'message_page'].includes(String(item?.sourceType || '')))
     .map((item) => ({
       ...item,
+      active: activeColumnId !== 0 && item.id === activeColumnId,
       children: childrenByParentId.get(item.id) || []
+    }))
+    .map((item) => ({
+      ...item,
+      active: Boolean(item.active) || item.children.some((child) => child.active)
     }))
     .filter((item) => item.url);
 }
@@ -606,6 +668,12 @@ function buildLegacyColumnUrl(column, rowsById = new Map()) {
   }
   if (sourceType === 'message_page') {
     return '/msg.html';
+  }
+  if (sourceType === 'custom_link') {
+    return String(column.custom_url || '').trim();
+  }
+  if (sourceType === 'single_page') {
+    return String(column.route_path || '').trim();
   }
 
   return '';
@@ -667,6 +735,31 @@ function buildLegacyContentPageProps(templateContext, item) {
     title: item.name || '',
     contentHtml: normalizeLegacyRichTextHtml(item.content_html) || '',
     secondaryMenuItems: buildLegacyCorporationMenuItems(templateContext.corporationCategories, CORPORATION_ROOT_ID, normalizeInteger(item.id, 0))
+  };
+}
+
+function buildLegacySingleColumnPageProps(templateContext, column) {
+  const url = buildLegacyColumnUrl(column);
+  return {
+    ...buildLegacyCommonProps(templateContext),
+    ...buildLegacyPageContextProps({
+      pageType: 'column',
+      title: column.name || '',
+      url,
+      section: { type: 'content', name: column.name || '', url },
+      breadcrumbItems: [{ label: column.name || '' }],
+      breadcrumbOptions: { separatorHtml: ' &gt;&gt; ' }
+    }),
+    siteColumns: buildLegacySiteColumns(templateContext.columns, {
+      activeColumnId: normalizeInteger(column.id, 0)
+    }),
+    title: column.name || '',
+    contentHtml: normalizeLegacyRichTextHtml(column.content_html) || '',
+    bodyHtml: normalizeLegacyRichTextHtml(column.content_html) || '',
+    newsDescription: column.seo_description || '',
+    newsKeywords: column.seo_keywords || '',
+    keywords: column.seo_keywords || '',
+    description: column.seo_description || ''
   };
 }
 
@@ -1360,6 +1453,17 @@ function buildLegacyServiceIndex() {
   return items.map((item) => `<li><a href="/service/detail/${item.id}.html">${escapeHtml(item.title || '')}</a></li>`).join('');
 }
 
+function resolveColumnRouteOutputPath(routePath) {
+  const normalized = String(routePath || '').trim().replace(/^\/+/, '');
+  if (!normalized) {
+    return 'index.html';
+  }
+  if (String(routePath || '').trim().endsWith('/')) {
+    return path.join(normalized, 'index.html');
+  }
+  return normalized;
+}
+
 function buildLegacyMessageSidebarProducts() {
   const items = queryAll(
     `
@@ -1404,6 +1508,7 @@ function normalizeSections(sections) {
     'index',
     'contact',
     'msg',
+    'column-pages',
     'corporation-pages',
     'news-lists',
     'news-details',
