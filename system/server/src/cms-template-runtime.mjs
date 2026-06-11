@@ -14,8 +14,8 @@ export function createCmsTemplateRuntime({
   templateClientAssetDir,
   expandLegacyCommonPlaceholders
 }) {
-  const registeredTsxClientTemplates = new Map();
-  const registeredTsxStyleTemplates = new Map();
+  const registeredClientTemplates = new Map();
+  const registeredStyleTemplates = new Map();
 
   function renderCmsSitePage(pageName, props, templateContext, options = {}) {
     const templateCode = templateByPage[pageName];
@@ -50,7 +50,7 @@ export function createCmsTemplateRuntime({
       });
     }
 
-    return injectTsxPageAssets(html, { clientTemplates, styleTemplates, props });
+    return injectPageAssets(html, { clientTemplates, styleTemplates, props });
   }
 
   function renderCmsTsxTemplate(content, props, templateContext, options = {}) {
@@ -73,7 +73,7 @@ export function createCmsTemplateRuntime({
 
   function registerTsxTemplateAssets(template, registries = {}) {
     registerTsxClientTemplate(template, registries.clientTemplates);
-    registerTsxStyleTemplate(template, registries.styleTemplates);
+    registerTemplateStyleAsset(template, registries.styleTemplates);
   }
 
   function registerTsxClientTemplate(template, clientTemplates = null) {
@@ -86,34 +86,41 @@ export function createCmsTemplateRuntime({
     }
     const runtimeTemplate = {
       code,
-      source: template.content || ''
+      source: template.content || '',
+      needsProps: templateClientNeedsProps(template.content)
     };
-    registeredTsxClientTemplates.set(code, runtimeTemplate);
+    registeredClientTemplates.set(code, {
+      kind: 'tsx-client',
+      ...runtimeTemplate
+    });
     if (clientTemplates) {
-      clientTemplates.set(code, runtimeTemplate);
+      clientTemplates.set(code, {
+        kind: 'tsx-client',
+        ...runtimeTemplate
+      });
     }
   }
 
-  function registerTsxStyleTemplate(template, styleTemplates = null) {
+  function registerTemplateStyleAsset(template, styleTemplates = null) {
     const asset = getTsxTemplateStyleAsset(template.content, {
       templateCode: template.code
     });
     if (!asset) {
       return;
     }
-    registeredTsxStyleTemplates.set(asset.code, asset);
+    registeredStyleTemplates.set(asset.code, asset);
     if (styleTemplates) {
       styleTemplates.set(asset.code, asset);
     }
   }
 
-  function injectTsxPageAssets(html, { clientTemplates, styleTemplates, props }) {
-    let nextHtml = injectTsxStylesheetLinks(html, styleTemplates);
-    nextHtml = injectTsxClientRuntimes(nextHtml, clientTemplates, props);
+  function injectPageAssets(html, { clientTemplates, styleTemplates, props }) {
+    let nextHtml = injectStylesheetLinks(html, styleTemplates);
+    nextHtml = injectClientRuntimes(nextHtml, clientTemplates, props);
     return nextHtml;
   }
 
-  function injectTsxStylesheetLinks(html, styleTemplates) {
+  function injectStylesheetLinks(html, styleTemplates) {
     if (!styleTemplates || styleTemplates.size === 0) {
       return html;
     }
@@ -127,7 +134,7 @@ export function createCmsTemplateRuntime({
     return `${linkHtml}\n${html}`;
   }
 
-  function injectTsxClientRuntimes(html, clientTemplates, props) {
+  function injectClientRuntimes(html, clientTemplates, props) {
     if (!clientTemplates || clientTemplates.size === 0) {
       return html;
     }
@@ -137,7 +144,7 @@ export function createCmsTemplateRuntime({
       if (!code) {
         continue;
       }
-      if (hasImperativeTsxClientRuntime(template.source)) {
+      if (template.kind === 'tsx-client' && hasImperativeTsxClientRuntime(template.source) && template.needsProps !== false) {
         runtimeParts.push(`<script type="application/json" id="cms-tsx-props-${code}">${safeJsonForScript(props)}</script>`);
       }
       runtimeParts.push(`<script type="module" src="/${templateClientAssetDir}/${code}.js"></script>`);
@@ -176,7 +183,7 @@ export function createCmsTemplateRuntime({
     for (const item of listSelectedThemePublishedComponents()) {
       components.set(String(item.code || '').toLowerCase(), {
         code: item.code || '',
-        engine: item.engine || 'html',
+        engine: item.engine || 'tsx',
         content: item.content || ''
       });
     }
@@ -292,7 +299,7 @@ export function createCmsTemplateRuntime({
   }
 
   function buildRegisteredTsxStyleAssets(outputRoot) {
-    if (registeredTsxStyleTemplates.size === 0) {
+    if (registeredStyleTemplates.size === 0) {
       return;
     }
 
@@ -300,22 +307,22 @@ export function createCmsTemplateRuntime({
     fs.mkdirSync(dirPath, { recursive: true });
 
     try {
-      for (const asset of registeredTsxStyleTemplates.values()) {
+      for (const asset of registeredStyleTemplates.values()) {
         fs.writeFileSync(path.join(dirPath, `${asset.code}.css`), asset.cssText, 'utf8');
       }
     } finally {
-      registeredTsxStyleTemplates.clear();
+      registeredStyleTemplates.clear();
     }
   }
 
   function buildRegisteredTsxClientBundles(outputRoot) {
-    if (registeredTsxClientTemplates.size === 0) {
+    if (registeredClientTemplates.size === 0) {
       return;
     }
 
     const manifestPath = path.join(outputRoot, '.cms-template-client-manifest.json');
     const manifest = {
-      templates: Array.from(registeredTsxClientTemplates.values())
+      templates: Array.from(registeredClientTemplates.values())
     };
 
     try {
@@ -328,7 +335,7 @@ export function createCmsTemplateRuntime({
         stdio: 'inherit'
       });
     } finally {
-      registeredTsxClientTemplates.clear();
+      registeredClientTemplates.clear();
       if (fs.existsSync(manifestPath)) {
         fs.unlinkSync(manifestPath);
       }
@@ -343,11 +350,15 @@ export function createCmsTemplateRuntime({
 }
 
 function hasTsxClientRuntime(source) {
-  return /\bClientOnly\b|\bexport\s+(?:function|const|let|var)\s+(?:Client|client|ClientComponents)\b/.test(String(source || ''));
+  return hasImperativeTsxClientRuntime(source);
 }
 
 function hasImperativeTsxClientRuntime(source) {
   return /\bexport\s+(?:function|const|let|var)\s+client\b/.test(String(source || ''));
+}
+
+function templateClientNeedsProps(source) {
+  return !/\bexport\s+const\s+clientProps\s*=\s*false\b/.test(String(source || ''));
 }
 
 function safeJsonForScript(value) {

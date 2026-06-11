@@ -8,12 +8,14 @@
 - `system/server/` 是当前主后端，基于 Fastify + SQLite。`src/routes/` 放路由，`src/services/` 放业务与数据访问，`src/middleware/` 放认证逻辑，`src/static-builder.mjs` 负责静态页生成。
 - `data/` 保存运行数据，默认 SQLite 数据库为 `data/site.sqlite`，不要和程序代码混放。
 - `system/admin/` 是当前后台管理前端，基于 React + TypeScript + Vite。`src/pages/` 为页面，`src/api/` 为接口封装，`src/components/` 为复用组件，`src/layouts/` 为后台框架。
-- `system/templates/` 保存遗留模板源，`system/docs/` 记录迁移、架构评估和后台完成情况。
+- `system/templates/` 仅保留遗留模板与迁移参考，`system/docs/` 记录迁移、架构评估和后台完成情况。
 - `system/server/generated/` 与 `system/server/generated-debug/` 用于静态生成调试产物；默认正式静态生成输出现为根目录下的 `html/`。
 - `dist/` 是本地打包生成的部署目录，包含启动入口、后端程序、后台 `dist`、模板和空的 `html/`/`data/` 占位；不要手工维护或提交。
+- 当前站点正在使用的页面模板、组件模板、主题组件关联都以数据库为唯一来源，分别存放在 `templates`、`template_variants`、`template_variant_components` 表中；不要在 `system/server/scripts/`、服务代码或前端源码里硬编码当前生效模板内容。
+- 当前模板体系已收敛为单一 `TSX` 引擎：`templates.engine` 与 `template_versions.engine` 只允许 `tsx`，不再支持数据库中的 `html` 模板引擎或 `svelte` 组件引擎。
 
 ## 构建、测试与开发命令
-日常开发以根级单入口启动为主，遗留模板作为静态生成输入保留。
+日常开发以根级单入口启动为主；当前前台页面和组件模板以数据库中的 TSX 模板为准，遗留模板目录仅作参考。
 
 - 根级启动统一服务：`npm start`
 - 根级开发模式：`npm run dev`
@@ -33,7 +35,7 @@
 - 构建后台前端：`npm --prefix system/admin run build`
 - 检查后台前端 lint：`npm --prefix system/admin run lint`
 - 快速排查路由或服务：`rg -n "fastify|route|services|buildStaticSite" system/server/src`
-- 快速排查模板占位符：`rg -n "#BM_|#hope_" system/templates system/server/src`
+- 快速排查 TSX 模板与组件引用：`rg -n "component\\(|renderTsxTemplate|TemplateVariantsPage|templates.engine" system/server/src system/admin/src`
 
 提交前至少运行受影响子项目的构建或 lint；若改动涉及部署包结构，还需运行 `npm run build`。若改动涉及模板、内容或分类数据，还需执行一次静态生成并确认 `html/` 下输出正常。
 
@@ -52,16 +54,17 @@
 ## 编码风格与命名约定
 - `system/server/` 使用 ES Modules，保持现有 `*.mjs` 风格；路由层尽量薄，业务逻辑优先放入 `src/services/`。
 - `system/admin/` 使用 TypeScript + React 函数组件；沿用现有页面/API/对话框拆分，不要把请求、表单和布局重新耦合到单文件。
-- 遗留模板继续使用 `#BM_*#`、`#hope_*#` 占位符；编辑 `system/templates/` 下文件时尽量保持原有 HTML 结构、命名和编码习惯，避免无关格式化。
+- `system/templates/` 仅用于遗留模板参考和兼容资料，不用于维护当前生效主题；当前主题的新增、修改、绑定、组件归属都必须通过数据库和后台模板管理完成。
+- 当前数据库模板只允许 `TSX`；不要再新增、恢复或兼容 `html` 模板引擎、`svelte` 组件引擎或 `island/hydrate` 运行路径。
 - 静态资源、上传目录和生成页文件名保持现有小写规则；不要随意重命名历史目录，否则会破坏旧链接兼容。
-- 除非任务明确要求，不要直接手改 `html/` 下批量生成的静态页面，优先修改 `system/templates/`、`system/server/src/static-builder.mjs` 或对应服务层后再重新生成。
+- 除非任务明确要求，不要直接手改 `html/` 下批量生成的静态页面，优先修改数据库中的 TSX 模板、`system/server/src/static-builder.mjs` 或对应服务层后再重新生成。
 
 ## 测试指南
 当前仓库没有完整自动化测试，回归以手工验证和构建检查为主。
 
 - 修改 `system/server/` 后，至少验证：`/` 首页、`/admin/` 后台入口、登录、一个列表接口、一个保存接口、静态文件访问，以及受影响的旧兼容路径如 `/search`、`/ajaxcode/msg`、`/admin/build`。
 - 修改 `system/admin/` 后，至少运行 `npm --prefix system/admin run build`，并手工检查对应页面的列表、弹窗表单、分页或上传流程。
-- 修改模板、站点配置、分类、新闻、产品或公司信息后，运行静态生成并抽查 `html/index.html`、`html/contact.html`、`html/msg.html`、一个产品详情页、一个新闻详情页。
+- 修改模板、站点配置、分类、新闻、产品或公司信息后，运行静态生成并抽查 `html/index.html`、`html/contact.html`、`html/msg.html`、一个产品详情页、一个新闻详情页；如果改动涉及模板管理后台，也要确认模板编辑、历史版本、预览和组件关联正常。
 - 修改数据库 schema、导入脚本或编码修复脚本后，额外检查 `data/site.sqlite` 的兼容性，并确认生成页未出现乱码或字段丢失。
 
 ## 提交与合并请求

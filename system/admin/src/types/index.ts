@@ -99,7 +99,7 @@ export interface Template {
   name: string;
   type: 'home' | 'list' | 'content' | 'component';
   code: string;
-  engine: 'html' | 'tsx';
+  engine: 'tsx';
   content: string;
   published_content?: string | null;
   status: 'draft' | 'published';

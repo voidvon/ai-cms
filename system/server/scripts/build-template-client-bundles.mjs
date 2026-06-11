@@ -11,8 +11,6 @@ const adminRoot = path.join(systemRoot, 'admin');
 const adminRequire = createRequire(path.join(adminRoot, 'package.json'));
 
 const vite = await import(pathToFileURL(adminRequire.resolve('vite')).href);
-const reactPluginModule = await import(pathToFileURL(adminRequire.resolve('@vitejs/plugin-react')).href);
-const reactPlugin = reactPluginModule.default;
 
 const manifestPath = process.argv[2];
 const outputRoot = process.argv[3];
@@ -26,40 +24,40 @@ const templates = Array.isArray(manifest.templates) ? manifest.templates : [];
 
 for (const template of templates) {
   const code = sanitizeTemplateCode(template.code);
-  if (!code || !template.source) {
+  const source = String(template.source || '');
+  const kind = String(template.kind || 'tsx-client').trim();
+  const needsProps = template.needsProps !== false;
+  if (!code || !source) {
     continue;
   }
 
-  await buildOneTemplate({
-    code,
-    source: String(template.source),
-    outputRoot: path.resolve(outputRoot)
-  });
+  if (kind === 'tsx-client') {
+    const clientSource = extractImperativeClientModule(source);
+    if (!clientSource) {
+      continue;
+    }
+    await buildOneTemplate({
+      code,
+      source: clientSource,
+      needsProps,
+      outputRoot: path.resolve(outputRoot)
+    });
+  }
 }
 
-async function buildOneTemplate({ code, source, outputRoot }) {
+async function buildOneTemplate({ code, source, needsProps, outputRoot }) {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), `cms-template-${code}-`));
-  const sourcePath = path.join(tempRoot, 'template.tsx');
-  const entryPath = path.join(tempRoot, 'entry.tsx');
+  const sourcePath = path.join(tempRoot, 'template-client.ts');
+  const entryPath = path.join(tempRoot, 'entry.ts');
 
   fs.writeFileSync(sourcePath, source, 'utf8');
-  fs.writeFileSync(entryPath, buildEntrySource(code), 'utf8');
+  fs.writeFileSync(entryPath, buildEntrySource(code, { needsProps }), 'utf8');
 
   try {
     await vite.build({
       configFile: false,
       root: tempRoot,
       logLevel: 'warn',
-      plugins: [reactPlugin()],
-      resolve: {
-        dedupe: ['react', 'react-dom'],
-        alias: [
-          { find: /^react$/, replacement: adminRequire.resolve('react') },
-          { find: /^react\/jsx-runtime$/, replacement: adminRequire.resolve('react/jsx-runtime') },
-          { find: /^react\/jsx-dev-runtime$/, replacement: adminRequire.resolve('react/jsx-dev-runtime') },
-          { find: /^react-dom\/client$/, replacement: adminRequire.resolve('react-dom/client') }
-        ]
-      },
       build: {
         outDir: path.join(outputRoot, 'assets', 'cms-templates'),
         emptyOutDir: false,
@@ -80,53 +78,20 @@ async function buildOneTemplate({ code, source, outputRoot }) {
   }
 }
 
-function buildEntrySource(code) {
-  return `import React from 'react';
-import { createRoot } from 'react-dom/client';
-import * as TemplateModule from './template.tsx';
+function buildEntrySource(code, options = {}) {
+  const needsProps = options.needsProps !== false;
+  return `import { client as runClient } from './template-client.ts';
 
 const templateCode = ${JSON.stringify(code)};
-const pageProps = readPageProps(templateCode);
-const roots = Array.from(document.querySelectorAll('[data-cms-client-root]')).filter((root) => {
-  return (root.getAttribute('data-cms-client-template') || templateCode) === templateCode;
-});
+const pageProps = ${needsProps ? 'readPageProps(templateCode)' : '{}'};
 
-for (const root of roots) {
-  const name = root.getAttribute('data-cms-client-root') || 'default';
-  const islandProps = readJsonAttribute(root, 'data-cms-client-props');
-  const Component = resolveClientComponent(TemplateModule, name);
-  if (Component) {
-    createRoot(root).render(React.createElement(Component, {
-      ...pageProps,
-      ...islandProps,
-      islandName: name
-    }));
-  }
-}
-
-const maybeClient = Reflect.get(TemplateModule, 'client');
-if (typeof maybeClient === 'function') {
-  maybeClient({
-    React,
-    props: pageProps,
-    roots
+if (typeof runClient === 'function') {
+  runClient({
+    props: pageProps
   });
 }
 
-function resolveClientComponent(module, name) {
-  const clientComponents = Reflect.get(module, 'ClientComponents');
-  const namedComponent = Reflect.get(module, name);
-  const defaultClient = Reflect.get(module, 'Client');
-  if (clientComponents && clientComponents[name]) {
-    return clientComponents[name];
-  }
-  if (name !== 'default' && typeof namedComponent === 'function') {
-    return namedComponent;
-  }
-  return typeof defaultClient === 'function' ? defaultClient : null;
-}
-
-function readPageProps(code) {
+${needsProps ? `function readPageProps(code) {
   const node = document.getElementById('cms-tsx-props-' + code);
   if (!node) {
     return {};
@@ -137,17 +102,118 @@ function readPageProps(code) {
     console.error('Invalid CMS TSX props JSON:', error);
     return {};
   }
+}` : ''}
+`;
 }
 
-function readJsonAttribute(node, name) {
-  try {
-    return JSON.parse(node.getAttribute(name) || '{}');
-  } catch (error) {
-    console.error('Invalid CMS TSX island props JSON:', error);
-    return {};
+function extractImperativeClientModule(source) {
+  const normalizedSource = String(source || '');
+  const functionMatch = normalizedSource.match(/export\s+function\s+client\s*\(/);
+  if (functionMatch?.index != null) {
+    return extractFunctionDeclaration(normalizedSource, functionMatch.index);
   }
+
+  const variableMatch = normalizedSource.match(/export\s+(?:const|let|var)\s+client\s*=/);
+  if (variableMatch?.index != null) {
+    return extractVariableDeclaration(normalizedSource, variableMatch.index);
+  }
+
+  return '';
 }
-`;
+
+function extractFunctionDeclaration(source, startIndex) {
+  const bodyStart = source.indexOf('{', startIndex);
+  if (bodyStart === -1) {
+    throw new Error('Invalid template client function: missing function body');
+  }
+  const bodyEnd = findMatchingBrace(source, bodyStart);
+  return `${source.slice(startIndex, bodyEnd + 1)}\n`;
+}
+
+function extractVariableDeclaration(source, startIndex) {
+  let cursor = startIndex;
+  let depthParen = 0;
+  let depthBrace = 0;
+  let depthBracket = 0;
+  let quote = '';
+  let escaped = false;
+
+  while (cursor < source.length) {
+    const char = source[cursor];
+
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = '';
+      }
+      cursor += 1;
+      continue;
+    }
+
+    if (char === '"' || char === '\'' || char === '`') {
+      quote = char;
+      cursor += 1;
+      continue;
+    }
+
+    if (char === '(') depthParen += 1;
+    if (char === ')') depthParen = Math.max(0, depthParen - 1);
+    if (char === '{') depthBrace += 1;
+    if (char === '}') depthBrace = Math.max(0, depthBrace - 1);
+    if (char === '[') depthBracket += 1;
+    if (char === ']') depthBracket = Math.max(0, depthBracket - 1);
+
+    if (char === ';' && depthParen === 0 && depthBrace === 0 && depthBracket === 0) {
+      return `${source.slice(startIndex, cursor + 1)}\n`;
+    }
+
+    cursor += 1;
+  }
+
+  throw new Error('Invalid template client variable export: missing statement terminator');
+}
+
+function findMatchingBrace(source, openIndex) {
+  let depth = 0;
+  let quote = '';
+  let escaped = false;
+
+  for (let index = openIndex; index < source.length; index += 1) {
+    const char = source[index];
+
+    if (quote) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = '';
+      }
+      continue;
+    }
+
+    if (char === '"' || char === '\'' || char === '`') {
+      quote = char;
+      continue;
+    }
+
+    if (char === '{') {
+      depth += 1;
+      continue;
+    }
+
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+
+  throw new Error('Invalid template client function: unclosed block');
 }
 
 function sanitizeTemplateCode(value) {

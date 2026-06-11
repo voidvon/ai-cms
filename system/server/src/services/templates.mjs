@@ -5,7 +5,7 @@ import { getTsxTemplateStyleAsset } from '../tsx-template-styles.mjs';
 import { escapeHtml } from '../utils/html.mjs';
 
 export const TEMPLATE_TYPES = ['home', 'list', 'content', 'component'];
-export const TEMPLATE_ENGINES = ['html', 'tsx'];
+export const TEMPLATE_ENGINES = ['tsx'];
 const MAX_TEMPLATE_VERSIONS = 10;
 const CORPORATION_ROOT_ID = 32;
 const NEWS_ROOT_ID = 4;
@@ -24,7 +24,7 @@ export function ensureTemplatesSchema() {
       name TEXT NOT NULL,
       type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'component')),
       code TEXT NOT NULL UNIQUE,
-      engine TEXT NOT NULL DEFAULT 'html' CHECK (engine IN ('html', 'tsx')),
+      engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
       content TEXT NOT NULL DEFAULT '',
       published_content TEXT,
       status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
@@ -51,7 +51,7 @@ export function ensureTemplatesSchema() {
       id INTEGER PRIMARY KEY,
       template_id INTEGER NOT NULL,
       version_no INTEGER NOT NULL,
-      engine TEXT NOT NULL DEFAULT 'html',
+      engine TEXT NOT NULL DEFAULT 'tsx',
       content TEXT NOT NULL,
       note TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -64,8 +64,19 @@ export function ensureTemplatesSchema() {
     CREATE INDEX IF NOT EXISTS idx_template_versions_template_id ON template_versions(template_id, version_no);
   `);
 
-  addColumnIfMissing('templates', 'engine', "TEXT NOT NULL DEFAULT 'html'");
-  addColumnIfMissing('template_versions', 'engine', "TEXT NOT NULL DEFAULT 'html'");
+  ensureTemplatesEngineConstraint();
+  ensureTemplateVersionsForeignKey();
+  ensureTemplateVersionsEngineConstraint();
+
+  getDb().exec(`
+    CREATE INDEX IF NOT EXISTS idx_templates_type_sort ON templates(type, sort_order, id);
+    CREATE INDEX IF NOT EXISTS idx_templates_status ON templates(status);
+    CREATE INDEX IF NOT EXISTS idx_template_bindings_target ON template_bindings(target_type, target_id, template_type);
+    CREATE INDEX IF NOT EXISTS idx_template_versions_template_id ON template_versions(template_id, version_no);
+  `);
+
+  addColumnIfMissing('templates', 'engine', "TEXT NOT NULL DEFAULT 'tsx'");
+  addColumnIfMissing('template_versions', 'engine', "TEXT NOT NULL DEFAULT 'tsx'");
 
   schemaEnsured = true;
 }
@@ -326,7 +337,7 @@ export function publishTemplate(id, note = null) {
   if (existing.published_content != null) {
     execute(
       'INSERT INTO template_versions (template_id, version_no, engine, content, note, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [id, nextVersion, existing.engine || 'html', existing.published_content, note || '发布前版本', new Date().toISOString()]
+      [id, nextVersion, existing.engine || 'tsx', existing.published_content, note || '发布前版本', new Date().toISOString()]
     );
     pruneTemplateVersions(id);
   }
@@ -394,7 +405,7 @@ export function restoreTemplateVersion(templateId, versionId) {
 
   const updated = updateTemplate(template.id, {
     ...template,
-    engine: version.engine || template.engine || 'html',
+    engine: version.engine || template.engine || 'tsx',
     content: version.content || ''
   });
   return publishTemplate(updated.id, `恢复版本 #${version.version_no}`);
@@ -486,19 +497,13 @@ export function validateTemplateForPublish(template) {
     }
   }
 
-  if (normalizedTemplate.engine === 'html') {
-    validateHtmlTemplateContent(content, errors);
-  }
-
-  if (normalizedTemplate.engine === 'tsx') {
-    try {
-      renderTsxTemplate(content, buildTemplateValidationProps(normalizedTemplate));
-      getTsxTemplateStyleAsset(content, {
-        templateCode: normalizedTemplate.code
-      });
-    } catch (error) {
-      errors.push(`TSX 编译或渲染失败：${formatTemplateValidationError(error)}`);
-    }
+  try {
+    renderTsxTemplate(content, buildTemplateValidationProps(normalizedTemplate));
+    getTsxTemplateStyleAsset(content, {
+      templateCode: normalizedTemplate.code
+    });
+  } catch (error) {
+    errors.push(`TSX 编译或渲染失败：${formatTemplateValidationError(error)}`);
   }
 
   if (errors.length > 0) {
@@ -994,23 +999,11 @@ function buildPreviewCorporationMenuItems(activeId = 0) {
 }
 
 function buildPreviewRootColumnMenuItems() {
-  const rows = queryAll(
-    `
-      SELECT id, name, source_type, source_id
-      FROM columns
-      WHERE coalesce(parent_id, 0) = 0
-      ORDER BY sort_order ASC, id ASC
-    `
-  );
-
-  return rows
-    .filter((item) => !['contact_page', 'message_page'].includes(String(item?.source_type || '')))
-    .map((item) => ({
-      label: item.name || '',
-      url: buildPreviewColumnUrl(item),
-      active: false
-    }))
-    .filter((item) => item.url);
+  return buildPreviewSiteColumns().map((item) => ({
+    label: item.name || '',
+    url: item.url || '',
+    active: false
+  })).filter((item) => item.url);
 }
 
 function buildPreviewSiteColumns() {
@@ -1024,24 +1017,51 @@ function buildPreviewSiteColumns() {
 
   if (rows.length === 0) {
     return [
-      { id: 1, name: '产品展示', parentId: 0, modelCode: 'product', sourceType: 'product_root', sourceId: 0, url: '/valve/' },
-      { id: 2, name: '新闻资讯', parentId: 0, modelCode: 'news', sourceType: 'news_category', sourceId: NEWS_ROOT_ID, url: '/news/' },
-      { id: 3, name: '阀门知识', parentId: 0, modelCode: 'news', sourceType: 'news_category', sourceId: SERVICE_ROOT_ID, url: '/service/' },
-      { id: 4, name: '公司信息', parentId: 0, modelCode: 'corporation', sourceType: 'corporation_root', sourceId: 0, url: '/about/' }
+      { id: 1, name: '产品展示', parentId: 0, modelCode: 'product', sourceType: 'product_root', sourceId: 0, url: '/valve/', children: [] },
+      { id: 2, name: '新闻资讯', parentId: 0, modelCode: 'news', sourceType: 'news_category', sourceId: NEWS_ROOT_ID, url: '/news/', children: [] },
+      { id: 3, name: '阀门知识', parentId: 0, modelCode: 'news', sourceType: 'news_category', sourceId: SERVICE_ROOT_ID, url: '/service/', children: [] },
+      { id: 4, name: '公司信息', parentId: 0, modelCode: 'corporation', sourceType: 'corporation_root', sourceId: 0, url: '/about/', children: [] }
     ];
   }
 
-  return rows.map((item) => ({
+  const rowsById = new Map(rows.map((item) => [toInteger(item?.id, 0), item]));
+  const normalizedRows = rows.map((item) => ({
     id: toInteger(item.id, 0),
     name: item.name || '',
     parentId: toInteger(item.parent_id, 0),
     modelCode: item.model_code || '',
     sourceType: item.source_type || '',
     sourceId: toInteger(item.source_id, 0),
-    url: buildPreviewColumnUrl(item)
-  }))
+    url: buildPreviewColumnUrl(item, rowsById)
+  })).filter((item) => item.id !== 0);
+
+  const childrenByParentId = new Map();
+  for (const item of normalizedRows) {
+    if (item.parentId === 0 || !item.url) {
+      continue;
+    }
+    if (!childrenByParentId.has(item.parentId)) {
+      childrenByParentId.set(item.parentId, []);
+    }
+    childrenByParentId.get(item.parentId).push({
+      id: item.id,
+      name: item.name,
+      parentId: item.parentId,
+      modelCode: item.modelCode,
+      sourceType: item.sourceType,
+      sourceId: item.sourceId,
+      url: item.url
+    });
+  }
+
+  return normalizedRows
     .filter((item) => item.parentId === 0)
-    .filter((item) => !['contact_page', 'message_page'].includes(String(item?.sourceType || '')));
+    .filter((item) => !['contact_page', 'message_page'].includes(String(item?.sourceType || '')))
+    .map((item) => ({
+      ...item,
+      children: childrenByParentId.get(item.id) || []
+    }))
+    .filter((item) => item.url);
 }
 
 function buildPreviewPrimaryMenuItems(activeKey = '') {
@@ -1062,12 +1082,16 @@ function buildPreviewPrimaryMenuItems(activeKey = '') {
   }));
 }
 
-function buildPreviewColumnUrl(column) {
+function buildPreviewColumnUrl(column, rowsById = new Map()) {
   const sourceType = String(column?.source_type || '');
   const sourceId = toInteger(column?.source_id, 0);
+  const parentColumn = rowsById.get(toInteger(column?.parent_id, 0)) || null;
 
   if (sourceType === 'product_root') {
     return '/valve/';
+  }
+  if (sourceType === 'product_category') {
+    return sourceId > 0 ? `/valve/${sourceId}.html` : '';
   }
   if (sourceType === 'news_category') {
     if (sourceId === NEWS_ROOT_ID) {
@@ -1076,9 +1100,17 @@ function buildPreviewColumnUrl(column) {
     if (sourceId === SERVICE_ROOT_ID) {
       return '/service/';
     }
+    if (parentColumn && String(parentColumn?.source_type || '') === 'news_category') {
+      return toInteger(parentColumn?.source_id, 0) === SERVICE_ROOT_ID
+        ? `/service/${sourceId}.html`
+        : `/news/${sourceId}.html`;
+    }
   }
   if (sourceType === 'corporation_root') {
     return '/about/';
+  }
+  if (sourceType === 'corporation_category') {
+    return sourceId > 0 ? `/about/about-${sourceId}.html` : '';
   }
   if (sourceType === 'contact_page') {
     return '/contact.html';
@@ -1171,7 +1203,7 @@ function buildPreviewComponentMap(currentTemplate) {
   for (const item of componentRows) {
     components.set(normalizeCode(item.code), {
       code: item.code,
-      engine: item.engine || 'html',
+      engine: item.engine || 'tsx',
       content: item.content || ''
     });
   }
@@ -1188,24 +1220,20 @@ function buildPreviewComponentMap(currentTemplate) {
 }
 
 function renderPreviewTemplate(template, props, components, depth, previewState) {
-  if (template.engine === 'tsx') {
-    collectPreviewTsxStyle(template, previewState);
-    return renderTsxTemplate(template.content, props, {
-      templateCode: template.code,
-      componentResolver: ({ code, props: extraProps, helpers }) => {
-        return renderPreviewComponentElement(
-          code,
-          components,
-          mergePreviewComponentProps(props, extraProps),
-          depth + 1,
-          previewState,
-          helpers
-        );
-      }
-    });
-  }
-
-  return renderPreviewHtmlContent(template.content, props, components, depth, previewState);
+  collectPreviewTemplateStyle(template, previewState);
+  return renderTsxTemplate(template.content, props, {
+    templateCode: template.code,
+    componentResolver: ({ code, props: extraProps, helpers }) => {
+      return renderPreviewComponentElement(
+        code,
+        components,
+        mergePreviewComponentProps(props, extraProps),
+        depth + 1,
+        previewState,
+        helpers
+      );
+    }
+  });
 }
 
 function renderPreviewComponentElement(code, components, props, depth, previewState, helpers) {
@@ -1216,25 +1244,20 @@ function renderPreviewComponentElement(code, components, props, depth, previewSt
   if (!component?.content) {
     return null;
   }
-  collectPreviewTsxStyle(component, previewState);
-  if (component.engine === 'tsx') {
-    return createTsxTemplateElement(component.content, props, {
-      templateCode: component.code,
-      componentResolver: ({ code: nestedCode, props: nestedProps, helpers: nestedHelpers }) => {
-        return renderPreviewComponentElement(
-          nestedCode,
-          components,
-          mergePreviewComponentProps(props, nestedProps),
-          depth + 1,
-          previewState,
-          nestedHelpers
-        );
-      }
-    }, helpers?.runtimeContext);
-  }
-
-  const html = renderPreviewHtmlContent(component.content, props, components, depth + 1, previewState);
-  return helpers?.renderHtml ? helpers.renderHtml(html) : html;
+  collectPreviewTemplateStyle(component, previewState);
+  return createTsxTemplateElement(component.content, props, {
+    templateCode: component.code,
+    componentResolver: ({ code: nestedCode, props: nestedProps, helpers: nestedHelpers }) => {
+      return renderPreviewComponentElement(
+        nestedCode,
+        components,
+        mergePreviewComponentProps(props, nestedProps),
+        depth + 1,
+        previewState,
+        nestedHelpers
+      );
+    }
+  }, helpers?.runtimeContext);
 }
 
 function renderPreviewComponentMarkup(code, components, props, depth, previewState) {
@@ -1245,51 +1268,31 @@ function renderPreviewComponentMarkup(code, components, props, depth, previewSta
   if (!component?.content) {
     return `<!-- missing component: ${escapeHtml(code)} -->`;
   }
-  collectPreviewTsxStyle(component, previewState);
-  if (component.engine === 'tsx') {
-    return renderTsxTemplate(component.content, props, {
-      templateCode: component.code,
-      componentResolver: ({ code: nestedCode, props: nestedProps, helpers }) => {
-        return renderPreviewComponentElement(
-          nestedCode,
-          components,
-          mergePreviewComponentProps(props, nestedProps),
-          depth + 1,
-          previewState,
-          helpers
-        );
-      }
-    });
-  }
-  return renderPreviewTemplate(component, props, components, depth + 1, previewState);
-}
-
-function renderPreviewHtmlContent(content, props, components, depth, previewState) {
-  const loopsExpanded = String(content || '').replace(/#loop\(([A-Za-z0-9_.-]+)\)#([\s\S]*?)#\/loop#/g, (_, pathName, rowTemplate) => {
-    const items = resolvePreviewValue(props, pathName);
-    if (!Array.isArray(items)) {
-      return '';
+  collectPreviewTemplateStyle(component, previewState);
+  return renderTsxTemplate(component.content, props, {
+    templateCode: component.code,
+    componentResolver: ({ code: nestedCode, props: nestedProps, helpers }) => {
+      return renderPreviewComponentElement(
+        nestedCode,
+        components,
+        mergePreviewComponentProps(props, nestedProps),
+        depth + 1,
+        previewState,
+        helpers
+      );
     }
-    return items.map((item) => renderPreviewHtmlContent(rowTemplate, { ...props, item }, components, depth + 1, previewState)).join('');
-  });
-  const componentExpanded = loopsExpanded.replace(/#component\(\s*["']([A-Za-z0-9_-]+)["']\s*\)#/g, (_, code) => {
-    return renderPreviewComponentMarkup(code, components, props, depth + 1, previewState);
-  });
-  const rawExpanded = componentExpanded.replace(/\{\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}\}/g, (_, pathName) => {
-    return stringifyPreviewValue(resolvePreviewValue(props, pathName));
-  });
-  return rawExpanded.replace(/\{\{\s*([A-Za-z0-9_.-]+)\s*\}\}/g, (_, pathName) => {
-    return escapeHtml(stringifyPreviewValue(resolvePreviewValue(props, pathName)));
   });
 }
 
-function collectPreviewTsxStyle(template, previewState) {
-  if (!previewState?.styleAssets || template?.engine !== 'tsx') {
+function collectPreviewTemplateStyle(template, previewState) {
+  if (!previewState?.styleAssets || !template?.content) {
     return;
   }
-  const asset = getTsxTemplateStyleAsset(template.content, {
-    templateCode: template.code
-  });
+  const asset = template.engine === 'tsx'
+    ? getTsxTemplateStyleAsset(template.content, {
+      templateCode: template.code
+    })
+    : null;
   if (!asset) {
     return;
   }
@@ -1316,31 +1319,6 @@ function mergePreviewComponentProps(baseProps, extraProps) {
     ...restBaseProps,
     ...(extraProps || {})
   };
-}
-
-function resolvePreviewValue(source, pathName) {
-  const parts = String(pathName || '').split('.').filter(Boolean);
-  let current = source;
-  for (const part of parts) {
-    if (current == null) {
-      return '';
-    }
-    current = current[part];
-  }
-  return current ?? '';
-}
-
-function stringifyPreviewValue(value) {
-  if (value == null) {
-    return '';
-  }
-  if (typeof value === 'string') {
-    return value;
-  }
-  if (typeof value === 'number' || typeof value === 'boolean') {
-    return String(value);
-  }
-  return '';
 }
 
 function getTemplateByCode(code) {
@@ -1372,15 +1350,6 @@ function extractLiteralComponentReferences(content) {
   }
 
   return Array.from(refs).filter(Boolean);
-}
-
-function validateHtmlTemplateContent(content, errors) {
-  const source = String(content || '');
-  const loopStarts = source.match(/#loop\([A-Za-z0-9_.-]+\)#/g) || [];
-  const loopEnds = source.match(/#\/loop#/g) || [];
-  if (loopStarts.length !== loopEnds.length) {
-    errors.push(`HTML 循环标签不匹配：开始 ${loopStarts.length} 个，结束 ${loopEnds.length} 个`);
-  }
 }
 
 function buildTemplateValidationProps(template) {
@@ -1543,11 +1512,12 @@ function normalizeTemplateInput(input) {
     throw new Error('code is required');
   }
 
+  const engine = normalizeTemplateEngine(input.engine);
   return {
     name,
     type,
     code,
-    engine: normalizeTemplateEngine(input.engine),
+    engine,
     content: String(input.content ?? ''),
     status: input.status === 'published' ? 'published' : 'draft',
     is_default: 0,
@@ -1556,11 +1526,14 @@ function normalizeTemplateInput(input) {
 }
 
 function normalizeTemplateEngine(value) {
-  const engine = String(value || 'html').trim().toLowerCase();
-  if (!TEMPLATE_ENGINES.includes(engine)) {
-    throw new Error('invalid template engine');
+  if (value == null || String(value).trim() === '') {
+    return 'tsx';
   }
-  return engine;
+  const engine = String(value).trim().toLowerCase();
+  if (engine !== 'tsx') {
+    throw new Error('only tsx template engine is allowed');
+  }
+  return 'tsx';
 }
 
 function pruneTemplateVersions(templateId) {
@@ -1585,6 +1558,156 @@ function addColumnIfMissing(tableName, columnName, definition) {
     return;
   }
   getDb().exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+}
+
+function ensureTemplatesEngineConstraint() {
+  const sql = queryOne(
+    `
+      SELECT sql
+      FROM sqlite_master
+      WHERE type = 'table' AND name = 'templates'
+      LIMIT 1
+    `
+  )?.sql || '';
+
+  if (
+    String(sql).includes("DEFAULT 'tsx'")
+    && String(sql).includes("CHECK (engine IN ('tsx'))")
+  ) {
+    return;
+  }
+
+  getDb().exec(`
+    PRAGMA foreign_keys = OFF;
+    BEGIN TRANSACTION;
+
+    ALTER TABLE templates RENAME TO templates__old_engine_check;
+
+    CREATE TABLE templates (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'component')),
+      code TEXT NOT NULL UNIQUE,
+      engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
+      content TEXT NOT NULL DEFAULT '',
+      published_content TEXT,
+      status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+      is_default INTEGER NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      published_at TEXT
+    );
+
+    INSERT INTO templates (
+      id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
+    )
+    SELECT
+      id, name, type, code, 'tsx', content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
+    FROM templates__old_engine_check;
+
+    DROP TABLE templates__old_engine_check;
+
+    COMMIT;
+    PRAGMA foreign_keys = ON;
+  `);
+}
+
+function ensureTemplateVersionsForeignKey() {
+  const sql = queryOne(
+    `
+      SELECT sql
+      FROM sqlite_master
+      WHERE type = 'table' AND name = 'template_versions'
+      LIMIT 1
+    `
+  )?.sql || '';
+
+  if (
+    !String(sql).includes('templates__old_engine_check')
+    && String(sql).includes('REFERENCES templates(id)')
+  ) {
+    return;
+  }
+
+  getDb().exec(`
+    PRAGMA foreign_keys = OFF;
+    BEGIN TRANSACTION;
+
+    ALTER TABLE template_versions RENAME TO template_versions__old_fk_fix;
+
+    CREATE TABLE template_versions (
+      id INTEGER PRIMARY KEY,
+      template_id INTEGER NOT NULL,
+      version_no INTEGER NOT NULL,
+      engine TEXT NOT NULL DEFAULT 'tsx',
+      content TEXT NOT NULL,
+      note TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
+    );
+
+    INSERT INTO template_versions (
+      id, template_id, version_no, engine, content, note, created_at
+    )
+    SELECT
+      id, template_id, version_no, 'tsx', content, note, created_at
+    FROM template_versions__old_fk_fix;
+
+    DROP TABLE template_versions__old_fk_fix;
+
+    COMMIT;
+    PRAGMA foreign_keys = ON;
+  `);
+}
+
+function ensureTemplateVersionsEngineConstraint() {
+  const sql = queryOne(
+    `
+      SELECT sql
+      FROM sqlite_master
+      WHERE type = 'table' AND name = 'template_versions'
+      LIMIT 1
+    `
+  )?.sql || '';
+
+  if (
+    String(sql).includes("DEFAULT 'tsx'")
+    && String(sql).includes("CHECK (engine IN ('tsx'))")
+  ) {
+    return;
+  }
+
+  getDb().exec(`
+    PRAGMA foreign_keys = OFF;
+    BEGIN TRANSACTION;
+
+    ALTER TABLE template_versions RENAME TO template_versions__old_engine_fix;
+
+    CREATE TABLE template_versions (
+      id INTEGER PRIMARY KEY,
+      template_id INTEGER NOT NULL,
+      version_no INTEGER NOT NULL,
+      engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
+      content TEXT NOT NULL,
+      note TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
+    );
+
+    INSERT INTO template_versions (
+      id, template_id, version_no, engine, content, note, created_at
+    )
+    SELECT
+      id, template_id, version_no, 'tsx', content, note, created_at
+    FROM template_versions__old_engine_fix
+    WHERE coalesce(engine, 'tsx') = 'tsx';
+
+    DROP TABLE template_versions__old_engine_fix;
+
+    COMMIT;
+    PRAGMA foreign_keys = ON;
+  `);
 }
 
 function normalizeCode(value) {

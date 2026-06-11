@@ -2,36 +2,12 @@ import type { Template } from '@/types'
 
 type TemplateVariableReferenceProps = {
   type: Template['type']
-  engine: Template['engine']
 }
 
 type VariableGroup = {
   title: string
   items: string[]
 }
-
-const htmlGroups: VariableGroup[] = [
-  {
-    title: '全局变量',
-    items: ['{{site.web_name}}', '{{site.company_phone}}', '{{meta.1.title}}', '#component("top")#'],
-  },
-  {
-    title: '当前上下文',
-    items: [
-      '{{currentPage.title}}',
-      '{{currentSection.name}}',
-      '#loop(currentCategory)#{{item.name}}#/loop#',
-      '{{currentCategoryItem.name}}',
-      '{{currentCategoryItem.url}}',
-      '{{parentCategory.name}}',
-      '{{currentContent.title}}',
-    ],
-  },
-  {
-    title: '面包屑',
-    items: ['{{{breadcrumb.prefixHtml}}}', '{{{breadcrumb.html}}}'],
-  },
-]
 
 const tsxGroups: VariableGroup[] = [
   {
@@ -65,19 +41,9 @@ const tsxGroups: VariableGroup[] = [
   },
 ]
 
-const listHtmlGroup: VariableGroup = {
-  title: '列表模板',
-  items: ['#loop(items)# ... #/loop#', '{{item.name}}', '{{item.url}}', '{{{pagerHtml}}}'],
-}
-
 const listTsxGroup: VariableGroup = {
   title: '列表模板',
   items: ['items.map((item) => ...)', 'item.name', 'item.url', 'pagerHtml'],
-}
-
-const contentHtmlGroup: VariableGroup = {
-  title: '内容模板',
-  items: ['{{title}}', '{{image}}', '{{code}}', '{{{bodyHtml}}}', '{{{previousHtml}}}', '{{{nextHtml}}}'],
 }
 
 const contentTsxGroup: VariableGroup = {
@@ -85,13 +51,13 @@ const contentTsxGroup: VariableGroup = {
   items: ['title', 'image', 'code', 'bodyHtml', 'previousHtml', 'nextHtml'],
 }
 
-export function TemplateVariableReference({ type, engine }: TemplateVariableReferenceProps) {
-  const groups = [...(engine === 'tsx' ? tsxGroups : htmlGroups)]
+export function TemplateVariableReference({ type }: TemplateVariableReferenceProps) {
+  const groups = [...tsxGroups]
   if (type === 'list') {
-    groups.push(engine === 'tsx' ? listTsxGroup : listHtmlGroup)
+    groups.push(listTsxGroup)
   }
   if (type === 'content') {
-    groups.push(engine === 'tsx' ? contentTsxGroup : contentHtmlGroup)
+    groups.push(contentTsxGroup)
   }
 
   return (

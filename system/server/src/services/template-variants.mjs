@@ -359,7 +359,7 @@ export function listSelectedThemePublishedComponents() {
   }
   return listTemplateVariantComponents(selected.id, { publishedOnly: true }).map((item) => ({
     code: item.code,
-    engine: item.engine || 'html',
+    engine: item.engine || 'tsx',
     content: item.published_content || item.content || ''
   }));
 }
@@ -436,8 +436,9 @@ function attachVariantComponentIds(rows) {
 }
 
 function syncTemplateVariantComponentIds(variantId, templateIds = []) {
+  const normalizedTemplateIds = ensureThemeComponentTemplateIds(templateIds);
   execute('DELETE FROM template_variant_components WHERE variant_id = ?', [variantId]);
-  for (const templateId of templateIds) {
+  for (const templateId of normalizedTemplateIds) {
     execute(
       `
         INSERT OR IGNORE INTO template_variant_components (variant_id, template_id)
@@ -501,6 +502,20 @@ function normalizeComponentTemplateIds(value, fallback = []) {
         .filter(Boolean)
     )
   );
+}
+
+function ensureThemeComponentTemplateIds(templateIds = []) {
+  const normalizedTemplateIds = normalizeComponentTemplateIds(templateIds);
+  for (const templateId of normalizedTemplateIds) {
+    const template = getTemplateByIdCached(templateId, new Map());
+    if (!template) {
+      throw new Error(`主题组件不存在：${templateId}`);
+    }
+    if (template.type !== 'component') {
+      throw new Error(`主题只能关联组件模板：${template.code || templateId}`);
+    }
+  }
+  return normalizedTemplateIds;
 }
 
 function normalizeThemeTemplateCode(value) {

@@ -1,17 +1,16 @@
 import { useMemo } from 'react'
 import CodeMirror from '@uiw/react-codemirror'
-import { html } from '@codemirror/lang-html'
 import { javascript } from '@codemirror/lang-javascript'
-import { EditorView } from '@codemirror/view'
+import { EditorView, placeholder as codePlaceholder } from '@codemirror/view'
 import { useTheme } from 'next-themes'
 import { cn } from '@/lib/utils'
-import type { Template } from '@/types'
 
 type TemplateCodeEditorProps = {
   id?: string
   value: string
-  engine: Template['engine']
   onChange: (value: string) => void
+  placeholder?: string
+  readOnly?: boolean
   className?: string
   height?: string
 }
@@ -48,12 +47,25 @@ const editorTheme = EditorView.theme({
   },
 })
 
-export function TemplateCodeEditor({ id, value, engine, onChange, className, height = '520px' }: TemplateCodeEditorProps) {
+export function TemplateCodeEditor({
+  id,
+  value,
+  onChange,
+  placeholder,
+  readOnly = false,
+  className,
+  height = '520px',
+}: TemplateCodeEditorProps) {
   const { resolvedTheme } = useTheme()
   const extensions = useMemo(() => {
-    const language = engine === 'tsx' ? javascript({ jsx: true, typescript: true }) : html()
-    return [language, EditorView.lineWrapping, editorTheme]
-  }, [engine])
+    return [
+      javascript({ jsx: true, typescript: true }),
+      EditorView.lineWrapping,
+      editorTheme,
+      EditorView.editable.of(!readOnly),
+      placeholder ? codePlaceholder(placeholder) : [],
+    ]
+  }, [placeholder, readOnly])
 
   return (
     <div id={id} className={cn('overflow-hidden rounded-md border border-input bg-background', className)}>
@@ -66,12 +78,13 @@ export function TemplateCodeEditor({ id, value, engine, onChange, className, hei
           foldGutter: true,
           highlightActiveLine: true,
           bracketMatching: true,
-          closeBrackets: true,
-          autocompletion: true,
+          closeBrackets: !readOnly,
+          autocompletion: !readOnly,
           searchKeymap: true,
         }}
         extensions={extensions}
         onChange={onChange}
+        editable={!readOnly}
       />
     </div>
   )

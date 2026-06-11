@@ -1,6 +1,4 @@
-/html/*.html
-/html/**/*.html
-!/html/.gitkeep
+/html/
 
 node_modules/
 /dist

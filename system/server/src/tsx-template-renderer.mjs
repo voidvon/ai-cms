@@ -125,7 +125,6 @@ function compileTsxModule(source, React) {
 }
 
 function buildTemplateProps(props, React, rawFragments, options = {}, runtimeContext = {}) {
-  const templateCode = String(options.templateCode || '').trim();
   const helpers = {
     runtimeContext: {
       React,
@@ -149,17 +148,6 @@ function buildTemplateProps(props, React, rawFragments, options = {}, runtimeCon
     return renderHtml(html);
   }
 
-  function ClientOnly({ name = 'default', props: clientProps = {}, children }) {
-    const attributes = {
-      'data-cms-client-root': String(name || 'default'),
-      'data-cms-client-props': JSON.stringify(clientProps ?? {})
-    };
-    if (templateCode) {
-      attributes['data-cms-client-template'] = templateCode;
-    }
-    return React.createElement('div', attributes, children);
-  }
-
   function component(code, extraProps = {}) {
     if (typeof options.componentResolver === 'function') {
       return options.componentResolver({
@@ -169,12 +157,11 @@ function buildTemplateProps(props, React, rawFragments, options = {}, runtimeCon
           ...helpers,
           raw,
           Raw,
-          renderHtml,
-          ClientOnly
+          renderHtml
         },
         React,
         parentProps: props,
-        templateCode
+        templateCode: String(options.templateCode || '').trim()
       });
     }
     if (typeof props.component === 'function') {
@@ -187,7 +174,6 @@ function buildTemplateProps(props, React, rawFragments, options = {}, runtimeCon
     ...props,
     raw,
     Raw,
-    ClientOnly,
     component
   };
 }

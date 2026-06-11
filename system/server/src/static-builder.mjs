@@ -519,42 +519,68 @@ function buildLegacyHomePageProps(templateContext) {
 }
 
 function buildLegacyRootColumnMenuItems(columns) {
-  return (columns || [])
-    .filter((item) => item && normalizeInteger(item.parent_id, 0) === 0)
-    .filter((item) => !['contact_page', 'message_page'].includes(String(item?.source_type || '')))
+  return buildLegacySiteColumns(columns).map((item) => ({
+    label: item.name || '',
+    url: item.url || '',
+    active: false
+  })).filter((item) => item.url);
+}
+
+function buildLegacySiteColumns(columns) {
+  const rows = Array.isArray(columns) ? columns : [];
+  const rowsById = new Map(rows.map((item) => [normalizeInteger(item?.id, 0), item]));
+  const normalizedRows = rows.map((item) => ({
+    id: normalizeInteger(item?.id, 0),
+    name: item?.name || '',
+    parentId: normalizeInteger(item?.parent_id, 0),
+    modelCode: item?.model_code || '',
+    sourceType: item?.source_type || '',
+    sourceId: normalizeInteger(item?.source_id, 0),
+    url: buildLegacyColumnUrl(item, rowsById)
+  })).filter((item) => item.id !== 0);
+
+  const childrenByParentId = new Map();
+  for (const item of normalizedRows) {
+    if (item.parentId === 0 || !item.url) {
+      continue;
+    }
+    if (!childrenByParentId.has(item.parentId)) {
+      childrenByParentId.set(item.parentId, []);
+    }
+    childrenByParentId.get(item.parentId).push({
+      id: item.id,
+      name: item.name,
+      parentId: item.parentId,
+      modelCode: item.modelCode,
+      sourceType: item.sourceType,
+      sourceId: item.sourceId,
+      url: item.url
+    });
+  }
+
+  return normalizedRows
+    .filter((item) => item.parentId === 0)
+    .filter((item) => !['contact_page', 'message_page'].includes(String(item?.sourceType || '')))
     .map((item) => ({
-      label: item.name || '',
-      url: buildLegacyColumnUrl(item),
-      active: false
+      ...item,
+      children: childrenByParentId.get(item.id) || []
     }))
     .filter((item) => item.url);
 }
 
-function buildLegacySiteColumns(columns) {
-  return (columns || [])
-    .filter((item) => item && normalizeInteger(item.parent_id, 0) === 0)
-    .filter((item) => !['contact_page', 'message_page'].includes(String(item?.source_type || '')))
-    .map((item) => ({
-      id: normalizeInteger(item?.id, 0),
-      name: item?.name || '',
-      parentId: normalizeInteger(item?.parent_id, 0),
-      modelCode: item?.model_code || '',
-      sourceType: item?.source_type || '',
-      sourceId: normalizeInteger(item?.source_id, 0),
-      url: buildLegacyColumnUrl(item)
-    }))
-    .filter((item) => item.id !== 0);
-}
-
-function buildLegacyColumnUrl(column) {
+function buildLegacyColumnUrl(column, rowsById = new Map()) {
   if (!column) {
     return '';
   }
   const sourceType = String(column.source_type || '');
   const sourceId = normalizeInteger(column.source_id, 0);
+  const parentColumn = rowsById.get(normalizeInteger(column.parent_id, 0)) || null;
 
   if (sourceType === 'product_root') {
     return '/valve/';
+  }
+  if (sourceType === 'product_category') {
+    return sourceId > 0 ? `/valve/${sourceId}.html` : '';
   }
   if (sourceType === 'news_category') {
     if (sourceId === NEWS_ROOT_ID) {
@@ -563,9 +589,17 @@ function buildLegacyColumnUrl(column) {
     if (sourceId === SERVICE_ROOT_ID) {
       return '/service/';
     }
+    if (parentColumn && String(parentColumn.source_type || '') === 'news_category') {
+      return normalizeInteger(parentColumn.source_id, 0) === SERVICE_ROOT_ID
+        ? `/service/${sourceId}.html`
+        : `/news/${sourceId}.html`;
+    }
   }
   if (sourceType === 'corporation_root') {
     return '/about/';
+  }
+  if (sourceType === 'corporation_category') {
+    return sourceId > 0 ? `/about/about-${sourceId}.html` : '';
   }
   if (sourceType === 'contact_page') {
     return '/contact.html';
