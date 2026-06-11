@@ -17,7 +17,7 @@ export const adminApi = {
     return response.data
   },
 
-  updatePassword: async (id: number, data: { password: string }) => {
+  updatePassword: async (id: number, data: { newPassword: string }) => {
     const response = await apiClient.put<ApiResponse<void>>(`/admin/${id}/password`, data)
     return response.data
   },

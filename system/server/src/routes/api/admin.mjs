@@ -65,7 +65,7 @@ export default async function adminApiRoutes(app) {
   app.put('/admin/:id/password', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
-    const { newPassword } = request.body;
+    const newPassword = request.body?.newPassword ?? request.body?.password;
 
     if (!newPassword) {
       return reply.badRequest('缺少新密码');

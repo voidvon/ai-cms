@@ -136,9 +136,27 @@ function buildTemplateProps(props, React, rawFragments, options = {}, runtimeCon
     return { __html: String(value ?? '') };
   }
 
+  function normalizeRawHtml(value) {
+    if (value == null || typeof value === 'boolean') {
+      return '';
+    }
+    if (typeof value === 'string' || typeof value === 'number') {
+      return String(value);
+    }
+    if (React.isValidElement(value) || Array.isArray(value)) {
+      const renderToStaticMarkup = loadRenderToStaticMarkup();
+      const element = React.createElement(React.Fragment, null, value);
+      return replaceRawMarkers(renderToStaticMarkup(element), rawFragments);
+    }
+    return String(value);
+  }
+
   function renderHtml(html) {
     const id = rawFragments.length;
-    rawFragments.push(String(html ?? ''));
+    // Reserve the slot before rendering nested React nodes so nested Raw calls
+    // cannot steal this marker id.
+    rawFragments.push('');
+    rawFragments[id] = normalizeRawHtml(html);
     return React.createElement('cms-raw', {
       'data-raw-id': String(id)
     });

@@ -50,7 +50,7 @@ export default function AdminFormDialog({ open, onOpenChange, admin, mode }: Adm
         if (formData.password !== formData.confirmPassword) {
           throw new Error('两次输入的密码不一致')
         }
-        return adminApi.updatePassword(admin!.id, { password: formData.password })
+        return adminApi.updatePassword(admin!.id, { newPassword: formData.password })
       } else {
         return adminApi.update(admin!.id, { username: formData.username })
       }
