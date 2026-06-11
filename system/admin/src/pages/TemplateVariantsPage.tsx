@@ -20,7 +20,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Tree, type TreeItemData } from '@/components/ui/tree'
+import { Tree, type TreeItemData, type TreeMoveParams } from '@/components/ui/tree'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { TemplateCodeEditor } from '@/components/TemplateCodeEditor'
 import { TemplateVariableReference } from '@/components/TemplateVariableReference'
@@ -415,12 +415,35 @@ export default function TemplateVariantsPage() {
     onSuccess: (_, templateId) => {
       queryClient.invalidateQueries({ queryKey: ['themes'] })
       queryClient.invalidateQueries({ queryKey: ['selected-theme'] })
-      if (editorTarget.kind === 'component' && editorTarget.templateId === templateId) {
-        setEditorTarget({ kind: 'slot', slot: activeThemeSlot })
+      if (editorTarget.templateId === templateId) {
+        setEditorTarget({ templateId: null })
       }
       toast.success('组件已从当前主题解除关联')
     },
     onError: (error: unknown) => toast.error(getApiErrorMessage(error, '解除关联失败')),
+  })
+
+  const reorderTemplatesMutation = useMutation({
+    mutationFn: async ({ templateType, templateIds }: { templateType: Template['type']; templateIds: number[] }) => {
+      for (let index = 0; index < templateIds.length; index += 1) {
+        await templatesApi.update(templateIds[index], { sort_order: index + 1 })
+      }
+
+      if (templateType === 'component' && selectedTheme) {
+        await templateVariantsApi.update(selectedTheme.id, {
+          manual_component_template_ids: templateIds,
+        })
+      }
+
+      return { templateType, templateIds }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['templates'] })
+      queryClient.invalidateQueries({ queryKey: ['themes'] })
+      queryClient.invalidateQueries({ queryKey: ['selected-theme'] })
+      toast.success('排序已更新')
+    },
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '排序更新失败')),
   })
 
   const createThemeMutation = useMutation({
@@ -575,6 +598,32 @@ export default function TemplateVariantsPage() {
     if (data.kind === 'template' && data.template?.id) {
       setEditorTarget({ templateId: data.template.id })
     }
+  }
+
+  const canDragTreeItem = (item: TreeItemData<TemplateLibraryNode>, parent: TreeItemData<TemplateLibraryNode> | null) => {
+    if (!parent || item.data?.kind !== 'template') {
+      return false
+    }
+    return Boolean(parent.data?.kind === 'group' && parent.children && parent.children.length > 1)
+  }
+
+  const handleTemplateTreeMove = ({ parent, fromIndex, toIndex, siblingItems }: TreeMoveParams<TemplateLibraryNode>) => {
+    const templateType = parent?.data?.templateType
+    if (!templateType || fromIndex === toIndex) {
+      return
+    }
+
+    const orderedIds = siblingItems
+      .map((entry) => entry.data?.template?.id || null)
+      .filter((id): id is number => id != null)
+
+    const [movedId] = orderedIds.splice(fromIndex, 1)
+    orderedIds.splice(toIndex, 0, movedId)
+
+    reorderTemplatesMutation.mutate({
+      templateType,
+      templateIds: orderedIds,
+    })
   }
 
   const renderTreeAction = (item: TreeItemData<TemplateLibraryNode>) => {
@@ -733,6 +782,8 @@ export default function TemplateVariantsPage() {
               defaultExpandedIds={['group:list', 'group:content', 'group:component']}
               onValueChange={handleSelectLibraryItem}
               renderAction={renderTreeAction}
+              canDrag={canDragTreeItem}
+              onItemMove={handleTemplateTreeMove}
               className="pr-1"
             />
             <div className="mt-4 space-y-3 rounded border p-3">
@@ -805,40 +856,31 @@ export default function TemplateVariantsPage() {
           <CardHeader className="shrink-0">
             <div className="flex items-center justify-between gap-3">
               {selectedTemplate ? (
-                <div className="grid flex-1 gap-4 md:grid-cols-[80px_auto]">
-                  <Input
-                    id="template-sort"
-                    type="number"
-                    placeholder="排序"
-                    value={formData.sort_order}
-                    onChange={(event) => setFormData({ ...formData, sort_order: Number(event.target.value) || 0 })}
-                  />
-                  <div className="flex items-center">
-                    <Popover open={versionPopoverOpen} onOpenChange={setVersionPopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <Button type="button" variant="outline" className="shrink-0">
-                          历史版本
-                          <Badge variant="secondary" className="ml-2">{versionsData?.data?.length || 0}</Badge>
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent align="end" className="w-[680px] p-0">
-                        <TemplateVersionPopover
-                          currentContent={formData.content}
-                          versions={versionsData?.data || []}
-                          isLoading={isVersionsLoading}
-                          isRestoring={restoreVersionMutation.isPending}
-                          onViewCode={(version) => {
-                            setVersionPreview(version)
-                            setVersionPopoverOpen(false)
-                          }}
-                          onRestore={(versionId) => {
-                            setVersionPopoverOpen(false)
-                            restoreVersionMutation.mutate(versionId)
-                          }}
-                        />
-                      </PopoverContent>
-                    </Popover>
-                  </div>
+                <div className="flex flex-1 items-center">
+                  <Popover open={versionPopoverOpen} onOpenChange={setVersionPopoverOpen}>
+                    <PopoverTrigger asChild>
+                      <Button type="button" variant="outline" className="shrink-0">
+                        历史版本
+                        <Badge variant="secondary" className="ml-2">{versionsData?.data?.length || 0}</Badge>
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent align="start" className="w-[680px] p-0">
+                      <TemplateVersionPopover
+                        currentContent={formData.content}
+                        versions={versionsData?.data || []}
+                        isLoading={isVersionsLoading}
+                        isRestoring={restoreVersionMutation.isPending}
+                        onViewCode={(version) => {
+                          setVersionPreview(version)
+                          setVersionPopoverOpen(false)
+                        }}
+                        onRestore={(versionId) => {
+                          setVersionPopoverOpen(false)
+                          restoreVersionMutation.mutate(versionId)
+                        }}
+                      />
+                    </PopoverContent>
+                  </Popover>
                 </div>
               ) : <div className="flex-1" />}
               <div className="flex gap-2">
