@@ -10,7 +10,8 @@ import {
   buildProductCategoryPages,
   buildProductDetailPages,
   buildServiceCategoryPages,
-  buildServiceDetailPages
+  buildServiceDetailPages,
+  buildStaticSite
 } from '../../static-builder.mjs';
 
 export default async function staticGenRoutes(app) {
@@ -61,25 +62,17 @@ export default async function staticGenRoutes(app) {
         case 'service-details':
           result = buildServiceDetailPages({ outputRoot: CONTENT_ROOT });
           break;
+        case 'robots':
+          result = buildStaticSite({ outputRoot: CONTENT_ROOT, sections: ['robots'] });
+          break;
+        case 'sitemap':
+          result = buildStaticSite({ outputRoot: CONTENT_ROOT, sections: ['sitemap'] });
+          break;
+        case 'llms':
+          result = buildStaticSite({ outputRoot: CONTENT_ROOT, sections: ['llms'] });
+          break;
         case 'all':
-          const results = [
-            buildIndexPage({ outputRoot: CONTENT_ROOT }),
-            buildContactPage({ outputRoot: CONTENT_ROOT }),
-            buildMessagePage({ outputRoot: CONTENT_ROOT }),
-            buildCorporationPages({ outputRoot: CONTENT_ROOT }),
-            buildProductCategoryPages({ outputRoot: CONTENT_ROOT }),
-            buildProductDetailPages({ outputRoot: CONTENT_ROOT }),
-            buildNewsCategoryPages({ outputRoot: CONTENT_ROOT }),
-            buildNewsDetailPages({ outputRoot: CONTENT_ROOT }),
-            buildServiceCategoryPages({ outputRoot: CONTENT_ROOT }),
-            buildServiceDetailPages({ outputRoot: CONTENT_ROOT })
-          ];
-          result = {
-            outputRoot: CONTENT_ROOT,
-            results,
-            totalFiles: results.reduce((sum, r) => sum + (r.filesWritten || 0), 0),
-            totalRecords: results.reduce((sum, r) => sum + (r.recordsProcessed || 0), 0)
-          };
+          result = buildStaticSite({ outputRoot: CONTENT_ROOT });
           break;
         default:
           return reply.badRequest('未知的生成类型');

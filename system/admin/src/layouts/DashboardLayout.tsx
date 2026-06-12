@@ -86,6 +86,8 @@ export default function DashboardLayout() {
         { path: '/admins', label: '管理员' },
         { path: '/static-gen', label: '静态生成' },
         { path: '/site-config', label: '网站配置' },
+        { path: '/sitemap-diagnostics', label: 'Sitemap 诊断' },
+        { path: '/llms-diagnostics', label: 'LLMS 诊断' },
       ]
     }
   ]

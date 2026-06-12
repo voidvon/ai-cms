@@ -10,6 +10,7 @@ import { listProductCategories } from './services/product-categories.mjs';
 import { listProducts } from './services/products.mjs';
 import { buildRobotsTxt } from './services/robots.mjs';
 import { buildSitemap } from './services/sitemap.mjs';
+import { buildLlmsFiles } from './services/llms.mjs';
 import { getSiteConfig } from './services/site.mjs';
 import { ensureTemplatesSchema } from './services/templates.mjs';
 import { escapeHtml } from './utils/html.mjs';
@@ -35,7 +36,7 @@ const LEGACY_PRODUCT_BRAND_PATTERNS = [
   /【\s*彪维\s*】/gi,
   /我公司彪维/gi
 ];
-const MANAGED_STATIC_ROOT_FILES = ['index.html', 'contact.html', 'msg.html', 'sitemap.xml', 'robots.txt'];
+const MANAGED_STATIC_ROOT_FILES = ['index.html', 'contact.html', 'msg.html', 'sitemap.xml', 'robots.txt', 'llms.txt', 'llms-full.txt', 'index.md'];
 const MANAGED_STATIC_DIRS = ['about', 'news', 'product', 'products', 'service', 'valve'];
 const CMS_TEMPLATE_BY_PAGE = {
   'legacy-home': 'home_default',
@@ -78,11 +79,14 @@ const {
 
 export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cleanExisting = false } = {}) {
   getDb();
-  ensureTemplatesSchema();
-
   const normalizedOutputRoot = path.resolve(outputRoot);
   const requestedSections = normalizeSections(sections);
   const results = [];
+  const requiresTemplateRuntime = Array.from(requestedSections).some((section) => !['robots', 'sitemap', 'llms'].includes(section));
+
+  if (requiresTemplateRuntime) {
+    ensureTemplatesSchema();
+  }
 
   fs.mkdirSync(normalizedOutputRoot, { recursive: true });
   if (cleanExisting) {
@@ -128,6 +132,9 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
   }
   if (requestedSections.has('sitemap')) {
     results.push(buildSitemap({ outputRoot: normalizedOutputRoot }));
+  }
+  if (requestedSections.has('llms')) {
+    results.push(buildLlmsFiles({ outputRoot: normalizedOutputRoot }));
   }
   buildRegisteredTsxAssets(normalizedOutputRoot);
 
@@ -1516,7 +1523,8 @@ function normalizeSections(sections) {
     'product-lists',
     'product-details',
     'robots',
-    'sitemap'
+    'sitemap',
+    'llms'
   ];
   if (!sections) {
     return new Set(defaults);
@@ -1542,6 +1550,8 @@ function cleanupManagedStaticFiles(outputRoot) {
     }
     cleanupHtmlFilesRecursive(dirPath);
   }
+
+  cleanupManagedSitemapChunks(outputRoot);
 }
 
 function cleanupHtmlFilesRecursive(currentPath) {
@@ -1557,8 +1567,19 @@ function cleanupHtmlFilesRecursive(currentPath) {
     }
 
     const extension = path.extname(entry.name).toLowerCase();
-    if (extension === '.html' || extension === '.htm') {
+    if (extension === '.html' || extension === '.htm' || extension === '.md') {
       fs.unlinkSync(fullPath);
+    }
+  }
+}
+
+function cleanupManagedSitemapChunks(outputRoot) {
+  for (const entry of fs.readdirSync(outputRoot, { withFileTypes: true })) {
+    if (!entry.isFile()) {
+      continue;
+    }
+    if (/^sitemap-\d+\.xml$/i.test(entry.name)) {
+      fs.unlinkSync(path.resolve(outputRoot, entry.name));
     }
   }
 }

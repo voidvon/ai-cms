@@ -4,7 +4,9 @@ import { queryAll } from '../db.mjs';
 import { getSiteConfig } from './site.mjs';
 import { listColumns } from './columns.mjs';
 import { listNewsCategories } from './news-categories.mjs';
+import { ensureCorporationCategoriesSchema } from './corporation-categories.mjs';
 import { listProductCategories } from './product-categories.mjs';
+import { ensureProductsSchema } from './products.mjs';
 import { escapeHtml } from '../utils/html.mjs';
 
 const PRODUCT_LIST_PAGE_SIZE = 14;
@@ -12,6 +14,7 @@ const NEWS_LIST_PAGE_SIZE = 6;
 const CORPORATION_ROOT_ID = 32;
 const NEWS_ROOT_ID = 4;
 const SERVICE_ROOT_ID = 12;
+const SITEMAP_CHUNK_SIZE = 1000;
 
 export function buildSitemap({ outputRoot, generatedAt = new Date().toISOString() }) {
   const site = getSiteConfig();
@@ -29,26 +32,85 @@ export function buildSitemap({ outputRoot, generatedAt = new Date().toISOString(
   }
 
   const urls = collectSitemapEntries({ siteUrl, generatedAt });
-  const xml = renderSitemapXml(urls);
+  const chunks = chunkEntries(urls, SITEMAP_CHUNK_SIZE);
+  const sitemapFiles = [];
+
+  fs.mkdirSync(outputRoot, { recursive: true });
+  cleanupExistingSitemapFiles(outputRoot);
+
+  chunks.forEach((chunk, index) => {
+    const fileName = `sitemap-${index + 1}.xml`;
+    const filePath = path.resolve(outputRoot, fileName);
+    fs.writeFileSync(filePath, renderSitemapXml(chunk), 'utf8');
+    sitemapFiles.push({
+      loc: `${siteUrl}/${fileName}`,
+      lastmod: resolveChunkLastmod(chunk, generatedAt)
+    });
+  });
+
+  const indexXml = renderSitemapIndexXml(sitemapFiles);
   const filePath = path.resolve(outputRoot, 'sitemap.xml');
-  fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, xml, 'utf8');
+  fs.writeFileSync(filePath, indexXml, 'utf8');
 
   return {
     key: 'sitemap',
     label: '站点地图',
     recordsProcessed: urls.length,
-    filesWritten: 1
+    filesWritten: sitemapFiles.length + 1
+  };
+}
+
+export function getSitemapDiagnostics({ generatedAt = new Date().toISOString() } = {}) {
+  const site = getSiteConfig();
+  const siteUrl = normalizeSiteUrl(site.web_url);
+  const urls = siteUrl ? collectSitemapEntries({ siteUrl, generatedAt }) : [];
+  const chunks = chunkEntries(urls, SITEMAP_CHUNK_SIZE);
+  const products = queryAll(`
+    SELECT id, updated_at
+    FROM products
+    WHERE is_visible = 1
+    ORDER BY id ASC
+  `);
+  const corporationCategories = queryAll(`
+    SELECT id, name, updated_at
+    FROM corporation_categories
+    WHERE coalesce(is_external, 0) = 0
+    ORDER BY id ASC
+  `);
+
+  return {
+    generated_at: generatedAt,
+    site_url: site.web_url || '',
+    normalized_site_url: siteUrl,
+    total_urls: urls.length,
+    chunk_size: SITEMAP_CHUNK_SIZE,
+    chunk_count: urls.length > 0 ? chunks.length : 0,
+    sitemap_index_url: siteUrl ? `${siteUrl}/sitemap.xml` : '',
+    page_type_counts: buildPageTypeCounts(urls),
+    recent_urls: urls.slice(0, 20),
+    warnings: buildDiagnosticWarnings({
+      siteUrl,
+      products,
+      corporationCategories
+    }),
+    chunk_files: chunks.map((chunk, index) => ({
+      file_name: `sitemap-${index + 1}.xml`,
+      url_count: chunk.length,
+      lastmod: resolveChunkLastmod(chunk, generatedAt)
+    }))
   };
 }
 
 function collectSitemapEntries({ siteUrl, generatedAt }) {
+  ensureProductsSchema();
+  ensureCorporationCategoriesSchema();
+
   const entries = new Map();
   const columns = listColumns();
   const productCategories = listProductCategories();
   const newsCategories = listNewsCategories();
   const products = queryAll(`
-    SELECT id, category_id, is_visible
+    SELECT id, category_id, is_visible, updated_at
     FROM products
     WHERE is_visible = 1
     ORDER BY sort_order ASC, id DESC
@@ -59,14 +121,16 @@ function collectSitemapEntries({ siteUrl, generatedAt }) {
     ORDER BY coalesce(created_at, '') DESC, id DESC
   `);
   const corporationCategories = queryAll(`
-    SELECT id, parent_id, is_external
+    SELECT id, parent_id, is_external, updated_at
     FROM corporation_categories
     WHERE coalesce(is_external, 0) = 0
     ORDER BY parent_id ASC, sort_order ASC, id ASC
   `);
   const productCountByCategory = buildDescendantProductCountMap(productCategories, products);
+  const latestProductDateByCategory = buildDescendantLatestDateMap(productCategories, products, generatedAt);
   const newsCountByCategory = buildCountMap(newsItems, (item) => toInteger(item.category_id, 0));
-  const latestNewsDateByCategory = buildLatestDateMap(newsItems, (item) => toInteger(item.category_id, 0), generatedAt);
+  const latestNewsDateByCategory = buildLatestDateMap(newsItems, (item) => toInteger(item.category_id, 0), 'created_at', generatedAt);
+  const corporationLatestDateById = buildCorporationLatestDateMap(corporationCategories, generatedAt);
   const corporationIndexId = corporationCategories.find((item) => toInteger(item.parent_id, 0) === CORPORATION_ROOT_ID)?.id
     ?? corporationCategories[0]?.id
     ?? null;
@@ -88,12 +152,12 @@ function collectSitemapEntries({ siteUrl, generatedAt }) {
   }
 
   if (corporationIndexId != null) {
-    addEntry(entries, siteUrl, '/about/index.html', generatedAt);
+    addEntry(entries, siteUrl, '/about/index.html', corporationLatestDateById.get(toInteger(corporationIndexId, 0)) || generatedAt);
   }
   for (const item of corporationCategories) {
     const id = toInteger(item.id, 0);
     if (id > 0) {
-      addEntry(entries, siteUrl, `/about/about-${id}.html`, generatedAt);
+      addEntry(entries, siteUrl, `/about/about-${id}.html`, corporationLatestDateById.get(id) || item.updated_at || generatedAt);
     }
   }
 
@@ -128,7 +192,7 @@ function collectSitemapEntries({ siteUrl, generatedAt }) {
     }
   }
 
-  addEntry(entries, siteUrl, '/valve/index.html', generatedAt);
+  addEntry(entries, siteUrl, '/valve/index.html', latestProductDateByCategory.get(0) || generatedAt);
   for (const category of productCategories) {
     const categoryId = toInteger(category.id, 0);
     if (categoryId <= 0) {
@@ -136,15 +200,16 @@ function collectSitemapEntries({ siteUrl, generatedAt }) {
     }
     const total = productCountByCategory.get(categoryId) || 0;
     const pageCount = Math.max(Math.ceil(total / PRODUCT_LIST_PAGE_SIZE), 1);
-    addEntry(entries, siteUrl, `/valve/${categoryId}.html`, generatedAt);
-    addEntry(entries, siteUrl, `/valve/${categoryId}-1.html`, generatedAt);
+    const lastmod = latestProductDateByCategory.get(categoryId) || generatedAt;
+    addEntry(entries, siteUrl, `/valve/${categoryId}.html`, lastmod);
+    addEntry(entries, siteUrl, `/valve/${categoryId}-1.html`, lastmod);
     for (let pageNumber = 2; pageNumber <= pageCount; pageNumber += 1) {
-      addEntry(entries, siteUrl, `/valve/${categoryId}-${pageNumber}.html`, generatedAt);
+      addEntry(entries, siteUrl, `/valve/${categoryId}-${pageNumber}.html`, lastmod);
     }
   }
 
   for (const product of products) {
-    addEntry(entries, siteUrl, `/product/${product.id}.html`, generatedAt);
+    addEntry(entries, siteUrl, `/product/${product.id}.html`, product.updated_at || generatedAt);
   }
 
   return Array.from(entries.values());
@@ -278,17 +343,98 @@ function buildCountMap(items, keyFn) {
   return counts;
 }
 
-function buildLatestDateMap(items, keyFn, fallbackDate) {
+function buildLatestDateMap(items, keyFn, dateField, fallbackDate) {
   const latest = new Map();
   for (const item of items) {
     const key = keyFn(item);
-    const current = toSitemapDate(item.created_at || fallbackDate);
+    const current = toSitemapDate(item[dateField] || fallbackDate);
     const previous = latest.get(key);
     if (!previous || current > previous) {
       latest.set(key, current);
     }
   }
   return latest;
+}
+
+function buildDescendantLatestDateMap(categories, products, fallbackDate) {
+  const childrenByParent = new Map();
+  for (const category of categories) {
+    const parentId = toInteger(category.parent_id, 0);
+    if (!childrenByParent.has(parentId)) {
+      childrenByParent.set(parentId, []);
+    }
+    childrenByParent.get(parentId).push(category);
+  }
+
+  const directLatest = new Map();
+  for (const product of products) {
+    const categoryId = toInteger(product.category_id, 0);
+    const current = toSitemapDate(product.updated_at || fallbackDate);
+    const previous = directLatest.get(categoryId);
+    if (!previous || current > previous) {
+      directLatest.set(categoryId, current);
+    }
+  }
+
+  const result = new Map();
+  function resolveLatest(categoryId) {
+    if (result.has(categoryId)) {
+      return result.get(categoryId);
+    }
+
+    let latest = directLatest.get(categoryId) || null;
+    for (const child of childrenByParent.get(categoryId) || []) {
+      const childLatest = resolveLatest(toInteger(child.id, 0));
+      if (childLatest && (!latest || childLatest > latest)) {
+        latest = childLatest;
+      }
+    }
+
+    result.set(categoryId, latest || toSitemapDate(fallbackDate));
+    return result.get(categoryId);
+  }
+
+  resolveLatest(0);
+  for (const category of categories) {
+    resolveLatest(toInteger(category.id, 0));
+  }
+  return result;
+}
+
+function buildCorporationLatestDateMap(categories, fallbackDate) {
+  const categoryMap = new Map(categories.map((item) => [toInteger(item.id, 0), item]));
+  const childrenByParent = new Map();
+  for (const category of categories) {
+    const parentId = toInteger(category.parent_id, 0);
+    if (!childrenByParent.has(parentId)) {
+      childrenByParent.set(parentId, []);
+    }
+    childrenByParent.get(parentId).push(category);
+  }
+
+  const result = new Map();
+  function resolveLatest(categoryId) {
+    if (result.has(categoryId)) {
+      return result.get(categoryId);
+    }
+
+    const currentCategory = categoryMap.get(categoryId) || null;
+    let latest = currentCategory ? toSitemapDate(currentCategory.updated_at || fallbackDate) : null;
+    for (const child of childrenByParent.get(categoryId) || []) {
+      const childLatest = resolveLatest(toInteger(child.id, 0));
+      if (childLatest && (!latest || childLatest > latest)) {
+        latest = childLatest;
+      }
+    }
+
+    result.set(categoryId, latest || toSitemapDate(fallbackDate));
+    return result.get(categoryId);
+  }
+
+  for (const category of categories) {
+    resolveLatest(toInteger(category.id, 0));
+  }
+  return result;
 }
 
 function getNewsCategoryParentId(categories, categoryId) {
@@ -300,6 +446,134 @@ function renderSitemapXml(entries) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map((entry) => (
     `  <url>\n    <loc>${escapeHtml(entry.loc)}</loc>\n    <lastmod>${escapeHtml(entry.lastmod)}</lastmod>\n  </url>`
   )).join('\n')}\n</urlset>\n`;
+}
+
+function renderSitemapIndexXml(files) {
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${files.map((file) => (
+    `  <sitemap>\n    <loc>${escapeHtml(file.loc)}</loc>\n    <lastmod>${escapeHtml(file.lastmod)}</lastmod>\n  </sitemap>`
+  )).join('\n')}\n</sitemapindex>\n`;
+}
+
+function buildDiagnosticWarnings({ siteUrl, products, corporationCategories }) {
+  const warnings = [];
+
+  if (!siteUrl) {
+    warnings.push({
+      level: 'error',
+      code: 'missing_site_url',
+      message: '网站地址未配置或格式无效，无法生成可提交搜索引擎的 sitemap'
+    });
+  }
+
+  const productsMissingUpdatedAt = products.filter((item) => !String(item.updated_at || '').trim());
+  if (productsMissingUpdatedAt.length > 0) {
+    warnings.push({
+      level: 'warning',
+      code: 'products_missing_updated_at',
+      message: `有 ${productsMissingUpdatedAt.length} 条产品缺少 updated_at，lastmod 将回退到构建时间`,
+      sample_ids: productsMissingUpdatedAt.slice(0, 10).map((item) => item.id)
+    });
+  }
+
+  const corporationMissingUpdatedAt = corporationCategories.filter((item) => !String(item.updated_at || '').trim());
+  if (corporationMissingUpdatedAt.length > 0) {
+    warnings.push({
+      level: 'warning',
+      code: 'corporation_missing_updated_at',
+      message: `有 ${corporationMissingUpdatedAt.length} 个公司栏目缺少 updated_at，lastmod 将回退到构建时间`,
+      sample_ids: corporationMissingUpdatedAt.slice(0, 10).map((item) => item.id)
+    });
+  }
+
+  return warnings;
+}
+
+function buildPageTypeCounts(urls) {
+  const counts = {
+    home: 0,
+    contact: 0,
+    message: 0,
+    corporation: 0,
+    news_list: 0,
+    news_detail: 0,
+    service_list: 0,
+    service_detail: 0,
+    product_list: 0,
+    product_detail: 0,
+    single_page: 0,
+    other: 0
+  };
+
+  for (const entry of urls) {
+    const url = entry.loc || '';
+    if (url.endsWith('/index.html') || url.endsWith('/')) {
+      if (url.endsWith('/about/index.html')) {
+        counts.corporation += 1;
+      } else if (url.endsWith('/news/index.html') || url.endsWith('/news/')) {
+        counts.news_list += 1;
+      } else if (url.endsWith('/service/index.html') || url.endsWith('/service/')) {
+        counts.service_list += 1;
+      } else if (url.endsWith('/valve/index.html')) {
+        counts.product_list += 1;
+      } else if (url.endsWith('/index.html') || url.endsWith('/')) {
+        counts.home += 1;
+      }
+      continue;
+    }
+
+    if (url.includes('/contact.html')) {
+      counts.contact += 1;
+    } else if (url.includes('/msg.html')) {
+      counts.message += 1;
+    } else if (url.includes('/about/about-')) {
+      counts.corporation += 1;
+    } else if (url.includes('/news/detail/')) {
+      counts.news_detail += 1;
+    } else if (url.includes('/news/')) {
+      counts.news_list += 1;
+    } else if (url.includes('/service/detail/')) {
+      counts.service_detail += 1;
+    } else if (url.includes('/service/')) {
+      counts.service_list += 1;
+    } else if (url.includes('/product/')) {
+      counts.product_detail += 1;
+    } else if (url.includes('/valve/')) {
+      counts.product_list += 1;
+    } else {
+      counts.single_page += 1;
+    }
+  }
+
+  return counts;
+}
+
+function chunkEntries(entries, size) {
+  const chunks = [];
+  for (let index = 0; index < entries.length; index += size) {
+    chunks.push(entries.slice(index, index + size));
+  }
+  return chunks.length > 0 ? chunks : [[]];
+}
+
+function resolveChunkLastmod(entries, fallbackDate) {
+  let latest = toSitemapDate(fallbackDate);
+  for (const entry of entries) {
+    if (entry.lastmod && entry.lastmod > latest) {
+      latest = entry.lastmod;
+    }
+  }
+  return latest;
+}
+
+function cleanupExistingSitemapFiles(outputRoot) {
+  for (const entry of fs.readdirSync(outputRoot, { withFileTypes: true })) {
+    if (!entry.isFile()) {
+      continue;
+    }
+    if (entry.name === 'sitemap.xml' || /^sitemap-\d+\.xml$/i.test(entry.name)) {
+      fs.unlinkSync(path.resolve(outputRoot, entry.name));
+    }
+  }
 }
 
 function toInteger(value, fallback = 0) {

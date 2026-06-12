@@ -1,6 +1,26 @@
-import { execute, queryAll, queryOne } from '../db.mjs';
+import { execute, getDb, queryAll, queryOne } from '../db.mjs';
+
+let schemaEnsured = false;
+
+export function ensureCorporationCategoriesSchema() {
+  if (schemaEnsured) {
+    return;
+  }
+
+  addColumnIfMissing('corporation_categories', 'updated_at', 'TEXT');
+  execute(
+    `
+      UPDATE corporation_categories
+      SET updated_at = COALESCE(NULLIF(updated_at, ''), CURRENT_TIMESTAMP)
+      WHERE updated_at IS NULL OR trim(updated_at) = ''
+    `
+  );
+
+  schemaEnsured = true;
+}
 
 export function listCorporationCategoriesAdmin({ parentId = 0 } = {}) {
+  ensureCorporationCategoriesSchema();
   const safeParentId = Number.parseInt(String(parentId), 10) || 0;
   return queryAll(
     `
@@ -11,6 +31,7 @@ export function listCorporationCategoriesAdmin({ parentId = 0 } = {}) {
         c.sort_order,
         c.is_external,
         c.external_url,
+        c.updated_at,
         c.legacy_extra,
         (
           SELECT COUNT(*)
@@ -26,6 +47,7 @@ export function listCorporationCategoriesAdmin({ parentId = 0 } = {}) {
 }
 
 export function listRootCorporationCategories() {
+  ensureCorporationCategoriesSchema();
   return queryAll(
     `
       SELECT
@@ -35,6 +57,7 @@ export function listRootCorporationCategories() {
         sort_order,
         is_external,
         external_url,
+        updated_at,
         legacy_extra
       FROM corporation_categories
       WHERE parent_id = 0
@@ -44,6 +67,7 @@ export function listRootCorporationCategories() {
 }
 
 export function getCorporationCategoryById(id) {
+  ensureCorporationCategoriesSchema();
   const row = queryOne(
     `
       SELECT
@@ -53,6 +77,7 @@ export function getCorporationCategoryById(id) {
         sort_order,
         is_external,
         external_url,
+        updated_at,
         legacy_extra
       FROM corporation_categories
       WHERE id = ?
@@ -63,6 +88,7 @@ export function getCorporationCategoryById(id) {
 }
 
 export function getNextCorporationCategorySortOrder(parentId = 0) {
+  ensureCorporationCategoriesSchema();
   const safeParentId = Number.parseInt(String(parentId), 10) || 0;
   const maxValue = queryOne(
     `
@@ -76,7 +102,9 @@ export function getNextCorporationCategorySortOrder(parentId = 0) {
 }
 
 export function createCorporationCategory(input) {
+  ensureCorporationCategoriesSchema();
   const payload = normalizeCorporationCategoryInput(input);
+  const now = new Date().toISOString();
   const result = execute(
     `
       INSERT INTO corporation_categories (
@@ -85,8 +113,9 @@ export function createCorporationCategory(input) {
         sort_order,
         is_external,
         external_url,
+        updated_at,
         legacy_extra
-      ) VALUES (?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
     [
       payload.name,
@@ -94,6 +123,7 @@ export function createCorporationCategory(input) {
       payload.sort_order,
       payload.is_external,
       payload.external_url,
+      now,
       payload.legacy_extra
     ]
   );
@@ -102,12 +132,14 @@ export function createCorporationCategory(input) {
 }
 
 export function updateCorporationCategory(id, input) {
+  ensureCorporationCategoriesSchema();
   const existing = getCorporationCategoryById(id);
   if (!existing) {
     return null;
   }
 
   const payload = normalizeCorporationCategoryInput({ ...existing, ...input }, { currentId: id, existing });
+  const now = new Date().toISOString();
   execute(
     `
       UPDATE corporation_categories
@@ -117,6 +149,7 @@ export function updateCorporationCategory(id, input) {
         sort_order = ?,
         is_external = ?,
         external_url = ?,
+        updated_at = ?,
         legacy_extra = ?
       WHERE id = ?
     `,
@@ -126,6 +159,7 @@ export function updateCorporationCategory(id, input) {
       payload.sort_order,
       payload.is_external,
       payload.external_url,
+      now,
       payload.legacy_extra,
       id
     ]
@@ -135,16 +169,18 @@ export function updateCorporationCategory(id, input) {
 }
 
 export function updateCorporationCategoryContent(id, contentHtml) {
+  ensureCorporationCategoriesSchema();
   const existing = getCorporationCategoryById(id);
   if (!existing) {
     return null;
   }
 
   const legacyExtra = parseLegacyExtra(existing.legacy_extra);
+  const now = new Date().toISOString();
   execute(
     `
       UPDATE corporation_categories
-      SET legacy_extra = ?
+      SET legacy_extra = ?, updated_at = ?
       WHERE id = ?
     `,
     [
@@ -152,6 +188,7 @@ export function updateCorporationCategoryContent(id, contentHtml) {
         ...legacyExtra,
         Centern: String(contentHtml ?? '')
       }),
+      now,
       id
     ]
   );
@@ -160,6 +197,7 @@ export function updateCorporationCategoryContent(id, contentHtml) {
 }
 
 export function deleteCorporationCategory(id) {
+  ensureCorporationCategoriesSchema();
   const existing = getCorporationCategoryById(id);
   if (!existing) {
     return null;
@@ -245,4 +283,12 @@ function toBooleanInt(value, fallback = 0) {
     return 0;
   }
   return toInteger(value, fallback) === 0 ? 0 : 1;
+}
+
+function addColumnIfMissing(tableName, columnName, definition) {
+  const columns = queryAll(`PRAGMA table_info(${tableName})`);
+  if (columns.some((column) => column.name === columnName)) {
+    return;
+  }
+  getDb().exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
 }

@@ -10,6 +10,8 @@ import ContentModelsPage from '@/pages/ContentModelsPage'
 import AdminsPage from '@/pages/AdminsPage'
 import StaticGenerationPage from '@/pages/StaticGenerationPage'
 import SiteConfigPage from '@/pages/SiteConfigPage'
+import SitemapDiagnosticsPage from '@/pages/SitemapDiagnosticsPage'
+import LlmsDiagnosticsPage from '@/pages/LlmsDiagnosticsPage'
 
 function App() {
   return (
@@ -30,6 +32,8 @@ function App() {
           <Route path="admins" element={<AdminsPage />} />
           <Route path="static-gen" element={<StaticGenerationPage />} />
           <Route path="site-config" element={<SiteConfigPage />} />
+          <Route path="sitemap-diagnostics" element={<SitemapDiagnosticsPage />} />
+          <Route path="llms-diagnostics" element={<LlmsDiagnosticsPage />} />
         </Route>
       </Routes>
       <Toaster />

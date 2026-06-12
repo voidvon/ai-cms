@@ -1,4 +1,4 @@
-import { execute, queryAll, queryOne } from '../db.mjs';
+import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { markMediaAssetStatusByPath } from './media-assets.mjs';
 import { looksLikeLegacyMojibake } from '../utils/legacy-text.mjs';
 
@@ -15,8 +15,27 @@ const LEGACY_PRODUCT_BRAND_PATTERNS = [
   /[-,，\s]*中国驰名商标/gi
 ];
 const DEFAULT_PRODUCT_IMAGE = '/skin/dfpic.gif';
+let schemaEnsured = false;
+
+export function ensureProductsSchema() {
+  if (schemaEnsured) {
+    return;
+  }
+
+  addColumnIfMissing('products', 'updated_at', 'TEXT');
+  execute(
+    `
+      UPDATE products
+      SET updated_at = COALESCE(NULLIF(updated_at, ''), CURRENT_TIMESTAMP)
+      WHERE updated_at IS NULL OR trim(updated_at) = ''
+    `
+  );
+
+  schemaEnsured = true;
+}
 
 export function listProducts({ featured = false, visibleOnly = true, limit = 20 } = {}) {
+  ensureProductsSchema();
   const safeLimit = clampLimit(limit);
   const whereParts = [];
   const params = [];
@@ -42,7 +61,8 @@ export function listProducts({ featured = false, visibleOnly = true, limit = 20 
         keywords,
         is_featured_home,
         is_visible,
-        sort_order
+        sort_order,
+        updated_at
       FROM products
       ${where}
       ORDER BY sort_order ASC, id DESC
@@ -53,6 +73,7 @@ export function listProducts({ featured = false, visibleOnly = true, limit = 20 
 }
 
 export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, includeDescendants = false } = {}) {
+  ensureProductsSchema();
   const safeLimit = Math.min(Math.max(Number.parseInt(String(limit), 10) || 50, 1), 200);
   const safePage = Math.max(Number.parseInt(String(page), 10) || 1, 1);
   const safeCategoryId = Number.parseInt(String(categoryId ?? ''), 10);
@@ -96,6 +117,7 @@ export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, inc
         p.is_featured_home,
         p.is_visible,
         p.sort_order,
+        p.updated_at,
         c.name AS category_name
       FROM products p
       LEFT JOIN product_categories c ON c.id = p.category_id
@@ -128,6 +150,7 @@ export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, inc
 }
 
 export function getProductById(id) {
+  ensureProductsSchema();
   return normalizeProductRecord(queryOne(
     `
       SELECT
@@ -141,7 +164,8 @@ export function getProductById(id) {
         keywords,
         is_featured_home,
         is_visible,
-        sort_order
+        sort_order,
+        updated_at
       FROM products
       WHERE id = ?
     `,
@@ -150,6 +174,7 @@ export function getProductById(id) {
 }
 
 export function searchProducts(rawQuery, limit = 20) {
+  ensureProductsSchema();
   const normalizedQuery = String(rawQuery ?? '').trim();
   const safeLimit = clampLimit(limit);
 
@@ -171,7 +196,8 @@ export function searchProducts(rawQuery, limit = 20) {
         keywords,
         is_featured_home,
         is_visible,
-        sort_order
+        sort_order,
+        updated_at
       FROM products
       WHERE is_visible = 1
         AND (
@@ -187,6 +213,7 @@ export function searchProducts(rawQuery, limit = 20) {
 }
 
 export function searchProductsPaged(rawQuery, { page = 1, limit = 20 } = {}) {
+  ensureProductsSchema();
   const normalizedQuery = String(rawQuery ?? '').trim();
   const safeLimit = Math.min(Math.max(Number.parseInt(String(limit), 10) || 20, 1), 200);
   const safePage = Math.max(Number.parseInt(String(page), 10) || 1, 1);
@@ -206,7 +233,8 @@ export function searchProductsPaged(rawQuery, { page = 1, limit = 20 } = {}) {
           keywords,
           is_featured_home,
           is_visible,
-          sort_order
+          sort_order,
+          updated_at
         FROM products
         WHERE is_visible = 1
         ORDER BY sort_order ASC, id DESC
@@ -242,7 +270,8 @@ export function searchProductsPaged(rawQuery, { page = 1, limit = 20 } = {}) {
         keywords,
         is_featured_home,
         is_visible,
-        sort_order
+        sort_order,
+        updated_at
       FROM products
       WHERE is_visible = 1
         AND (
@@ -283,7 +312,9 @@ export function searchProductsPaged(rawQuery, { page = 1, limit = 20 } = {}) {
 }
 
 export function createProduct(input) {
+  ensureProductsSchema();
   const payload = normalizeProductInput(input);
+  const now = new Date().toISOString();
   const result = execute(
     `
       INSERT INTO products (
@@ -296,7 +327,8 @@ export function createProduct(input) {
         keywords,
         is_featured_home,
         is_visible,
-        sort_order
+        sort_order,
+        updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
@@ -309,7 +341,8 @@ export function createProduct(input) {
       payload.keywords,
       payload.is_featured_home,
       payload.is_visible,
-      payload.sort_order
+      payload.sort_order,
+      now
     ]
   );
 
@@ -319,17 +352,20 @@ export function createProduct(input) {
 }
 
 export function getNextProductSortOrder() {
+  ensureProductsSchema();
   const maxValue = queryOne('SELECT MAX(sort_order) AS value FROM products')?.value;
   return Number.isInteger(maxValue) ? maxValue + 1 : 1;
 }
 
 export function updateProduct(id, input) {
+  ensureProductsSchema();
   const existing = getProductById(id);
   if (!existing) {
     return null;
   }
 
   const payload = normalizeProductInput({ ...existing, ...input });
+  const now = new Date().toISOString();
   execute(
     `
       UPDATE products
@@ -343,7 +379,8 @@ export function updateProduct(id, input) {
         keywords = ?,
         is_featured_home = ?,
         is_visible = ?,
-        sort_order = ?
+        sort_order = ?,
+        updated_at = ?
       WHERE id = ?
     `,
     [
@@ -357,6 +394,7 @@ export function updateProduct(id, input) {
       payload.is_featured_home,
       payload.is_visible,
       payload.sort_order,
+      now,
       id
     ]
   );
@@ -371,6 +409,7 @@ export function updateProduct(id, input) {
 }
 
 export function deleteProduct(id) {
+  ensureProductsSchema();
   const existing = getProductById(id);
   if (!existing) {
     return null;
@@ -403,6 +442,14 @@ export function normalizeProductInput(input) {
 
 function clampLimit(limit) {
   return Math.min(Math.max(Number.parseInt(String(limit), 10) || 20, 1), 10000);
+}
+
+function addColumnIfMissing(tableName, columnName, definition) {
+  const columns = queryAll(`PRAGMA table_info(${tableName})`);
+  if (columns.some((column) => column.name === columnName)) {
+    return;
+  }
+  getDb().exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
 }
 
 function markProductCoverActive(relativePath) {

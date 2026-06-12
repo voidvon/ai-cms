@@ -73,6 +73,8 @@ export async function createApp(options = {}) {
   await app.register(import('./routes/api/uploads.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/admin.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/site-config.mjs'), { prefix: '/api' });
+  await app.register(import('./routes/api/sitemap.mjs'), { prefix: '/api' });
+  await app.register(import('./routes/api/llms.mjs'), { prefix: '/api' });
   await app.register(import('./routes/admin/static-gen.mjs'), { prefix: '/admin' });
   await app.register(import('./routes/legacy.mjs'));
 

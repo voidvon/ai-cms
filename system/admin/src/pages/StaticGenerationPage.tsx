@@ -68,6 +68,11 @@ export default function StaticGenerationPage() {
       { label: '生成服务分类列表', value: 'service-lists' },
       { label: '生成服务详情页', value: 'service-details' },
     ]},
+    { title: '索引与 AI 文件', items: [
+      { label: '生成 robots.txt', value: 'robots' },
+      { label: '生成 sitemap.xml', value: 'sitemap' },
+      { label: '生成 LLMS 文件', value: 'llms' },
+    ]},
   ]
 
   return (
