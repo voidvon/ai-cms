@@ -86,7 +86,7 @@ npm start
 发布服务器推荐上传根目录 `dist/` 内的内容，不上传本地 `html/`。服务器准备或保留 `data/site.sqlite` 后，运行 `npm run build:site` 现场生成前台 HTML，再启动服务。
 
 ```bash
-# 安装依赖
+# 在根目录安装 workspace 依赖
 npm install
 
 # 初始化数据库

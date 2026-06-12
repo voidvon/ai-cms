@@ -38,7 +38,6 @@ async function copyDir(sourceRelativePath, targetRelativePath = sourceRelativePa
 
 async function copyServer() {
   await copyDir('system/server/package.json');
-  await copyDir('system/server/package-lock.json');
   await copyDir('system/server/src');
   await copyDir('system/server/scripts');
   await copyDir('system/server/schema');
@@ -53,7 +52,6 @@ async function copyAdminDist() {
 
 async function copyAdminSiteSource() {
   await copyDir('system/admin/package.json');
-  await copyDir('system/admin/package-lock.json');
   await copyDir('system/admin/src/site');
   await copyDir('system/admin/tsconfig.json');
   await copyDir('system/admin/tsconfig.node.json');
@@ -95,8 +93,8 @@ This directory is the deployable runtime package.
 ## Server Steps
 
 \`\`\`bash
-npm --prefix system/server install --omit=dev
-npm --prefix system/admin install
+npm install
+npm --workspace system/server install --omit=dev
 npm run build:site
 PORT=3000 HOST=0.0.0.0 NODE_ENV=production npm start
 \`\`\`

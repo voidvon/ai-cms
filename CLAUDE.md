@@ -32,8 +32,11 @@ npm run build:site           # Generate only html/
 Server maintenance commands run through `system/server/`:
 
 ```bash
-# Install server dependencies
-npm --prefix system/server install
+# Install all workspace dependencies from the root
+npm install
+
+# Install only server dependencies
+npm install -w system/server
 
 # Database management
 npm --prefix system/server run db:init              # Initialize SQLite database from schema
@@ -56,7 +59,8 @@ Deployment package flow:
 npm run build
 
 # Server, after uploading dist/ contents
-npm --prefix system/server install --omit=dev
+npm install
+npm install -w system/server --omit=dev
 npm run build:site
 PORT=3000 HOST=0.0.0.0 NODE_ENV=production npm start
 ```

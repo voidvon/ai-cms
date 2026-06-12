@@ -24,13 +24,14 @@
 - 仅构建后台前端：`npm run build:admin`
 - 仅生成前台静态页：`npm run build:site`
 
-- 后端安装依赖：`npm --prefix system/server install`
+- 根目录安装全部依赖：`npm install`
+- 后端安装依赖：`npm install -w system/server`
 - 启动后端开发服务：`npm --prefix system/server run dev`
 - 初始化 SQLite：`npm --prefix system/server run db:init`
 - 创建后台管理员：`npm --prefix system/server run admin:create -- <username> <password>`
 - 执行静态生成：`npm --prefix system/server run build:static`
 - 输出到调试目录：`STATIC_OUTPUT_DIR=generated-debug npm --prefix system/server run build:static`
-- 前端安装依赖：`npm --prefix system/admin install`
+- 前端安装依赖：`npm install -w system/admin`
 - 启动后台前端：`npm --prefix system/admin run dev`
 - 构建后台前端：`npm --prefix system/admin run build`
 - 检查后台前端 lint：`npm --prefix system/admin run lint`
@@ -44,7 +45,8 @@
 
 - 本地生成发布包：`npm run build`
 - 上传根目录 `dist/` 内的内容到服务器目标目录。
-- 服务器安装后端生产依赖：`npm --prefix system/server install --omit=dev`
+- 服务器安装根级依赖：`npm install`
+- 服务器精简后端为生产依赖：`npm install -w system/server --omit=dev`
 - 服务器准备运行数据库：保留或恢复 `data/site.sqlite`；全新环境可先执行 `npm run db:init` 并创建管理员。
 - 服务器生成前台静态内容：`npm run build:site`
 - 服务器启动统一入口：`PORT=3000 HOST=0.0.0.0 NODE_ENV=production npm start`

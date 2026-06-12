@@ -116,6 +116,6 @@ function loadSucrase() {
     cachedSucrase = adminRequire('sucrase');
     return cachedSucrase;
   } catch {
-    throw new Error('React site source renderer requires system/admin dependencies. Run npm --prefix system/admin install once on this server.');
+    throw new Error('React site source renderer requires system/admin dependencies. Run npm install in the project root once on this server.');
   }
 }

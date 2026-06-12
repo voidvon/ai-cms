@@ -1,11 +1,17 @@
 {
   "name": "www-spiraxsarcocn-root",
   "private": true,
+  "workspaces": [
+    "system/server",
+    "system/admin"
+  ],
   "scripts": {
     "start": "node server.mjs",
     "dev": "npm --prefix system/admin run build && node --watch server.mjs",
     "build:admin": "npm --prefix system/admin run build",
     "build:site": "npm --prefix system/server run build:static",
+    "db:init": "npm --prefix system/server run db:init",
+    "admin:create": "npm --prefix system/server run admin:create --",
     "build:dist": "npm run build:admin && node scripts/build-dist.mjs",
     "build": "npm run build:dist"
   }
