@@ -8,6 +8,8 @@ import { listNewsCategories } from './services/news-categories.mjs';
 import { listNews } from './services/news.mjs';
 import { listProductCategories } from './services/product-categories.mjs';
 import { listProducts } from './services/products.mjs';
+import { buildRobotsTxt } from './services/robots.mjs';
+import { buildSitemap } from './services/sitemap.mjs';
 import { getSiteConfig } from './services/site.mjs';
 import { ensureTemplatesSchema } from './services/templates.mjs';
 import { escapeHtml } from './utils/html.mjs';
@@ -33,7 +35,7 @@ const LEGACY_PRODUCT_BRAND_PATTERNS = [
   /【\s*彪维\s*】/gi,
   /我公司彪维/gi
 ];
-const MANAGED_STATIC_ROOT_FILES = ['index.html', 'contact.html', 'msg.html'];
+const MANAGED_STATIC_ROOT_FILES = ['index.html', 'contact.html', 'msg.html', 'sitemap.xml', 'robots.txt'];
 const MANAGED_STATIC_DIRS = ['about', 'news', 'product', 'products', 'service', 'valve'];
 const CMS_TEMPLATE_BY_PAGE = {
   'legacy-home': 'home_default',
@@ -120,6 +122,12 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
   }
   if (requestedSections.has('news-details')) {
     results.push(buildNewsDetailPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
+  }
+  if (requestedSections.has('robots')) {
+    results.push(buildRobotsTxt({ outputRoot: normalizedOutputRoot }));
+  }
+  if (requestedSections.has('sitemap')) {
+    results.push(buildSitemap({ outputRoot: normalizedOutputRoot }));
   }
   buildRegisteredTsxAssets(normalizedOutputRoot);
 
@@ -1222,7 +1230,7 @@ function buildLegacyNewsMenuItems(categories, rootId, dirName, activeId = 0) {
 function buildLegacyProductSmallCategories(categories) {
   let html = '<table width="95%" border="0" align="center" cellpadding="0" cellspacing="0"><tr><td><span class=abv>';
   categories.forEach((item) => {
-    html += `&nbsp;【<A href="/products/${item.id}.html" class="0a">${escapeHtml(item.name || '')}</a>】`;
+    html += `&nbsp;【<A href="/valve/${item.id}.html" class="0a">${escapeHtml(item.name || '')}</a>】`;
   });
   html += '</span></td></tr></table>';
   return html;
@@ -1233,7 +1241,7 @@ function buildLegacyProductMenuItems(categories, activeId = 0) {
     .filter(Boolean)
     .map((item) => ({
       label: item.name || '',
-      url: `/products/${normalizeInteger(item.id, 0)}.html`,
+      url: `/valve/${normalizeInteger(item.id, 0)}.html`,
       active: normalizeInteger(item.id, 0) === normalizeInteger(activeId, 0)
     }));
 }
@@ -1242,7 +1250,7 @@ function buildLegacyProductListItems(pageItems) {
   return pageItems.map((item, index) => ({
     id: item.id,
     name: item.name || '',
-    url: `/Product/${item.id}.html`,
+    url: `/product/${item.id}.html`,
     image: item.small_image || '/skin/dfpic.gif',
     summary: gotTopicLegacy(item.summary || '', 90),
     rowOpenHtml: index === 0 ? '<tr>' : '',
@@ -1398,7 +1406,7 @@ function buildLegacyIndexFeaturedProducts() {
   for (const item of items) {
     html += '<li>';
     html += `<img src="${escapeHtml(item.small_image || '/skin/dfpic.gif')}" width="120" height="120" border="0" alt="${escapeHtml(item.name || '')}">`;
-    html += `<li><a href="/Product/${item.id}.html" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${gotTopicLegacy(item.summary || '', 118)}</li>`;
+    html += `<li><a href="/product/${item.id}.html" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${gotTopicLegacy(item.summary || '', 118)}</li>`;
     html += '</li>';
   }
   return html;
@@ -1415,7 +1423,7 @@ function buildLegacyIndexFeaturedProductLinks() {
     `
   );
 
-  return items.map((item) => `<li><a href="/Product/${item.id}.html">${escapeHtml(item.name || '')}</a></li>`).join('');
+  return items.map((item) => `<li><a href="/product/${item.id}.html">${escapeHtml(item.name || '')}</a></li>`).join('');
 }
 
 function buildLegacyIndexNews() {
@@ -1471,7 +1479,7 @@ function buildLegacyMessageSidebarProducts() {
     html += '<tr>';
     html += `<td width="160" height="100" align="center"><img src="${escapeHtml(item.small_image || '/skin/dfpic.gif')}" alt="${escapeHtml(item.name || '')}" width="150" height="94" /></td>`;
     html += '</tr><tr>';
-    html += `<td><a href="/Product/${item.id}.html" class="0a">${escapeHtml(item.name || '')}</a></td>`;
+    html += `<td><a href="/product/${item.id}.html" class="0a">${escapeHtml(item.name || '')}</a></td>`;
     html += '</tr>';
   }
   html += '</table>';
@@ -1506,7 +1514,9 @@ function normalizeSections(sections) {
     'service-lists',
     'service-details',
     'product-lists',
-    'product-details'
+    'product-details',
+    'robots',
+    'sitemap'
   ];
   if (!sections) {
     return new Set(defaults);

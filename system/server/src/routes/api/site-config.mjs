@@ -20,7 +20,12 @@ export default async function siteConfigRoutes(app) {
   app.put('/site-config', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
-    const updated = updateSiteConfig(request.body);
-    return { success: true, data: updated };
+    try {
+      const updated = updateSiteConfig(request.body);
+      return { success: true, data: updated };
+    } catch (error) {
+      reply.code(400);
+      return { success: false, message: error.message || '网站配置更新失败' };
+    }
   });
 }

@@ -621,12 +621,12 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       bigId: category.parent_id || category.id,
       bigName: category.name,
       prodKeywords: category.seo_keywords || category.name,
-      productsSmallCatHtml: `<span class="abv">【<a href="/products/${category.id}.html">${escapeHtml(category.name)}</a>】</span>`,
+      productsSmallCatHtml: `<span class="abv">【<a href="/valve/${category.id}.html">${escapeHtml(category.name)}</a>】</span>`,
       secondaryMenuItems: buildPreviewProductMenuItems(category),
       items: products.map((item) => ({
         id: item.id,
         name: item.name || '',
-        url: `/Product/${item.id}.html`,
+        url: `/product/${item.id}.html`,
         image: item.small_image || '/skin/dfpic.gif',
         summary: item.summary || ''
       })),
@@ -1220,7 +1220,7 @@ function buildPreviewProductMenuItems(category) {
 
   return items.map((item) => ({
     label: item.name || '',
-    url: `/products/${toInteger(item.id, 0)}.html`,
+    url: `/valve/${toInteger(item.id, 0)}.html`,
     active: toInteger(item.id, 0) === toInteger(currentCategory?.id, 0)
   }));
 }
@@ -1238,12 +1238,12 @@ function parsePreviewLegacyExtra(value) {
 
 function buildPreviewFeaturedProductsHtml() {
   return getPreviewProducts(8).map((item) => (
-    `<li><img src="${escapeHtml(item.small_image || '/skin/dfpic.gif')}" width="120" height="120" border="0" alt="${escapeHtml(item.name || '')}"><li><a href="/Product/${item.id}.html" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${escapeHtml(item.summary || '')}</li></li>`
+    `<li><img src="${escapeHtml(item.small_image || '/skin/dfpic.gif')}" width="120" height="120" border="0" alt="${escapeHtml(item.name || '')}"><li><a href="/product/${item.id}.html" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${escapeHtml(item.summary || '')}</li></li>`
   )).join('');
 }
 
 function buildPreviewProductLinksHtml(limit = 8) {
-  return getPreviewProducts(limit).map((item) => `<li><a href="/Product/${item.id}.html">${escapeHtml(item.name || '')}</a></li>`).join('');
+  return getPreviewProducts(limit).map((item) => `<li><a href="/product/${item.id}.html">${escapeHtml(item.name || '')}</a></li>`).join('');
 }
 
 function buildPreviewArticleLinks(prefix, limit = 10) {

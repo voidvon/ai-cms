@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/api/client'
 import { Button } from '@/components/ui/button'
@@ -53,11 +53,11 @@ export default function SiteConfigPage() {
     web_author: '',
   })
 
-  useState(() => {
+  useEffect(() => {
     if (data?.data) {
       setFormData(data.data)
     }
-  })
+  }, [data])
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -75,15 +75,19 @@ export default function SiteConfigPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!formData.web_url.trim()) {
+      toast.error('网站地址不能为空')
+      return
+    }
+    if (!/^https?:\/\//i.test(formData.web_url.trim())) {
+      toast.error('网站地址必须以 http:// 或 https:// 开头')
+      return
+    }
     mutation.mutate()
   }
 
   if (isLoading) {
     return <div>加载中...</div>
-  }
-
-  if (data?.data && formData.web_name === '') {
-    setFormData(data.data)
   }
 
   return (
@@ -110,7 +114,7 @@ export default function SiteConfigPage() {
                 id="web_url"
                 value={formData.web_url}
                 onChange={(e) => setFormData({ ...formData, web_url: e.target.value })}
-                placeholder="请输入网站地址"
+                placeholder="https://www.example.com"
               />
             </div>
             <div className="space-y-2">

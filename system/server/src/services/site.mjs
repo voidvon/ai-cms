@@ -112,9 +112,17 @@ export function updateSiteConfig(input) {
 export { listNews, listProducts, searchProducts };
 
 function normalizeSiteConfigInput(input) {
+  const webUrl = toNullableString(input.web_url);
+  if (!webUrl) {
+    throw new Error('网站地址不能为空');
+  }
+  if (!/^https?:\/\//i.test(webUrl)) {
+    throw new Error('网站地址必须以 http:// 或 https:// 开头');
+  }
+
   return {
     web_name: toNullableString(input.web_name),
-    web_url: toNullableString(input.web_url),
+    web_url: webUrl,
     company_name: toNullableString(input.company_name),
     company_address: toNullableString(input.company_address),
     postal_code: toNullableString(input.postal_code),
