@@ -17,8 +17,13 @@ export default async function templateVariantsRoutes(app) {
 
   app.get('/template-variants', {
     onRequest: [requireAuth]
-  }, async () => {
-    return { success: true, data: listTemplateVariants() };
+  }, async (request, reply) => {
+    try {
+      return { success: true, data: listTemplateVariants() };
+    } catch (error) {
+      reply.code(500);
+      return { success: false, message: error.message || '主题列表加载失败' };
+    }
   });
 
   app.get('/template-variants/selected', async () => {

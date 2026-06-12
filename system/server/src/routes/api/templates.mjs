@@ -20,7 +20,7 @@ export default async function templatesRoutes(app) {
     onRequest: [requireAuth]
   }, async (request, reply) => {
     try {
-      const templates = listTemplates({ type: request.query?.type });
+      const templates = listTemplates({ type: request.query?.type, themeId: request.query?.theme_id });
       return { success: true, data: templates };
     } catch (error) {
       reply.code(400);
@@ -53,8 +53,8 @@ export default async function templatesRoutes(app) {
 
   app.get('/template-bindings', {
     onRequest: [requireAuth]
-  }, async () => {
-    return { success: true, data: listTemplateBindings() };
+  }, async (request) => {
+    return { success: true, data: listTemplateBindings(request.query?.theme_id) };
   });
 
   app.put('/template-bindings', {

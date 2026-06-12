@@ -1,5 +1,5 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
-import { getSelectedTemplateVariant, listTemplateVariantComponents } from './template-variants.mjs';
+import { detachTemplateFromAllThemeVariants, getSelectedTemplateVariant, listTemplateVariantComponents } from './template-variants.mjs';
 import { createTsxTemplateElement, renderTsxTemplate } from '../tsx-template-renderer.mjs';
 import { getTsxTemplateStyleAsset } from '../tsx-template-styles.mjs';
 import { escapeHtml } from '../utils/html.mjs';
@@ -10,6 +10,11 @@ const MAX_TEMPLATE_VERSIONS = 10;
 const CORPORATION_ROOT_ID = 32;
 const NEWS_ROOT_ID = 4;
 const SERVICE_ROOT_ID = 12;
+const CONTENT_TYPE_PRODUCT_ID = 1;
+const CONTENT_TYPE_ARTICLE_ID = 2;
+const CONTENT_TYPE_CONTACT_ID = 4;
+const CONTENT_TYPE_MESSAGE_ID = 5;
+const CONTENT_TYPE_CORPORATION_ID = 6;
 
 let schemaEnsured = false;
 
@@ -21,9 +26,10 @@ export function ensureTemplatesSchema() {
   getDb().exec(`
     CREATE TABLE IF NOT EXISTS templates (
       id INTEGER PRIMARY KEY,
+      theme_id INTEGER,
       name TEXT NOT NULL,
       type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'component')),
-      code TEXT NOT NULL UNIQUE,
+      code TEXT NOT NULL,
       engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
       content TEXT NOT NULL DEFAULT '',
       published_content TEXT,
@@ -32,18 +38,20 @@ export function ensureTemplatesSchema() {
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      published_at TEXT
+      published_at TEXT,
+      UNIQUE (theme_id, code)
     );
 
     CREATE TABLE IF NOT EXISTS template_bindings (
       id INTEGER PRIMARY KEY,
+      theme_id INTEGER NOT NULL,
       target_type TEXT NOT NULL,
       target_id INTEGER,
       template_type TEXT NOT NULL CHECK (template_type IN ('home', 'list', 'content')),
       template_id INTEGER NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (target_type, target_id, template_type),
+      UNIQUE (theme_id, target_type, target_id, template_type),
       FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
     );
 
@@ -57,45 +65,52 @@ export function ensureTemplatesSchema() {
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
     );
-
-    CREATE INDEX IF NOT EXISTS idx_templates_type_sort ON templates(type, sort_order, id);
-    CREATE INDEX IF NOT EXISTS idx_templates_status ON templates(status);
-    CREATE INDEX IF NOT EXISTS idx_template_bindings_target ON template_bindings(target_type, target_id, template_type);
-    CREATE INDEX IF NOT EXISTS idx_template_versions_template_id ON template_versions(template_id, version_no);
   `);
 
+  addColumnIfMissing('templates', 'theme_id', 'INTEGER');
+  addColumnIfMissing('templates', 'engine', "TEXT NOT NULL DEFAULT 'tsx'");
+  addColumnIfMissing('template_bindings', 'theme_id', 'INTEGER');
+  addColumnIfMissing('template_versions', 'engine', "TEXT NOT NULL DEFAULT 'tsx'");
+  ensureTemplateThemeOwnership();
+  ensureTemplateBindingsThemeValues();
+  ensureTemplateCodeThemeScope();
   ensureTemplatesEngineConstraint();
   ensureTemplateVersionsForeignKey();
   ensureTemplateVersionsEngineConstraint();
+  ensureTemplateBindingsThemeScope();
+  reconcileThemeOwnedTemplateAssets();
 
   getDb().exec(`
-    CREATE INDEX IF NOT EXISTS idx_templates_type_sort ON templates(type, sort_order, id);
+    CREATE INDEX IF NOT EXISTS idx_templates_theme_type_sort ON templates(theme_id, type, sort_order, id);
     CREATE INDEX IF NOT EXISTS idx_templates_status ON templates(status);
-    CREATE INDEX IF NOT EXISTS idx_template_bindings_target ON template_bindings(target_type, target_id, template_type);
+    CREATE INDEX IF NOT EXISTS idx_template_bindings_theme_target ON template_bindings(theme_id, target_type, target_id, template_type);
     CREATE INDEX IF NOT EXISTS idx_template_versions_template_id ON template_versions(template_id, version_no);
   `);
-
-  addColumnIfMissing('templates', 'engine', "TEXT NOT NULL DEFAULT 'tsx'");
-  addColumnIfMissing('template_versions', 'engine', "TEXT NOT NULL DEFAULT 'tsx'");
 
   schemaEnsured = true;
 }
 
-export function listTemplates({ type } = {}) {
+export function listTemplates({ type, themeId } = {}) {
   ensureTemplatesSchema();
   const params = [];
-  let where = '';
+  const whereClauses = [];
   if (type) {
     if (!TEMPLATE_TYPES.includes(type)) {
       throw new Error('invalid template type');
     }
-    where = 'WHERE type = ?';
+    whereClauses.push('type = ?');
     params.push(type);
   }
+  const normalizedThemeId = toInteger(themeId, null);
+  if (normalizedThemeId) {
+    whereClauses.push('theme_id = ?');
+    params.push(normalizedThemeId);
+  }
+  const where = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
   return queryAll(
     `
-      SELECT id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
+      SELECT id, theme_id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
       FROM templates
       ${where}
       ORDER BY type ASC, sort_order ASC, id ASC
@@ -108,7 +123,7 @@ export function getTemplateById(id) {
   ensureTemplatesSchema();
   return queryOne(
     `
-      SELECT id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
+      SELECT id, theme_id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
       FROM templates
       WHERE id = ?
     `,
@@ -116,41 +131,57 @@ export function getTemplateById(id) {
   ) || null;
 }
 
-export function getPublishedTemplateByCode(code) {
+export function getPublishedTemplateByCode(code, themeId = null) {
   ensureTemplatesSchema();
+  const normalizedThemeId = toInteger(themeId, null) || toInteger(getSelectedTemplateVariant()?.id, null);
+  const params = [normalizeCode(code)];
+  let whereTheme = '';
+  if (normalizedThemeId) {
+    whereTheme = 'AND theme_id = ?';
+    params.push(normalizedThemeId);
+  }
   return queryOne(
     `
-      SELECT id, name, type, code, engine, coalesce(published_content, content) AS content
+      SELECT id, theme_id, name, type, code, engine, coalesce(published_content, content) AS content
       FROM templates
-      WHERE code = ? AND status = 'published'
+      WHERE code = ? AND status = 'published' ${whereTheme}
       LIMIT 1
     `,
-    [normalizeCode(code)]
+    params
   ) || null;
 }
 
-export function getPublishedTemplateById(id) {
+export function getPublishedTemplateById(id, themeId = null) {
   ensureTemplatesSchema();
+  const normalizedThemeId = toInteger(themeId, null);
+  const params = [id];
+  let whereTheme = '';
+  if (normalizedThemeId) {
+    whereTheme = 'AND theme_id = ?';
+    params.push(normalizedThemeId);
+  }
   return queryOne(
     `
-      SELECT id, name, type, code, engine, coalesce(published_content, content) AS content
+      SELECT id, theme_id, name, type, code, engine, coalesce(published_content, content) AS content
       FROM templates
-      WHERE id = ? AND status = 'published'
+      WHERE id = ? AND status = 'published' ${whereTheme}
       LIMIT 1
     `,
-    [id]
+    params
   ) || null;
 }
 
 export function resolvePublishedTemplate({ templateType, targets = [], fallbackCode, fallbackCodes = [] }) {
   ensureTemplatesSchema();
+  const selectedTheme = getSelectedTemplateVariant();
+  const currentThemeId = toInteger(selectedTheme?.id, null);
 
   for (const target of targets) {
-    const binding = getTemplateBinding(target.target_type, target.target_id ?? null, templateType);
+    const binding = getTemplateBinding(currentThemeId, target.target_type, target.target_id ?? null, templateType);
     if (!binding?.template_id) {
       continue;
     }
-    const template = getPublishedTemplateById(binding.template_id);
+    const template = getPublishedTemplateById(binding.template_id, currentThemeId);
     if (template) {
       return template;
     }
@@ -162,7 +193,7 @@ export function resolvePublishedTemplate({ templateType, targets = [], fallbackC
   ].filter(Boolean);
 
   for (const code of candidates) {
-    const template = getPublishedTemplateByCode(code);
+    const template = getPublishedTemplateByCode(code, currentThemeId);
     if (template) {
       return template;
     }
@@ -173,22 +204,37 @@ export function resolvePublishedTemplate({ templateType, targets = [], fallbackC
 
 export function listPublishedComponents() {
   ensureTemplatesSchema();
+  const selectedTheme = getSelectedTemplateVariant();
+  const currentThemeId = toInteger(selectedTheme?.id, null);
+  const params = [];
+  const whereTheme = currentThemeId ? 'AND theme_id = ?' : '';
+  if (currentThemeId) {
+    params.push(currentThemeId);
+  }
   return queryAll(
     `
       SELECT code, engine, coalesce(published_content, content) AS content
       FROM templates
-      WHERE type = 'component' AND status = 'published'
+      WHERE type = 'component' AND status = 'published' ${whereTheme}
       ORDER BY sort_order ASC, id ASC
-    `
+    `,
+    params
   );
 }
 
-export function listTemplateBindings() {
+export function listTemplateBindings(themeId = null) {
   ensureTemplatesSchema();
+  const normalizedThemeId = toInteger(themeId, null);
+  const params = [];
+  const whereTheme = normalizedThemeId ? 'WHERE b.theme_id = ?' : '';
+  if (normalizedThemeId) {
+    params.push(normalizedThemeId);
+  }
   return queryAll(
     `
       SELECT
         b.id,
+        b.theme_id,
         b.target_type,
         b.target_id,
         b.template_type,
@@ -199,24 +245,26 @@ export function listTemplateBindings() {
         t.code AS template_code
       FROM template_bindings b
       LEFT JOIN templates t ON t.id = b.template_id
+      ${whereTheme}
       ORDER BY b.target_type ASC, coalesce(b.target_id, 0) ASC, b.template_type ASC
-    `
+    `,
+    params
   );
 }
 
-export function getTemplateBinding(targetType, targetId, templateType) {
+export function getTemplateBinding(themeId, targetType, targetId, templateType) {
   ensureTemplatesSchema();
-  const normalized = normalizeBindingTarget(targetType, targetId, templateType);
+  const normalized = normalizeBindingTarget(themeId, targetType, targetId, templateType);
   const whereTargetId = normalized.target_id == null ? 'target_id IS NULL' : 'target_id = ?';
   const params = normalized.target_id == null
-    ? [normalized.target_type, normalized.template_type]
-    : [normalized.target_type, normalized.target_id, normalized.template_type];
+    ? [normalized.theme_id, normalized.target_type, normalized.template_type]
+    : [normalized.theme_id, normalized.target_type, normalized.target_id, normalized.template_type];
 
   return queryOne(
     `
-      SELECT id, target_type, target_id, template_type, template_id, created_at, updated_at
+      SELECT id, theme_id, target_type, target_id, template_type, template_id, created_at, updated_at
       FROM template_bindings
-      WHERE target_type = ? AND ${whereTargetId} AND template_type = ?
+      WHERE theme_id = ? AND target_type = ? AND ${whereTargetId} AND template_type = ?
       LIMIT 1
     `,
     params
@@ -226,7 +274,7 @@ export function getTemplateBinding(targetType, targetId, templateType) {
 export function upsertTemplateBinding(input) {
   ensureTemplatesSchema();
   const payload = normalizeBindingInput(input);
-  const existing = getTemplateBinding(payload.target_type, payload.target_id, payload.template_type);
+  const existing = getTemplateBinding(payload.theme_id, payload.target_type, payload.target_id, payload.template_type);
   const now = new Date().toISOString();
 
   if (existing) {
@@ -238,19 +286,19 @@ export function upsertTemplateBinding(input) {
       `,
       [payload.template_id, now, existing.id]
     );
-    return getTemplateBinding(payload.target_type, payload.target_id, payload.template_type);
+    return getTemplateBinding(payload.theme_id, payload.target_type, payload.target_id, payload.template_type);
   }
 
   const result = execute(
     `
-      INSERT INTO template_bindings (target_type, target_id, template_type, template_id, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO template_bindings (theme_id, target_type, target_id, template_type, template_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
-    [payload.target_type, payload.target_id, payload.template_type, payload.template_id, now, now]
+    [payload.theme_id, payload.target_type, payload.target_id, payload.template_type, payload.template_id, now, now]
   );
   return queryOne(
     `
-      SELECT id, target_type, target_id, template_type, template_id, created_at, updated_at
+      SELECT id, theme_id, target_type, target_id, template_type, template_id, created_at, updated_at
       FROM template_bindings
       WHERE id = ?
     `,
@@ -261,7 +309,7 @@ export function upsertTemplateBinding(input) {
 export function deleteTemplateBinding(id) {
   ensureTemplatesSchema();
   const existing = queryOne(
-    'SELECT id, target_type, target_id, template_type, template_id FROM template_bindings WHERE id = ?',
+    'SELECT id, theme_id, target_type, target_id, template_type, template_id FROM template_bindings WHERE id = ?',
     [id]
   );
   if (!existing) {
@@ -274,13 +322,15 @@ export function deleteTemplateBinding(id) {
 export function createTemplate(input) {
   ensureTemplatesSchema();
   const payload = normalizeTemplateInput(input);
+  assertTemplateCodeAvailable(payload.theme_id, payload.code);
   const now = new Date().toISOString();
   const result = execute(
     `
-      INSERT INTO templates (name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO templates (theme_id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
+      payload.theme_id,
       payload.name,
       payload.type,
       payload.code,
@@ -305,13 +355,15 @@ export function updateTemplate(id, input) {
   }
 
   const payload = normalizeTemplateInput({ ...existing, ...input }, { existing });
+  assertTemplateCodeAvailable(payload.theme_id, payload.code, id);
   execute(
     `
       UPDATE templates
-      SET name = ?, type = ?, code = ?, engine = ?, content = ?, is_default = ?, sort_order = ?, updated_at = ?
+      SET theme_id = ?, name = ?, type = ?, code = ?, engine = ?, content = ?, is_default = ?, sort_order = ?, updated_at = ?
       WHERE id = ?
     `,
     [
+      payload.theme_id,
       payload.name,
       payload.type,
       payload.code,
@@ -367,6 +419,7 @@ export function deleteTemplate(id) {
   if (dependencyInfo.bindings.length > 0) {
     throw new Error('模板已绑定到分类或站点，不能删除，请先取消模板绑定');
   }
+  detachTemplateFromAllThemeVariants(existing);
   execute('DELETE FROM templates WHERE id = ?', [id]);
   return existing;
 }
@@ -418,7 +471,7 @@ export function getTemplateDependencyInfo(templateId) {
     return null;
   }
 
-  const allTemplates = listTemplates();
+  const allTemplates = listTemplates({ themeId: template.theme_id });
   const byCode = new Map(allTemplates.map((item) => [normalizeCode(item.code), item]));
   const targetCode = normalizeCode(template.code);
   const references = extractLiteralComponentReferences(template.content).map((code) => {
@@ -482,7 +535,7 @@ export function validateTemplateForPublish(template) {
   const errors = [];
 
   for (const componentCode of extractLiteralComponentReferences(content)) {
-    const component = getTemplateByCode(componentCode);
+    const component = getTemplateByCode(componentCode, normalizedTemplate.theme_id);
     const isSelf = normalizeCode(componentCode) === normalizedTemplate.code;
     if (!component) {
       errors.push(`组件不存在：${componentCode}`);
@@ -1329,16 +1382,23 @@ function mergePreviewComponentProps(baseProps, extraProps) {
   };
 }
 
-function getTemplateByCode(code) {
+function getTemplateByCode(code, themeId = null) {
   ensureTemplatesSchema();
+  const normalizedThemeId = toInteger(themeId, null) || toInteger(getSelectedTemplateVariant()?.id, null);
+  const params = [normalizeCode(code)];
+  let whereTheme = '';
+  if (normalizedThemeId) {
+    whereTheme = 'AND theme_id = ?';
+    params.push(normalizedThemeId);
+  }
   return queryOne(
     `
-      SELECT id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
+      SELECT id, theme_id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
       FROM templates
-      WHERE code = ?
+      WHERE code = ? ${whereTheme}
       LIMIT 1
     `,
-    [normalizeCode(code)]
+    params
   ) || null;
 }
 
@@ -1471,7 +1531,7 @@ function formatTemplateValidationError(error) {
 }
 
 function normalizeBindingInput(input) {
-  const payload = normalizeBindingTarget(input.target_type, input.target_id ?? null, input.template_type);
+  const payload = normalizeBindingTarget(input.theme_id, input.target_type, input.target_id ?? null, input.template_type);
   const templateId = toInteger(input.template_id, 0);
   if (!templateId) {
     throw new Error('template_id is required');
@@ -1479,6 +1539,9 @@ function normalizeBindingInput(input) {
   const template = getTemplateById(templateId);
   if (!template) {
     throw new Error('template does not exist');
+  }
+  if (template.theme_id !== payload.theme_id) {
+    throw new Error('template does not belong to current theme');
   }
   if (template.type !== payload.template_type) {
     throw new Error('template type does not match binding type');
@@ -1490,7 +1553,8 @@ function normalizeBindingInput(input) {
   };
 }
 
-function normalizeBindingTarget(targetType, targetId, templateType) {
+function normalizeBindingTarget(themeId, targetType, targetId, templateType) {
+  const normalizedThemeId = resolveThemeId(themeId);
   const normalizedTargetType = String(targetType || '').trim().toLowerCase();
   if (!['site', 'product_category', 'news_category', 'corporation_category', 'content_type', 'column'].includes(normalizedTargetType)) {
     throw new Error('invalid binding target type');
@@ -1500,6 +1564,7 @@ function normalizeBindingTarget(targetType, targetId, templateType) {
   }
 
   return {
+    theme_id: normalizedThemeId,
     target_type: normalizedTargetType,
     target_id: targetId == null || String(targetId).trim() === '' ? null : toInteger(targetId, null),
     template_type: templateType
@@ -1521,7 +1586,9 @@ function normalizeTemplateInput(input) {
   }
 
   const engine = normalizeTemplateEngine(input.engine);
+  const theme_id = resolveThemeId(input.theme_id);
   return {
+    theme_id,
     name,
     type,
     code,
@@ -1542,6 +1609,19 @@ function normalizeTemplateEngine(value) {
     throw new Error('only tsx template engine is allowed');
   }
   return 'tsx';
+}
+
+function resolveThemeId(value) {
+  const normalizedThemeId = toInteger(value, null);
+  if (normalizedThemeId) {
+    return normalizedThemeId;
+  }
+  const selectedTheme = getSelectedTemplateVariant();
+  const fallbackThemeId = toInteger(selectedTheme?.id, null);
+  if (!fallbackThemeId) {
+    throw new Error('theme_id is required');
+  }
+  return fallbackThemeId;
 }
 
 function pruneTemplateVersions(templateId) {
@@ -1566,6 +1646,314 @@ function addColumnIfMissing(tableName, columnName, definition) {
     return;
   }
   getDb().exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+}
+
+function ensureTemplateThemeOwnership() {
+  const fallbackThemeId = getSelectedThemeIdDirect();
+  if (!fallbackThemeId) {
+    return;
+  }
+  execute('UPDATE templates SET theme_id = ? WHERE theme_id IS NULL OR theme_id = 0', [fallbackThemeId]);
+}
+
+function ensureTemplateBindingsThemeValues() {
+  const fallbackThemeId = getSelectedThemeIdDirect();
+  if (!fallbackThemeId) {
+    return;
+  }
+  execute('UPDATE template_bindings SET theme_id = ? WHERE theme_id IS NULL OR theme_id = 0', [fallbackThemeId]);
+}
+
+function getSelectedThemeIdDirect() {
+  return toInteger(queryOne(
+    `
+      SELECT id
+      FROM template_variants
+      WHERE is_selected = 1
+      ORDER BY id ASC
+      LIMIT 1
+    `
+  )?.id, null);
+}
+
+function reconcileThemeOwnedTemplateAssets() {
+  migrateDefaultThemeAssets();
+  migrateThemeSuffixedAssets();
+  cleanupCrossThemeBindings();
+}
+
+function migrateDefaultThemeAssets() {
+  const defaultThemeId = toInteger(queryOne(
+    `
+      SELECT id
+      FROM template_variants
+      WHERE template_name LIKE '%默认%'
+      ORDER BY id ASC
+      LIMIT 1
+    `
+  )?.id, null);
+  if (!defaultThemeId) {
+    return;
+  }
+
+  const defaultTemplates = queryAll(
+    `
+      SELECT id, code, name, theme_id
+      FROM templates
+      WHERE code LIKE 'default_%' OR name LIKE '默认模板-%'
+      ORDER BY id ASC
+    `
+  );
+
+  for (const template of defaultTemplates) {
+    if (toInteger(template.theme_id, null) === defaultThemeId) {
+      continue;
+    }
+    migrateTemplateToTheme(template.id, defaultThemeId, template.code);
+  }
+
+  ensureThemeBindingByCode(defaultThemeId, 'site', null, 'home', 'default_home_tsx');
+  ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_PRODUCT_ID, 'list', 'default_product_list_tsx');
+  ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_PRODUCT_ID, 'content', 'default_product_detail_tsx');
+  ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_ARTICLE_ID, 'list', 'default_article_list_tsx');
+  ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_ARTICLE_ID, 'content', 'default_article_detail_tsx');
+  ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_CORPORATION_ID, 'content', 'default_content_tsx');
+  ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_CONTACT_ID, 'content', 'default_contact_tsx');
+  ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_MESSAGE_ID, 'content', 'default_message_tsx');
+}
+
+function migrateThemeSuffixedAssets() {
+  const suffixedTemplates = queryAll(
+    `
+      SELECT id, theme_id, code
+      FROM templates
+      WHERE code LIKE '%__theme_%'
+      ORDER BY id ASC
+    `
+  );
+
+  for (const template of suffixedTemplates) {
+    const match = String(template.code || '').match(/^(.*)__theme_(\d+)$/);
+    if (!match) {
+      continue;
+    }
+    const targetThemeId = toInteger(match[2], null);
+    if (!targetThemeId) {
+      continue;
+    }
+    const targetThemeExists = queryOne('SELECT id FROM template_variants WHERE id = ? LIMIT 1', [targetThemeId]);
+    if (!targetThemeExists?.id) {
+      execute('DELETE FROM templates WHERE id = ?', [template.id]);
+      continue;
+    }
+
+    const baseCode = normalizeCode(match[1]);
+    const duplicate = queryOne(
+      'SELECT id FROM templates WHERE theme_id = ? AND code = ? AND id <> ? LIMIT 1',
+      [targetThemeId, baseCode, template.id]
+    );
+    if (duplicate?.id) {
+      execute('DELETE FROM templates WHERE id = ?', [template.id]);
+      continue;
+    }
+
+    migrateTemplateToTheme(template.id, targetThemeId, baseCode);
+  }
+}
+
+function cleanupCrossThemeBindings() {
+  execute(
+    `
+      DELETE FROM template_bindings
+      WHERE id IN (
+        SELECT b.id
+        FROM template_bindings b
+        LEFT JOIN templates t ON t.id = b.template_id
+        WHERE t.id IS NULL OR coalesce(t.theme_id, 0) <> coalesce(b.theme_id, 0)
+      )
+    `
+  );
+}
+
+function migrateTemplateToTheme(templateId, targetThemeId, nextCode) {
+  const normalizedThemeId = toInteger(targetThemeId, null);
+  const normalizedCode = normalizeCode(nextCode);
+  if (!normalizedThemeId || !normalizedCode) {
+    return;
+  }
+
+  const duplicate = queryOne(
+    'SELECT id FROM templates WHERE theme_id = ? AND code = ? AND id <> ? LIMIT 1',
+    [normalizedThemeId, normalizedCode, templateId]
+  );
+  if (duplicate?.id) {
+    execute('DELETE FROM templates WHERE id = ?', [templateId]);
+    return;
+  }
+
+  execute(
+    'UPDATE templates SET theme_id = ?, code = ?, updated_at = ? WHERE id = ?',
+    [normalizedThemeId, normalizedCode, new Date().toISOString(), templateId]
+  );
+}
+
+function ensureThemeBindingByCode(themeId, targetType, targetId, templateType, templateCode) {
+  const template = queryOne(
+    `
+      SELECT id
+      FROM templates
+      WHERE theme_id = ? AND code = ?
+      LIMIT 1
+    `,
+    [themeId, normalizeCode(templateCode)]
+  );
+  if (!template?.id) {
+    return;
+  }
+
+  const normalizedTargetId = targetId == null ? null : toInteger(targetId, null);
+  const whereTargetId = normalizedTargetId == null ? 'target_id IS NULL' : 'target_id = ?';
+  const params = normalizedTargetId == null
+    ? [themeId, targetType, templateType]
+    : [themeId, targetType, normalizedTargetId, templateType];
+  const existing = queryOne(
+    `
+      SELECT id
+      FROM template_bindings
+      WHERE theme_id = ? AND target_type = ? AND ${whereTargetId} AND template_type = ?
+      LIMIT 1
+    `,
+    params
+  );
+
+  const now = new Date().toISOString();
+  if (existing?.id) {
+    execute('UPDATE template_bindings SET template_id = ?, updated_at = ? WHERE id = ?', [template.id, now, existing.id]);
+    return;
+  }
+
+  execute(
+    `
+      INSERT INTO template_bindings (theme_id, target_type, target_id, template_type, template_id, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+    `,
+    [themeId, targetType, normalizedTargetId, templateType, template.id, now, now]
+  );
+}
+
+function ensureTemplateBindingsThemeScope() {
+  const sql = queryOne(
+    `
+      SELECT sql
+      FROM sqlite_master
+      WHERE type = 'table' AND name = 'template_bindings'
+      LIMIT 1
+    `
+  )?.sql || '';
+
+  if (
+    String(sql).includes('theme_id INTEGER NOT NULL')
+    && String(sql).includes('UNIQUE (theme_id, target_type, target_id, template_type)')
+  ) {
+    return;
+  }
+
+  getDb().exec(`
+    PRAGMA foreign_keys = OFF;
+    BEGIN TRANSACTION;
+
+    ALTER TABLE template_bindings RENAME TO template_bindings__old_theme_scope;
+
+    CREATE TABLE template_bindings (
+      id INTEGER PRIMARY KEY,
+      theme_id INTEGER NOT NULL,
+      target_type TEXT NOT NULL,
+      target_id INTEGER,
+      template_type TEXT NOT NULL CHECK (template_type IN ('home', 'list', 'content')),
+      template_id INTEGER NOT NULL,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (theme_id, target_type, target_id, template_type),
+      FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
+    );
+
+    INSERT INTO template_bindings (
+      id, theme_id, target_type, target_id, template_type, template_id, created_at, updated_at
+    )
+    SELECT
+      id,
+      coalesce(theme_id, 0),
+      target_type,
+      target_id,
+      template_type,
+      template_id,
+      created_at,
+      updated_at
+    FROM template_bindings__old_theme_scope;
+
+    DROP TABLE template_bindings__old_theme_scope;
+
+    COMMIT;
+    PRAGMA foreign_keys = ON;
+  `);
+}
+
+function ensureTemplateCodeThemeScope() {
+  const sql = queryOne(
+    `
+      SELECT sql
+      FROM sqlite_master
+      WHERE type = 'table' AND name = 'templates'
+      LIMIT 1
+    `
+  )?.sql || '';
+
+  if (
+    String(sql).includes('theme_id INTEGER')
+    && String(sql).includes('UNIQUE (theme_id, code)')
+    && !String(sql).includes('code TEXT NOT NULL UNIQUE')
+  ) {
+    return;
+  }
+
+  reconcileDuplicateTemplateCodesByTheme();
+
+  getDb().exec(`
+    PRAGMA foreign_keys = OFF;
+    BEGIN TRANSACTION;
+
+    ALTER TABLE templates RENAME TO templates__old_theme_code_scope;
+
+    CREATE TABLE templates (
+      id INTEGER PRIMARY KEY,
+      theme_id INTEGER,
+      name TEXT NOT NULL,
+      type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'component')),
+      code TEXT NOT NULL,
+      engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
+      content TEXT NOT NULL DEFAULT '',
+      published_content TEXT,
+      status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+      is_default INTEGER NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      published_at TEXT,
+      UNIQUE (theme_id, code)
+    );
+
+    INSERT INTO templates (
+      id, theme_id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
+    )
+    SELECT
+      id, theme_id, name, type, code, 'tsx', content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
+    FROM templates__old_theme_code_scope;
+
+    DROP TABLE templates__old_theme_code_scope;
+
+    COMMIT;
+    PRAGMA foreign_keys = ON;
+  `);
 }
 
 function ensureTemplatesEngineConstraint() {
@@ -1593,9 +1981,10 @@ function ensureTemplatesEngineConstraint() {
 
     CREATE TABLE templates (
       id INTEGER PRIMARY KEY,
+      theme_id INTEGER,
       name TEXT NOT NULL,
       type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'component')),
-      code TEXT NOT NULL UNIQUE,
+      code TEXT NOT NULL,
       engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
       content TEXT NOT NULL DEFAULT '',
       published_content TEXT,
@@ -1604,14 +1993,15 @@ function ensureTemplatesEngineConstraint() {
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      published_at TEXT
+      published_at TEXT,
+      UNIQUE (theme_id, code)
     );
 
     INSERT INTO templates (
-      id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
+      id, theme_id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
     )
     SELECT
-      id, name, type, code, 'tsx', content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
+      id, theme_id, name, type, code, 'tsx', content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
     FROM templates__old_engine_check;
 
     DROP TABLE templates__old_engine_check;
@@ -1619,6 +2009,87 @@ function ensureTemplatesEngineConstraint() {
     COMMIT;
     PRAGMA foreign_keys = ON;
   `);
+}
+
+function reconcileDuplicateTemplateCodesByTheme() {
+  const duplicateGroups = queryAll(
+    `
+      SELECT theme_id, code
+      FROM templates
+      GROUP BY theme_id, code
+      HAVING COUNT(*) > 1
+    `
+  );
+
+  for (const group of duplicateGroups) {
+    const rows = queryAll(
+      `
+        SELECT id, code
+        FROM templates
+        WHERE ${group.theme_id == null ? 'theme_id IS NULL' : 'theme_id = ?'} AND code = ?
+        ORDER BY id ASC
+      `,
+      group.theme_id == null ? [group.code] : [group.theme_id, group.code]
+    );
+
+    rows.slice(1).forEach((row, index) => {
+      const nextCode = buildMigratedDuplicateTemplateCode(group.theme_id, row.code, row.id, index + 1);
+      execute(
+        'UPDATE templates SET code = ?, updated_at = ? WHERE id = ?',
+        [nextCode, new Date().toISOString(), row.id]
+      );
+    });
+  }
+}
+
+function buildMigratedDuplicateTemplateCode(themeId, baseCode, templateId, offset) {
+  const normalizedBase = normalizeCode(baseCode) || 'template';
+  let candidate = `${normalizedBase}_${templateId}`;
+  let attempt = 0;
+
+  while (queryOne(
+    `
+      SELECT id
+      FROM templates
+      WHERE ${themeId == null ? 'theme_id IS NULL' : 'theme_id = ?'} AND code = ?
+      LIMIT 1
+    `,
+    themeId == null ? [candidate] : [themeId, candidate]
+  )) {
+    attempt += 1;
+    candidate = `${normalizedBase}_${templateId}_${offset + attempt}`;
+  }
+
+  return candidate;
+}
+
+function assertTemplateCodeAvailable(themeId, code, excludeId = null) {
+  const normalizedThemeId = toInteger(themeId, null);
+  const normalizedCode = normalizeCode(code);
+  const params = [];
+  let whereTheme = 'theme_id IS NULL';
+  if (normalizedThemeId != null) {
+    whereTheme = 'theme_id = ?';
+    params.push(normalizedThemeId);
+  }
+  params.push(normalizedCode);
+  let whereExclude = '';
+  if (toInteger(excludeId, null)) {
+    whereExclude = 'AND id <> ?';
+    params.push(toInteger(excludeId, null));
+  }
+  const existing = queryOne(
+    `
+      SELECT id
+      FROM templates
+      WHERE ${whereTheme} AND code = ? ${whereExclude}
+      LIMIT 1
+    `,
+    params
+  );
+  if (existing?.id) {
+    throw new Error('当前主题下模板标识 code 已存在');
+  }
 }
 
 function ensureTemplateVersionsForeignKey() {

@@ -76,26 +76,12 @@ export interface TemplateVariant {
   id: number;
   template_name: string;
   is_selected: number;
-  home_index?: string;
-  co_index?: string;
-  produts_index?: string;
-  produts_sort1?: string;
-  produts_sort2?: string;
-  produts_detail?: string;
-  news_index?: string;
-  news_sort1?: string;
-  news_detail?: string;
-  service_sort1?: string;
-  service_detail?: string;
-  msg_index?: string;
-  contact?: string;
-  manual_component_template_ids?: number[];
-  component_template_ids?: number[];
-  source_theme_id?: number;
+  theme_templates?: Template[];
 }
 
 export interface Template {
   id: number;
+  theme_id?: number | null;
   name: string;
   type: 'home' | 'list' | 'content' | 'component';
   code: string;
@@ -112,6 +98,7 @@ export interface Template {
 
 export interface TemplateBinding {
   id: number;
+  theme_id?: number;
   target_type: 'site' | 'product_category' | 'news_category' | 'corporation_category' | 'content_type' | 'column';
   target_id?: number | null;
   template_type: 'home' | 'list' | 'content';

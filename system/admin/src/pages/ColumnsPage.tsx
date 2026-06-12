@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { corporationCategoriesApi, templatesApi } from '@/api/advanced'
+import { corporationCategoriesApi, templateVariantsApi, templatesApi } from '@/api/advanced'
 import { columnsApi } from '@/api/columns'
 import { newsApi } from '@/api/news'
 import { newsCategoriesApi } from '@/api/news-categories'
@@ -117,6 +117,11 @@ export default function ColumnsPage() {
     queryKey: ['columns'],
     queryFn: () => columnsApi.list(),
   })
+  const { data: selectedThemeData } = useQuery({
+    queryKey: ['selected-theme'],
+    queryFn: () => templateVariantsApi.getSelected(),
+  })
+  const selectedThemeId = selectedThemeData?.data?.id
 
   const { data: editingProductCategoryData } = useQuery({
     queryKey: ['product-categories', 'detail', editingCategoryTarget?.id],
@@ -137,15 +142,15 @@ export default function ColumnsPage() {
   })
 
   const { data: templatesData } = useQuery({
-    queryKey: ['templates'],
-    queryFn: () => templatesApi.list(),
-    enabled: rootCategoryDialogOpen || manualColumnDialogOpen || Boolean(bindingCategoryTarget),
+    queryKey: ['templates', selectedThemeId ?? 0],
+    queryFn: () => templatesApi.list(undefined, selectedThemeId),
+    enabled: (rootCategoryDialogOpen || manualColumnDialogOpen || Boolean(bindingCategoryTarget)) && Boolean(selectedThemeId),
   })
 
   const { data: bindingsData } = useQuery({
-    queryKey: ['template-bindings'],
-    queryFn: () => templatesApi.listBindings(),
-    enabled: manualColumnDialogOpen || Boolean(bindingCategoryTarget),
+    queryKey: ['template-bindings', selectedThemeId ?? 0],
+    queryFn: () => templatesApi.listBindings(selectedThemeId),
+    enabled: (manualColumnDialogOpen || Boolean(bindingCategoryTarget)) && Boolean(selectedThemeId),
   })
 
   const columns = columnsData?.data || []
@@ -290,9 +295,9 @@ export default function ColumnsPage() {
 
       const targetType = getTemplateTargetType(rootCategoryForm.model)
       if (rootCategoryForm.model !== 'corporation') {
-        await saveOptionalTemplateBinding(targetType, categoryId, 'list', rootCategoryForm.listTemplateId)
+        await saveOptionalTemplateBinding(selectedThemeId || 0, targetType, categoryId, 'list', rootCategoryForm.listTemplateId)
       }
-      await saveOptionalTemplateBinding(targetType, categoryId, 'content', rootCategoryForm.contentTemplateId)
+      await saveOptionalTemplateBinding(selectedThemeId || 0, targetType, categoryId, 'content', rootCategoryForm.contentTemplateId)
 
       return response
     },
@@ -318,7 +323,7 @@ export default function ColumnsPage() {
       if (!columnId) {
         throw new Error('栏目创建失败')
       }
-      await saveOptionalTemplateBinding('column', columnId, 'content', templateId)
+      await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', columnId, 'content', templateId)
       return response
     },
     onSuccess: () => {
@@ -336,7 +341,7 @@ export default function ColumnsPage() {
   const updateManualColumnMutation = useMutation({
     mutationFn: async ({ id, value, templateId }: { id: number; value: ManualColumnFormValue; templateId: string }) => {
       const response = await columnsApi.update(id, value)
-      await saveOptionalTemplateBinding('column', id, 'content', templateId, bindings)
+      await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'content', templateId, bindings)
       return response
     },
     onSuccess: () => {
@@ -1254,6 +1259,7 @@ function isEditableCategoryColumn(column: Column) {
 }
 
 async function saveOptionalTemplateBinding(
+  themeId: number,
   targetType: Extract<TemplateBinding['target_type'], 'product_category' | 'news_category' | 'corporation_category' | 'column'>,
   targetId: number,
   templateType: Extract<TemplateBinding['template_type'], 'list' | 'content'>,
@@ -1274,6 +1280,7 @@ async function saveOptionalTemplateBinding(
   }
 
   await templatesApi.saveBinding({
+    theme_id: themeId,
     target_type: targetType,
     target_id: targetId,
     template_type: templateType,

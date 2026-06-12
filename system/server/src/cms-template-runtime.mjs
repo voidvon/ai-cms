@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { SERVER_ROOT } from './config.mjs';
-import { listSelectedThemePublishedComponents, resolveSelectedThemeTemplateCode } from './services/template-variants.mjs';
+import { listSelectedThemePublishedComponents } from './services/template-variants.mjs';
 import { resolvePublishedTemplate } from './services/templates.mjs';
 import { createTsxTemplateElement, renderTsxTemplate } from './tsx-template-renderer.mjs';
 import { getTsxTemplateStyleAsset } from './tsx-template-styles.mjs';
@@ -22,12 +22,11 @@ export function createCmsTemplateRuntime({
   function renderCmsSitePage(pageName, props, templateContext, options = {}) {
     const templateCode = templateByPage[pageName];
     const templateType = options.templateType || templateTypeByPage[pageName];
-    const themeTemplateCode = options.themeSlot ? resolveSelectedThemeTemplateCode(options.themeSlot) : null;
     const template = templateCode && templateType ? resolvePublishedTemplate({
       templateType,
       targets: options.targets || [],
       fallbackCode: templateCode,
-      fallbackCodes: themeTemplateCode ? [themeTemplateCode] : []
+      fallbackCodes: []
     }) : null;
 
     if (!template?.content) {

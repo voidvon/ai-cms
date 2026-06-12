@@ -1,17 +1,5 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
-
-const THEME_TEMPLATE_SLOT_FIELDS = {
-  home: 'home_index',
-  corporation: 'co_index',
-  product_list: 'produts_sort1',
-  product_detail: 'produts_detail',
-  news_list: 'news_sort1',
-  news_detail: 'news_detail',
-  service_list: 'service_sort1',
-  service_detail: 'service_detail',
-  message: 'msg_index',
-  contact: 'contact'
-};
+import { ensureTemplatesSchema, listTemplates } from './templates.mjs';
 
 let schemaEnsured = false;
 
@@ -24,122 +12,55 @@ export function ensureTemplateVariantsSchema() {
     CREATE TABLE IF NOT EXISTS template_variants (
       id INTEGER PRIMARY KEY,
       template_name TEXT NOT NULL,
-      is_selected INTEGER NOT NULL DEFAULT 0,
-      home_index TEXT,
-      co_index TEXT,
-      produts_index TEXT,
-      produts_sort1 TEXT,
-      produts_sort2 TEXT,
-      produts_detail TEXT,
-      news_index TEXT,
-      news_sort1 TEXT,
-      news_detail TEXT,
-      service_sort1 TEXT,
-      service_detail TEXT,
-      msg_index TEXT,
-      contact TEXT,
-      legacy_extra TEXT
-    );
-
-    CREATE TABLE IF NOT EXISTS template_variant_components (
-      id INTEGER PRIMARY KEY,
-      variant_id INTEGER NOT NULL,
-      template_id INTEGER NOT NULL,
-      UNIQUE (variant_id, template_id)
+      is_selected INTEGER NOT NULL DEFAULT 0
     );
   `);
 
+  dropLegacyThemeSchema();
   schemaEnsured = true;
 }
 
 export function listTemplateVariants() {
   ensureTemplateVariantsSchema();
+  ensureTemplatesSchema();
   const rows = queryAll(
     `
-      SELECT
-        id,
-        template_name,
-        is_selected,
-        home_index,
-        co_index,
-        produts_index,
-        produts_sort1,
-        produts_sort2,
-        produts_detail,
-        news_index,
-        news_sort1,
-        news_detail,
-        service_sort1,
-        service_detail,
-        msg_index,
-        contact,
-        legacy_extra
+      SELECT id, template_name, is_selected
       FROM template_variants
       ORDER BY id ASC
     `
   );
-  return attachVariantComponentIds(rows);
+  return attachThemeTemplates(rows);
 }
 
 export function getTemplateVariantById(id) {
   ensureTemplateVariantsSchema();
+  ensureTemplatesSchema();
   const row = queryOne(
     `
-      SELECT
-        id,
-        template_name,
-        is_selected,
-        home_index,
-        co_index,
-        produts_index,
-        produts_sort1,
-        produts_sort2,
-        produts_detail,
-        news_index,
-        news_sort1,
-        news_detail,
-        service_sort1,
-        service_detail,
-        msg_index,
-        contact,
-        legacy_extra
+      SELECT id, template_name, is_selected
       FROM template_variants
       WHERE id = ?
+      LIMIT 1
     `,
     [id]
   );
-  return row ? attachVariantComponentIds([row])[0] : null;
+  return row ? attachThemeTemplates([row])[0] : null;
 }
 
 export function getSelectedTemplateVariant() {
   ensureTemplateVariantsSchema();
+  ensureTemplatesSchema();
   const row = queryOne(
     `
-      SELECT
-        id,
-        template_name,
-        is_selected,
-        home_index,
-        co_index,
-        produts_index,
-        produts_sort1,
-        produts_sort2,
-        produts_detail,
-        news_index,
-        news_sort1,
-        news_detail,
-        service_sort1,
-        service_detail,
-        msg_index,
-        contact,
-        legacy_extra
+      SELECT id, template_name, is_selected
       FROM template_variants
       WHERE is_selected = 1
       ORDER BY id ASC
       LIMIT 1
     `
   );
-  return row ? attachVariantComponentIds([row])[0] : null;
+  return row ? attachThemeTemplates([row])[0] : null;
 }
 
 export function createTemplateVariant(input = {}) {
@@ -150,43 +71,10 @@ export function createTemplateVariant(input = {}) {
   });
   const result = execute(
     `
-      INSERT INTO template_variants (
-        template_name,
-        is_selected,
-        home_index,
-        co_index,
-        produts_index,
-        produts_sort1,
-        produts_sort2,
-        produts_detail,
-        news_index,
-        news_sort1,
-        news_detail,
-        service_sort1,
-        service_detail,
-        msg_index,
-        contact,
-        legacy_extra
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO template_variants (template_name, is_selected)
+      VALUES (?, ?)
     `,
-    [
-      payload.template_name,
-      payload.is_selected,
-      payload.home_index,
-      payload.co_index,
-      payload.produts_index,
-      payload.produts_sort1,
-      payload.produts_sort2,
-      payload.produts_detail,
-      payload.news_index,
-      payload.news_sort1,
-      payload.news_detail,
-      payload.service_sort1,
-      payload.service_detail,
-      payload.msg_index,
-      payload.contact,
-      payload.legacy_extra
-    ]
+    [payload.template_name, payload.is_selected]
   );
 
   if (payload.is_selected === 1) {
@@ -194,9 +82,7 @@ export function createTemplateVariant(input = {}) {
   }
 
   if (payload.source_theme_id) {
-    cloneTemplateVariantComponents(payload.source_theme_id, result.lastInsertRowid);
-  } else {
-    syncTemplateVariantComponentIds(result.lastInsertRowid, payload.component_template_ids);
+    cloneThemeTemplates(payload.source_theme_id, result.lastInsertRowid);
   }
 
   return getTemplateVariantById(result.lastInsertRowid);
@@ -213,51 +99,15 @@ export function updateTemplateVariant(id, input) {
   execute(
     `
       UPDATE template_variants
-      SET
-        template_name = ?,
-        is_selected = ?,
-        home_index = ?,
-        co_index = ?,
-        produts_index = ?,
-        produts_sort1 = ?,
-        produts_sort2 = ?,
-        produts_detail = ?,
-        news_index = ?,
-        news_sort1 = ?,
-        news_detail = ?,
-        service_sort1 = ?,
-        service_detail = ?,
-        msg_index = ?,
-        contact = ?,
-        legacy_extra = ?
+      SET template_name = ?, is_selected = ?
       WHERE id = ?
     `,
-    [
-      payload.template_name,
-      payload.is_selected,
-      payload.home_index,
-      payload.co_index,
-      payload.produts_index,
-      payload.produts_sort1,
-      payload.produts_sort2,
-      payload.produts_detail,
-      payload.news_index,
-      payload.news_sort1,
-      payload.news_detail,
-      payload.service_sort1,
-      payload.service_detail,
-      payload.msg_index,
-      payload.contact,
-      payload.legacy_extra,
-      id
-    ]
+    [payload.template_name, payload.is_selected, id]
   );
 
   if (payload.is_selected === 1) {
     execute('UPDATE template_variants SET is_selected = 0 WHERE id <> ?', [id]);
   }
-
-  syncTemplateVariantComponentIds(id, payload.component_template_ids);
 
   return getTemplateVariantById(id);
 }
@@ -287,6 +137,8 @@ export function deleteTemplateVariant(id) {
   }
 
   execute('DELETE FROM template_variants WHERE id = ?', [id]);
+  execute('DELETE FROM template_bindings WHERE theme_id = ?', [id]);
+  execute('DELETE FROM templates WHERE theme_id = ?', [id]);
 
   if (existing.is_selected === 1) {
     const firstRemaining = queryOne('SELECT id FROM template_variants ORDER BY id ASC LIMIT 1');
@@ -298,58 +150,15 @@ export function deleteTemplateVariant(id) {
   return existing;
 }
 
-export function resolveSelectedThemeTemplateCode(slot) {
-  const selected = getSelectedTemplateVariant();
-  return selected ? getThemeTemplateCode(selected, slot) : null;
-}
-
-export function getThemeTemplateCode(variant, slot) {
-  const field = THEME_TEMPLATE_SLOT_FIELDS[slot];
-  if (!field) {
-    return null;
-  }
-
-  return normalizeThemeTemplateCode(variant[field]);
+export function listThemeVariantTemplates(variantId, { publishedOnly = false } = {}) {
+  ensureTemplateVariantsSchema();
+  ensureTemplatesSchema();
+  const templates = listTemplates({ themeId: variantId });
+  return publishedOnly ? templates.filter((template) => template.status === 'published') : templates;
 }
 
 export function listTemplateVariantComponents(variantId, { publishedOnly = false } = {}) {
-  ensureTemplateVariantsSchema();
-  const variant = getTemplateVariantById(variantId);
-  if (!variant) {
-    return [];
-  }
-
-  const templateIds = resolveThemeComponentTemplateIds(variant, { publishedOnly });
-  if (templateIds.length === 0) {
-    return [];
-  }
-
-  const placeholders = templateIds.map(() => '?').join(', ');
-  const wherePublished = publishedOnly ? "AND status = 'published'" : '';
-  const rows = queryAll(
-    `
-      SELECT
-        id,
-        name,
-        type,
-        code,
-        engine,
-        content,
-        published_content,
-        status,
-        is_default,
-        sort_order,
-        created_at,
-        updated_at,
-        published_at
-      FROM templates
-      WHERE id IN (${placeholders}) AND type = 'component' ${wherePublished}
-      ORDER BY sort_order ASC, id ASC
-    `,
-    templateIds
-  );
-  const byId = new Map(rows.map((item) => [item.id, item]));
-  return templateIds.map((id) => byId.get(id)).filter(Boolean);
+  return listThemeVariantTemplates(variantId, { publishedOnly }).filter((template) => template.type === 'component');
 }
 
 export function listSelectedThemePublishedComponents() {
@@ -364,6 +173,10 @@ export function listSelectedThemePublishedComponents() {
   }));
 }
 
+export function detachTemplateFromAllThemeVariants() {
+  ensureTemplateVariantsSchema();
+}
+
 function normalizeTemplateVariantInput(input, options = {}) {
   return {
     template_name: toNullableString(input.template_name) || options.existing?.template_name || '未命名主题',
@@ -371,92 +184,35 @@ function normalizeTemplateVariantInput(input, options = {}) {
       input.is_selected ?? options.existing?.is_selected,
       options.existing?.is_selected ? 1 : (options.defaultSelected ? 1 : 0)
     ),
-    home_index: normalizeThemeTemplateCode(input.home_index),
-    co_index: normalizeThemeTemplateCode(input.co_index),
-    produts_index: normalizeThemeTemplateCode(input.produts_index),
-    produts_sort1: normalizeThemeTemplateCode(input.produts_sort1),
-    produts_sort2: normalizeThemeTemplateCode(input.produts_sort2),
-    produts_detail: normalizeThemeTemplateCode(input.produts_detail),
-    news_index: normalizeThemeTemplateCode(input.news_index),
-    news_sort1: normalizeThemeTemplateCode(input.news_sort1),
-    news_detail: normalizeThemeTemplateCode(input.news_detail),
-    service_sort1: normalizeThemeTemplateCode(input.service_sort1),
-    service_detail: normalizeThemeTemplateCode(input.service_detail),
-    msg_index: normalizeThemeTemplateCode(input.msg_index),
-    contact: normalizeThemeTemplateCode(input.contact),
-    legacy_extra: options.existing?.legacy_extra ?? null,
-    component_template_ids: normalizeComponentTemplateIds(
-      input.manual_component_template_ids ?? input.component_template_ids,
-      options.existing?.manual_component_template_ids ?? options.existing?.component_template_ids
-    ),
     source_theme_id: toPositiveInteger(input.source_theme_id)
   };
 }
 
-function normalizeTemplateVariantRecord(row) {
-  return { ...row };
-}
-
-function attachVariantComponentIds(rows) {
-  const variants = rows.map(normalizeTemplateVariantRecord);
-  if (variants.length === 0) {
-    return variants;
-  }
-
-  const ids = variants.map((item) => item.id);
-  const placeholders = ids.map(() => '?').join(', ');
-  const componentRows = queryAll(
-    `
-      SELECT variant_id, template_id
-      FROM template_variant_components
-      WHERE variant_id IN (${placeholders})
-      ORDER BY variant_id ASC, template_id ASC
-    `,
-    ids
-  );
-  const idsByVariant = new Map();
-
-  for (const row of componentRows) {
-    if (!idsByVariant.has(row.variant_id)) {
-      idsByVariant.set(row.variant_id, []);
+function attachThemeTemplates(rows) {
+  const templates = listTemplates();
+  const templatesByThemeId = new Map();
+  for (const template of templates) {
+    const themeId = Number(template.theme_id || 0);
+    if (!templatesByThemeId.has(themeId)) {
+      templatesByThemeId.set(themeId, []);
     }
-    idsByVariant.get(row.variant_id).push(row.template_id);
+    templatesByThemeId.get(themeId).push(template);
   }
 
-  return variants.map((item) => {
-    const manualComponentTemplateIds = idsByVariant.get(item.id) || [];
-    return {
-      ...item,
-      manual_component_template_ids: manualComponentTemplateIds,
-      component_template_ids: resolveThemeComponentTemplateIds(item, {
-        manualComponentTemplateIds
-      })
-    };
-  });
+  return rows.map((item) => ({
+    ...item,
+    theme_templates: templatesByThemeId.get(Number(item.id || 0)) || [],
+  }));
 }
 
-function syncTemplateVariantComponentIds(variantId, templateIds = []) {
-  const normalizedTemplateIds = ensureThemeComponentTemplateIds(templateIds);
-  execute('DELETE FROM template_variant_components WHERE variant_id = ?', [variantId]);
-  for (const templateId of normalizedTemplateIds) {
+function cloneThemeTemplates(sourceThemeId, targetThemeId) {
+  ensureTemplatesSchema();
+  const templates = listTemplates({ themeId: sourceThemeId });
+  for (const template of templates) {
     execute(
       `
-        INSERT OR IGNORE INTO template_variant_components (variant_id, template_id)
-        VALUES (?, ?)
-      `,
-      [variantId, templateId]
-    );
-  }
-}
-
-function cloneTemplateVariantComponents(sourceThemeId, targetThemeId) {
-  const components = listTemplateVariantComponents(sourceThemeId, { publishedOnly: false });
-  const clonedIds = [];
-
-  for (const component of components) {
-    const result = execute(
-      `
         INSERT INTO templates (
+          theme_id,
           name,
           type,
           code,
@@ -469,232 +225,69 @@ function cloneTemplateVariantComponents(sourceThemeId, targetThemeId) {
           created_at,
           updated_at,
           published_at
-        ) VALUES (?, 'component', ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, ?)
       `,
       [
-        component.name,
-        buildClonedThemeComponentCode(component.code, targetThemeId),
-        component.engine || 'tsx',
-        component.content || '',
-        component.published_content || component.content || '',
-        component.status || 'published',
-        component.is_default || 0,
-        component.sort_order || 0,
-        component.published_at || null
+        targetThemeId,
+        template.name,
+        template.type,
+        template.code,
+        template.engine || 'tsx',
+        template.content || '',
+        template.published_content || null,
+        template.status || 'draft',
+        template.is_default || 0,
+        template.sort_order || 0,
+        template.published_at || null
       ]
     );
-    clonedIds.push(Number(result.lastInsertRowid));
-  }
-
-  syncTemplateVariantComponentIds(targetThemeId, clonedIds);
-}
-
-function buildClonedThemeComponentCode(baseCode, themeId) {
-  return `${String(baseCode || 'component').trim()}__theme_${themeId}`;
-}
-
-function normalizeComponentTemplateIds(value, fallback = []) {
-  const source = Array.isArray(value) ? value : fallback;
-  return Array.from(
-    new Set(
-      source
-        .map((item) => toPositiveInteger(item))
-        .filter(Boolean)
-    )
-  );
-}
-
-function ensureThemeComponentTemplateIds(templateIds = []) {
-  const normalizedTemplateIds = normalizeComponentTemplateIds(templateIds);
-  for (const templateId of normalizedTemplateIds) {
-    const template = getTemplateByIdCached(templateId, new Map());
-    if (!template) {
-      throw new Error(`主题组件不存在：${templateId}`);
-    }
-    if (template.type !== 'component') {
-      throw new Error(`主题只能关联组件模板：${template.code || templateId}`);
-    }
-  }
-  return normalizedTemplateIds;
-}
-
-function normalizeThemeTemplateCode(value) {
-  const normalized = toNullableString(value);
-  if (!normalized || normalized === '没有模板') {
-    return null;
-  }
-
-  const lowered = normalized.toLowerCase();
-  if (lowered.includes('/') || lowered.includes('\\')) {
-    throw new Error(`invalid theme template code: ${normalized}`);
-  }
-
-  return normalized;
-}
-
-function resolveThemeComponentTemplateIds(variant, options = {}) {
-  const publishedOnly = options.publishedOnly === true;
-  const manualComponentTemplateIds = Array.isArray(options.manualComponentTemplateIds)
-    ? options.manualComponentTemplateIds
-    : getManualThemeComponentTemplateIds(variant.id);
-  const templateCacheByCode = new Map();
-  const templateCacheById = new Map();
-  const resolvedComponentIds = new Set();
-  const visitedTemplateKeys = new Set();
-
-  for (const templateId of manualComponentTemplateIds) {
-    const component = getTemplateByIdCached(templateId, templateCacheById);
-    if (!component || component.type !== 'component' || !matchesPublishedFilter(component, publishedOnly)) {
-      continue;
-    }
-    resolvedComponentIds.add(component.id);
-    collectNestedComponentTemplateIds(component, {
-      publishedOnly,
-      templateCacheByCode,
-      templateCacheById,
-      resolvedComponentIds,
-      visitedTemplateKeys
-    });
-  }
-
-  for (const field of Object.values(THEME_TEMPLATE_SLOT_FIELDS)) {
-    const templateCode = normalizeThemeTemplateCode(variant?.[field]);
-    if (!templateCode) {
-      continue;
-    }
-    const template = getTemplateByCodeCached(templateCode, templateCacheByCode);
-    if (!template || !matchesPublishedFilter(template, publishedOnly)) {
-      continue;
-    }
-    collectNestedComponentTemplateIds(template, {
-      publishedOnly,
-      templateCacheByCode,
-      templateCacheById,
-      resolvedComponentIds,
-      visitedTemplateKeys
-    });
-  }
-
-  return Array.from(resolvedComponentIds);
-}
-
-function collectNestedComponentTemplateIds(template, context) {
-  const cacheKey = `${template.type}:${template.id}`;
-  if (context.visitedTemplateKeys.has(cacheKey)) {
-    return;
-  }
-  context.visitedTemplateKeys.add(cacheKey);
-
-  for (const componentCode of extractLiteralComponentReferences(getTemplateEffectiveContent(template, context.publishedOnly))) {
-    const component = getTemplateByCodeCached(componentCode, context.templateCacheByCode);
-    if (!component || component.type !== 'component' || !matchesPublishedFilter(component, context.publishedOnly)) {
-      continue;
-    }
-    context.resolvedComponentIds.add(component.id);
-    collectNestedComponentTemplateIds(component, context);
   }
 }
 
-function getManualThemeComponentTemplateIds(variantId) {
-  return queryAll(
-    `
-      SELECT template_id
-      FROM template_variant_components
-      WHERE variant_id = ?
-      ORDER BY template_id ASC
-    `,
-    [variantId]
-  ).map((item) => Number(item.template_id)).filter(Boolean);
-}
+function dropLegacyThemeSchema() {
+  const columns = queryAll('PRAGMA table_info(template_variants)');
+  const hasLegacyColumns = columns.some((column) => [
+    'home_index',
+    'co_index',
+    'produts_index',
+    'produts_sort1',
+    'produts_sort2',
+    'produts_detail',
+    'news_index',
+    'news_sort1',
+    'news_detail',
+    'service_sort1',
+    'service_detail',
+    'msg_index',
+    'contact',
+    'legacy_extra',
+  ].includes(column.name));
 
-function getTemplateByIdCached(id, cache) {
-  if (cache.has(id)) {
-    return cache.get(id);
-  }
-  const template = queryOne(
-    `
-      SELECT id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
-      FROM templates
-      WHERE id = ?
-      LIMIT 1
-    `,
-    [id]
-  ) || null;
-  cache.set(id, template);
-  if (template?.code) {
-    cache.set(template.id, template);
-  }
-  return template;
-}
+  if (hasLegacyColumns) {
+    getDb().exec(`
+      PRAGMA foreign_keys = OFF;
+      BEGIN TRANSACTION;
 
-function getTemplateByCodeCached(code, cache) {
-  const normalizedCode = normalizeComponentCode(code);
-  if (!normalizedCode) {
-    return null;
-  }
-  if (cache.has(normalizedCode)) {
-    return cache.get(normalizedCode);
-  }
-  const template = queryOne(
-    `
-      SELECT id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
-      FROM templates
-      WHERE code = ?
-      LIMIT 1
-    `,
-    [normalizedCode]
-  ) || null;
-  cache.set(normalizedCode, template);
-  return template;
-}
+      ALTER TABLE template_variants RENAME TO template_variants__legacy_cleanup;
 
-function getTemplateEffectiveContent(template, publishedOnly) {
-  if (publishedOnly) {
-    return template.published_content || template.content || '';
-  }
-  return template.content || template.published_content || '';
-}
+      CREATE TABLE template_variants (
+        id INTEGER PRIMARY KEY,
+        template_name TEXT NOT NULL,
+        is_selected INTEGER NOT NULL DEFAULT 0
+      );
 
-function matchesPublishedFilter(template, publishedOnly) {
-  return !publishedOnly || template.status === 'published';
-}
+      INSERT INTO template_variants (id, template_name, is_selected)
+      SELECT id, template_name, is_selected
+      FROM template_variants__legacy_cleanup;
 
-function extractLiteralComponentReferences(content) {
-  const refs = new Set();
-  const source = String(content || '');
-  const patterns = [
-    /#component\(\s*["']([A-Za-z0-9_-]+)["']\s*\)#/g,
-    /\bcomponent\(\s*["']([A-Za-z0-9_-]+)["']/g
-  ];
+      DROP TABLE template_variants__legacy_cleanup;
 
-  for (const pattern of patterns) {
-    let match;
-    while ((match = pattern.exec(source)) !== null) {
-      refs.add(normalizeComponentCode(match[1]));
-    }
+      COMMIT;
+      PRAGMA foreign_keys = ON;
+    `);
   }
 
-  return Array.from(refs).filter(Boolean);
-}
-
-function normalizeComponentCode(value) {
-  return String(value ?? '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '_')
-    .replace(/^_+|_+$/g, '');
-}
-
-function parseLegacyExtra(value) {
-  if (!value) {
-    return {};
-  }
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
+  execute('DROP TABLE IF EXISTS template_variant_components');
 }
 
 function toNullableString(value) {

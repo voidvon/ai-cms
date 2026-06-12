@@ -56,36 +56,6 @@ const templateTypeLabelMap: Record<Template['type'], string> = {
 }
 
 type TemplateForm = Pick<Template, 'name' | 'code' | 'type' | 'engine' | 'content' | 'sort_order'>
-type ThemeSlotKey =
-  'home' |
-  'corporation' |
-  'product_list' |
-  'product_detail' |
-  'news_list' |
-  'news_detail' |
-  'service_list' |
-  'service_detail' |
-  'message' |
-  'contact'
-
-const themeSlotConfigs: Array<{
-  key: ThemeSlotKey
-  label: string
-  description: string
-  templateType: Extract<Template['type'], 'home' | 'list' | 'content'>
-  field: keyof TemplateVariant
-}> = [
-  { key: 'home', label: '首页模板', description: '网站首页', templateType: 'home', field: 'home_index' },
-  { key: 'corporation', label: '公司栏目模板', description: '公司单页', templateType: 'content', field: 'co_index' },
-  { key: 'product_list', label: '产品列表模板', description: '产品分类列表', templateType: 'list', field: 'produts_sort1' },
-  { key: 'product_detail', label: '产品详情模板', description: '产品详情页', templateType: 'content', field: 'produts_detail' },
-  { key: 'news_list', label: '新闻列表模板', description: '新闻分类列表', templateType: 'list', field: 'news_sort1' },
-  { key: 'news_detail', label: '新闻详情模板', description: '新闻详情页', templateType: 'content', field: 'news_detail' },
-  { key: 'service_list', label: '服务列表模板', description: '服务分类列表', templateType: 'list', field: 'service_sort1' },
-  { key: 'service_detail', label: '服务详情模板', description: '服务详情页', templateType: 'content', field: 'service_detail' },
-  { key: 'message', label: '留言板模板', description: '在线留言页', templateType: 'content', field: 'msg_index' },
-  { key: 'contact', label: '联系页模板', description: '联系我们页', templateType: 'content', field: 'contact' },
-]
 
 type EditorTarget = {
   templateId: number | null
@@ -112,7 +82,6 @@ export default function TemplateVariantsPage() {
   const [versionPopoverOpen, setVersionPopoverOpen] = useState(false)
   const [versionPreview, setVersionPreview] = useState<TemplateVersion | null>(null)
   const [previewMode, setPreviewMode] = useState('auto')
-  const [attachComponentId, setAttachComponentId] = useState<string>('')
   const [deleteThemeDialogOpen, setDeleteThemeDialogOpen] = useState(false)
   const [templateDeleteDialogOpen, setTemplateDeleteDialogOpen] = useState(false)
   const [deletingTreeItem, setDeletingTreeItem] = useState<TemplateLibraryNode | null>(null)
@@ -127,48 +96,65 @@ export default function TemplateVariantsPage() {
     content: '',
     sort_order: 0,
   })
-  const { data: themesData, isLoading: isThemesLoading } = useQuery({
+  const { data: themesData, isLoading: isThemesLoading, error: themesError } = useQuery({
     queryKey: ['themes'],
     queryFn: () => templateVariantsApi.list(),
   })
-  const { data, isLoading } = useQuery({
-    queryKey: ['templates'],
-    queryFn: () => templatesApi.list(),
-  })
-
   const themes = themesData?.data ?? []
-  const templates = data?.data ?? []
   const selectedTheme = useMemo(
     () => themes.find((item) => item.is_selected === 1) || themes[0] || null,
     [themes],
   )
-  const themeComponentTemplates = useMemo(
+  const { data, isLoading, error: templatesError } = useQuery({
+    queryKey: ['templates', selectedTheme?.id ?? 0],
+    queryFn: () => templatesApi.list(undefined, selectedTheme?.id),
+    enabled: Boolean(selectedTheme?.id),
+  })
+  const templates = data?.data ?? []
+  const themeTemplatesByType = useMemo(
     () => {
-      const componentIds = new Set(selectedTheme?.manual_component_template_ids || [])
-      return templates.filter((item) => item.type === 'component' && componentIds.has(item.id))
+      const grouped: Record<'home' | 'list' | 'content', Template[]> = {
+        home: [],
+        list: [],
+        content: [],
+      }
+
+      if (templates.length === 0) {
+        return grouped
+      }
+
+      for (const template of templates) {
+        if (template.type !== 'home' && template.type !== 'list' && template.type !== 'content') {
+          continue
+        }
+        grouped[template.type].push(template)
+      }
+
+      grouped.home.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id)
+      grouped.list.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id)
+      grouped.content.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id)
+
+      return grouped
     },
-    [selectedTheme, templates],
-  )
-  const availableComponentTemplates = useMemo(
-    () => {
-      const attachedIds = new Set(selectedTheme?.manual_component_template_ids || [])
-      return templates.filter((item) => item.type === 'component' && !attachedIds.has(item.id))
-    },
-    [selectedTheme, templates],
-  )
-  const resolvedThemeComponentCount = selectedTheme?.component_template_ids?.length || 0
-  const homeTemplates = useMemo(
-    () => templates.filter((item) => item.type === 'home'),
     [templates],
+  )
+  const themeComponentTemplates = useMemo(
+    () => templates.filter((item) => item.type === 'component'),
+    [selectedTheme, templates],
+  )
+  const resolvedThemeComponentCount = themeComponentTemplates.length
+  const homeTemplates = useMemo(
+    () => themeTemplatesByType.home,
+    [themeTemplatesByType],
   )
   const primaryHomeTemplate = homeTemplates[0] || null
   const listTemplates = useMemo(
-    () => templates.filter((item) => item.type === 'list'),
-    [templates],
+    () => themeTemplatesByType.list,
+    [themeTemplatesByType],
   )
   const contentTemplates = useMemo(
-    () => templates.filter((item) => item.type === 'content'),
-    [templates],
+    () => themeTemplatesByType.content,
+    [themeTemplatesByType],
   )
   const templateLibraryItems = useMemo<TreeItemData<TemplateLibraryNode>[]>(() => {
     const createTemplateLeaf = (template: Template) => {
@@ -274,6 +260,18 @@ export default function TemplateVariantsPage() {
   }, [selectedTemplate])
 
   useEffect(() => {
+    if (themesError) {
+      toast.error(getApiErrorMessage(themesError, '主题列表加载失败'))
+    }
+  }, [themesError])
+
+  useEffect(() => {
+    if (templatesError) {
+      toast.error(getApiErrorMessage(templatesError, '模板列表加载失败'))
+    }
+  }, [templatesError])
+
+  useEffect(() => {
     if (editorTarget.templateId || selectedTemplate) {
       return
     }
@@ -282,6 +280,26 @@ export default function TemplateVariantsPage() {
       setEditorTarget({ templateId: firstTemplate.id })
     }
   }, [contentTemplates, editorTarget.templateId, homeTemplates, listTemplates, selectedTemplate, themeComponentTemplates])
+
+  useEffect(() => {
+    if (!editorTarget.templateId) {
+      return
+    }
+
+    const visibleTemplateIds = new Set([
+      ...homeTemplates.map((item) => item.id),
+      ...listTemplates.map((item) => item.id),
+      ...contentTemplates.map((item) => item.id),
+      ...themeComponentTemplates.map((item) => item.id),
+    ])
+
+    if (visibleTemplateIds.has(editorTarget.templateId)) {
+      return
+    }
+
+    const fallbackTemplate = homeTemplates[0] || listTemplates[0] || contentTemplates[0] || themeComponentTemplates[0] || null
+    setEditorTarget({ templateId: fallbackTemplate?.id || null })
+  }, [contentTemplates, editorTarget.templateId, homeTemplates, listTemplates, themeComponentTemplates])
 
   const publishMutation = useMutation({
     mutationFn: async () => {
@@ -305,6 +323,7 @@ export default function TemplateVariantsPage() {
       const templateCount = templates.filter((item) => item.type === templateType).length
       const code = `${templateType}_${Date.now()}`
       const created = await templatesApi.create({
+        theme_id: selectedTheme?.id,
         name: `${templateTypeLabelMap[templateType]}-新模板`,
         code,
         type: templateType,
@@ -337,6 +356,7 @@ export default function TemplateVariantsPage() {
       }
       const code = `component_${Date.now()}`
       const created = await templatesApi.create({
+        theme_id: selectedTheme.id,
         name: '新组件模板',
         code,
         type: 'component',
@@ -366,9 +386,6 @@ export default function TemplateVariantsPage() {
       if (!created.data?.id) {
         throw new Error('创建组件失败')
       }
-      await templateVariantsApi.update(selectedTheme.id, {
-        manual_component_template_ids: [...(selectedTheme.manual_component_template_ids || []), created.data.id],
-      })
       return created
     },
     onSuccess: (response) => {
@@ -383,56 +400,11 @@ export default function TemplateVariantsPage() {
     },
     onError: (error: unknown) => toast.error(getApiErrorMessage(error, '创建组件失败')),
   })
-  const attachComponentMutation = useMutation({
-    mutationFn: async (templateId: number) => {
-      if (!selectedTheme) {
-        throw new Error('未选择主题')
-      }
-      return templateVariantsApi.update(selectedTheme.id, {
-        manual_component_template_ids: Array.from(new Set([
-          ...(selectedTheme.manual_component_template_ids || []),
-          templateId,
-        ])),
-      })
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['themes'] })
-      queryClient.invalidateQueries({ queryKey: ['selected-theme'] })
-      setAttachComponentId('')
-      toast.success('组件已关联到当前主题')
-    },
-    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '组件关联失败')),
-  })
-  const detachComponentMutation = useMutation({
-    mutationFn: async (templateId: number) => {
-      if (!selectedTheme) {
-        throw new Error('未选择主题')
-      }
-      return templateVariantsApi.update(selectedTheme.id, {
-        manual_component_template_ids: (selectedTheme.manual_component_template_ids || []).filter((id) => id !== templateId),
-      })
-    },
-    onSuccess: (_, templateId) => {
-      queryClient.invalidateQueries({ queryKey: ['themes'] })
-      queryClient.invalidateQueries({ queryKey: ['selected-theme'] })
-      if (editorTarget.templateId === templateId) {
-        setEditorTarget({ templateId: null })
-      }
-      toast.success('组件已从当前主题解除关联')
-    },
-    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '解除关联失败')),
-  })
 
   const reorderTemplatesMutation = useMutation({
     mutationFn: async ({ templateType, templateIds }: { templateType: Template['type']; templateIds: number[] }) => {
       for (let index = 0; index < templateIds.length; index += 1) {
         await templatesApi.update(templateIds[index], { sort_order: index + 1 })
-      }
-
-      if (templateType === 'component' && selectedTheme) {
-        await templateVariantsApi.update(selectedTheme.id, {
-          manual_component_template_ids: templateIds,
-        })
       }
 
       return { templateType, templateIds }
@@ -481,24 +453,6 @@ export default function TemplateVariantsPage() {
     mutationFn: async (node: TemplateLibraryNode) => {
       if (!node.template?.id) {
         throw new Error('未找到模板')
-      }
-
-      for (const theme of themes) {
-        const updatePayload: Partial<TemplateVariant> = {}
-
-        if ((theme.manual_component_template_ids || []).includes(node.template.id)) {
-          updatePayload.manual_component_template_ids = (theme.manual_component_template_ids || []).filter((id) => id !== node.template!.id)
-        }
-
-        for (const slotConfig of themeSlotConfigs) {
-          if (theme[slotConfig.field] === node.template.code) {
-            updatePayload[slotConfig.field] = ''
-          }
-        }
-
-        if (Object.keys(updatePayload).length > 0) {
-          await templateVariantsApi.update(theme.id, updatePayload)
-        }
       }
 
       await templatesApi.delete(node.template.id)
@@ -789,56 +743,20 @@ export default function TemplateVariantsPage() {
             <div className="mt-4 space-y-3 rounded border p-3">
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <div className="text-sm font-medium">主题组件关联</div>
+                  <div className="text-sm font-medium">主题组件模板</div>
                   <div className="text-xs text-muted-foreground">
-                    直属组件 {themeComponentTemplates.length} 个，运行时解析组件 {resolvedThemeComponentCount} 个。
+                    当前主题组件模板 {themeComponentTemplates.length} 个，运行时可用组件 {resolvedThemeComponentCount} 个。
                   </div>
                 </div>
-              </div>
-              <div className="flex gap-2">
-                <Select value={attachComponentId} onValueChange={setAttachComponentId}>
-                  <SelectTrigger className="flex-1">
-                    <SelectValue placeholder="关联已有组件模板" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableComponentTemplates.map((template) => (
-                      <SelectItem key={template.id} value={String(template.id)}>
-                        {template.name} ({template.code})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    const templateId = Number(attachComponentId)
-                    if (!Number.isNaN(templateId) && templateId > 0) {
-                      attachComponentMutation.mutate(templateId)
-                    }
-                  }}
-                  disabled={!attachComponentId || attachComponentMutation.isPending}
-                >
-                  关联
-                </Button>
               </div>
               {themeComponentTemplates.length > 0 ? (
                 <div className="space-y-2">
                   {themeComponentTemplates.map((template) => (
-                    <div key={template.id} className="flex items-center justify-between gap-2 rounded bg-muted/50 px-2 py-1.5 text-sm">
+                    <div key={template.id} className="rounded bg-muted/50 px-2 py-1.5 text-sm">
                       <div className="min-w-0">
                         <div className="truncate font-medium">{template.name}</div>
                         <div className="truncate text-xs text-muted-foreground">{template.code}</div>
                       </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => detachComponentMutation.mutate(template.id)}
-                        disabled={detachComponentMutation.isPending}
-                      >
-                        移除
-                      </Button>
                     </div>
                   ))}
                 </div>
@@ -1087,38 +1005,7 @@ function buildNewThemePayload(baseTheme: TemplateVariant | null, nextIndex: numb
     template_name: `新主题 ${nextIndex}`,
     source_theme_id: baseTheme?.id,
     is_selected: 0,
-    home_index: baseTheme?.home_index,
-    co_index: baseTheme?.co_index,
-    produts_index: baseTheme?.produts_index,
-    produts_sort1: baseTheme?.produts_sort1,
-    produts_sort2: baseTheme?.produts_sort2,
-    produts_detail: baseTheme?.produts_detail,
-    news_index: baseTheme?.news_index,
-    news_sort1: baseTheme?.news_sort1,
-    news_detail: baseTheme?.news_detail,
-    service_sort1: baseTheme?.service_sort1,
-    service_detail: baseTheme?.service_detail,
-    msg_index: baseTheme?.msg_index,
-    contact: baseTheme?.contact,
   }
-}
-
-function buildThemeSlotUpdate(field: keyof TemplateVariant, code: string): Partial<TemplateVariant> {
-  return {
-    [field]: code,
-  }
-}
-
-function getSlotLibraryLabel(
-  slot?: {
-    label: string
-    template?: Template | null
-  } | null,
-) {
-  if (!slot) {
-    return ''
-  }
-  return slot.template?.name?.trim() || slot.label
 }
 
 function getApiErrorMessage(error: unknown, fallback: string) {

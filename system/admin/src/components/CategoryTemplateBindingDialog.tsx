@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { templatesApi } from '@/api/advanced'
+import { templateVariantsApi, templatesApi } from '@/api/advanced'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -29,17 +29,23 @@ export default function CategoryTemplateBindingDialog({
 }: CategoryTemplateBindingDialogProps) {
   const queryClient = useQueryClient()
   const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string>>({})
+  const { data: selectedThemeData } = useQuery({
+    queryKey: ['selected-theme'],
+    queryFn: () => templateVariantsApi.getSelected(),
+    enabled: open,
+  })
+  const selectedThemeId = selectedThemeData?.data?.id
 
   const { data: templatesData } = useQuery({
-    queryKey: ['templates'],
-    queryFn: () => templatesApi.list(),
-    enabled: open,
+    queryKey: ['templates', selectedThemeId ?? 0],
+    queryFn: () => templatesApi.list(undefined, selectedThemeId),
+    enabled: open && Boolean(selectedThemeId),
   })
 
   const { data: bindingsData } = useQuery({
-    queryKey: ['template-bindings'],
-    queryFn: () => templatesApi.listBindings(),
-    enabled: open,
+    queryKey: ['template-bindings', selectedThemeId ?? 0],
+    queryFn: () => templatesApi.listBindings(selectedThemeId),
+    enabled: open && Boolean(selectedThemeId),
   })
 
   const templates = templatesData?.data || []
@@ -75,6 +81,7 @@ export default function CategoryTemplateBindingDialog({
           continue
         }
         await templatesApi.saveBinding({
+          theme_id: selectedThemeId,
           target_type: targetType,
           target_id: targetId ?? null,
           template_type: type,
@@ -83,7 +90,7 @@ export default function CategoryTemplateBindingDialog({
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['template-bindings'] })
+      queryClient.invalidateQueries({ queryKey: ['template-bindings', selectedThemeId ?? 0] })
       toast.success('模板绑定已保存')
       onOpenChange(false)
     },

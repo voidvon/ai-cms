@@ -73,9 +73,12 @@ export const templateVariantsApi = {
 }
 
 export const templatesApi = {
-  list: async (type?: Template['type']) => {
+  list: async (type?: Template['type'], themeId?: number) => {
     const response = await apiClient.get<ApiResponse<Template[]>>('/templates', {
-      params: type ? { type } : {},
+      params: {
+        ...(type ? { type } : {}),
+        ...(themeId ? { theme_id: themeId } : {}),
+      },
     })
     return response.data
   },
@@ -125,8 +128,10 @@ export const templatesApi = {
     return response.data
   },
 
-  listBindings: async () => {
-    const response = await apiClient.get<ApiResponse<TemplateBinding[]>>('/template-bindings')
+  listBindings: async (themeId?: number) => {
+    const response = await apiClient.get<ApiResponse<TemplateBinding[]>>('/template-bindings', {
+      params: themeId ? { theme_id: themeId } : {},
+    })
     return response.data
   },
 
