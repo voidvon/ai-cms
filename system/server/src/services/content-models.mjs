@@ -25,7 +25,7 @@ const FIELD_LABELS = {
   summary: '摘要',
   content_html: '正文内容',
   requirements_html: '具体要求',
-  small_image: '封面图片',
+  images: '产品图片',
   picture: '图片',
   keywords: '关键词',
   is_featured_home: '首页推荐',

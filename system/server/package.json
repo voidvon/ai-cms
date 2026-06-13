@@ -10,6 +10,8 @@
     "db:init": "node scripts/init-db.mjs",
     "db:export-access": ".venv/bin/python scripts/export-access.py",
     "db:import": "node scripts/import-csv.mjs",
+    "db:import:spirax-site": "node scripts/import-spirax-global-site-config.mjs",
+    "db:import:spirax-templates": "node scripts/import-spirax-global-templates.mjs --select",
     "db:backfill-media": "node scripts/backfill-media-assets.mjs",
     "db:repair-encoding": "node scripts/repair-legacy-encoding.mjs --write",
     "admin:create": "node scripts/create-admin.mjs",

@@ -226,7 +226,7 @@ function isProtectedField(fieldName: string) {
     'is_visible',
     'is_featured_home',
     'code',
-    'small_image',
+    'images',
     'picture',
     'created_at',
     'updated_at',

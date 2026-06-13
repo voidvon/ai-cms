@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import ImageUploadField from '@/components/ImageUploadField'
+import ImagesUploadField from '@/components/ImagesUploadField'
 import RichTextEditor from '@/components/RichTextEditor'
 import { toast } from 'sonner'
 import type { Product, ProductTranslation } from '@/types'
@@ -28,7 +28,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
   const [baseData, setBaseData] = useState({
     code: '',
     category_id: defaultCategoryId,
-    small_image: '',
+    images: [] as string[],
     is_featured_home: 0,
     is_visible: 1,
     sort_order: 0,
@@ -58,7 +58,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
       setBaseData({
         code: source.code || '',
         category_id: source.category_id || 1,
-        small_image: source.small_image || '',
+        images: Array.isArray(source.images) ? source.images : [],
         is_featured_home: source.is_featured_home || 0,
         is_visible: source.is_visible || 1,
         sort_order: source.sort_order || 0,
@@ -72,7 +72,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
       setBaseData({
         code: '',
         category_id: defaultCategoryId,
-        small_image: '',
+        images: [],
         is_featured_home: 0,
         is_visible: 1,
         sort_order: 0,
@@ -252,13 +252,13 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="small_image">封面图片</Label>
-              <ImageUploadField
-                id="small_image"
-                value={baseData.small_image}
-                onChange={(small_image) => setBaseData({ ...baseData, small_image })}
+              <Label htmlFor="images">产品图片</Label>
+              <ImagesUploadField
+                id="images"
+                value={baseData.images}
+                onChange={(images) => setBaseData({ ...baseData, images })}
                 purpose="product_cover"
-                placeholder="请输入封面图片路径"
+                placeholder="请输入产品图片路径"
               />
             </div>
 

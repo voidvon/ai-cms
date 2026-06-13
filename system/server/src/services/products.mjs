@@ -16,6 +16,7 @@ const LEGACY_PRODUCT_BRAND_PATTERNS = [
   /[-,，\s]*中国驰名商标/gi
 ];
 const DEFAULT_PRODUCT_IMAGE = '/skin/dfpic.gif';
+const EMPTY_IMAGE_LIST = '[]';
 let schemaEnsured = false;
 
 export function ensureProductsSchema() {
@@ -25,6 +26,7 @@ export function ensureProductsSchema() {
 
   ensureLanguagesSchema();
   addColumnIfMissing('products', 'updated_at', 'TEXT');
+  migrateProductImagesColumn();
   execute(
     `
       UPDATE products
@@ -86,7 +88,8 @@ export function listProducts({ featured = false, visibleOnly = true, limit = 20,
         code,
         summary,
         content_html,
-        small_image,
+        images,
+        legacy_extra,
         keywords,
         is_featured_home,
         is_visible,
@@ -148,7 +151,8 @@ export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, inc
         p.code,
         p.summary,
         p.content_html,
-        p.small_image,
+        p.images,
+        p.legacy_extra,
         p.keywords,
         p.is_featured_home,
         p.is_visible,
@@ -200,7 +204,8 @@ export function getProductById(id, { languageCode = null, includeTranslations = 
         code,
         summary,
         content_html,
-        small_image,
+        images,
+        legacy_extra,
         keywords,
         is_featured_home,
         is_visible,
@@ -243,7 +248,8 @@ export function searchProducts(rawQuery, limit = 20, { languageCode = null } = {
         code,
         summary,
         content_html,
-        small_image,
+        images,
+        legacy_extra,
         keywords,
         is_featured_home,
         is_visible,
@@ -287,7 +293,7 @@ export function searchProductsPaged(rawQuery, { page = 1, limit = 20, languageCo
           code,
           summary,
           content_html,
-          small_image,
+          images,
           keywords,
           is_featured_home,
           is_visible,
@@ -328,7 +334,7 @@ export function searchProductsPaged(rawQuery, { page = 1, limit = 20, languageCo
         code,
         summary,
         content_html,
-        small_image,
+        images,
         keywords,
         is_featured_home,
         is_visible,
@@ -391,7 +397,7 @@ export function createProduct(input) {
         code,
         summary,
         content_html,
-        small_image,
+        images,
         keywords,
         is_featured_home,
         is_visible,
@@ -405,7 +411,7 @@ export function createProduct(input) {
       payload.base.code,
       defaultTranslation.summary,
       defaultTranslation.content_html,
-      payload.base.small_image,
+      payload.base.images,
       defaultTranslation.keywords,
       payload.base.is_featured_home,
       payload.base.is_visible,
@@ -419,7 +425,7 @@ export function createProduct(input) {
     includeTranslations: true,
     includeTranslationStatuses: true
   });
-  markProductCoverActive(product?.small_image);
+  markProductImagesActive(product?.images);
   return product;
 }
 
@@ -455,7 +461,7 @@ export function updateProduct(id, input) {
         code = ?,
         summary = ?,
         content_html = ?,
-        small_image = ?,
+        images = ?,
         keywords = ?,
         is_featured_home = ?,
         is_visible = ?,
@@ -469,7 +475,7 @@ export function updateProduct(id, input) {
       payload.base.code,
       defaultTranslation.summary,
       defaultTranslation.content_html,
-      payload.base.small_image,
+      payload.base.images,
       defaultTranslation.keywords,
       payload.base.is_featured_home,
       payload.base.is_visible,
@@ -481,15 +487,13 @@ export function updateProduct(id, input) {
 
   saveProductTranslations(id, payload.translations, now);
 
-  if (existing.small_image !== payload.base.small_image) {
-    markProductCoverOrphaned(existing.small_image);
-  }
+  syncProductImageAssetStatuses(existing.images, payload.base.images);
 
   const product = getProductById(id, {
     includeTranslations: true,
     includeTranslationStatuses: true
   });
-  markProductCoverActive(product?.small_image);
+  markProductImagesActive(product?.images);
   return product;
 }
 
@@ -501,7 +505,7 @@ export function deleteProduct(id) {
   }
 
   execute('DELETE FROM products WHERE id = ?', [id]);
-  markProductCoverOrphaned(existing.small_image);
+  markProductImagesOrphaned(existing.images);
   return existing;
 }
 
@@ -517,7 +521,7 @@ export function normalizeProductInput(input) {
     code: toNullableString(input.code),
     summary: toNullableString(input.summary),
     content_html: toNullableString(input.content_html),
-    small_image: toNullableString(input.small_image) || DEFAULT_PRODUCT_IMAGE,
+    images: normalizeImagesInput(input.images ?? input.small_image),
     keywords: toNullableString(input.keywords),
     is_featured_home: toBooleanInt(input.is_featured_home),
     is_visible: toBooleanInt(input.is_visible, 1),
@@ -529,7 +533,7 @@ function normalizeProductBaseInput(input) {
   return {
     category_id: toNullableInteger(input?.category_id),
     code: toNullableString(input?.code),
-    small_image: toNullableString(input?.small_image) || DEFAULT_PRODUCT_IMAGE,
+    images: normalizeImagesInput(input?.images ?? input?.small_image),
     is_featured_home: toBooleanInt(input?.is_featured_home),
     is_visible: toBooleanInt(input?.is_visible, 1),
     sort_order: toInteger(input?.sort_order, 0)
@@ -630,23 +634,113 @@ function addColumnIfMissing(tableName, columnName, definition) {
   getDb().exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
 }
 
-function markProductCoverActive(relativePath) {
-  if (!isManagedProductCover(relativePath)) {
+function migrateProductImagesColumn() {
+  const columns = queryAll('PRAGMA table_info(products)');
+  const hasImages = columns.some((column) => column.name === 'images');
+  const hasSmallImage = columns.some((column) => column.name === 'small_image');
+
+  if (!hasImages) {
+    getDb().exec(`ALTER TABLE products ADD COLUMN images TEXT NOT NULL DEFAULT '${EMPTY_IMAGE_LIST}'`);
+  }
+
+  if (!hasSmallImage) {
     return;
   }
-  markMediaAssetStatusByPath(relativePath, 'active');
-}
 
-function markProductCoverOrphaned(relativePath) {
-  if (!isManagedProductCover(relativePath)) {
-    return;
+  const rows = queryAll('SELECT id, small_image, images FROM products');
+  for (const row of rows) {
+    const currentImages = parseImagesValue(row.images);
+    if (currentImages.length > 0) {
+      continue;
+    }
+
+    const legacyPath = String(row.small_image || '').trim();
+    const nextImages = legacyPath && legacyPath !== DEFAULT_PRODUCT_IMAGE ? [legacyPath] : [];
+    execute('UPDATE products SET images = ? WHERE id = ?', [JSON.stringify(nextImages), Number(row.id)]);
   }
-  markMediaAssetStatusByPath(relativePath, 'orphaned');
 }
 
-function isManagedProductCover(relativePath) {
+function markProductImagesActive(imagesValue) {
+  for (const relativePath of parseImagesValue(imagesValue)) {
+    if (!isManagedProductImage(relativePath)) {
+      continue;
+    }
+    markMediaAssetStatusByPath(relativePath, 'active');
+  }
+}
+
+function markProductImagesOrphaned(imagesValue) {
+  for (const relativePath of parseImagesValue(imagesValue)) {
+    if (!isManagedProductImage(relativePath)) {
+      continue;
+    }
+    markMediaAssetStatusByPath(relativePath, 'orphaned');
+  }
+}
+
+function syncProductImageAssetStatuses(previousImagesValue, nextImagesValue) {
+  const previous = new Set(parseImagesValue(previousImagesValue).filter(isManagedProductImage));
+  const next = new Set(parseImagesValue(nextImagesValue).filter(isManagedProductImage));
+
+  for (const path of previous) {
+    if (!next.has(path)) {
+      markMediaAssetStatusByPath(path, 'orphaned');
+    }
+  }
+
+  for (const path of next) {
+    markMediaAssetStatusByPath(path, 'active');
+  }
+}
+
+function isManagedProductImage(relativePath) {
   const normalizedPath = String(relativePath || '').trim();
   return normalizedPath !== '' && normalizedPath !== DEFAULT_PRODUCT_IMAGE;
+}
+
+function normalizeImagesInput(input) {
+  return JSON.stringify(parseImagesValue(input));
+}
+
+function parseImagesValue(value) {
+  if (Array.isArray(value)) {
+    return dedupeImages(value.map(normalizeImagePath).filter(Boolean));
+  }
+
+  const normalizedValue = String(value ?? '').trim();
+  if (!normalizedValue || normalizedValue === DEFAULT_PRODUCT_IMAGE || normalizedValue === EMPTY_IMAGE_LIST) {
+    return [];
+  }
+
+  if (normalizedValue.startsWith('[')) {
+    try {
+      const parsed = JSON.parse(normalizedValue);
+      if (Array.isArray(parsed)) {
+        return dedupeImages(parsed.map(normalizeImagePath).filter(Boolean));
+      }
+    } catch {
+      // keep legacy single-string fallback below
+    }
+  }
+
+  return dedupeImages([normalizeImagePath(normalizedValue)].filter(Boolean));
+}
+
+function normalizeImagePath(value) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized || normalized === DEFAULT_PRODUCT_IMAGE) {
+    return '';
+  }
+  return normalized;
+}
+
+function dedupeImages(images) {
+  return [...new Set(images)];
+}
+
+function resolvePrimaryProductImage(imagesValue) {
+  const images = parseImagesValue(imagesValue);
+  return images[0] || DEFAULT_PRODUCT_IMAGE;
 }
 
 function normalizeProductRecord(row) {
@@ -656,10 +750,13 @@ function normalizeProductRecord(row) {
 
   return {
     ...row,
+    images: parseImagesValue(row.images ?? row.small_image),
+    primary_image: resolvePrimaryProductImage(row.images ?? row.small_image),
     name: resolveProductName(row),
     code: resolveProductCode(row),
     summary: resolveProductSummary(row),
-    keywords: resolveProductKeywords(row)
+    keywords: resolveProductKeywords(row),
+    legacy_extra: row.legacy_extra || null
   };
 }
 

@@ -389,6 +389,15 @@ export default function ColumnsPage() {
   const bindings = bindingsData?.data || []
   const listTemplates = templates.filter((template: Template) => template.type === 'list')
   const contentTemplates = templates.filter((template: Template) => template.type === 'content')
+  const selectedCategoryBindings = selectedColumn
+    ? bindings.filter((binding) => {
+      const target = getCategoryTreeTarget(selectedColumn)
+      if (!target) {
+        return false
+      }
+      return binding.target_type === target.targetType && binding.target_id === target.id
+    })
+    : []
 
   const handleSelectColumn = (column: TreeItemData<Column>) => {
     setPage(1)
@@ -725,6 +734,13 @@ export default function ColumnsPage() {
           </div>
         </div>
         <div className="mt-4 min-h-0 flex flex-1 flex-col">
+          {selectedColumn && !isManualColumn ? (
+            <CategoryDetailPanel
+              column={selectedColumn}
+              bindings={selectedCategoryBindings}
+              selectedThemeId={selectedThemeId}
+            />
+          ) : null}
           {isManualColumn ? (
             <div className="min-h-0 flex-1">
               <ManualColumnPanel column={selectedColumn} onEdit={handleEditManualColumn} onDelete={handleDeleteManualColumn} />
@@ -1244,6 +1260,61 @@ function ManualColumnPanel({
   )
 }
 
+function CategoryDetailPanel({
+  column,
+  bindings,
+  selectedThemeId,
+}: {
+  column: Column
+  bindings: TemplateBinding[]
+  selectedThemeId?: number
+}) {
+  const target = getCategoryTreeTarget(column)
+  const listBinding = bindings.find((item) => item.template_type === 'list')
+  const contentBinding = bindings.find((item) => item.template_type === 'content')
+  const detailText = column.column_kind === 'single'
+    ? (column.route_path || '-')
+    : column.source_type === 'custom_link'
+      ? (column.custom_url || '-')
+      : `源ID ${column.source_id || '-'}`
+  const seoSummary = column.seo_description?.trim() || '-'
+  const seoKeywords = column.seo_keywords?.trim() || '-'
+
+  return (
+    <Card className="mb-4">
+      <CardContent className="grid gap-4 px-5 py-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="space-y-1 text-sm">
+          <div className="text-muted-foreground">基本信息</div>
+          <div className="font-medium">{column.name}</div>
+          <div>ID {column.id}</div>
+          <div>类型：{getColumnKindLabel(column)}</div>
+          <div>排序：{column.sort_order}</div>
+          <div>父级：{column.parent_id || '顶级'}</div>
+        </div>
+        <div className="space-y-1 text-sm">
+          <div className="text-muted-foreground">路径与来源</div>
+          <div className="break-all">{detailText}</div>
+          <div>模型：{column.model_code || '-'}</div>
+          <div>来源类型：{column.source_type || '-'}</div>
+          {target ? <div>分类ID：{target.id}</div> : null}
+        </div>
+        <div className="space-y-1 text-sm">
+          <div className="text-muted-foreground">SEO</div>
+          <div className="line-clamp-3 break-words">{seoSummary}</div>
+          <div className="line-clamp-2 break-words text-muted-foreground">{seoKeywords}</div>
+          <div>语言：{column.current_language_code || '-'}</div>
+        </div>
+        <div className="space-y-1 text-sm">
+          <div className="text-muted-foreground">模板绑定</div>
+          <div>主题：{selectedThemeId ? `#${selectedThemeId}` : '未选择'}</div>
+          <div>列表模板：{listBinding?.template_name || listBinding?.template_code || '未绑定'}</div>
+          <div>内容模板：{contentBinding?.template_name || contentBinding?.template_code || '未绑定'}</div>
+        </div>
+      </CardContent>
+    </Card>
+  )
+}
+
 function buildPaginationItems(currentPage: number, totalPages: number): Array<number | 'ellipsis'> {
   if (totalPages <= 7) {
     return Array.from({ length: totalPages }, (_, index) => index + 1)
@@ -1316,6 +1387,31 @@ function isEditableCategoryColumn(column: Column) {
   return column.source_type === 'product_category'
     || column.source_type === 'news_category'
     || column.source_type === 'corporation_category'
+}
+
+function getColumnKindLabel(column: Column) {
+  if (column.column_kind === 'single') {
+    return '单页'
+  }
+  if (column.column_kind === 'link' || column.source_type === 'custom_link') {
+    return Number(column.open_in_new_tab || 0) === 1 ? '链接/新窗' : '链接'
+  }
+  if (column.source_type === 'product_root' || column.source_type === 'product_category') {
+    return '产品'
+  }
+  if (column.source_type === 'news_category') {
+    return '新闻'
+  }
+  if (column.source_type === 'corporation_root' || column.source_type === 'corporation_category') {
+    return '公司'
+  }
+  if (column.source_type === 'contact_page') {
+    return '联系'
+  }
+  if (column.source_type === 'message_page') {
+    return '留言'
+  }
+  return '栏目'
 }
 
 async function saveOptionalTemplateBinding(
@@ -1408,9 +1504,37 @@ function getCategoryTreeTarget(column: Column): CategoryTreeTarget {
 }
 
 function toTreeItem(column: ColumnTreeNode): TreeItemData<Column> {
+  const isManual = isEditableManualColumn(column)
+  const detailText = column.column_kind === 'single'
+    ? (column.route_path || '-')
+    : column.source_type === 'custom_link'
+      ? (column.custom_url || '-')
+      : `源ID ${column.source_id || '-'}`
+  const seoSummary = column.seo_description?.trim() || column.seo_keywords?.trim() || ''
+
   return {
     id: column.id,
-    label: column.name,
+    label: (
+      <div className="min-w-0 py-1">
+        <div className="flex items-center gap-2">
+          <span className="truncate font-medium">{column.name}</span>
+          <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px]">
+            {getColumnKindLabel(column)}
+          </Badge>
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+          <span>ID {column.id}</span>
+          {!isManual ? <span>{detailText}</span> : null}
+          <span>排序 {column.sort_order}</span>
+          {isManual ? <span className="truncate">{detailText}</span> : null}
+        </div>
+        {seoSummary ? (
+          <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">
+            SEO: {seoSummary}
+          </div>
+        ) : null}
+      </div>
+    ),
     data: column,
     children: column.children.map(toTreeItem),
   }

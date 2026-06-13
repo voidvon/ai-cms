@@ -627,7 +627,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         id: item.id,
         name: item.name || '',
         url: `/product/${item.id}.html`,
-        image: item.small_image || '/skin/dfpic.gif',
+        image: item.primary_image || '/skin/dfpic.gif',
         summary: item.summary || ''
       })),
       pagerHtml: '<div class="page_list">共 8 条信息 1/1 页</div>'
@@ -656,7 +656,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       primaryMenuItems: buildPreviewPrimaryMenuItems('product'),
       prodKeywords: product.keywords || product.name,
       prodDescription: product.summary || '',
-      image: product.small_image || '/skin/dfpic.gif',
+      image: product.primary_image || '/skin/dfpic.gif',
       code: product.code || '',
       relatedProductsHtml: buildPreviewProductLinksHtml(4),
       bodyHtml: product.content_html || product.summary || '',
@@ -882,7 +882,7 @@ function buildPreviewPageContext({ pageType, title, url, section, category, cont
 function getPreviewProduct() {
   return queryOne(
     `
-      SELECT id, category_id, name, code, summary, content_html, small_image, keywords
+      SELECT id, category_id, name, code, summary, content_html, images, keywords
       FROM products
       ORDER BY is_featured_home DESC, sort_order ASC, id DESC
       LIMIT 1
@@ -894,7 +894,8 @@ function getPreviewProduct() {
     code: 'DEMO',
     summary: '示例产品摘要',
     content_html: '示例产品正文',
-    small_image: '/skin/dfpic.gif',
+    images: [],
+    primary_image: '/skin/dfpic.gif',
     keywords: '示例关键词'
   };
 }
@@ -902,7 +903,7 @@ function getPreviewProduct() {
 function getPreviewProducts(limit = 8) {
   const rows = queryAll(
     `
-      SELECT id, category_id, name, code, summary, content_html, small_image, keywords
+      SELECT id, category_id, name, code, summary, content_html, images, keywords
       FROM products
       ORDER BY is_featured_home DESC, sort_order ASC, id DESC
       LIMIT ?
@@ -1238,7 +1239,7 @@ function parsePreviewLegacyExtra(value) {
 
 function buildPreviewFeaturedProductsHtml() {
   return getPreviewProducts(8).map((item) => (
-    `<li><img src="${escapeHtml(item.small_image || '/skin/dfpic.gif')}" width="120" height="120" border="0" alt="${escapeHtml(item.name || '')}"><li><a href="/product/${item.id}.html" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${escapeHtml(item.summary || '')}</li></li>`
+    `<li><img src="${escapeHtml(item.primary_image || '/skin/dfpic.gif')}" width="120" height="120" border="0" alt="${escapeHtml(item.name || '')}"><li><a href="/product/${item.id}.html" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${escapeHtml(item.summary || '')}</li></li>`
   )).join('');
 }
 

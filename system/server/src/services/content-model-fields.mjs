@@ -13,7 +13,7 @@ const PROTECTED_TRANSLATION_FIELDS = new Set([
   'is_visible',
   'is_featured_home',
   'code',
-  'small_image',
+  'images',
   'picture',
   'created_at',
   'updated_at'
@@ -312,7 +312,7 @@ function migrateLegacyContentModelFieldsSchema() {
       SET model_code = CASE field_name
         WHEN 'name' THEN 'product'
         WHEN 'code' THEN 'product'
-        WHEN 'small_image' THEN 'product'
+        WHEN 'images' THEN 'product'
         WHEN 'title' THEN 'news'
         WHEN 'picture' THEN 'news'
         ELSE model_code

@@ -33,7 +33,8 @@ export interface Product {
   code?: string;
   summary?: string;
   content_html?: string;
-  small_image?: string;
+  images?: string[];
+  primary_image?: string;
   keywords?: string;
   is_featured_home: number;
   is_visible: number;

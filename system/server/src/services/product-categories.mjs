@@ -9,6 +9,7 @@ export function ensureProductCategoriesSchema() {
   }
 
   ensureLanguagesSchema();
+  addColumnIfMissing('product_categories', 'content_html', "TEXT NOT NULL DEFAULT ''");
   getDb().exec(`
     CREATE TABLE IF NOT EXISTS product_category_translations (
       id INTEGER PRIMARY KEY,
@@ -41,8 +42,10 @@ export function listProductCategories({ languageCode = null } = {}) {
         name,
         parent_id,
         sort_order,
+        content_html,
         seo_keywords,
-        seo_description
+        seo_description,
+        legacy_extra
       FROM product_categories
       WHERE id <> 0
       ORDER BY parent_id ASC, sort_order ASC, id ASC
@@ -70,8 +73,10 @@ export function listProductCategoriesAdmin({ parentId = 0, page = 1, limit = 10,
         c.name,
         c.parent_id,
         c.sort_order,
+        c.content_html,
         c.seo_keywords,
         c.seo_description,
+        c.legacy_extra,
         p.name AS parent_name,
         (
           SELECT COUNT(*)
@@ -126,8 +131,10 @@ export function listRootProductCategories({ languageCode = null } = {}) {
         name,
         parent_id,
         sort_order,
+        content_html,
         seo_keywords,
-        seo_description
+        seo_description,
+        legacy_extra
       FROM product_categories
       WHERE parent_id = 0
         AND id <> 0
@@ -179,8 +186,10 @@ export function getProductCategoryById(id, { languageCode = null, includeTransla
         name,
         parent_id,
         sort_order,
+        content_html,
         seo_keywords,
-        seo_description
+        seo_description,
+        legacy_extra
       FROM product_categories
       WHERE id = ?
     `,
@@ -222,14 +231,16 @@ export function createProductCategory(input) {
         name,
         parent_id,
         sort_order,
+        content_html,
         seo_keywords,
         seo_description
-      ) VALUES (?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?)
     `,
     [
       defaultTranslation.name,
       payload.base.parent_id,
       payload.base.sort_order,
+      payload.base.content_html,
       defaultTranslation.seo_keywords,
       defaultTranslation.seo_description
     ]
@@ -258,6 +269,7 @@ export function updateProductCategory(id, input) {
         name = ?,
         parent_id = ?,
         sort_order = ?,
+        content_html = ?,
         seo_keywords = ?,
         seo_description = ?
       WHERE id = ?
@@ -266,6 +278,7 @@ export function updateProductCategory(id, input) {
       defaultTranslation.name,
       payload.base.parent_id,
       payload.base.sort_order,
+      payload.base.content_html,
       defaultTranslation.seo_keywords,
       defaultTranslation.seo_description,
       id
@@ -302,6 +315,7 @@ export function normalizeProductCategoryInput(input, options = {}) {
     name,
     parent_id: parentId,
     sort_order: toInteger(input.sort_order, 0),
+    content_html: String(input.content_html ?? ''),
     seo_keywords: toNullableString(input.seo_keywords),
     seo_description: toNullableString(input.seo_description)
   };
@@ -313,7 +327,8 @@ function normalizeProductCategoryMutationInput(input, { existingCategory = null 
   if (input?.base || input?.translations) {
     const base = {
       parent_id: toInteger(input.base?.parent_id ?? existingCategory?.parent_id, 0),
-      sort_order: toInteger(input.base?.sort_order ?? existingCategory?.sort_order, 0)
+      sort_order: toInteger(input.base?.sort_order ?? existingCategory?.sort_order, 0),
+      content_html: String(input.base?.content_html ?? existingCategory?.content_html ?? '')
     };
     const translations = normalizeCategoryTranslations(input.translations || {}, {
       defaultLanguageCode,
@@ -327,7 +342,8 @@ function normalizeProductCategoryMutationInput(input, { existingCategory = null 
   return {
     base: {
       parent_id: legacy.parent_id,
-      sort_order: legacy.sort_order
+      sort_order: legacy.sort_order,
+      content_html: legacy.content_html
     },
     translations: {
       [defaultLanguageCode]: {
@@ -413,8 +429,11 @@ function hydrateCategories(rows, {
     return {
       ...row,
       name: fallbackTranslation?.name || row.name,
+      content_html: row.content_html || '',
       seo_keywords: fallbackTranslation?.seo_keywords ?? row.seo_keywords,
       seo_description: fallbackTranslation?.seo_description ?? row.seo_description,
+      legacy_extra: row.legacy_extra || null,
+      page_data: parseLegacyExtra(row.legacy_extra)?.page_data || null,
       current_language_code: fallbackTranslation?.language_code || selectedLanguage.code,
       ...(includeTranslations ? {
         translations: Object.fromEntries(
@@ -587,9 +606,29 @@ function ensureRootCategorySentinel() {
         name,
         parent_id,
         sort_order,
+        content_html,
         seo_keywords,
         seo_description
-      ) VALUES (0, '__root__', 0, 0, null, null)
+      ) VALUES (0, '__root__', 0, 0, '', null, null)
     `
   );
+}
+
+function addColumnIfMissing(tableName, columnName, definitionSql) {
+  const columns = queryAll(`PRAGMA table_info(${tableName})`);
+  if (!columns.some((column) => column.name === columnName)) {
+    getDb().exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definitionSql}`);
+  }
+}
+
+function parseLegacyExtra(value) {
+  if (!value) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
 }

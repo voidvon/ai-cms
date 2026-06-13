@@ -434,10 +434,21 @@ function buildLegacyNewsSectionCategoryPages({
   const categoryList = categories.filter((item) => normalizeInteger(item.parent_id, 0) === rootId);
   const items = listNews({ limit: 10000, languageCode });
   const categoryBuckets = groupBy(items, (item) => normalizeInteger(item.category_id, 0));
+  const directRootItems = (categoryBuckets.get(rootId) || []).slice();
+  const effectiveCategoryList = categoryList.length > 0
+    ? categoryList
+    : directRootItems.length > 0
+      ? [categories.find((item) => normalizeInteger(item.id, 0) === rootId) || {
+        id: rootId,
+        name: dirName === 'service' ? '服务支持' : '新闻资讯',
+        parent_id: 0
+      }]
+      : [];
   let filesWritten = 0;
 
-  for (const [categoryIndex, category] of categoryList.entries()) {
-    const pageItems = (categoryBuckets.get(normalizeInteger(category.id, 0)) || []).slice();
+  for (const [categoryIndex, category] of effectiveCategoryList.entries()) {
+    const categoryId = normalizeInteger(category.id, 0);
+    const pageItems = (categoryBuckets.get(categoryId) || []).slice();
     const pages = paginate(pageItems, NEWS_LIST_PAGE_SIZE);
     const pageList = pages.length > 0 ? pages : [[]];
 
@@ -461,12 +472,12 @@ function buildLegacyNewsSectionCategoryPages({
         ]
       });
 
-      const fileName = pageNumber === 1 ? `${category.id}.html` : `${category.id}-${pageNumber}.html`;
+      const fileName = pageNumber === 1 ? `${categoryId}.html` : `${categoryId}-${pageNumber}.html`;
       writeTextFile(outputRoot, path.join(dirName, fileName), html, templateContext.site);
       filesWritten += 1;
 
       if (pageNumber === 1) {
-        writeTextFile(outputRoot, path.join(dirName, `${category.id}-1.html`), html, templateContext.site);
+        writeTextFile(outputRoot, path.join(dirName, `${categoryId}-1.html`), html, templateContext.site);
         filesWritten += 1;
         if (categoryIndex === 0) {
           writeTextFile(outputRoot, path.join(dirName, 'index.html'), html, templateContext.site);
@@ -479,7 +490,7 @@ function buildLegacyNewsSectionCategoryPages({
   if (finalizeClientAssets) {
     buildRegisteredTsxAssets(outputRoot);
   }
-  return createBuildResult(sectionKey, sectionLabel, categoryList.length, filesWritten);
+  return createBuildResult(sectionKey, sectionLabel, effectiveCategoryList.length, filesWritten);
 }
 
 function buildLegacyNewsSectionDetailPages({
@@ -606,13 +617,52 @@ function expandLegacyCommonPlaceholders(value, templateContext) {
 }
 
 function buildLegacyHomePageProps(templateContext) {
+  const featuredProducts = listProducts({ featured: true, visibleOnly: true, limit: 8, languageCode: templateContext.languageCode })
+    .slice(0, 8)
+    .map((item) => ({
+      id: item.id,
+      title: item.name || '',
+      url: `/product/${item.id}.html`,
+      image: item.primary_image || '/skin/dfpic.gif',
+      summary: item.summary || ''
+    }));
+  const homeNewsItems = listNews({ limit: 6, languageCode: templateContext.languageCode })
+    .filter((item) => normalizeInteger(item.category_id, 0) !== SERVICE_ROOT_ID)
+    .slice(0, 6)
+    .map((item) => ({
+      id: item.id,
+      title: item.title || '',
+      url: `/news/detail/${item.id}.html`,
+      image: item.picture || '',
+      summary: resolveRenderableNewsSummary(item),
+      date: formatLegacyDateOnly(item.created_at)
+    }));
+  const homeServiceItems = listNews({ limit: 1000, languageCode: templateContext.languageCode })
+    .filter((item) => {
+      const categoryId = normalizeInteger(item.category_id, 0);
+      const chain = [SERVICE_ROOT_ID, ...getDescendantNewsCategoryIds(templateContext.newsCategories, SERVICE_ROOT_ID)];
+      return chain.includes(categoryId);
+    })
+    .slice(0, 6)
+    .map((item) => ({
+      id: item.id,
+      title: item.title || '',
+      url: `/service/detail/${item.id}.html`,
+      image: item.picture || '',
+      summary: resolveRenderableNewsSummary(item),
+      date: formatLegacyDateOnly(item.created_at)
+    }));
+
   return {
     ...buildLegacyCommonProps(templateContext),
     secondaryMenuItems: buildLegacyRootColumnMenuItems(templateContext.columns),
     newsIndexHtml: buildLegacyIndexNews(),
     featuredProductsHtml: buildLegacyIndexFeaturedProducts(),
     featuredProductLinksHtml: buildLegacyIndexFeaturedProductLinks(),
-    serviceIndexHtml: buildLegacyServiceIndex()
+    serviceIndexHtml: buildLegacyServiceIndex(),
+    homeFeaturedProductItems: featuredProducts,
+    homeNewsItems,
+    homeServiceItems
   };
 }
 
@@ -785,6 +835,13 @@ function buildLegacyContentPageProps(templateContext, item) {
 
 function buildLegacySingleColumnPageProps(templateContext, column) {
   const url = buildLegacyColumnUrl(column);
+  const columnPageData = normalizeLegacyCategoryPageData(column?.page_data);
+  const categoryChain = buildTemplateCategoryChain({
+    category: column,
+    categories: templateContext.columns.filter((item) => String(item.source_type || '') === 'single_page'),
+    type: 'content',
+    urlBuilder: (columnItem) => buildLegacyColumnUrl(columnItem)
+  });
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
@@ -792,13 +849,19 @@ function buildLegacySingleColumnPageProps(templateContext, column) {
       title: column.name || '',
       url,
       section: { type: 'content', name: column.name || '', url },
-      breadcrumbItems: [{ label: column.name || '' }],
+      categoryChain,
+      categoryType: 'content',
+      categoryUrl: url,
+      breadcrumbItems: buildLegacyManualColumnBreadcrumbItems(categoryChain),
       breadcrumbOptions: { separatorHtml: ' &gt;&gt; ' }
     }),
     siteColumns: buildLegacySiteColumns(templateContext.columns, {
       activeColumnId: normalizeInteger(column.id, 0)
     }),
     title: column.name || '',
+    pageData: columnPageData,
+    currentCategoryPageData: columnPageData,
+    currentCategoryHeroImage: columnPageData?.mastheadImage || '',
     contentHtml: normalizeLegacyRichTextHtml(column.content_html, templateContext.site) || '',
     bodyHtml: normalizeLegacyRichTextHtml(column.content_html, templateContext.site) || '',
     newsDescription: column.seo_description || '',
@@ -811,6 +874,15 @@ function buildLegacySingleColumnPageProps(templateContext, column) {
 function buildLegacyProductListPageProps({ templateContext, category, parent, children, pageItems, pageNumber, pageCount, totalRecords }) {
   const rootLevelCategories = templateContext.productCategories.filter((item) => normalizeInteger(item.parent_id, 0) === 0);
   const fileStem = normalizeInteger(category.id, 0) === 0 ? 'index' : String(category.id);
+  const productNavigation = buildLegacyProductNavigation({
+    categories: templateContext.productCategories,
+    currentCategory: category,
+    currentParent: parent,
+    fallbackCategories: rootLevelCategories.length > 0 ? rootLevelCategories : [category].filter(Boolean)
+  });
+  const categoryPageData = normalizeLegacyCategoryPageData(category?.page_data);
+  const normalizedCategoryBodyHtml = normalizeLegacyRichTextHtml(category?.content_html, templateContext.site) || '';
+  const enrichedCategoryBody = buildLegacyProductSectionNavigation(normalizedCategoryBodyHtml);
 
   return {
     ...buildLegacyCommonProps(templateContext),
@@ -836,8 +908,24 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
     bigId: normalizeInteger(parent?.id, category.id),
     bigName: parent?.name || category.name || '',
     productsSmallCatHtml: buildLegacyProductSmallCategories(rootLevelCategories.length > 0 ? rootLevelCategories : [category]),
-    secondaryMenuItems: buildLegacyProductMenuItems(rootLevelCategories.length > 0 ? rootLevelCategories : [category], normalizeInteger(category.id, 0)),
+    secondaryMenuItems: productNavigation.items,
+    secondaryMenuTitle: productNavigation.title,
+    secondaryMenuParentUrl: productNavigation.parentUrl,
+    currentCategoryDescription: normalizeRenderableLegacyText(category.seo_description),
+    currentCategoryPageData: categoryPageData,
+    currentCategoryHeroImage: categoryPageData?.mastheadImage || '',
+    pageData: categoryPageData,
+    bodyHtml: enrichedCategoryBody.html,
+    sectionNavItems: enrichedCategoryBody.items,
     items: buildLegacyProductListItems(pageItems),
+    productCardItems: pageItems.map((item) => ({
+      id: item.id,
+      name: item.name || '',
+      title: item.name || '',
+      url: `/product/${item.id}.html`,
+      image: item.primary_image || '/skin/dfpic.gif',
+      summary: item.summary || ''
+    })),
     pagerHtml: buildLegacyProductPager(fileStem, pageNumber, pageCount, totalRecords),
     prodKeywords: category.seo_keywords || category.name || ''
   };
@@ -845,6 +933,17 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
 
 function buildLegacyProductDetailPageProps({ templateContext, product, relatedProducts, category, parent }) {
   const rootLevelCategories = templateContext.productCategories.filter((item) => normalizeInteger(item.parent_id, 0) === 0);
+  const productNavigation = buildLegacyProductNavigation({
+    categories: templateContext.productCategories,
+    currentCategory: category,
+    currentParent: parent,
+    fallbackCategories: rootLevelCategories.length > 0 ? rootLevelCategories : [category].filter(Boolean)
+  });
+  const normalizedBodyHtml = normalizeLegacyRichTextHtml(product.content_html, templateContext.site) || '';
+  const enrichedBody = buildLegacyProductSectionNavigation(normalizedBodyHtml);
+  const productImages = normalizeLegacyProductImages(product);
+  const categoryPageData = normalizeLegacyCategoryPageData(category?.page_data);
+  const productPageData = normalizeLegacyCategoryPageData(parseLegacyExtra(product?.legacy_extra)?.page_data);
 
   return {
     ...buildLegacyCommonProps(templateContext),
@@ -876,14 +975,37 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
     title: product.name || '',
     prodKeywords: product.keywords || '',
     prodDescription: product.summary || '',
-    image: product.small_image || '/skin/dfpic.gif',
+    image: product.primary_image || '/skin/dfpic.gif',
     code: product.code || '',
     relatedProductsHtml: buildLegacyRelatedProducts(relatedProducts),
-    bodyHtml: normalizeLegacyRichTextHtml(product.content_html, templateContext.site) || '',
-    secondaryMenuItems: buildLegacyProductMenuItems(
-      rootLevelCategories.length > 0 ? rootLevelCategories : [category].filter(Boolean),
-      normalizeInteger(category?.id, 0)
-    )
+    bodyHtml: enrichedBody.html,
+    currentProduct: {
+      id: normalizeInteger(product.id, 0),
+      title: product.name || '',
+      name: product.name || '',
+      code: product.code || '',
+      summary: product.summary || '',
+      primaryImage: product.primary_image || '/skin/dfpic.gif',
+      images: productImages,
+      bodyHtml: enrichedBody.html,
+      pageData: productPageData,
+      topPanel: productPageData?.topPanel || null,
+      url: `/product/${normalizeInteger(product.id, 0)}.html`
+    },
+    relatedProductItems: relatedProducts.map((item) => ({
+      id: item.id,
+      name: item.name || '',
+      title: item.name || '',
+      url: `/product/${item.id}.html`,
+      image: item.primary_image || '/skin/dfpic.gif',
+      summary: item.summary || ''
+    })),
+    secondaryMenuItems: productNavigation.items,
+    secondaryMenuTitle: productNavigation.title,
+    secondaryMenuParentUrl: productNavigation.parentUrl,
+    sectionNavItems: enrichedBody.items,
+    currentCategoryPageData: categoryPageData,
+    currentProductPageData: productPageData
   };
 }
 
@@ -920,6 +1042,14 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
     categoryId: normalizeInteger(category.id, 0),
     title: category.name || '',
     items: buildLegacyArticleListItems({ pageItems, summaryClassName }),
+    articleCardItems: pageItems.map((item) => ({
+      id: item.id,
+      title: item.title || '',
+      url: `/${sectionDir}/detail/${item.id}.html`,
+      image: item.picture || '',
+      summary: resolveRenderableNewsSummary(item),
+      date: formatLegacyDateOnly(item.created_at)
+    })),
     pagerHtml: buildLegacyArticlePager({
       categoryId: normalizeInteger(category.id, 0),
       pageNumber,
@@ -933,6 +1063,9 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, item, cat
   const isService = section === 'service';
   const sectionDir = isService ? 'service' : 'news';
   const sectionLabel = isService ? '阀门知识' : '新闻资讯';
+  const relatedArticles = listNews({ limit: 10000, languageCode: templateContext.languageCode })
+    .filter((entry) => normalizeInteger(entry.category_id, 0) === normalizeInteger(item.category_id, 0) && normalizeInteger(entry.id, 0) !== normalizeInteger(item.id, 0))
+    .slice(0, 3);
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
@@ -968,6 +1101,23 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, item, cat
     typeId: normalizeInteger(item.category_id, 0),
     catName: category?.name || '',
     bodyHtml: normalizeLegacyRichTextHtml(item.content_html, templateContext.site) || '',
+    currentArticle: {
+      id: normalizeInteger(item.id, 0),
+      title: item.title || '',
+      summary: resolveRenderableNewsSummary(item),
+      bodyHtml: normalizeLegacyRichTextHtml(item.content_html, templateContext.site) || '',
+      image: item.picture || '',
+      date: formatLegacyDateOnly(item.created_at),
+      url: `/${sectionDir}/detail/${normalizeInteger(item.id, 0)}.html`
+    },
+    relatedArticleItems: relatedArticles.map((entry) => ({
+      id: entry.id,
+      title: entry.title || '',
+      url: `/${sectionDir}/detail/${entry.id}.html`,
+      image: entry.picture || '',
+      summary: resolveRenderableNewsSummary(entry),
+      date: formatLegacyDateOnly(entry.created_at)
+    })),
     previousHtml: previous ? `<a href="${previous.id}.html" class="Font_2e4690_a ">${escapeHtml(previous.title || '')}</a>` : '<span class="Font_2e4690_a">没有上一篇</span>',
     nextHtml: next ? `<a href="${next.id}.html" class="Font_2e4690_a ">${escapeHtml(next.title || '')}</a>` : '<span class="Font_2e4690_a">没有下一篇</span>'
   };
@@ -1284,11 +1434,214 @@ function buildLegacyProductSmallCategories(categories) {
 function buildLegacyProductMenuItems(categories, activeId = 0) {
   return (categories || [])
     .filter(Boolean)
-    .map((item) => ({
-      label: item.name || '',
-      url: `/valve/${normalizeInteger(item.id, 0)}.html`,
-      active: normalizeInteger(item.id, 0) === normalizeInteger(activeId, 0)
-    }));
+    .map((item) => {
+      const description = resolveLegacyProductCategoryDescription(item);
+      return {
+        id: normalizeInteger(item.id, 0),
+        label: item.name || '',
+        title: item.name || '',
+        url: `/valve/${normalizeInteger(item.id, 0)}.html`,
+        active: normalizeInteger(item.id, 0) === normalizeInteger(activeId, 0),
+        description,
+        ctaLabel: description ? 'Explore more' : '',
+        image: '',
+        imageAlt: item.name || ''
+      };
+    });
+}
+
+function buildLegacyProductNavigation({ categories, currentCategory, currentParent, fallbackCategories = [] }) {
+  const safeCategories = Array.isArray(categories) ? categories : [];
+  const activeId = normalizeInteger(currentCategory?.id, 0);
+  const parentId = normalizeInteger(currentCategory?.parent_id, 0);
+  const siblingCategories = parentId > 0
+    ? safeCategories
+      .filter((item) => normalizeInteger(item.parent_id, 0) === parentId)
+      .sort(compareCategoryOrder)
+    : [];
+
+  if (siblingCategories.length > 0) {
+    return {
+      title: currentParent?.name || 'Browse categories',
+      parentUrl: currentParent ? buildLegacyProductCategoryUrl(currentParent) : '',
+      items: buildLegacyProductMenuItems(siblingCategories, activeId)
+    };
+  }
+
+  return {
+    title: 'Browse categories',
+    parentUrl: '',
+    items: buildLegacyProductMenuItems(fallbackCategories, activeId)
+  };
+}
+
+function resolveLegacyProductCategoryDescription(category) {
+  const seoDescription = normalizeRenderableLegacyText(category?.seo_description);
+  if (seoDescription && !looksLikeLegacyMojibake(seoDescription)) {
+    return truncateRenderableNewsSummary(seoDescription, 96);
+  }
+
+  const keywords = normalizeRenderableLegacyText(category?.seo_keywords);
+  if (keywords && !looksLikeLegacyMojibake(keywords)) {
+    return truncateRenderableNewsSummary(keywords.replace(/[|,，]+/g, ' '), 96);
+  }
+
+  return '';
+}
+
+function normalizeLegacyProductImages(product) {
+  const images = Array.isArray(product?.images)
+    ? product.images.filter((item) => String(item || '').trim())
+    : [];
+  const primaryImage = String(product?.primary_image || '').trim();
+  if (primaryImage && !images.includes(primaryImage)) {
+    return [primaryImage, ...images];
+  }
+  return images.length > 0 ? images : [primaryImage || '/skin/dfpic.gif'];
+}
+
+function buildLegacyProductSectionNavigation(html) {
+  const rawHtml = String(html || '').trim();
+  if (!rawHtml) {
+    return { html: '', items: [] };
+  }
+
+  const usedIds = new Set();
+  const items = [];
+  let index = 0;
+  const output = rawHtml.replace(/<h([2-3])([^>]*)>([\s\S]*?)<\/h\1>/gi, (match, level, attributes, innerHtml) => {
+    const plainText = normalizeRenderableLegacyText(innerHtml.replace(/<[^>]+>/g, ' '));
+    if (!plainText) {
+      return match;
+    }
+
+    const existingIdMatch = String(attributes || '').match(/\sid=(["'])([^"']+)\1/i);
+    let headingId = existingIdMatch?.[2] || createLegacyAnchorSlug(plainText, `section-${index + 1}`);
+    while (usedIds.has(headingId)) {
+      index += 1;
+      headingId = `${headingId}-${index}`;
+    }
+    usedIds.add(headingId);
+    items.push({
+      id: headingId,
+      label: plainText,
+      href: `#${headingId}`,
+      level: normalizeInteger(level, 2)
+    });
+    index += 1;
+
+    if (existingIdMatch) {
+      return `<h${level}${attributes}>${innerHtml}</h${level}>`;
+    }
+
+    return `<h${level}${attributes} id="${escapeHtmlAttribute(headingId)}">${innerHtml}</h${level}>`;
+  });
+
+  return {
+    html: output,
+    items: items.slice(0, 12)
+  };
+}
+
+function createLegacyAnchorSlug(value, fallback = 'section') {
+  const normalized = String(value || '')
+    .toLowerCase()
+    .replace(/&[a-z0-9#]+;/gi, ' ')
+    .replace(/[^a-z0-9\u4e00-\u9fff]+/gi, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return normalized || fallback;
+}
+
+function normalizeLegacyCategoryPageData(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const normalizedPageKind = String(value.pageKind || value.kind || '').trim().toLowerCase();
+  const pageKind = normalizedPageKind === 'collection' ? 'category' : normalizedPageKind;
+
+  return {
+    title: String(value.title || '').trim(),
+    summary: String(value.summary || '').trim(),
+    pageKind,
+    heroImage: String(value.heroImage || '').trim(),
+    mastheadImage: String(value.mastheadImage || value.heroImage || '').trim(),
+    categoryNavTitle: String(value.categoryNavTitle || '').trim(),
+    intro: normalizeLegacyLooseParagraphs(value.intro),
+    overview: Array.isArray(value.overview) ? value.overview.filter(Boolean).map((item) => String(item).trim()).filter(Boolean) : [],
+    benefits: Array.isArray(value.benefits) ? value.benefits.filter(Boolean) : [],
+    cards: Array.isArray(value.cards) ? value.cards.filter(Boolean) : [],
+    models: Array.isArray(value.models) ? value.models.filter(Boolean) : [],
+    downloads: Array.isArray(value.downloads) ? value.downloads.filter(Boolean) : [],
+    supplementalSections: Array.isArray(value.supplementalSections) ? value.supplementalSections.filter(Boolean) : [],
+    brandPathSection: value.brandPathSection && typeof value.brandPathSection === 'object' ? value.brandPathSection : null,
+    browseByTopicSection: value.browseByTopicSection && typeof value.browseByTopicSection === 'object' ? value.browseByTopicSection : null,
+    topPanel: value.topPanel && typeof value.topPanel === 'object' ? value.topPanel : null,
+    seo: value.seo && typeof value.seo === 'object' ? value.seo : null,
+    items: Array.isArray(value.items) ? value.items.filter(Boolean) : [],
+    sections: Array.isArray(value.sections) ? value.sections.filter(Boolean) : [],
+    resources: Array.isArray(value.resources) ? value.resources.filter(Boolean) : [],
+    products: Array.isArray(value.products) ? value.products.filter(Boolean) : [],
+    features: Array.isArray(value.features) ? value.features.filter(Boolean) : [],
+    calloutCards: Array.isArray(value.calloutCards) ? value.calloutCards.filter(Boolean) : [],
+    promoCards: Array.isArray(value.promoCards) ? value.promoCards.filter(Boolean) : [],
+    filterGroups: Array.isArray(value.filterGroups) ? value.filterGroups.filter(Boolean) : [],
+    jobs: Array.isArray(value.jobs) ? value.jobs.filter(Boolean) : [],
+    jobsSummary: String(value.jobsSummary || '').trim(),
+    goals: value.goals && typeof value.goals === 'object' ? value.goals : null,
+    featureHeading: value.featureHeading && typeof value.featureHeading === 'object' ? value.featureHeading : null,
+    introBlock: value.introBlock && typeof value.introBlock === 'object' ? value.introBlock : (value.intro && typeof value.intro === 'object' && !Array.isArray(value.intro) ? value.intro : null),
+    partnerHeading: value.partnerHeading && typeof value.partnerHeading === 'object' ? value.partnerHeading : null,
+    advice: value.advice && typeof value.advice === 'object' ? value.advice : null,
+    supportList: value.supportList && typeof value.supportList === 'object' ? value.supportList : null,
+    frame: value.frame && typeof value.frame === 'object' ? value.frame : null,
+    promo: value.promo && typeof value.promo === 'object' ? value.promo : null,
+    spotlight: value.spotlight && typeof value.spotlight === 'object' ? value.spotlight : null
+  };
+}
+
+function normalizeLegacyLooseParagraphs(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === 'string') {
+          return item.trim();
+        }
+        if (item && typeof item === 'object') {
+          if (Array.isArray(item.paragraphs)) {
+            return item.paragraphs.map((entry) => String(entry || '').trim()).filter(Boolean);
+          }
+          return String(item.body || item.statement || item.description || '').trim();
+        }
+        return '';
+      })
+      .flat()
+      .filter(Boolean);
+  }
+
+  if (value && typeof value === 'object') {
+    const paragraphs = Array.isArray(value.paragraphs)
+      ? value.paragraphs.map((item) => String(item || '').trim()).filter(Boolean)
+      : [];
+    if (paragraphs.length > 0) {
+      return paragraphs;
+    }
+    return [String(value.body || value.statement || value.description || '').trim()].filter(Boolean);
+  }
+
+  return String(value || '').trim() ? [String(value).trim()] : [];
+}
+
+function buildLegacyManualColumnBreadcrumbItems(categoryChain) {
+  const normalizedChain = normalizeTemplateCategoryChain(categoryChain);
+  if (normalizedChain.length === 0) {
+    return [];
+  }
+  return normalizedChain.map((item, index) => ({
+    label: item.name || '',
+    href: index < normalizedChain.length - 1 ? item.url || '' : ''
+  }));
 }
 
 function buildLegacyProductListItems(pageItems) {
@@ -1296,7 +1649,7 @@ function buildLegacyProductListItems(pageItems) {
     id: item.id,
     name: item.name || '',
     url: `/product/${item.id}.html`,
-    image: item.small_image || '/skin/dfpic.gif',
+    image: item.primary_image || '/skin/dfpic.gif',
     summary: gotTopicLegacy(item.summary || '', 90),
     rowOpenHtml: index === 0 ? '<tr>' : '',
     rowCloseHtml: (index + 1) % 2 === 0 ? '</tr><tr>' : '',
@@ -1425,7 +1778,7 @@ function buildLegacyRelatedProducts(products) {
     const className = index % 4 !== 0 ? 'class="in5"' : '';
     html += `<td width="50%" height="90" align="center" valign="middle" ${className}>`;
     html += '<table width="100%" border="0" cellpadding="0" cellspacing="0"><tr>';
-    html += `<td width="100%" height="47" align="center" valign="middle" ${className}><img src="${escapeHtml(item.small_image || '/skin/dfpic.gif')}" alt="${escapeHtml(item.name || '')}" width="95" height="70" /></td>`;
+    html += `<td width="100%" height="47" align="center" valign="middle" ${className}><img src="${escapeHtml(item.primary_image || '/skin/dfpic.gif')}" alt="${escapeHtml(item.name || '')}" width="95" height="70" /></td>`;
     html += `</tr><tr><td align="center" height="20">&nbsp;<a href="${item.id}.html" class="Font_2E4690_a Font-Weight">${escapeHtml(item.name || '')}</a></td></tr></table>`;
     html += '</td>';
     if (index % 2 === 0) {
@@ -1439,7 +1792,7 @@ function buildLegacyRelatedProducts(products) {
 function buildLegacyIndexFeaturedProducts() {
   const items = queryAll(
     `
-      SELECT id, name, summary, small_image
+      SELECT id, name, summary, images
       FROM products
       WHERE is_featured_home = 1
       ORDER BY id DESC
@@ -1450,7 +1803,7 @@ function buildLegacyIndexFeaturedProducts() {
   let html = '';
   for (const item of items) {
     html += '<li>';
-    html += `<img src="${escapeHtml(item.small_image || '/skin/dfpic.gif')}" width="120" height="120" border="0" alt="${escapeHtml(item.name || '')}">`;
+    html += `<img src="${escapeHtml(item.primary_image || '/skin/dfpic.gif')}" width="120" height="120" border="0" alt="${escapeHtml(item.name || '')}">`;
     html += `<li><a href="/product/${item.id}.html" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${gotTopicLegacy(item.summary || '', 118)}</li>`;
     html += '</li>';
   }
@@ -1511,7 +1864,7 @@ function resolveColumnRouteOutputPath(routePath) {
 function buildLegacyMessageSidebarProducts() {
   const items = queryAll(
     `
-      SELECT id, name, small_image
+      SELECT id, name, images
       FROM products
       WHERE is_featured_home = 1
       ORDER BY id ASC
@@ -1522,7 +1875,7 @@ function buildLegacyMessageSidebarProducts() {
   let html = '<table width="160" border="0" cellspacing="0">';
   for (const item of items) {
     html += '<tr>';
-    html += `<td width="160" height="100" align="center"><img src="${escapeHtml(item.small_image || '/skin/dfpic.gif')}" alt="${escapeHtml(item.name || '')}" width="150" height="94" /></td>`;
+    html += `<td width="160" height="100" align="center"><img src="${escapeHtml(item.primary_image || '/skin/dfpic.gif')}" alt="${escapeHtml(item.name || '')}" width="150" height="94" /></td>`;
     html += '</tr><tr>';
     html += `<td><a href="/product/${item.id}.html" class="0a">${escapeHtml(item.name || '')}</a></td>`;
     html += '</tr>';

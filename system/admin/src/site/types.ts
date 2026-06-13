@@ -19,7 +19,8 @@ export type ProductSummary = {
   id: number
   name?: string | null
   summary?: string | null
-  small_image?: string | null
+  images?: string[] | null
+  primary_image?: string | null
 }
 
 export type NewsSummary = {

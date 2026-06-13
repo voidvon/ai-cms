@@ -85,6 +85,7 @@ export function ensureColumnsSchema() {
   addColumnIfMissing('columns', 'seo_title', 'TEXT');
   addColumnIfMissing('columns', 'seo_keywords', 'TEXT');
   addColumnIfMissing('columns', 'seo_description', 'TEXT');
+  addColumnIfMissing('columns', 'legacy_extra', 'TEXT');
 
   getDb().exec(`
     CREATE INDEX IF NOT EXISTS idx_columns_parent_sort ON columns(parent_id, sort_order, id);
@@ -117,6 +118,7 @@ export function listColumns({ languageCode = null, includeTranslations = true } 
         seo_title,
         seo_keywords,
         seo_description,
+        legacy_extra,
         sort_order,
         is_system,
         created_at,
@@ -161,11 +163,12 @@ export function createManualColumn(input) {
         seo_title,
         seo_keywords,
         seo_description,
+        legacy_extra,
         sort_order,
         is_system,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
     `,
     [
       defaultTranslation.name,
@@ -181,6 +184,7 @@ export function createManualColumn(input) {
       defaultTranslation.seo_title,
       defaultTranslation.seo_keywords,
       defaultTranslation.seo_description,
+      payload.base.legacy_extra,
       payload.base.sort_order,
       now,
       now
@@ -221,6 +225,7 @@ export function updateManualColumn(id, input) {
         seo_title = ?,
         seo_keywords = ?,
         seo_description = ?,
+        legacy_extra = ?,
         sort_order = ?,
         updated_at = ?
       WHERE id = ?
@@ -237,6 +242,7 @@ export function updateManualColumn(id, input) {
       defaultTranslation.seo_title,
       defaultTranslation.seo_keywords,
       defaultTranslation.seo_description,
+      payload.base.legacy_extra,
       payload.base.sort_order,
       new Date().toISOString(),
       id
@@ -411,6 +417,8 @@ function hydrateColumns(rows, { languageCode, includeTranslations = true } = {})
       seo_title: fallbackTranslation?.seo_title ?? row.seo_title,
       seo_keywords: fallbackTranslation?.seo_keywords ?? row.seo_keywords,
       seo_description: fallbackTranslation?.seo_description ?? row.seo_description,
+      legacy_extra: row.legacy_extra || null,
+      page_data: extractColumnPageData(row.legacy_extra),
       current_language_code: fallbackTranslation?.language_code || selectedLanguage.code,
       ...(includeTranslations ? {
         translations: Object.fromEntries(
@@ -589,11 +597,12 @@ function upsertColumn(input) {
         seo_title,
         seo_keywords,
         seo_description,
+        legacy_extra,
         sort_order,
         is_system,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
       ON CONFLICT(source_type, source_id) DO UPDATE SET
         name = excluded.name,
         parent_id = excluded.parent_id,
@@ -620,6 +629,7 @@ function upsertColumn(input) {
       null,
       null,
       null,
+      input.legacy_extra ?? null,
       input.sort_order,
       now,
       now
@@ -645,6 +655,7 @@ function getColumnBySource(sourceType, sourceId) {
         seo_title,
         seo_keywords,
         seo_description,
+        legacy_extra,
         sort_order,
         is_system,
         created_at,
@@ -675,6 +686,7 @@ function getColumnByIdRaw(id) {
         seo_title,
         seo_keywords,
         seo_description,
+        legacy_extra,
         sort_order,
         is_system,
         created_at,
@@ -723,9 +735,6 @@ function normalizeManualColumnInput(input, options = {}) {
   if (parentId > 0 && !parent) {
     throw new Error('父栏目不存在');
   }
-  if (parent && String(parent.column_kind || '') === 'single') {
-    throw new Error('单页栏目下不能再挂子栏目');
-  }
   if (currentId && parentId > 0 && wouldCreateColumnCycle(currentId, parentId)) {
     throw new Error('不能将栏目移动到自己的子栏目下');
   }
@@ -749,6 +758,7 @@ function normalizeManualColumnInput(input, options = {}) {
       seo_title: seoTitle,
       seo_keywords: seoKeywords,
       seo_description: seoDescription,
+      legacy_extra: existing?.legacy_extra ?? null,
       sort_order: sortOrder
     };
   }
@@ -767,6 +777,7 @@ function normalizeManualColumnInput(input, options = {}) {
     seo_title: seoTitle,
     seo_keywords: seoKeywords,
     seo_description: seoDescription,
+    legacy_extra: existing?.legacy_extra ?? null,
     sort_order: sortOrder
   };
 }
@@ -994,4 +1005,23 @@ function toNullableString(value) {
   }
   const normalized = String(value).trim();
   return normalized ? normalized : null;
+}
+
+function extractColumnPageData(legacyExtra) {
+  const parsed = parseLegacyExtra(legacyExtra);
+  return parsed?.page_data && typeof parsed.page_data === 'object'
+    ? parsed.page_data
+    : null;
+}
+
+function parseLegacyExtra(value) {
+  if (!value) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
 }
