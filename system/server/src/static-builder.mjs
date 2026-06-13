@@ -13,6 +13,7 @@ import { buildSitemap } from './services/sitemap.mjs';
 import { buildLlmsFiles } from './services/llms.mjs';
 import { getSiteConfig } from './services/site.mjs';
 import { ensureTemplatesSchema } from './services/templates.mjs';
+import { listLanguages } from './services/languages.mjs';
 import { escapeHtml } from './utils/html.mjs';
 import { looksLikeLegacyMojibake } from './utils/legacy-text.mjs';
 
@@ -38,6 +39,13 @@ const LEGACY_PRODUCT_BRAND_PATTERNS = [
 ];
 const MANAGED_STATIC_ROOT_FILES = ['index.html', 'contact.html', 'msg.html', 'sitemap.xml', 'robots.txt', 'llms.txt', 'llms-full.txt', 'index.md'];
 const MANAGED_STATIC_DIRS = ['about', 'news', 'product', 'products', 'service', 'valve'];
+const SHARED_STATIC_DIRS = ['css', 'js', 'images', 'skin', 'uploadfile'];
+const STATIC_COMPAT_ALIASES = [
+  ['js', 'JS'],
+  ['images', 'Images'],
+  ['skin', 'Skin'],
+  ['uploadfile', 'UploadFile']
+];
 const CMS_TEMPLATE_BY_PAGE = {
   'legacy-home': 'home_default',
   'legacy-contact': 'content_contact',
@@ -77,116 +85,139 @@ const {
   expandLegacyCommonPlaceholders
 });
 
-export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cleanExisting = false } = {}) {
+export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cleanExisting = false, languageCode = null } = {}) {
   getDb();
-  const normalizedOutputRoot = path.resolve(outputRoot);
   const requestedSections = normalizeSections(sections);
-  const results = [];
   const requiresTemplateRuntime = Array.from(requestedSections).some((section) => !['robots', 'sitemap', 'llms'].includes(section));
+  const sharedAssetRoot = path.resolve(outputRoot);
 
   if (requiresTemplateRuntime) {
     ensureTemplatesSchema();
   }
 
-  fs.mkdirSync(normalizedOutputRoot, { recursive: true });
-  if (cleanExisting) {
-    cleanupManagedStaticFiles(normalizedOutputRoot);
-    cleanupTemplateClientBundles(normalizedOutputRoot);
-  }
+  const targetLanguages = resolveStaticBuildLanguages(languageCode);
+  const languageBuilds = [];
+  let totalFiles = 0;
+  let totalRecords = 0;
 
-  if (requestedSections.has('index')) {
-    results.push(buildIndexPage({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
+  for (const language of targetLanguages) {
+    const normalizedOutputRoot = resolveLanguageOutputRoot(outputRoot, language);
+    const results = [];
+
+    fs.mkdirSync(normalizedOutputRoot, { recursive: true });
+    if (cleanExisting) {
+      cleanupManagedStaticFiles(normalizedOutputRoot);
+      cleanupTemplateClientBundles(normalizedOutputRoot);
+    }
+
+    if (requestedSections.has('index')) {
+      results.push(buildIndexPage({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false, languageCode: language.code }));
+    }
+    if (requestedSections.has('contact')) {
+      results.push(buildContactPage({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false, languageCode: language.code }));
+    }
+    if (requestedSections.has('msg')) {
+      results.push(buildMessagePage({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false, languageCode: language.code }));
+    }
+    if (requestedSections.has('column-pages')) {
+      results.push(buildManualSinglePageColumns({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false, languageCode: language.code }));
+    }
+    if (requestedSections.has('corporation-pages')) {
+      results.push(buildCorporationPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false, languageCode: language.code }));
+    }
+    if (requestedSections.has('news-lists')) {
+      results.push(buildNewsCategoryPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false, languageCode: language.code }));
+    }
+    if (requestedSections.has('service-lists')) {
+      results.push(buildServiceCategoryPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false, languageCode: language.code }));
+    }
+    if (requestedSections.has('product-lists')) {
+      results.push(buildProductCategoryPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false, languageCode: language.code }));
+    }
+    if (requestedSections.has('product-details')) {
+      results.push(buildProductDetailPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false, languageCode: language.code }));
+    }
+    if (requestedSections.has('service-details')) {
+      results.push(buildServiceDetailPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false, languageCode: language.code }));
+    }
+    if (requestedSections.has('news-details')) {
+      results.push(buildNewsDetailPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false, languageCode: language.code }));
+    }
+    if (requestedSections.has('robots')) {
+      results.push(buildRobotsTxt({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
+    }
+    if (requestedSections.has('sitemap')) {
+      results.push(buildSitemap({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
+    }
+    if (requestedSections.has('llms')) {
+      results.push(buildLlmsFiles({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
+    }
+    buildRegisteredTsxAssets(normalizedOutputRoot);
+    syncStaticSupportAssets(sharedAssetRoot, normalizedOutputRoot);
+
+    const languageTotalFiles = results.reduce((sum, item) => sum + item.filesWritten, 0);
+    const languageTotalRecords = results.reduce((sum, item) => sum + item.recordsProcessed, 0);
+    totalFiles += languageTotalFiles;
+    totalRecords += languageTotalRecords;
+    languageBuilds.push({
+      languageCode: language.code,
+      outputRoot: normalizedOutputRoot,
+      results,
+      totalFiles: languageTotalFiles,
+      totalRecords: languageTotalRecords
+    });
   }
-  if (requestedSections.has('contact')) {
-    results.push(buildContactPage({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
-  }
-  if (requestedSections.has('msg')) {
-    results.push(buildMessagePage({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
-  }
-  if (requestedSections.has('column-pages')) {
-    results.push(buildManualSinglePageColumns({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
-  }
-  if (requestedSections.has('corporation-pages')) {
-    results.push(buildCorporationPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
-  }
-  if (requestedSections.has('news-lists')) {
-    results.push(buildNewsCategoryPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
-  }
-  if (requestedSections.has('service-lists')) {
-    results.push(buildServiceCategoryPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
-  }
-  if (requestedSections.has('product-lists')) {
-    results.push(buildProductCategoryPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
-  }
-  if (requestedSections.has('product-details')) {
-    results.push(buildProductDetailPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
-  }
-  if (requestedSections.has('service-details')) {
-    results.push(buildServiceDetailPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
-  }
-  if (requestedSections.has('news-details')) {
-    results.push(buildNewsDetailPages({ outputRoot: normalizedOutputRoot, finalizeClientAssets: false }));
-  }
-  if (requestedSections.has('robots')) {
-    results.push(buildRobotsTxt({ outputRoot: normalizedOutputRoot }));
-  }
-  if (requestedSections.has('sitemap')) {
-    results.push(buildSitemap({ outputRoot: normalizedOutputRoot }));
-  }
-  if (requestedSections.has('llms')) {
-    results.push(buildLlmsFiles({ outputRoot: normalizedOutputRoot }));
-  }
-  buildRegisteredTsxAssets(normalizedOutputRoot);
 
   return {
-    outputRoot: normalizedOutputRoot,
-    results,
-    totalFiles: results.reduce((sum, item) => sum + item.filesWritten, 0),
-    totalRecords: results.reduce((sum, item) => sum + item.recordsProcessed, 0)
+    outputRoot: languageBuilds[0]?.outputRoot || path.resolve(outputRoot),
+    results: languageBuilds.flatMap((item) => item.results),
+    languageBuilds,
+    totalFiles,
+    totalRecords
   };
 }
 
-export function buildIndexPage({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true } = {}) {
-  const templateContext = getLegacyTemplateContext();
+export function buildIndexPage({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true, languageCode = null } = {}) {
+  const templateContext = getLegacyTemplateContext(languageCode);
   const html = renderCmsSitePage('legacy-home', buildLegacyHomePageProps(templateContext), templateContext, {
     targets: [{ target_type: 'site', target_id: null }]
   });
 
-  writeTextFile(outputRoot, 'index.html', html);
+  writeTextFile(outputRoot, 'index.html', html, templateContext.site);
   if (finalizeClientAssets) {
     buildRegisteredTsxAssets(outputRoot);
   }
   return createBuildResult('index', '首页', 1, 1);
 }
 
-export function buildContactPage({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true } = {}) {
-  const templateContext = getLegacyTemplateContext();
+export function buildContactPage({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true, languageCode = null } = {}) {
+  const templateContext = getLegacyTemplateContext(languageCode);
   const html = renderCmsSitePage('legacy-contact', buildLegacyContactPageProps(templateContext), templateContext, {
     targets: [{ target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.contact }]
   });
 
-  writeTextFile(outputRoot, 'contact.html', html);
+  writeTextFile(outputRoot, 'contact.html', html, templateContext.site);
   if (finalizeClientAssets) {
     buildRegisteredTsxAssets(outputRoot);
   }
   return createBuildResult('contact', '联系页面', 1, 1);
 }
 
-export function buildMessagePage({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true } = {}) {
-  const templateContext = getLegacyTemplateContext();
+export function buildMessagePage({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true, languageCode = null } = {}) {
+  const templateContext = getLegacyTemplateContext(languageCode);
   const html = renderCmsSitePage('legacy-message', buildLegacyMessagePageProps(templateContext), templateContext, {
     targets: [{ target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.message }]
   });
 
-  writeTextFile(outputRoot, 'msg.html', html);
+  writeTextFile(outputRoot, 'msg.html', html, templateContext.site);
   if (finalizeClientAssets) {
     buildRegisteredTsxAssets(outputRoot);
   }
   return createBuildResult('msg', '留言页面', 1, 1);
 }
 
-export function buildManualSinglePageColumns({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true } = {}) {
-  const templateContext = getLegacyTemplateContext();
+export function buildManualSinglePageColumns({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true, languageCode = null } = {}) {
+  const templateContext = getLegacyTemplateContext(languageCode);
   const items = templateContext.columns.filter((item) => (
     String(item.source_type || '') === 'single_page'
     && String(item.column_kind || '') === 'single'
@@ -202,7 +233,7 @@ export function buildManualSinglePageColumns({ outputRoot = DEFAULT_OUTPUT_ROOT,
       ]
     });
 
-    writeTextFile(outputRoot, resolveColumnRouteOutputPath(item.route_path), html);
+    writeTextFile(outputRoot, resolveColumnRouteOutputPath(item.route_path), html, templateContext.site);
     filesWritten += 1;
   }
 
@@ -212,8 +243,8 @@ export function buildManualSinglePageColumns({ outputRoot = DEFAULT_OUTPUT_ROOT,
   return createBuildResult('column-pages', '单页栏目', items.length, filesWritten);
 }
 
-export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true } = {}) {
-  const templateContext = getLegacyTemplateContext();
+export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true, languageCode = null } = {}) {
+  const templateContext = getLegacyTemplateContext(languageCode);
   const items = templateContext.corporationCategories
     .filter((item) => normalizeInteger(item.id, 0) !== 0 && normalizeInteger(item.is_external, 0) === 0);
   const indexItemId = items.find((item) => normalizeInteger(item.parent_id, 0) === CORPORATION_ROOT_ID)?.id ?? items[0]?.id;
@@ -228,11 +259,11 @@ export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT, finali
       ]
     });
 
-    writeTextFile(outputRoot, path.join('about', `about-${item.id}.html`), html);
+    writeTextFile(outputRoot, path.join('about', `about-${item.id}.html`), html, templateContext.site);
     filesWritten += 1;
 
     if (normalizeInteger(item.id, 0) === normalizeInteger(indexItemId, 0)) {
-      writeTextFile(outputRoot, path.join('about', 'index.html'), html);
+      writeTextFile(outputRoot, path.join('about', 'index.html'), html, templateContext.site);
       filesWritten += 1;
     }
   }
@@ -243,10 +274,11 @@ export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT, finali
   return createBuildResult('corporation-pages', '公司栏目页', items.length, filesWritten);
 }
 
-export function buildNewsCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true } = {}) {
+export function buildNewsCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true, languageCode = null } = {}) {
   return buildLegacyNewsSectionCategoryPages({
     outputRoot,
     finalizeClientAssets,
+    languageCode,
     rootId: NEWS_ROOT_ID,
     dirName: 'news',
     sectionKey: 'news-lists',
@@ -255,10 +287,11 @@ export function buildNewsCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, final
   });
 }
 
-export function buildServiceCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true } = {}) {
+export function buildServiceCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true, languageCode = null } = {}) {
   return buildLegacyNewsSectionCategoryPages({
     outputRoot,
     finalizeClientAssets,
+    languageCode,
     rootId: SERVICE_ROOT_ID,
     dirName: 'service',
     sectionKey: 'service-lists',
@@ -267,10 +300,10 @@ export function buildServiceCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, fi
   });
 }
 
-export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true } = {}) {
-  const categories = listProductCategories();
-  const products = listProducts({ visibleOnly: false, limit: 10000 });
-  const templateContext = getLegacyTemplateContext();
+export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true, languageCode = null } = {}) {
+  const categories = listProductCategories({ languageCode });
+  const products = listProducts({ visibleOnly: false, limit: 10000, languageCode });
+  const templateContext = getLegacyTemplateContext(languageCode);
   const categoryMap = new Map(categories.map((item) => [item.id, item]));
   const childrenByParent = groupBy(categories, (item) => normalizeInteger(item.parent_id, 0));
   const productsByCategory = groupBy(products, (item) => normalizeInteger(item.category_id, 0));
@@ -325,9 +358,9 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, fi
   return createBuildResult('product-lists', '产品分类页', categories.filter((item) => normalizeInteger(item.id, 0) !== 0).length, filesWritten);
 }
 
-export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange, finalizeClientAssets = true } = {}) {
-  const products = filterByIdRange(listProducts({ visibleOnly: false, limit: 10000 }), idRange);
-  const templateContext = getLegacyTemplateContext();
+export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange, finalizeClientAssets = true, languageCode = null } = {}) {
+  const products = filterByIdRange(listProducts({ visibleOnly: false, limit: 10000, languageCode }), idRange);
+  const templateContext = getLegacyTemplateContext(languageCode);
   const productMap = groupBy(products, (item) => normalizeInteger(item.category_id, 0));
   const categoryMap = new Map(templateContext.productCategories.map((item) => [normalizeInteger(item.id, 0), item]));
   let filesWritten = 0;
@@ -350,7 +383,7 @@ export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
       ]
     });
 
-    writeTextFile(outputRoot, path.join('product', `${product.id}.html`), html);
+    writeTextFile(outputRoot, path.join('product', `${product.id}.html`), html, templateContext.site);
     filesWritten += 1;
   }
 
@@ -360,11 +393,12 @@ export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
   return createBuildResult('product-details', '产品详情页', products.length, filesWritten);
 }
 
-export function buildNewsDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange, finalizeClientAssets = true } = {}) {
+export function buildNewsDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange, finalizeClientAssets = true, languageCode = null } = {}) {
   return buildLegacyNewsSectionDetailPages({
     outputRoot,
     idRange,
     finalizeClientAssets,
+    languageCode,
     rootId: NEWS_ROOT_ID,
     dirName: 'news',
     sectionKey: 'news-details',
@@ -372,11 +406,12 @@ export function buildNewsDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange
   });
 }
 
-export function buildServiceDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange, finalizeClientAssets = true } = {}) {
+export function buildServiceDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange, finalizeClientAssets = true, languageCode = null } = {}) {
   return buildLegacyNewsSectionDetailPages({
     outputRoot,
     idRange,
     finalizeClientAssets,
+    languageCode,
     rootId: SERVICE_ROOT_ID,
     dirName: 'service',
     sectionKey: 'service-details',
@@ -387,16 +422,17 @@ export function buildServiceDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
 function buildLegacyNewsSectionCategoryPages({
   outputRoot,
   finalizeClientAssets = true,
+  languageCode = null,
   rootId,
   dirName,
   sectionKey,
   sectionLabel,
   summaryClassName
 }) {
-  const categories = listNewsCategories();
-  const templateContext = getLegacyTemplateContext();
+  const categories = listNewsCategories({ languageCode });
+  const templateContext = getLegacyTemplateContext(languageCode);
   const categoryList = categories.filter((item) => normalizeInteger(item.parent_id, 0) === rootId);
-  const items = listNews({ limit: 10000 });
+  const items = listNews({ limit: 10000, languageCode });
   const categoryBuckets = groupBy(items, (item) => normalizeInteger(item.category_id, 0));
   let filesWritten = 0;
 
@@ -426,14 +462,14 @@ function buildLegacyNewsSectionCategoryPages({
       });
 
       const fileName = pageNumber === 1 ? `${category.id}.html` : `${category.id}-${pageNumber}.html`;
-      writeTextFile(outputRoot, path.join(dirName, fileName), html);
+      writeTextFile(outputRoot, path.join(dirName, fileName), html, templateContext.site);
       filesWritten += 1;
 
       if (pageNumber === 1) {
-        writeTextFile(outputRoot, path.join(dirName, `${category.id}-1.html`), html);
+        writeTextFile(outputRoot, path.join(dirName, `${category.id}-1.html`), html, templateContext.site);
         filesWritten += 1;
         if (categoryIndex === 0) {
-          writeTextFile(outputRoot, path.join(dirName, 'index.html'), html);
+          writeTextFile(outputRoot, path.join(dirName, 'index.html'), html, templateContext.site);
           filesWritten += 1;
         }
       }
@@ -450,16 +486,17 @@ function buildLegacyNewsSectionDetailPages({
   outputRoot,
   idRange,
   finalizeClientAssets = true,
+  languageCode = null,
   rootId,
   dirName,
   sectionKey,
   sectionLabel
 }) {
-  const categories = listNewsCategories();
-  const templateContext = getLegacyTemplateContext();
+  const categories = listNewsCategories({ languageCode });
+  const templateContext = getLegacyTemplateContext(languageCode);
   const allowedCategoryIds = new Set(getDescendantNewsCategoryIds(categories, rootId));
   const categoryMap = new Map(categories.map((item) => [item.id, item]));
-  const allItems = listNews({ limit: 10000 })
+  const allItems = listNews({ limit: 10000, languageCode })
     .filter((item) => allowedCategoryIds.has(normalizeInteger(item.category_id, 0)))
     .slice()
     .sort((left, right) => left.id - right.id);
@@ -487,7 +524,7 @@ function buildLegacyNewsSectionDetailPages({
       ]
     });
 
-    writeTextFile(outputRoot, path.join(dirName, 'detail', `${item.id}.html`), html);
+    writeTextFile(outputRoot, path.join(dirName, 'detail', `${item.id}.html`), html, templateContext.site);
     filesWritten += 1;
   }
 
@@ -498,12 +535,13 @@ function buildLegacyNewsSectionDetailPages({
 }
 
 
-function getLegacyTemplateContext() {
-  const site = getSiteConfig();
+function getLegacyTemplateContext(languageCode = null) {
+  const site = getSiteConfig(languageCode);
 
   return {
     site,
-    columns: listColumns(),
+    languageCode,
+    columns: listColumns({ languageCode }),
     corporationCategories: queryAll(
       `
         SELECT id, name, parent_id, sort_order, is_external, external_url, legacy_extra
@@ -511,8 +549,8 @@ function getLegacyTemplateContext() {
         ORDER BY parent_id ASC, sort_order ASC, id ASC
       `
     ).map(normalizeCorporationCategoryRecord),
-    productCategories: listProductCategories().slice().sort(compareCategoryOrder),
-    newsCategories: listNewsCategories().slice().sort(compareCategoryOrder)
+    productCategories: listProductCategories({ languageCode }).slice().sort(compareCategoryOrder),
+    newsCategories: listNewsCategories({ languageCode }).slice().sort(compareCategoryOrder)
   };
 }
 
@@ -740,7 +778,7 @@ function buildLegacyContentPageProps(templateContext, item) {
       breadcrumbOptions: { separatorHtml: ' &gt;&gt; ' }
     }),
     title: item.name || '',
-    contentHtml: normalizeLegacyRichTextHtml(item.content_html) || '',
+    contentHtml: normalizeLegacyRichTextHtml(item.content_html, templateContext.site) || '',
     secondaryMenuItems: buildLegacyCorporationMenuItems(templateContext.corporationCategories, CORPORATION_ROOT_ID, normalizeInteger(item.id, 0))
   };
 }
@@ -761,8 +799,8 @@ function buildLegacySingleColumnPageProps(templateContext, column) {
       activeColumnId: normalizeInteger(column.id, 0)
     }),
     title: column.name || '',
-    contentHtml: normalizeLegacyRichTextHtml(column.content_html) || '',
-    bodyHtml: normalizeLegacyRichTextHtml(column.content_html) || '',
+    contentHtml: normalizeLegacyRichTextHtml(column.content_html, templateContext.site) || '',
+    bodyHtml: normalizeLegacyRichTextHtml(column.content_html, templateContext.site) || '',
     newsDescription: column.seo_description || '',
     newsKeywords: column.seo_keywords || '',
     keywords: column.seo_keywords || '',
@@ -841,7 +879,7 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
     image: product.small_image || '/skin/dfpic.gif',
     code: product.code || '',
     relatedProductsHtml: buildLegacyRelatedProducts(relatedProducts),
-    bodyHtml: normalizeLegacyRichTextHtml(product.content_html) || '',
+    bodyHtml: normalizeLegacyRichTextHtml(product.content_html, templateContext.site) || '',
     secondaryMenuItems: buildLegacyProductMenuItems(
       rootLevelCategories.length > 0 ? rootLevelCategories : [category].filter(Boolean),
       normalizeInteger(category?.id, 0)
@@ -929,7 +967,7 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, item, cat
     newsDescription: resolveRenderableNewsSummary(item) || '',
     typeId: normalizeInteger(item.category_id, 0),
     catName: category?.name || '',
-    bodyHtml: normalizeLegacyRichTextHtml(item.content_html) || '',
+    bodyHtml: normalizeLegacyRichTextHtml(item.content_html, templateContext.site) || '',
     previousHtml: previous ? `<a href="${previous.id}.html" class="Font_2e4690_a ">${escapeHtml(previous.title || '')}</a>` : '<span class="Font_2e4690_a">没有上一篇</span>',
     nextHtml: next ? `<a href="${next.id}.html" class="Font_2e4690_a ">${escapeHtml(next.title || '')}</a>` : '<span class="Font_2e4690_a">没有下一篇</span>'
   };
@@ -1310,16 +1348,16 @@ function writeProductCategoryPageSet({
     });
 
     const fileName = buildLegacyListFileName(fileStem, pageNumber);
-    writeTextFile(outputRoot, path.join('products', fileName), legacyHtml);
+    writeTextFile(outputRoot, path.join('products', fileName), legacyHtml, templateContext.site);
     filesWritten += 1;
-    writeTextFile(outputRoot, path.join('valve', fileName), legacyHtml);
+    writeTextFile(outputRoot, path.join('valve', fileName), legacyHtml, templateContext.site);
     filesWritten += 1;
 
     if (pageNumber === 1) {
       const firstPageFileName = `${fileStem}.html`;
-      writeTextFile(outputRoot, path.join('products', firstPageFileName), legacyHtml);
+      writeTextFile(outputRoot, path.join('products', firstPageFileName), legacyHtml, templateContext.site);
       filesWritten += 1;
-      writeTextFile(outputRoot, path.join('valve', firstPageFileName), legacyHtml);
+      writeTextFile(outputRoot, path.join('valve', firstPageFileName), legacyHtml, templateContext.site);
       filesWritten += 1;
     }
   }
@@ -1584,10 +1622,98 @@ function cleanupManagedSitemapChunks(outputRoot) {
   }
 }
 
-function writeTextFile(outputRoot, relativePath, content) {
+function resolveStaticBuildLanguages(languageCode) {
+  const enabledLanguages = listLanguages().filter((language) => Number(language.is_enabled || 0) === 1);
+  if (languageCode) {
+    const matched = enabledLanguages.find((language) => language.code === languageCode);
+    return matched ? [matched] : enabledLanguages.slice(0, 1);
+  }
+  return enabledLanguages.length > 0 ? enabledLanguages : [{ code: 'zh-CN', site: { output_dir: 'html' } }];
+}
+
+function resolveLanguageOutputRoot(baseOutputRoot, language) {
+  const requestedRoot = path.resolve(baseOutputRoot);
+  const configuredOutputDir = String(language?.site?.output_dir || '').trim();
+  if (!configuredOutputDir) {
+    return requestedRoot;
+  }
+
+  const defaultRootName = path.basename(DEFAULT_OUTPUT_ROOT);
+  if (configuredOutputDir === defaultRootName || configuredOutputDir === 'html') {
+    return requestedRoot;
+  }
+
+  const relativeDir = configuredOutputDir.startsWith(`${defaultRootName}/`)
+    ? configuredOutputDir.slice(defaultRootName.length + 1)
+    : configuredOutputDir;
+  return path.resolve(requestedRoot, relativeDir);
+}
+
+function writeTextFile(outputRoot, relativePath, content, site = null) {
   const filePath = path.resolve(outputRoot, relativePath);
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
-  fs.writeFileSync(filePath, normalizeLegacyRichTextHtml(content), 'utf8');
+  fs.writeFileSync(filePath, normalizeLegacyRichTextHtml(content, site), 'utf8');
+}
+
+function syncStaticSupportAssets(sharedRoot, outputRoot) {
+  const resolvedSharedRoot = path.resolve(sharedRoot);
+  const resolvedOutputRoot = path.resolve(outputRoot);
+
+  if (resolvedSharedRoot !== resolvedOutputRoot) {
+    for (const dirName of SHARED_STATIC_DIRS) {
+      syncDirectory(path.join(resolvedSharedRoot, dirName), path.join(resolvedOutputRoot, dirName));
+    }
+  }
+
+  for (const [sourceName, targetName] of STATIC_COMPAT_ALIASES) {
+    syncDirectory(path.join(resolvedOutputRoot, sourceName), path.join(resolvedOutputRoot, targetName));
+  }
+
+  syncLegacyImgAlias(resolvedOutputRoot);
+}
+
+function syncDirectory(sourceDir, targetDir) {
+  if (!fs.existsSync(sourceDir)) {
+    return;
+  }
+
+  fs.rmSync(targetDir, { recursive: true, force: true });
+  fs.mkdirSync(targetDir, { recursive: true });
+  copyDirectoryContents(sourceDir, targetDir);
+}
+
+function syncLegacyImgAlias(outputRoot) {
+  const targetDir = path.join(outputRoot, 'img');
+  fs.rmSync(targetDir, { recursive: true, force: true });
+  fs.mkdirSync(targetDir, { recursive: true });
+
+  copyDirectoryContents(path.join(outputRoot, 'images'), targetDir);
+  copyDirectoryContents(path.join(outputRoot, 'skin'), targetDir);
+
+  const legacyCssSource = path.join(outputRoot, 'skin', 'css.css');
+  if (fs.existsSync(legacyCssSource)) {
+    fs.copyFileSync(legacyCssSource, path.join(targetDir, 'css.css'));
+  }
+}
+
+function copyDirectoryContents(sourceDir, targetDir) {
+  if (!fs.existsSync(sourceDir)) {
+    return;
+  }
+
+  fs.mkdirSync(targetDir, { recursive: true });
+
+  for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const targetPath = path.join(targetDir, entry.name);
+
+    if (entry.isDirectory()) {
+      copyDirectoryContents(sourcePath, targetPath);
+      continue;
+    }
+
+    fs.copyFileSync(sourcePath, targetPath);
+  }
 }
 
 function groupBy(items, keyFn) {
@@ -1745,12 +1871,12 @@ function gotTopicLegacy(value, maxLength) {
     .replaceAll('<', '&lt;');
 }
 
-function normalizeLegacyRichTextHtml(value) {
+function normalizeLegacyRichTextHtml(value, siteConfig = null) {
   const html = String(value || '').trim();
   if (!html) {
     return '';
   }
-  const site = getSiteConfig();
+  const site = siteConfig || getSiteConfig();
   const companyName = site.company_name || site.web_name || '斯派莎克阀门制造有限公司';
   const siteUrl = site.web_url || '/';
   const companyEmail = site.company_email || '';

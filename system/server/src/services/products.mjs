@@ -1,5 +1,6 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { markMediaAssetStatusByPath } from './media-assets.mjs';
+import { ensureLanguagesSchema, getDefaultLanguage, listLanguages } from './languages.mjs';
 import { looksLikeLegacyMojibake } from '../utils/legacy-text.mjs';
 
 const LEGACY_MARKETING_PATTERNS = [
@@ -22,6 +23,7 @@ export function ensureProductsSchema() {
     return;
   }
 
+  ensureLanguagesSchema();
   addColumnIfMissing('products', 'updated_at', 'TEXT');
   execute(
     `
@@ -31,12 +33,39 @@ export function ensureProductsSchema() {
     `
   );
 
+  getDb().exec(`
+    CREATE TABLE IF NOT EXISTS product_translations (
+      id INTEGER PRIMARY KEY,
+      product_id INTEGER NOT NULL,
+      language_id INTEGER NOT NULL,
+      name TEXT,
+      summary TEXT,
+      content_html TEXT,
+      keywords TEXT,
+      seo_title TEXT,
+      seo_keywords TEXT,
+      seo_description TEXT,
+      publish_status TEXT NOT NULL DEFAULT 'draft',
+      published_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(product_id, language_id),
+      FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE,
+      FOREIGN KEY (language_id) REFERENCES languages(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_product_translations_product_id ON product_translations(product_id, language_id);
+    CREATE INDEX IF NOT EXISTS idx_product_translations_language_id ON product_translations(language_id, product_id);
+  `);
+
+  ensureDefaultProductTranslations();
+
   schemaEnsured = true;
 }
 
-export function listProducts({ featured = false, visibleOnly = true, limit = 20 } = {}) {
+export function listProducts({ featured = false, visibleOnly = true, limit = 20, languageCode = null } = {}) {
   ensureProductsSchema();
   const safeLimit = clampLimit(limit);
+  const selectedLanguage = resolveLanguageForContent(languageCode);
   const whereParts = [];
   const params = [];
 
@@ -48,7 +77,7 @@ export function listProducts({ featured = false, visibleOnly = true, limit = 20 
   }
 
   const where = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
-  return queryAll(
+  const items = queryAll(
     `
       SELECT
         id,
@@ -69,11 +98,18 @@ export function listProducts({ featured = false, visibleOnly = true, limit = 20 
       LIMIT ?
     `,
     [...params, safeLimit]
-  ).map(normalizeProductRecord);
+  );
+
+  return hydrateProducts(items, {
+    languageCode: selectedLanguage.code,
+    includeTranslations: false,
+    includeTranslationStatuses: false
+  });
 }
 
-export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, includeDescendants = false } = {}) {
+export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, includeDescendants = false, languageCode = null } = {}) {
   ensureProductsSchema();
+  const selectedLanguage = resolveLanguageForContent(languageCode);
   const safeLimit = Math.min(Math.max(Number.parseInt(String(limit), 10) || 50, 1), 200);
   const safePage = Math.max(Number.parseInt(String(page), 10) || 1, 1);
   const safeCategoryId = Number.parseInt(String(categoryId ?? ''), 10);
@@ -102,7 +138,7 @@ export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, inc
       : 'WHERE category_id = ?'
     : '';
 
-  const items = queryAll(
+  const rows = queryAll(
     `
       ${categoryTree}
       SELECT
@@ -127,7 +163,7 @@ export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, inc
       OFFSET ?
     `,
     hasCategoryFilter ? [safeCategoryId, safeLimit, offset] : [safeLimit, offset]
-  ).map(normalizeProductRecord);
+  );
 
   const total = queryOne(
     `
@@ -139,7 +175,11 @@ export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, inc
     hasCategoryFilter ? [safeCategoryId] : []
   )?.count || 0;
   return {
-    items,
+    items: hydrateProducts(rows, {
+      languageCode: selectedLanguage.code,
+      includeTranslations: false,
+      includeTranslationStatuses: true
+    }),
     pagination: {
       page: safePage,
       limit: safeLimit,
@@ -149,9 +189,9 @@ export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, inc
   };
 }
 
-export function getProductById(id) {
+export function getProductById(id, { languageCode = null, includeTranslations = false, includeTranslationStatuses = false } = {}) {
   ensureProductsSchema();
-  return normalizeProductRecord(queryOne(
+  const row = queryOne(
     `
       SELECT
         id,
@@ -170,11 +210,22 @@ export function getProductById(id) {
       WHERE id = ?
     `,
     [id]
-  ));
+  );
+  if (!row) {
+    return null;
+  }
+
+  const selectedLanguage = resolveLanguageForContent(languageCode);
+  return hydrateProducts([row], {
+    languageCode: selectedLanguage.code,
+    includeTranslations,
+    includeTranslationStatuses
+  })[0] || null;
 }
 
-export function searchProducts(rawQuery, limit = 20) {
+export function searchProducts(rawQuery, limit = 20, { languageCode = null } = {}) {
   ensureProductsSchema();
+  const selectedLanguage = resolveLanguageForContent(languageCode);
   const normalizedQuery = String(rawQuery ?? '').trim();
   const safeLimit = clampLimit(limit);
 
@@ -183,7 +234,7 @@ export function searchProducts(rawQuery, limit = 20) {
   }
 
   const likeQuery = `%${normalizedQuery}%`;
-  return queryAll(
+  const rows = queryAll(
     `
       SELECT
         id,
@@ -209,18 +260,25 @@ export function searchProducts(rawQuery, limit = 20) {
       LIMIT ?
     `,
     [likeQuery, likeQuery, likeQuery, safeLimit]
-  ).map(normalizeProductRecord);
+  );
+
+  return hydrateProducts(rows, {
+    languageCode: selectedLanguage.code,
+    includeTranslations: false,
+    includeTranslationStatuses: false
+  });
 }
 
-export function searchProductsPaged(rawQuery, { page = 1, limit = 20 } = {}) {
+export function searchProductsPaged(rawQuery, { page = 1, limit = 20, languageCode = null } = {}) {
   ensureProductsSchema();
+  const selectedLanguage = resolveLanguageForContent(languageCode);
   const normalizedQuery = String(rawQuery ?? '').trim();
   const safeLimit = Math.min(Math.max(Number.parseInt(String(limit), 10) || 20, 1), 200);
   const safePage = Math.max(Number.parseInt(String(page), 10) || 1, 1);
   const offset = (safePage - 1) * safeLimit;
 
   if (normalizedQuery === '') {
-    const items = queryAll(
+    const rows = queryAll(
       `
         SELECT
           id,
@@ -242,11 +300,15 @@ export function searchProductsPaged(rawQuery, { page = 1, limit = 20 } = {}) {
         OFFSET ?
       `,
       [safeLimit, offset]
-    ).map(normalizeProductRecord);
+    );
 
     const total = queryOne('SELECT COUNT(*) AS count FROM products WHERE is_visible = 1')?.count || 0;
     return {
-      items,
+      items: hydrateProducts(rows, {
+        languageCode: selectedLanguage.code,
+        includeTranslations: false,
+        includeTranslationStatuses: false
+      }),
       pagination: {
         page: safePage,
         limit: safeLimit,
@@ -257,7 +319,7 @@ export function searchProductsPaged(rawQuery, { page = 1, limit = 20 } = {}) {
   }
 
   const likeQuery = `%${normalizedQuery}%`;
-  const items = queryAll(
+  const rows = queryAll(
     `
       SELECT
         id,
@@ -284,7 +346,7 @@ export function searchProductsPaged(rawQuery, { page = 1, limit = 20 } = {}) {
       OFFSET ?
     `,
     [likeQuery, likeQuery, likeQuery, safeLimit, offset]
-  ).map(normalizeProductRecord);
+  );
 
   const total = queryOne(
     `
@@ -301,7 +363,11 @@ export function searchProductsPaged(rawQuery, { page = 1, limit = 20 } = {}) {
   )?.count || 0;
 
   return {
-    items,
+    items: hydrateProducts(rows, {
+      languageCode: selectedLanguage.code,
+      includeTranslations: false,
+      includeTranslationStatuses: false
+    }),
     pagination: {
       page: safePage,
       limit: safeLimit,
@@ -313,7 +379,9 @@ export function searchProductsPaged(rawQuery, { page = 1, limit = 20 } = {}) {
 
 export function createProduct(input) {
   ensureProductsSchema();
-  const payload = normalizeProductInput(input);
+  const selectedDefaultLanguage = getDefaultLanguage();
+  const payload = normalizeProductMutationInput(input, { defaultLanguageCode: selectedDefaultLanguage?.code });
+  const defaultTranslation = resolveDefaultTranslationPayload(payload.translations, selectedDefaultLanguage?.code);
   const now = new Date().toISOString();
   const result = execute(
     `
@@ -332,21 +400,25 @@ export function createProduct(input) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
-      payload.category_id,
-      payload.name,
-      payload.code,
-      payload.summary,
-      payload.content_html,
-      payload.small_image,
-      payload.keywords,
-      payload.is_featured_home,
-      payload.is_visible,
-      payload.sort_order,
+      payload.base.category_id,
+      defaultTranslation.name,
+      payload.base.code,
+      defaultTranslation.summary,
+      defaultTranslation.content_html,
+      payload.base.small_image,
+      defaultTranslation.keywords,
+      payload.base.is_featured_home,
+      payload.base.is_visible,
+      payload.base.sort_order,
       now
     ]
   );
 
-  const product = getProductById(result.lastInsertRowid);
+  saveProductTranslations(result.lastInsertRowid, payload.translations, now);
+  const product = getProductById(result.lastInsertRowid, {
+    includeTranslations: true,
+    includeTranslationStatuses: true
+  });
   markProductCoverActive(product?.small_image);
   return product;
 }
@@ -359,12 +431,20 @@ export function getNextProductSortOrder() {
 
 export function updateProduct(id, input) {
   ensureProductsSchema();
-  const existing = getProductById(id);
+  const selectedDefaultLanguage = getDefaultLanguage();
+  const existing = getProductById(id, {
+    includeTranslations: true,
+    includeTranslationStatuses: true
+  });
   if (!existing) {
     return null;
   }
 
-  const payload = normalizeProductInput({ ...existing, ...input });
+  const payload = normalizeProductMutationInput(input, {
+    defaultLanguageCode: selectedDefaultLanguage?.code,
+    existingProduct: existing
+  });
+  const defaultTranslation = resolveDefaultTranslationPayload(payload.translations, selectedDefaultLanguage?.code);
   const now = new Date().toISOString();
   execute(
     `
@@ -384,26 +464,31 @@ export function updateProduct(id, input) {
       WHERE id = ?
     `,
     [
-      payload.category_id,
-      payload.name,
-      payload.code,
-      payload.summary,
-      payload.content_html,
-      payload.small_image,
-      payload.keywords,
-      payload.is_featured_home,
-      payload.is_visible,
-      payload.sort_order,
+      payload.base.category_id,
+      defaultTranslation.name,
+      payload.base.code,
+      defaultTranslation.summary,
+      defaultTranslation.content_html,
+      payload.base.small_image,
+      defaultTranslation.keywords,
+      payload.base.is_featured_home,
+      payload.base.is_visible,
+      payload.base.sort_order,
       now,
       id
     ]
   );
 
-  if (existing.small_image !== payload.small_image) {
+  saveProductTranslations(id, payload.translations, now);
+
+  if (existing.small_image !== payload.base.small_image) {
     markProductCoverOrphaned(existing.small_image);
   }
 
-  const product = getProductById(id);
+  const product = getProductById(id, {
+    includeTranslations: true,
+    includeTranslationStatuses: true
+  });
   markProductCoverActive(product?.small_image);
   return product;
 }
@@ -438,6 +523,99 @@ export function normalizeProductInput(input) {
     is_visible: toBooleanInt(input.is_visible, 1),
     sort_order: toInteger(input.sort_order, 0)
   };
+}
+
+function normalizeProductBaseInput(input) {
+  return {
+    category_id: toNullableInteger(input?.category_id),
+    code: toNullableString(input?.code),
+    small_image: toNullableString(input?.small_image) || DEFAULT_PRODUCT_IMAGE,
+    is_featured_home: toBooleanInt(input?.is_featured_home),
+    is_visible: toBooleanInt(input?.is_visible, 1),
+    sort_order: toInteger(input?.sort_order, 0)
+  };
+}
+
+function normalizeProductTranslationInput(input, { requireName = false } = {}) {
+  const name = String(input?.name ?? '').trim();
+  if (requireName && !name) {
+    throw new Error('默认语言的产品名称不能为空');
+  }
+
+  return {
+    name,
+    summary: toNullableString(input?.summary),
+    content_html: toNullableString(input?.content_html),
+    keywords: toNullableString(input?.keywords),
+    publish_status: normalizePublishStatus(input?.publish_status),
+    seo_title: toNullableString(input?.seo_title),
+    seo_keywords: toNullableString(input?.seo_keywords),
+    seo_description: toNullableString(input?.seo_description)
+  };
+}
+
+function normalizeProductMutationInput(input, { defaultLanguageCode = 'zh-CN', existingProduct = null } = {}) {
+  if (input?.base || input?.translations) {
+    const base = normalizeProductBaseInput({ ...(existingProduct || {}), ...(input.base || {}) });
+    const translations = normalizeTranslationsMap(input.translations || {}, {
+      defaultLanguageCode,
+      existingTranslations: existingProduct?.translations || {}
+    });
+
+    return { base, translations };
+  }
+
+  const base = normalizeProductBaseInput({ ...(existingProduct || {}), ...(input || {}) });
+  const translation = normalizeProductTranslationInput(
+    { ...(existingProduct || {}), ...(input || {}) },
+    { requireName: true }
+  );
+
+  return {
+    base,
+    translations: {
+      [defaultLanguageCode]: translation
+    }
+  };
+}
+
+function normalizeTranslationsMap(translations, { defaultLanguageCode, existingTranslations = {} }) {
+  const output = {};
+  const knownLanguages = listLanguages();
+  const knownCodes = new Set(knownLanguages.map((language) => language.code));
+
+  for (const [languageCode, value] of Object.entries(translations || {})) {
+    if (!knownCodes.has(languageCode)) {
+      continue;
+    }
+    const normalized = normalizeProductTranslationInput(
+      { ...(existingTranslations?.[languageCode] || {}), ...(value || {}) },
+      { requireName: languageCode === defaultLanguageCode }
+    );
+    if (hasAnyTranslationValue(normalized)) {
+      output[languageCode] = normalized;
+    }
+  }
+
+  if (!output[defaultLanguageCode]) {
+    const fallbackSource = existingTranslations?.[defaultLanguageCode] || {};
+    output[defaultLanguageCode] = normalizeProductTranslationInput(fallbackSource, { requireName: true });
+  }
+
+  return output;
+}
+
+function resolveDefaultTranslationPayload(translations, defaultLanguageCode) {
+  const defaultCode = defaultLanguageCode || 'zh-CN';
+  const direct = translations[defaultCode];
+  if (direct) {
+    return direct;
+  }
+  const first = Object.values(translations)[0];
+  if (first?.name) {
+    return first;
+  }
+  throw new Error('至少需要提供默认语言的产品名称');
 }
 
 function clampLimit(limit) {
@@ -483,6 +661,277 @@ function normalizeProductRecord(row) {
     summary: resolveProductSummary(row),
     keywords: resolveProductKeywords(row)
   };
+}
+
+function hydrateProducts(rows, {
+  languageCode,
+  includeTranslations = false,
+  includeTranslationStatuses = false
+} = {}) {
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return [];
+  }
+
+  const productIds = rows.map((row) => Number(row.id)).filter((id) => Number.isInteger(id) && id > 0);
+  const translationsByProductId = loadTranslationsByProductIds(productIds);
+  const selectedLanguage = resolveLanguageForContent(languageCode);
+
+  return rows.map((row) => {
+    const normalized = normalizeProductRecord(row);
+    const translations = translationsByProductId.get(Number(row.id)) || [];
+    const translationMap = Object.fromEntries(
+      translations.map((translation) => [translation.language_code, translation])
+    );
+    const selectedTranslation = translationMap[selectedLanguage.code];
+    const defaultTranslation = translationMap[selectedLanguage.default_code];
+    const fallbackTranslation = selectedTranslation || defaultTranslation || translations[0] || null;
+    const merged = applyProductTranslation(normalized, fallbackTranslation);
+
+    return {
+      ...merged,
+      current_language_code: fallbackTranslation?.language_code || selectedLanguage.code,
+      ...(includeTranslations ? { translations: mapTranslationsForApi(translationMap) } : {}),
+      ...(includeTranslationStatuses ? { translation_statuses: buildTranslationStatuses(translations) } : {})
+    };
+  });
+}
+
+function loadTranslationsByProductIds(productIds) {
+  if (!productIds.length) {
+    return new Map();
+  }
+
+  const placeholders = productIds.map(() => '?').join(', ');
+  const rows = queryAll(
+    `
+      SELECT
+        pt.id,
+        pt.product_id,
+        pt.language_id,
+        l.code AS language_code,
+        pt.name,
+        pt.summary,
+        pt.content_html,
+        pt.keywords,
+        pt.seo_title,
+        pt.seo_keywords,
+        pt.seo_description,
+        pt.publish_status,
+        pt.published_at,
+        pt.created_at,
+        pt.updated_at
+      FROM product_translations pt
+      INNER JOIN languages l ON l.id = pt.language_id
+      WHERE pt.product_id IN (${placeholders})
+      ORDER BY pt.product_id ASC, l.sort_order ASC, l.id ASC
+    `,
+    productIds
+  );
+
+  const map = new Map();
+  for (const row of rows) {
+    const list = map.get(Number(row.product_id)) || [];
+    list.push({
+      id: Number(row.id),
+      product_id: Number(row.product_id),
+      language_id: Number(row.language_id),
+      language_code: row.language_code,
+      name: row.name || '',
+      summary: row.summary || '',
+      content_html: row.content_html || '',
+      keywords: row.keywords || '',
+      seo_title: row.seo_title || '',
+      seo_keywords: row.seo_keywords || '',
+      seo_description: row.seo_description || '',
+      publish_status: normalizePublishStatus(row.publish_status),
+      published_at: row.published_at || null,
+      created_at: row.created_at,
+      updated_at: row.updated_at
+    });
+    map.set(Number(row.product_id), list);
+  }
+  return map;
+}
+
+function applyProductTranslation(product, translation) {
+  if (!translation) {
+    return product;
+  }
+
+  return {
+    ...product,
+    name: translation.name || product.name,
+    summary: translation.summary || product.summary,
+    content_html: translation.content_html || product.content_html,
+    keywords: translation.keywords || product.keywords
+  };
+}
+
+function mapTranslationsForApi(translationMap) {
+  return Object.fromEntries(
+    Object.entries(translationMap).map(([languageCode, translation]) => [
+      languageCode,
+      {
+        name: translation.name || '',
+        summary: translation.summary || '',
+        content_html: translation.content_html || '',
+        keywords: translation.keywords || '',
+        seo_title: translation.seo_title || '',
+        seo_keywords: translation.seo_keywords || '',
+        seo_description: translation.seo_description || '',
+        publish_status: normalizePublishStatus(translation.publish_status),
+        published_at: translation.published_at || null
+      }
+    ])
+  );
+}
+
+function buildTranslationStatuses(translations) {
+  return translations.map((translation) => ({
+    language_code: translation.language_code,
+    publish_status: normalizePublishStatus(translation.publish_status),
+    published_at: translation.published_at || null,
+    has_content: translation.name.trim() !== '' || translation.summary.trim() !== '' || translation.content_html.trim() !== ''
+  }));
+}
+
+function saveProductTranslations(productId, translations, now = new Date().toISOString()) {
+  const languages = listLanguages();
+  const languageIdByCode = new Map(languages.map((language) => [language.code, language.id]));
+
+  for (const [languageCode, translation] of Object.entries(translations || {})) {
+    const languageId = languageIdByCode.get(languageCode);
+    if (!languageId) {
+      continue;
+    }
+
+    const normalized = normalizeProductTranslationInput(translation, {
+      requireName: languageCode === getDefaultLanguage()?.code
+    });
+    const publishedAt = normalized.publish_status === 'published'
+      ? (translation?.published_at || now)
+      : null;
+
+    execute(
+      `
+        INSERT INTO product_translations (
+          product_id,
+          language_id,
+          name,
+          summary,
+          content_html,
+          keywords,
+          seo_title,
+          seo_keywords,
+          seo_description,
+          publish_status,
+          published_at,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(product_id, language_id) DO UPDATE SET
+          name = excluded.name,
+          summary = excluded.summary,
+          content_html = excluded.content_html,
+          keywords = excluded.keywords,
+          seo_title = excluded.seo_title,
+          seo_keywords = excluded.seo_keywords,
+          seo_description = excluded.seo_description,
+          publish_status = excluded.publish_status,
+          published_at = excluded.published_at,
+          updated_at = excluded.updated_at
+      `,
+      [
+        productId,
+        languageId,
+        normalized.name || '',
+        normalized.summary,
+        normalized.content_html,
+        normalized.keywords,
+        normalized.seo_title,
+        normalized.seo_keywords,
+        normalized.seo_description,
+        normalized.publish_status,
+        publishedAt,
+        now,
+        now
+      ]
+    );
+  }
+}
+
+function ensureDefaultProductTranslations() {
+  const defaultLanguage = getDefaultLanguage();
+  if (!defaultLanguage) {
+    return;
+  }
+
+  execute(
+    `
+      INSERT INTO product_translations (
+        product_id,
+        language_id,
+        name,
+        summary,
+        content_html,
+        keywords,
+        publish_status,
+        published_at,
+        created_at,
+        updated_at
+      )
+      SELECT
+        p.id,
+        ?,
+        coalesce(p.name, ''),
+        p.summary,
+        p.content_html,
+        p.keywords,
+        'published',
+        p.updated_at,
+        coalesce(p.updated_at, CURRENT_TIMESTAMP),
+        coalesce(p.updated_at, CURRENT_TIMESTAMP)
+      FROM products p
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM product_translations pt
+        WHERE pt.product_id = p.id
+          AND pt.language_id = ?
+      )
+    `,
+    [defaultLanguage.id, defaultLanguage.id]
+  );
+}
+
+function resolveLanguageForContent(languageCode) {
+  const defaultLanguage = getDefaultLanguage();
+  const fallbackCode = defaultLanguage?.code || 'zh-CN';
+  const code = String(languageCode || '').trim() || fallbackCode;
+
+  return {
+    code,
+    default_code: fallbackCode
+  };
+}
+
+function normalizePublishStatus(value) {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (normalized === 'published') {
+    return 'published';
+  }
+  return 'draft';
+}
+
+function hasAnyTranslationValue(translation) {
+  return Boolean(
+    String(translation?.name || '').trim()
+    || String(translation?.summary || '').trim()
+    || String(translation?.content_html || '').trim()
+    || String(translation?.keywords || '').trim()
+    || String(translation?.seo_title || '').trim()
+    || String(translation?.seo_keywords || '').trim()
+    || String(translation?.seo_description || '').trim()
+  );
 }
 
 function resolveProductName(row) {

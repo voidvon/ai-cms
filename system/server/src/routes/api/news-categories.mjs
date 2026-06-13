@@ -1,37 +1,46 @@
 import { requireAuth } from '../../middleware/auth.mjs';
-import { queryAll, queryOne, execute } from '../../db.mjs';
+import {
+  createNewsCategory,
+  deleteNewsCategory,
+  getNewsCategoryById,
+  listNewsCategories,
+  listNewsCategoriesAdmin,
+  listNewsCategoryOptions,
+  updateNewsCategory
+} from '../../services/news-categories.mjs';
 
 export default async function newsCategoriesRoutes(app) {
-  // 公开 API：获取所有新闻分类
   app.get('/news-categories', async (request, reply) => {
-    const categories = queryAll(`
-      SELECT id, name, parent_id, sort_order
-      FROM news_categories
-      ORDER BY sort_order ASC, id ASC
-    `);
-    return { success: true, data: categories };
+    const { language, lang } = request.query;
+    return { success: true, data: listNewsCategories({ languageCode: language ?? lang }) };
   });
 
-  // 管理 API：获取所有新闻分类
+  app.get('/news-categories/options', async (request, reply) => {
+    const { language, lang } = request.query;
+    return { success: true, data: listNewsCategoryOptions({ languageCode: language ?? lang }) };
+  });
+
   app.get('/news-categories/admin', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
-    const categories = queryAll(`
-      SELECT id, name, parent_id, sort_order
-      FROM news_categories
-      ORDER BY parent_id ASC, sort_order ASC, id ASC
-    `);
-    return { success: true, data: categories };
+    const { parentId, page, limit, language, lang } = request.query;
+    const result = listNewsCategoriesAdmin({
+      parentId: parentId ? parseInt(parentId) : 0,
+      page: page ? parseInt(page) : 1,
+      limit: limit ? parseInt(limit) : 50,
+      languageCode: language ?? lang
+    });
+    return { success: true, ...result };
   });
 
-  // 管理 API：获取单个新闻分类
   app.get('/news-categories/:id', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
-    const category = queryOne(
-      'SELECT id, name, parent_id, sort_order FROM news_categories WHERE id = ?',
-      [request.params.id]
-    );
+    const { language, lang, include_translations, includeTranslations } = request.query;
+    const category = getNewsCategoryById(request.params.id, {
+      languageCode: language ?? lang,
+      includeTranslations: include_translations === '1' || include_translations === 'true' || includeTranslations === '1' || includeTranslations === 'true'
+    });
     if (!category) {
       reply.code(404);
       return { success: false, message: '分类不存在' };
@@ -39,20 +48,11 @@ export default async function newsCategoriesRoutes(app) {
     return { success: true, data: category };
   });
 
-  // 管理 API：创建新闻分类
   app.post('/news-categories', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
     try {
-      const { name, parent_id, sort_order } = request.body;
-      const result = execute(
-        'INSERT INTO news_categories (name, parent_id, sort_order) VALUES (?, ?, ?)',
-        [name, parent_id || 0, sort_order || 0]
-      );
-      const category = queryOne(
-        'SELECT id, name, parent_id, sort_order FROM news_categories WHERE id = ?',
-        [result.lastInsertRowid]
-      );
+      const category = createNewsCategory(request.body);
       return { success: true, data: category };
     } catch (error) {
       reply.code(400);
@@ -60,20 +60,11 @@ export default async function newsCategoriesRoutes(app) {
     }
   });
 
-  // 管理 API：更新新闻分类
   app.put('/news-categories/:id', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
     try {
-      const { name, parent_id, sort_order } = request.body;
-      execute(
-        'UPDATE news_categories SET name = ?, parent_id = ?, sort_order = ? WHERE id = ?',
-        [name, parent_id || 0, sort_order || 0, request.params.id]
-      );
-      const category = queryOne(
-        'SELECT id, name, parent_id, sort_order FROM news_categories WHERE id = ?',
-        [request.params.id]
-      );
+      const category = updateNewsCategory(request.params.id, request.body);
       if (!category) {
         reply.code(404);
         return { success: false, message: '分类不存在' };
@@ -85,11 +76,14 @@ export default async function newsCategoriesRoutes(app) {
     }
   });
 
-  // 管理 API：删除新闻分类
   app.delete('/news-categories/:id', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
-    execute('DELETE FROM news_categories WHERE id = ?', [request.params.id]);
+    const category = deleteNewsCategory(request.params.id);
+    if (!category) {
+      reply.code(404);
+      return { success: false, message: '分类不存在' };
+    }
     return { success: true, message: '删除成功' };
   });
 }

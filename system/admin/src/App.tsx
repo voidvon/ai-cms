@@ -12,6 +12,7 @@ import StaticGenerationPage from '@/pages/StaticGenerationPage'
 import SiteConfigPage from '@/pages/SiteConfigPage'
 import SitemapDiagnosticsPage from '@/pages/SitemapDiagnosticsPage'
 import LlmsDiagnosticsPage from '@/pages/LlmsDiagnosticsPage'
+import LanguagesPage from '@/pages/LanguagesPage'
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
           <Route path="templates" element={<Navigate to="/themes" replace />} />
           <Route path="content-models" element={<ContentModelsPage />} />
           <Route path="media-assets" element={<MediaAssetsPage />} />
+          <Route path="languages" element={<LanguagesPage />} />
           <Route path="template-variants" element={<Navigate to="/themes" replace />} />
           <Route path="admins" element={<AdminsPage />} />
           <Route path="static-gen" element={<StaticGenerationPage />} />

@@ -1,11 +1,14 @@
 import { useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { contentModelsApi } from '@/api/advanced'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { toast } from 'sonner'
 
 export default function ContentModelsPage() {
+  const queryClient = useQueryClient()
   const [selectedId, setSelectedId] = useState<number | null>(null)
 
   const { data, isLoading } = useQuery({
@@ -18,6 +21,19 @@ export default function ContentModelsPage() {
     () => models.find((item) => item.id === selectedId) || models[0] || null,
     [models, selectedId],
   )
+
+  const updateFieldMutation = useMutation({
+    mutationFn: async ({ modelId, fieldName, patch }: { modelId: number; fieldName: string; patch: Record<string, unknown> }) => {
+      return contentModelsApi.updateField(modelId, fieldName, patch)
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['content-models'] })
+      toast.success('字段配置已更新')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || '字段配置保存失败')
+    },
+  })
 
   if (isLoading) {
     return <div>加载中...</div>
@@ -85,6 +101,9 @@ export default function ContentModelsPage() {
                       <TableHead>显示名</TableHead>
                       <TableHead>字段类型</TableHead>
                       <TableHead>数据库类型</TableHead>
+                      <TableHead>翻译</TableHead>
+                      <TableHead>列表</TableHead>
+                      <TableHead>编辑</TableHead>
                       <TableHead>属性</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -96,9 +115,73 @@ export default function ContentModelsPage() {
                         <TableCell><Badge variant="outline">{formatFieldType(field.field_type)}</Badge></TableCell>
                         <TableCell className="font-mono text-xs text-muted-foreground">{field.db_type || '-'}</TableCell>
                         <TableCell>
-                          <div className="flex flex-wrap gap-1">
+                          <Select
+                            value={String(field.is_translatable ?? 0)}
+                            disabled={field.is_primary === 1 || isProtectedField(field.field_name) || updateFieldMutation.isPending}
+                            onValueChange={(value) => {
+                              updateFieldMutation.mutate({
+                                modelId: selectedModel.id,
+                                fieldName: field.field_name,
+                                patch: buildFieldPatch(field, { is_translatable: Number.parseInt(value, 10) }),
+                              })
+                            }}
+                          >
+                            <SelectTrigger className="w-20">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">是</SelectItem>
+                              <SelectItem value="0">否</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={String(field.is_listed ?? 1)}
+                            disabled={updateFieldMutation.isPending}
+                            onValueChange={(value) => {
+                              updateFieldMutation.mutate({
+                                modelId: selectedModel.id,
+                                fieldName: field.field_name,
+                                patch: buildFieldPatch(field, { is_listed: Number.parseInt(value, 10) }),
+                              })
+                            }}
+                          >
+                            <SelectTrigger className="w-20">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">显示</SelectItem>
+                              <SelectItem value="0">隐藏</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <Select
+                            value={String(field.is_editable ?? 1)}
+                            disabled={field.is_primary === 1 || updateFieldMutation.isPending}
+                            onValueChange={(value) => {
+                              updateFieldMutation.mutate({
+                                modelId: selectedModel.id,
+                                fieldName: field.field_name,
+                                patch: buildFieldPatch(field, { is_editable: Number.parseInt(value, 10) }),
+                              })
+                            }}
+                          >
+                            <SelectTrigger className="w-20">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="1">可编辑</SelectItem>
+                              <SelectItem value="0">只读</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-1 items-center">
                             {field.is_primary ? <Badge>主键</Badge> : null}
                             {field.is_required ? <Badge variant="outline">必填</Badge> : null}
+                            {isProtectedField(field.field_name) ? <Badge variant="outline">结构字段</Badge> : null}
                           </div>
                         </TableCell>
                       </TableRow>
@@ -114,6 +197,40 @@ export default function ContentModelsPage() {
       </div>
     </div>
   )
+}
+
+function buildFieldPatch(field: any, patch: Record<string, unknown>) {
+  return {
+    field_label: field.field_label,
+    field_type: field.field_type,
+    is_required: field.is_required,
+    is_listed: field.is_listed ?? 1,
+    is_editable: field.is_editable ?? 1,
+    is_translatable: field.is_translatable ?? 0,
+    sort_order: field.sort_order,
+    ...patch,
+  }
+}
+
+function isProtectedField(fieldName: string) {
+  return [
+    'id',
+    'parent_id',
+    'source_id',
+    'source_type',
+    'category_id',
+    'route_path',
+    'custom_url',
+    'sort_order',
+    'is_system',
+    'is_visible',
+    'is_featured_home',
+    'code',
+    'small_image',
+    'picture',
+    'created_at',
+    'updated_at',
+  ].includes(fieldName)
 }
 
 function formatFieldType(type: string) {

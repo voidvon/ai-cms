@@ -12,13 +12,15 @@ import {
 export default async function productCategoriesRoutes(app) {
   // 公开 API：获取所有产品分类
   app.get('/product-categories', async (request, reply) => {
-    const categories = listProductCategories();
+    const { language, lang } = request.query;
+    const categories = listProductCategories({ languageCode: language ?? lang });
     return { success: true, data: categories };
   });
 
   // 公开 API：获取产品分类选项（树形结构）
   app.get('/product-categories/options', async (request, reply) => {
-    const options = listProductCategoryOptions();
+    const { language, lang } = request.query;
+    const options = listProductCategoryOptions({ languageCode: language ?? lang });
     return { success: true, data: options };
   });
 
@@ -26,11 +28,12 @@ export default async function productCategoriesRoutes(app) {
   app.get('/product-categories/admin', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
-    const { parentId, page, limit } = request.query;
+    const { parentId, page, limit, language, lang } = request.query;
     const result = listProductCategoriesAdmin({
       parentId: parentId ? parseInt(parentId) : 0,
       page: page ? parseInt(page) : 1,
-      limit: limit ? parseInt(limit) : 50
+      limit: limit ? parseInt(limit) : 50,
+      languageCode: language ?? lang
     });
     return { success: true, ...result };
   });
@@ -39,7 +42,11 @@ export default async function productCategoriesRoutes(app) {
   app.get('/product-categories/:id', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
-    const category = getProductCategoryById(request.params.id);
+    const { language, lang, include_translations, includeTranslations } = request.query;
+    const category = getProductCategoryById(request.params.id, {
+      languageCode: language ?? lang,
+      includeTranslations: include_translations === '1' || include_translations === 'true' || includeTranslations === '1' || includeTranslations === 'true'
+    });
     if (!category) {
       reply.code(404);
       return { success: false, message: '分类不存在' };

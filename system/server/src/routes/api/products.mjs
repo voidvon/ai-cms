@@ -14,15 +14,17 @@ export default async function productRoutes(app) {
   app.get('/products/admin', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
-    const { page, limit, category_id, categoryId, include_descendants, includeDescendants } = request.query;
+    const { page, limit, category_id, categoryId, include_descendants, includeDescendants, language, lang } = request.query;
     const selectedCategoryId = category_id ?? categoryId;
     const selectedIncludeDescendants = include_descendants ?? includeDescendants;
+    const selectedLanguage = language ?? lang;
 
     const result = listProductsAdmin({
       page: page ? parseInt(page) : undefined,
       limit: limit ? parseInt(limit) : undefined,
       categoryId: selectedCategoryId ? parseInt(selectedCategoryId) : undefined,
-      includeDescendants: selectedIncludeDescendants === '1' || selectedIncludeDescendants === 'true'
+      includeDescendants: selectedIncludeDescendants === '1' || selectedIncludeDescendants === 'true',
+      languageCode: selectedLanguage ? String(selectedLanguage) : undefined
     });
 
     return { success: true, ...result };
@@ -30,14 +32,13 @@ export default async function productRoutes(app) {
 
   // 公开 API：产品列表
   app.get('/products', async (request, reply) => {
-    const { category_id, featured, visible, limit, offset } = request.query;
+    const { featured, visible, limit, language, lang } = request.query;
 
     const products = listProducts({
-      categoryId: category_id ? parseInt(category_id) : undefined,
       featured: featured === 'true' || featured === '1',
       visibleOnly: visible !== 'false' && visible !== '0',
       limit: limit ? parseInt(limit) : undefined,
-      offset: offset ? parseInt(offset) : undefined
+      languageCode: language ?? lang
     });
 
     return { success: true, data: products };
@@ -45,16 +46,16 @@ export default async function productRoutes(app) {
 
   // 公开 API：搜索产品
   app.get('/products/search', async (request, reply) => {
-    const { q, page = 1, pageSize = 20 } = request.query;
+    const { q, page = 1, pageSize = 20, language, lang } = request.query;
 
     if (!q) {
       return reply.badRequest('缺少搜索关键词');
     }
 
-    const result = searchProductsPaged({
-      keyword: q,
+    const result = searchProductsPaged(q, {
       page: parseInt(page),
-      pageSize: parseInt(pageSize)
+      limit: parseInt(pageSize),
+      languageCode: language ?? lang
     });
 
     return { success: true, ...result };
@@ -62,7 +63,12 @@ export default async function productRoutes(app) {
 
   // 公开 API：产品详情
   app.get('/products/:id', async (request, reply) => {
-    const product = getProductById(parseInt(request.params.id));
+    const { language, lang, include_translations, includeTranslations } = request.query;
+    const product = getProductById(parseInt(request.params.id), {
+      languageCode: language ?? lang,
+      includeTranslations: include_translations === '1' || include_translations === 'true' || includeTranslations === '1' || includeTranslations === 'true',
+      includeTranslationStatuses: true
+    });
 
     if (!product) {
       return reply.notFound('产品不存在');

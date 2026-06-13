@@ -278,14 +278,7 @@ function TreeItemButton<T = unknown>({
   action?: React.ReactNode
 }) {
   return (
-    <button
-      type="button"
-      onClick={() => {
-        if (selectable) {
-          onValueChange?.(item)
-        }
-      }}
-      disabled={!selectable}
+    <div
       className={cn(
         'min-h-8 min-w-0 flex flex-1 items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors',
         selectable ? 'hover:bg-muted' : 'cursor-default text-muted-foreground',
@@ -293,7 +286,17 @@ function TreeItemButton<T = unknown>({
       )}
       style={{ marginLeft: depth * 12 }}
     >
-      <span className="block min-w-0 flex-1 truncate">{item.label}</span>
+      {selectable ? (
+        <button
+          type="button"
+          onClick={() => onValueChange?.(item)}
+          className="min-w-0 flex flex-1 items-center text-left"
+        >
+          <span className="block min-w-0 flex-1 truncate">{item.label}</span>
+        </button>
+      ) : (
+        <span className="block min-w-0 flex-1 truncate">{item.label}</span>
+      )}
       {action ? (
         <span
           className="shrink-0"
@@ -302,7 +305,7 @@ function TreeItemButton<T = unknown>({
           {action}
         </span>
       ) : null}
-    </button>
+    </div>
   )
 }
 

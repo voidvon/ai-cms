@@ -2,8 +2,8 @@ import apiClient from './client'
 import type { ProductCategory, ApiResponse } from '@/types'
 
 export const productCategoriesApi = {
-  list: async () => {
-    const response = await apiClient.get<ApiResponse<ProductCategory[]>>('/product-categories')
+  list: async (params?: { language?: string }) => {
+    const response = await apiClient.get<ApiResponse<ProductCategory[]>>('/product-categories', { params })
     return response.data
   },
 
@@ -12,13 +12,13 @@ export const productCategoriesApi = {
     return response.data
   },
 
-  listOptions: async () => {
-    const response = await apiClient.get<ApiResponse<ProductCategory[]>>('/product-categories/options')
+  listOptions: async (params?: { language?: string }) => {
+    const response = await apiClient.get<ApiResponse<ProductCategory[]>>('/product-categories/options', { params })
     return response.data
   },
 
-  get: async (id: number) => {
-    const response = await apiClient.get<ApiResponse<ProductCategory>>(`/product-categories/${id}`)
+  get: async (id: number, params?: { language?: string; include_translations?: number | boolean }) => {
+    const response = await apiClient.get<ApiResponse<ProductCategory>>(`/product-categories/${id}`, { params })
     return response.data
   },
 

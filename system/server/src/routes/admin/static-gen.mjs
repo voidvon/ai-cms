@@ -27,52 +27,53 @@ export default async function staticGenRoutes(app) {
     onRequest: [requireAuth]
   }, async (request, reply) => {
     const section = request.query.section || 'all';
+    const languageCode = String(request.query.language || '').trim() || null;
 
     try {
       let result;
 
       switch (section) {
         case 'index':
-          result = buildIndexPage({ outputRoot: CONTENT_ROOT });
+          result = buildIndexPage({ outputRoot: CONTENT_ROOT, languageCode });
           break;
         case 'contact':
-          result = buildContactPage({ outputRoot: CONTENT_ROOT });
+          result = buildContactPage({ outputRoot: CONTENT_ROOT, languageCode });
           break;
         case 'message':
-          result = buildMessagePage({ outputRoot: CONTENT_ROOT });
+          result = buildMessagePage({ outputRoot: CONTENT_ROOT, languageCode });
           break;
         case 'corporation':
-          result = buildCorporationPages({ outputRoot: CONTENT_ROOT });
+          result = buildCorporationPages({ outputRoot: CONTENT_ROOT, languageCode });
           break;
         case 'product-lists':
-          result = buildProductCategoryPages({ outputRoot: CONTENT_ROOT });
+          result = buildProductCategoryPages({ outputRoot: CONTENT_ROOT, languageCode });
           break;
         case 'product-details':
-          result = buildProductDetailPages({ outputRoot: CONTENT_ROOT });
+          result = buildProductDetailPages({ outputRoot: CONTENT_ROOT, languageCode });
           break;
         case 'news-lists':
-          result = buildNewsCategoryPages({ outputRoot: CONTENT_ROOT });
+          result = buildNewsCategoryPages({ outputRoot: CONTENT_ROOT, languageCode });
           break;
         case 'news-details':
-          result = buildNewsDetailPages({ outputRoot: CONTENT_ROOT });
+          result = buildNewsDetailPages({ outputRoot: CONTENT_ROOT, languageCode });
           break;
         case 'service-lists':
-          result = buildServiceCategoryPages({ outputRoot: CONTENT_ROOT });
+          result = buildServiceCategoryPages({ outputRoot: CONTENT_ROOT, languageCode });
           break;
         case 'service-details':
-          result = buildServiceDetailPages({ outputRoot: CONTENT_ROOT });
+          result = buildServiceDetailPages({ outputRoot: CONTENT_ROOT, languageCode });
           break;
         case 'robots':
-          result = buildStaticSite({ outputRoot: CONTENT_ROOT, sections: ['robots'] });
+          result = buildStaticSite({ outputRoot: CONTENT_ROOT, sections: ['robots'], languageCode });
           break;
         case 'sitemap':
-          result = buildStaticSite({ outputRoot: CONTENT_ROOT, sections: ['sitemap'] });
+          result = buildStaticSite({ outputRoot: CONTENT_ROOT, sections: ['sitemap'], languageCode });
           break;
         case 'llms':
-          result = buildStaticSite({ outputRoot: CONTENT_ROOT, sections: ['llms'] });
+          result = buildStaticSite({ outputRoot: CONTENT_ROOT, sections: ['llms'], languageCode });
           break;
         case 'all':
-          result = buildStaticSite({ outputRoot: CONTENT_ROOT });
+          result = buildStaticSite({ outputRoot: CONTENT_ROOT, languageCode });
           break;
         default:
           return reply.badRequest('未知的生成类型');
@@ -80,6 +81,7 @@ export default async function staticGenRoutes(app) {
 
       return {
         success: true,
+        languageCode,
         totalFiles: result.totalFiles || result.filesWritten || 0,
         totalRecords: result.totalRecords || result.recordsProcessed || 0,
         result

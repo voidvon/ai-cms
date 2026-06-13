@@ -12,6 +12,7 @@ export default defineConfig({
     },
   },
   server: {
+    host: '127.0.0.1',
     port: 5173,
     proxy: {
       '/api': {
@@ -22,15 +23,19 @@ export default defineConfig({
         target: 'http://localhost:3000',
         changeOrigin: true,
       },
-      '/admin/login': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
-      '/admin/logout': {
-        target: 'http://localhost:3000',
-        changeOrigin: true,
-      },
       '/admin/build': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      '/UploadFile': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      '/uploadfile': {
+        target: 'http://localhost:3000',
+        changeOrigin: true,
+      },
+      '/upload': {
         target: 'http://localhost:3000',
         changeOrigin: true,
       },

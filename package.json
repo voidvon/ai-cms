@@ -7,7 +7,9 @@
   ],
   "scripts": {
     "start": "node server.mjs",
-    "dev": "npm --prefix system/admin run build && node --watch server.mjs",
+    "dev": "node scripts/dev.mjs",
+    "dev:server": "npm --prefix system/server run dev",
+    "dev:admin": "npm --prefix system/admin run dev",
     "build:admin": "npm --prefix system/admin run build",
     "build:site": "npm --prefix system/server run build:static",
     "db:init": "npm --prefix system/server run db:init",

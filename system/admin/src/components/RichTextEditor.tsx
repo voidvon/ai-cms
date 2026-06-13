@@ -24,7 +24,7 @@ export default function RichTextEditor({
   uploadPurpose = 'richtext_image',
   className = '',
 }: RichTextEditorProps) {
-  const editorRef = useRef<HTMLDivElement | null>(null)
+  const mountRef = useRef<HTMLDivElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const quillRef = useRef<Quill | null>(null)
   const lastHtmlRef = useRef(normalizeEditorHtml(value))
@@ -41,11 +41,17 @@ export default function RichTextEditor({
   }, [isUploading])
 
   useEffect(() => {
-    if (!editorRef.current || quillRef.current) {
+    if (!mountRef.current || quillRef.current) {
       return
     }
 
-    const quill = new Quill(editorRef.current, {
+    // Quill 的 toolbar 和 editor DOM 会一起插入挂载容器中。
+    // 这里统一托管整块 DOM，避免重复挂载时残留旧 toolbar。
+    mountRef.current.innerHTML = ''
+    const editorHost = document.createElement('div')
+    mountRef.current.appendChild(editorHost)
+
+    const quill = new Quill(editorHost, {
       theme: 'snow',
       placeholder,
       modules: {
@@ -84,6 +90,9 @@ export default function RichTextEditor({
 
     return () => {
       quillRef.current = null
+      if (mountRef.current) {
+        mountRef.current.innerHTML = ''
+      }
     }
   }, [placeholder])
 
@@ -138,7 +147,7 @@ export default function RichTextEditor({
         className="hidden"
         onChange={handleFileChange}
       />
-      <div ref={editorRef} />
+      <div ref={mountRef} />
       {isUploading && (
         <div className="mt-2 text-xs text-muted-foreground">图片上传中...</div>
       )}

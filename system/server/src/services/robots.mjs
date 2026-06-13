@@ -2,8 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getSiteConfig } from './site.mjs';
 
-export function buildRobotsTxt({ outputRoot }) {
-  const site = getSiteConfig();
+export function buildRobotsTxt({ outputRoot, languageCode = null } = {}) {
+  const site = getSiteConfig(languageCode);
   const siteUrl = normalizeSiteUrl(site.web_url);
   const lines = ['User-agent: *', 'Allow: /'];
 

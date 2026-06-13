@@ -2,22 +2,22 @@ import apiClient from './client';
 import type { Product, ApiResponse, PaginationInfo } from '@/types';
 
 export const productsApi = {
-  list: async (params: { page?: number; limit?: number; category_id?: number; include_descendants?: number | boolean }) => {
+  list: async (params: { page?: number; limit?: number; category_id?: number; include_descendants?: number | boolean; language?: string }) => {
     const response = await apiClient.get<ApiResponse<Product[]> & { pagination: PaginationInfo }>('/products/admin', { params });
     return response.data;
   },
 
-  get: async (id: number) => {
-    const response = await apiClient.get<ApiResponse<Product>>(`/products/${id}`);
+  get: async (id: number, params?: { language?: string; include_translations?: number | boolean }) => {
+    const response = await apiClient.get<ApiResponse<Product>>(`/products/${id}`, { params });
     return response.data;
   },
 
-  create: async (data: Partial<Product>) => {
+  create: async (data: Record<string, unknown>) => {
     const response = await apiClient.post<ApiResponse<Product>>('/products', data);
     return response.data;
   },
 
-  update: async (id: number, data: Partial<Product>) => {
+  update: async (id: number, data: Record<string, unknown>) => {
     const response = await apiClient.put<ApiResponse<Product>>(`/products/${id}`, data);
     return response.data;
   },

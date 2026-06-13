@@ -1,4 +1,5 @@
 import { getDb, queryAll, queryOne } from '../db.mjs';
+import { ensureContentModelFieldsSchema, mergeModelFieldConfigs } from './content-model-fields.mjs';
 
 const BUILTIN_MODELS = [
   {
@@ -66,6 +67,7 @@ export function ensureContentModelsSchema() {
 
 export function listContentModels() {
   ensureContentModelsSchema();
+  ensureContentModelFieldsSchema();
   return getContentModelRows().map((model) => ({
     ...model,
     fields: readModelFields(model)
@@ -74,6 +76,7 @@ export function listContentModels() {
 
 export function getContentModelById(id) {
   ensureContentModelsSchema();
+  ensureContentModelFieldsSchema();
   const modelId = Number(id);
   const model = getContentModelRows().find((item) => Number(item.id) === modelId);
   if (!model) {
@@ -123,7 +126,7 @@ function getContentModelRows() {
 
 function readModelFields(model) {
   const columns = getTableColumns(model.source_table);
-  return columns.map((column) => ({
+  const fields = columns.map((column) => ({
     id: Number(column.cid || 0) + 1,
     model_id: model.id,
     field_name: column.name,
@@ -135,6 +138,8 @@ function readModelFields(model) {
     is_system: Number(model.is_system || 0),
     sort_order: Number(column.cid || 0) * 10
   }));
+
+  return mergeModelFieldConfigs(model.code, fields);
 }
 
 function getTableColumns(tableName) {

@@ -3,6 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { corporationCategoriesApi, templateVariantsApi, templatesApi } from '@/api/advanced'
 import { columnsApi } from '@/api/columns'
+import { languagesApi } from '@/api/languages'
 import { newsApi } from '@/api/news'
 import { newsCategoriesApi } from '@/api/news-categories'
 import { productCategoriesApi } from '@/api/product-categories'
@@ -24,7 +25,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tree, type TreeItemData } from '@/components/ui/tree'
-import { Ellipsis, LayoutTemplate, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Ellipsis, ExternalLink, LayoutTemplate, Pencil, Plus, Trash2 } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -113,9 +114,14 @@ export default function ColumnsPage() {
   const [manualColumnDeleteDialogOpen, setManualColumnDeleteDialogOpen] = useState(false)
   const [deletingManualColumn, setDeletingManualColumn] = useState<Column | null>(null)
 
+  const { data: languagesData } = useQuery({
+    queryKey: ['languages'],
+    queryFn: () => languagesApi.list(),
+  })
+  const defaultLanguageCode = languagesData?.data?.find((item) => item.is_default === 1)?.code || 'zh-CN'
   const { data: columnsData, isLoading: columnsLoading } = useQuery({
-    queryKey: ['columns'],
-    queryFn: () => columnsApi.list(),
+    queryKey: ['columns', defaultLanguageCode],
+    queryFn: () => columnsApi.list({ language: defaultLanguageCode }),
   })
   const { data: selectedThemeData } = useQuery({
     queryKey: ['selected-theme'],
@@ -183,6 +189,7 @@ export default function ColumnsPage() {
       limit,
       category_id: selectedSourceType === 'product_category' ? selectedSourceId : undefined,
       include_descendants: selectedSourceType === 'product_category' ? 1 : undefined,
+      language: defaultLanguageCode,
     }),
     enabled: isProductColumn,
     staleTime: 0,
@@ -195,6 +202,7 @@ export default function ColumnsPage() {
       limit,
       category_id: selectedSourceType === 'news_category' ? selectedSourceId : undefined,
       include_descendants: selectedSourceType === 'news_category' ? 1 : undefined,
+      language: defaultLanguageCode,
     }),
     enabled: isNewsColumn,
     staleTime: 0,
@@ -1036,6 +1044,7 @@ function ProductTable({
           <TableHead>标题</TableHead>
           <TableHead>编号</TableHead>
           <TableHead>分类</TableHead>
+          <TableHead>多语言</TableHead>
           <TableHead>状态</TableHead>
           <TableHead>推荐</TableHead>
           <TableHead className="text-right">操作</TableHead>
@@ -1044,15 +1053,45 @@ function ProductTable({
       <TableBody>
         {items.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={7} className="text-center">暂无内容</TableCell>
+            <TableCell colSpan={8} className="text-center">暂无内容</TableCell>
           </TableRow>
         ) : (
           items.map((product) => (
             <TableRow key={product.id}>
               <TableCell>{product.id}</TableCell>
-              <TableCell className="font-medium">{product.name}</TableCell>
+              <TableCell className="group/title font-medium">
+                <div className="flex items-center gap-1">
+                  <span>{product.name}</span>
+                  <a
+                    href={buildProductDetailPreviewHref(product.id)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex size-4 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none group-hover/title:opacity-100"
+                    aria-label={`新窗口打开 ${product.name} 详情页`}
+                    title="打开详情页"
+                  >
+                    <ExternalLink className="size-3.5" />
+                  </a>
+                </div>
+              </TableCell>
               <TableCell>{product.code || '-'}</TableCell>
               <TableCell>{product.category_name || product.category_id || '-'}</TableCell>
+              <TableCell>
+                <div className="flex flex-wrap gap-1">
+                  {(product.translation_statuses || []).length === 0 ? (
+                    <Badge variant="outline">默认语言</Badge>
+                  ) : (
+                    product.translation_statuses?.map((status) => (
+                      <Badge
+                        key={`${product.id}-${status.language_code}`}
+                        variant={status.publish_status === 'published' ? 'default' : 'outline'}
+                      >
+                        {status.language_code}
+                      </Badge>
+                    ))
+                  )}
+                </div>
+              </TableCell>
               <TableCell>{product.is_visible === 1 ? <Badge>显示</Badge> : <Badge variant="secondary">隐藏</Badge>}</TableCell>
               <TableCell>{product.is_featured_home === 1 ? <Badge>是</Badge> : <Badge variant="outline">否</Badge>}</TableCell>
               <TableCell className="text-right">
@@ -1065,6 +1104,10 @@ function ProductTable({
       </TableBody>
     </Table>
   )
+}
+
+function buildProductDetailPreviewHref(productId: number) {
+  return `/product/${productId}.html`
 }
 
 function NewsTable({
@@ -1083,6 +1126,7 @@ function NewsTable({
           <TableHead>ID</TableHead>
           <TableHead>标题</TableHead>
           <TableHead>分类</TableHead>
+          <TableHead>多语言</TableHead>
           <TableHead>推荐</TableHead>
           <TableHead>创建时间</TableHead>
           <TableHead className="text-right">操作</TableHead>
@@ -1091,7 +1135,7 @@ function NewsTable({
       <TableBody>
         {items.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={6} className="text-center">暂无内容</TableCell>
+            <TableCell colSpan={7} className="text-center">暂无内容</TableCell>
           </TableRow>
         ) : (
           items.map((item) => (
@@ -1099,6 +1143,22 @@ function NewsTable({
               <TableCell>{item.id}</TableCell>
               <TableCell className="font-medium">{item.title}</TableCell>
               <TableCell>{item.category_name || item.category_id || '-'}</TableCell>
+              <TableCell>
+                <div className="flex flex-wrap gap-1">
+                  {(item.translation_statuses || []).length === 0 ? (
+                    <Badge variant="outline">默认语言</Badge>
+                  ) : (
+                    item.translation_statuses?.map((status) => (
+                      <Badge
+                        key={`${item.id}-${status.language_code}`}
+                        variant={status.publish_status === 'published' ? 'default' : 'outline'}
+                      >
+                        {status.language_code}
+                      </Badge>
+                    ))
+                  )}
+                </div>
+              </TableCell>
               <TableCell>{Number(item.is_featured_home || item.is_featured || 0) === 1 ? <Badge>是</Badge> : <Badge variant="outline">否</Badge>}</TableCell>
               <TableCell>{item.created_at ? new Date(item.created_at).toLocaleDateString('zh-CN') : '-'}</TableCell>
               <TableCell className="text-right">

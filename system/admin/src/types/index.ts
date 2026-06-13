@@ -2,6 +2,28 @@ export interface Admin {
   id: number;
   username: string;
   created_at: string;
+  last_login_at?: string;
+}
+
+export interface LanguageSite {
+  id?: number | null;
+  host?: string;
+  path_prefix: string;
+  output_dir: string;
+  is_primary: number;
+}
+
+export interface Language {
+  id: number;
+  code: string;
+  name: string;
+  native_name?: string;
+  is_default: number;
+  is_enabled: number;
+  sort_order: number;
+  site: LanguageSite;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface Product {
@@ -17,6 +39,28 @@ export interface Product {
   is_visible: number;
   sort_order: number;
   category_name?: string;
+  current_language_code?: string;
+  translation_statuses?: ProductTranslationStatus[];
+  translations?: Record<string, ProductTranslation>;
+}
+
+export interface ProductTranslation {
+  name: string;
+  summary?: string;
+  content_html?: string;
+  keywords?: string;
+  seo_title?: string;
+  seo_keywords?: string;
+  seo_description?: string;
+  publish_status: 'draft' | 'published';
+  published_at?: string | null;
+}
+
+export interface ProductTranslationStatus {
+  language_code: string;
+  publish_status: 'draft' | 'published';
+  published_at?: string | null;
+  has_content: boolean;
 }
 
 export interface News {
@@ -33,6 +77,28 @@ export interface News {
   sort_order: number;
   created_at: string;
   category_name?: string;
+  current_language_code?: string;
+  translation_statuses?: NewsTranslationStatus[];
+  translations?: Record<string, NewsTranslation>;
+}
+
+export interface NewsTranslation {
+  title: string;
+  summary?: string;
+  content_html?: string;
+  keywords?: string;
+  seo_title?: string;
+  seo_keywords?: string;
+  seo_description?: string;
+  publish_status: 'draft' | 'published';
+  published_at?: string | null;
+}
+
+export interface NewsTranslationStatus {
+  language_code: string;
+  publish_status: 'draft' | 'published';
+  published_at?: string | null;
+  has_content: boolean;
 }
 
 export interface Message {
@@ -54,6 +120,8 @@ export interface ProductCategory {
   sort_order: number;
   seo_keywords?: string;
   seo_description?: string;
+  current_language_code?: string;
+  translations?: Record<string, ProductCategoryTranslation>;
 }
 
 export interface NewsCategory {
@@ -61,6 +129,18 @@ export interface NewsCategory {
   name: string;
   parent_id: number;
   sort_order: number;
+  current_language_code?: string;
+  translations?: Record<string, NewsCategoryTranslation>;
+}
+
+export interface ProductCategoryTranslation {
+  name: string;
+  seo_keywords?: string;
+  seo_description?: string;
+}
+
+export interface NewsCategoryTranslation {
+  name: string;
 }
 
 export interface CorporationCategory {
@@ -148,6 +228,7 @@ export interface TemplatePreview {
 export interface ContentModelField {
   id: number;
   model_id: number;
+  config_id?: number | null;
   field_name: string;
   field_label: string;
   field_type: 'text' | 'richtext' | 'image' | 'boolean' | 'datetime' | 'number' | string;
@@ -155,6 +236,10 @@ export interface ContentModelField {
   is_required: number;
   is_primary: number;
   is_system: number;
+  is_listed?: number;
+  is_editable?: number;
+  is_translatable?: number;
+  settings_json?: string | null;
   sort_order: number;
   created_at?: string;
   updated_at?: string;
@@ -190,8 +275,49 @@ export interface Column {
   seo_description?: string | null;
   sort_order: number;
   is_system: number;
+  current_language_code?: string;
+  translations?: Record<string, ColumnTranslation>;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface ColumnTranslation {
+  name: string;
+  content_html?: string;
+  seo_title?: string | null;
+  seo_keywords?: string | null;
+  seo_description?: string | null;
+}
+
+export interface SiteConfigTranslation {
+  web_name: string;
+  company_name?: string | null;
+  company_address?: string | null;
+  contact_person?: string | null;
+  company_email?: string | null;
+  web_copyright?: string | null;
+  web_author?: string | null;
+}
+
+export interface SiteConfig {
+  id?: number;
+  web_name: string;
+  web_url: string;
+  company_name: string;
+  company_address: string;
+  postal_code: string;
+  company_phone: string;
+  company_fax: string;
+  contact_person: string;
+  company_email: string;
+  icp_number: string;
+  web_qq: string;
+  web_mobile: string;
+  web_copyright: string;
+  web_author: string;
+  legacy_extra?: string | null;
+  current_language_code?: string;
+  translations?: Record<string, SiteConfigTranslation>;
 }
 
 export interface PaginationInfo {

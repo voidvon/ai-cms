@@ -36,9 +36,9 @@ export default async function legacyRoutes(app) {
   </div>`;
 
     if (keyword) {
-      const result = searchProductsPaged({ keyword, page, pageSize });
+      const result = searchProductsPaged(keyword, { page, limit: pageSize });
 
-      html += `<p>找到 ${result.total} 个结果</p>`;
+      html += `<p>找到 ${result.pagination.total} 个结果</p>`;
 
       if (result.items.length > 0) {
         for (const product of result.items) {
@@ -49,10 +49,10 @@ export default async function legacyRoutes(app) {
         }
 
         // 分页
-        if (result.totalPages > 1) {
+        if (result.pagination.totalPages > 1) {
           html += '<div class="pagination">';
-          for (let i = 1; i <= result.totalPages; i++) {
-            const className = i === result.page ? 'current' : '';
+          for (let i = 1; i <= result.pagination.totalPages; i++) {
+            const className = i === result.pagination.page ? 'current' : '';
             html += `<a href="/search?keyword=${encodeURIComponent(keyword)}&page=${i}" class="${className}">${i}</a>`;
           }
           html += '</div>';

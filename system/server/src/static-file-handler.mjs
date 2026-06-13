@@ -2,20 +2,23 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ADMIN_DIST_ROOT, CONTENT_ROOT, MIME_TYPES } from './config.mjs';
 
+const ADMIN_DEV_SERVER_URL = normalizeDevServerUrl(process.env.ADMIN_DEV_SERVER_URL);
+
 export async function serveStatic(request, reply) {
   const pathname = getPathname(request.url);
+  const rewrittenPathname = rewriteLegacyStaticPath(pathname);
 
-  if (isUnsafePath(pathname)) {
+  if (isUnsafePath(rewrittenPathname)) {
     return false;
   }
 
-  if (pathname === '/admin' || pathname.startsWith('/admin/')) {
-    return serveAdminApp(request, reply, pathname);
+  if (rewrittenPathname === '/admin' || rewrittenPathname.startsWith('/admin/')) {
+    return serveAdminApp(request, reply, rewrittenPathname);
   }
 
   const contentHandled = await serveFromCandidates(
     CONTENT_ROOT,
-    getStaticCandidates(pathname),
+    getStaticCandidates(rewrittenPathname),
     request,
     reply
   );
@@ -28,6 +31,11 @@ export async function serveStatic(request, reply) {
 export async function serveAdminApp(request, reply, pathname = getPathname(request.url)) {
   if (!isStaticMethod(request.method)) {
     return false;
+  }
+
+  if (ADMIN_DEV_SERVER_URL) {
+    reply.redirect(`${ADMIN_DEV_SERVER_URL}${pathname}`);
+    return true;
   }
 
   const subPath = pathname === '/admin' ? '/' : pathname.slice('/admin'.length) || '/';
@@ -110,6 +118,10 @@ function getStaticCandidates(pathname) {
 
   candidates.push(pathname);
 
+  for (const sharedCandidate of getSharedAssetCandidates(pathname)) {
+    candidates.push(sharedCandidate);
+  }
+
   const lowerPath = pathname.toLowerCase();
   if (lowerPath !== pathname) {
     candidates.push(lowerPath);
@@ -131,4 +143,69 @@ function getStaticCandidates(pathname) {
   }
 
   return [...new Set(candidates)];
+}
+
+function getSharedAssetCandidates(pathname) {
+  const normalized = String(pathname || '').replace(/\/{2,}/g, '/');
+  const match = normalized.match(
+    /^\/([^/]+)\/(css|js|images|img|skin|uploadfile|upload|assets)(\/.*)?$/i
+  );
+
+  if (!match) {
+    return [];
+  }
+
+  const [, , assetDir, suffix = ''] = match;
+  const strippedPath = `/${assetDir}${suffix}`;
+  const candidates = [strippedPath];
+
+  const rewrittenStrippedPath = rewriteLegacyStaticPath(strippedPath);
+  if (rewrittenStrippedPath !== strippedPath) {
+    candidates.push(rewrittenStrippedPath);
+  }
+
+  return candidates;
+}
+
+function normalizeDevServerUrl(value) {
+  const normalized = String(value || '').trim().replace(/\/+$/, '');
+  if (!/^https?:\/\//i.test(normalized)) {
+    return '';
+  }
+  return normalized;
+}
+
+function rewriteLegacyStaticPath(pathname) {
+  const normalized = String(pathname || '').replace(/\/{2,}/g, '/');
+
+  if (/^\/img\/css\.css$/i.test(normalized)) {
+    return '/skin/css.css';
+  }
+  if (/^\/img\/(.+)$/i.test(normalized)) {
+    return normalized.replace(/^\/img\//i, '/images/');
+  }
+  if (/^\/js\/(.+)$/i.test(normalized)) {
+    return normalized.replace(/^\/js\//i, '/js/');
+  }
+  if (/^\/js$/i.test(normalized)) {
+    return '/js';
+  }
+  if (/^\/uploadfile\/(.+)$/i.test(normalized)) {
+    const suffix = normalized.replace(/^\/uploadfile\//i, '');
+    return `/uploadfile/${suffix}`;
+  }
+  if (/^\/uploadfile$/i.test(normalized)) {
+    return '/uploadfile';
+  }
+  if (/^\/skin\/blue\/images\/(.+)$/i.test(normalized)) {
+    return normalized.replace(/^\/skin\/blue\/images\//i, '/skin/blue/images/');
+  }
+  if (/^\/skin\/blue\/(.+)$/i.test(normalized)) {
+    return normalized.replace(/^\/skin\/blue\//i, '/skin/blue/');
+  }
+  if (/^\/skin\/(.+)$/i.test(normalized)) {
+    return normalized.replace(/^\/skin\//i, '/skin/');
+  }
+
+  return normalized;
 }

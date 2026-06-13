@@ -10,14 +10,25 @@ import {
 export default async function columnsRoutes(app) {
   app.get('/columns', {
     onRequest: [requireAuth]
-  }, async () => {
-    return { success: true, data: listColumns() };
+  }, async (request) => {
+    const { language, lang, include_translations, includeTranslations } = request.query;
+    return {
+      success: true,
+      data: listColumns({
+        languageCode: language ?? lang,
+        includeTranslations: include_translations === '1' || include_translations === 'true' || includeTranslations === '1' || includeTranslations === 'true'
+      })
+    };
   });
 
   app.get('/columns/:id', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
-    const column = getColumnById(request.params.id);
+    const { language, lang, include_translations, includeTranslations } = request.query;
+    const column = getColumnById(request.params.id, {
+      languageCode: language ?? lang,
+      includeTranslations: include_translations === '1' || include_translations === 'true' || includeTranslations === '1' || includeTranslations === 'true'
+    });
     if (!column) {
       reply.code(404);
       return { success: false, message: '栏目不存在' };

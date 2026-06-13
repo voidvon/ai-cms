@@ -26,8 +26,8 @@ const LLMS_GROUP_LIMITS = {
   '服务详情': 10
 };
 
-export function buildLlmsFiles({ outputRoot, generatedAt = new Date().toISOString() }) {
-  const diagnostics = getLlmsDiagnostics({ generatedAt });
+export function buildLlmsFiles({ outputRoot, generatedAt = new Date().toISOString(), languageCode = null } = {}) {
+  const diagnostics = getLlmsDiagnostics({ generatedAt, languageCode });
 
   if (!diagnostics.normalized_site_url) {
     return {
@@ -65,10 +65,10 @@ export function buildLlmsFiles({ outputRoot, generatedAt = new Date().toISOStrin
   };
 }
 
-export function getLlmsDiagnostics({ generatedAt = new Date().toISOString() } = {}) {
-  const site = getSiteConfig();
+export function getLlmsDiagnostics({ generatedAt = new Date().toISOString(), languageCode = null } = {}) {
+  const site = getSiteConfig(languageCode);
   const siteUrl = normalizeSiteUrl(site.web_url);
-  const pages = siteUrl ? collectMarkdownPages({ site, siteUrl }) : [];
+  const pages = siteUrl ? collectMarkdownPages({ site, siteUrl, languageCode }) : [];
   const llmsGroups = buildLlmsGroups(pages);
   const llmsIndexGroups = buildLlmsIndexGroups(llmsGroups);
   const llmsTxt = siteUrl ? renderLlmsTxt({ site, siteUrl, groups: llmsIndexGroups }) : '';
@@ -100,15 +100,15 @@ export function getLlmsDiagnostics({ generatedAt = new Date().toISOString() } = 
   };
 }
 
-function collectMarkdownPages({ site, siteUrl }) {
+function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   ensureProductsSchema();
   ensureCorporationCategoriesSchema();
 
-  const columns = listColumns();
-  const productCategories = listProductCategories();
-  const newsCategories = listNewsCategories();
-  const products = listProducts({ visibleOnly: true, limit: 10000 });
-  const newsItems = listNews({ limit: 10000 });
+  const columns = listColumns({ languageCode });
+  const productCategories = listProductCategories({ languageCode });
+  const newsCategories = listNewsCategories({ languageCode });
+  const products = listProducts({ visibleOnly: true, limit: 10000, languageCode });
+  const newsItems = listNews({ limit: 10000, languageCode });
   const corporationCategories = collectCorporationCategories();
 
   const productCategoriesById = new Map(productCategories.map((item) => [toInteger(item.id, 0), item]));

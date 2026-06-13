@@ -1,24 +1,25 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { languagesApi } from '@/api/languages'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import type { Column, Template } from '@/types'
+import type { Column, ColumnTranslation, Template } from '@/types'
 
 export interface ManualColumnFormValue {
-  name: string
-  parent_id: number
-  column_kind: 'link' | 'single'
-  custom_url: string
-  route_path: string
-  open_in_new_tab: number
-  content_html: string
-  seo_title: string
-  seo_keywords: string
-  seo_description: string
-  sort_order: number
+  base: {
+    parent_id: number
+    column_kind: 'link' | 'single'
+    custom_url: string
+    route_path: string
+    open_in_new_tab: number
+    sort_order: number
+  }
+  translations: Record<string, ColumnTranslation>
 }
 
 interface ManualColumnFormDialogProps {
@@ -48,20 +49,27 @@ export default function ManualColumnFormDialog({
   submitting,
   onSubmit
 }: ManualColumnFormDialogProps) {
-  const [formData, setFormData] = useState<ManualColumnFormValue>({
-    name: '',
+  const [activeLanguage, setActiveLanguage] = useState('zh-CN')
+  const [baseData, setBaseData] = useState<ManualColumnFormValue['base']>({
     parent_id: 0,
     column_kind: initialKind,
     custom_url: '',
     route_path: '',
     open_in_new_tab: 0,
-    content_html: '',
-    seo_title: '',
-    seo_keywords: '',
-    seo_description: '',
     sort_order: 0
   })
+  const [translations, setTranslations] = useState<Record<string, ColumnTranslation>>({})
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
+
+  const { data: languagesData } = useQuery({
+    queryKey: ['languages'],
+    queryFn: () => languagesApi.list(),
+  })
+
+  const languages = languagesData?.data || []
+  const defaultLanguageCode = languages.find((item) => item.is_default === 1)?.code || 'zh-CN'
+  const availableLanguageCodes = languages.map((item) => item.code)
+  const currentTranslation = translations[activeLanguage] || createEmptyTranslation()
 
   useEffect(() => {
     if (!open) {
@@ -69,38 +77,34 @@ export default function ManualColumnFormDialog({
     }
 
     if (mode === 'edit' && column) {
-      setFormData({
-        name: column.name || '',
+      setBaseData({
         parent_id: Number(column.parent_id || 0),
         column_kind: column.column_kind === 'single' ? 'single' : 'link',
         custom_url: column.custom_url || '',
         route_path: column.route_path || '',
         open_in_new_tab: Number(column.open_in_new_tab || 0),
-        content_html: column.content_html || '',
-        seo_title: column.seo_title || '',
-        seo_keywords: column.seo_keywords || '',
-        seo_description: column.seo_description || '',
         sort_order: Number(column.sort_order || 0)
       })
+      setTranslations(buildInitialTranslations(column, defaultLanguageCode, availableLanguageCodes))
+      setActiveLanguage(column.current_language_code || defaultLanguageCode)
       setTemplateId(initialTemplateId || DEFAULT_TEMPLATE_VALUE)
       return
     }
 
-    setFormData({
-      name: '',
+    setBaseData({
       parent_id: 0,
       column_kind: initialKind,
       custom_url: '',
       route_path: '',
       open_in_new_tab: 0,
-      content_html: '',
-      seo_title: '',
-      seo_keywords: '',
-      seo_description: '',
       sort_order: 0
     })
+    setTranslations({
+      [defaultLanguageCode]: createEmptyTranslation()
+    })
+    setActiveLanguage(defaultLanguageCode)
     setTemplateId(DEFAULT_TEMPLATE_VALUE)
-  }, [open, mode, column, initialKind, initialTemplateId])
+  }, [open, mode, column, initialKind, initialTemplateId, defaultLanguageCode])
 
   const parentOptions = useMemo(() => {
     return columns.filter((item) => {
@@ -118,7 +122,21 @@ export default function ManualColumnFormDialog({
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
-    onSubmit(formData, templateId)
+    onSubmit({
+      base: baseData,
+      translations,
+    }, templateId)
+  }
+
+  const updateTranslation = (patch: Partial<ColumnTranslation>) => {
+    setTranslations((previous) => ({
+      ...previous,
+      [activeLanguage]: {
+        ...createEmptyTranslation(),
+        ...(previous[activeLanguage] || {}),
+        ...patch,
+      },
+    }))
   }
 
   return (
@@ -131,161 +149,209 @@ export default function ManualColumnFormDialog({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label>栏目类型</Label>
-              <Select
-                disabled={mode === 'edit'}
-                value={formData.column_kind}
-                onValueChange={(value: 'link' | 'single') => setFormData({ ...formData, column_kind: value })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="link">链接栏目</SelectItem>
-                  <SelectItem value="single">单页栏目</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>父栏目</Label>
-              <Select
-                value={String(formData.parent_id)}
-                onValueChange={(value) => setFormData({ ...formData, parent_id: Number(value) })}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="0">顶级栏目</SelectItem>
-                  {parentOptions.map((item) => (
-                    <SelectItem key={item.id} value={String(item.id)}>
-                      {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="manual-column-name">栏目名称</Label>
-              <Input
-                id="manual-column-name"
-                value={formData.name}
-                onChange={(event) => setFormData({ ...formData, name: event.target.value })}
-                placeholder="请输入栏目名称"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="manual-column-sort">排序</Label>
-              <Input
-                id="manual-column-sort"
-                type="number"
-                value={String(formData.sort_order)}
-                onChange={(event) => setFormData({ ...formData, sort_order: Number.parseInt(event.target.value || '0', 10) || 0 })}
-                placeholder="0"
-              />
-            </div>
-          </div>
-
-          {formData.column_kind === 'link' ? (
-            <>
-              <div className="space-y-2">
-                <Label htmlFor="manual-column-url">链接地址</Label>
-                <Input
-                  id="manual-column-url"
-                  value={formData.custom_url}
-                  onChange={(event) => setFormData({ ...formData, custom_url: event.target.value })}
-                  placeholder="/ 或 https://example.com"
-                />
+          <Tabs value={activeLanguage} onValueChange={setActiveLanguage} className="rounded border p-4">
+            <div className="space-y-3">
+              <div>
+                <div className="font-medium">语言内容</div>
+                <div className="text-sm text-muted-foreground">栏目名称与单页文案按语言维护，切换标签后编辑对应语言内容。</div>
               </div>
+              <TabsList className="w-full justify-start">
+                {languages.map((language) => (
+                  <TabsTrigger key={language.id} value={language.code}>
+                    {language.name}
+                    {language.code === defaultLanguageCode ? ' *' : ''}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </div>
+
+            {languages.map((language) => (
+              <TabsContent key={language.id} value={language.code}>
+                <div className="space-y-2">
+                  <Label htmlFor={`manual-column-name_${language.code}`}>栏目名称 {language.code === defaultLanguageCode ? '*' : ''}</Label>
+                  <Input
+                    id={`manual-column-name_${language.code}`}
+                    value={(translations[language.code] || createEmptyTranslation()).name || ''}
+                    onChange={(event) => {
+                      setActiveLanguage(language.code)
+                      updateTranslation({ name: event.target.value })
+                    }}
+                    placeholder="请输入栏目名称"
+                  />
+                </div>
+
+                {baseData.column_kind === 'single' ? (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor={`manual-column-content_${language.code}`}>页面内容</Label>
+                      <Textarea
+                        id={`manual-column-content_${language.code}`}
+                        className="min-h-[220px]"
+                        value={(translations[language.code] || createEmptyTranslation()).content_html || ''}
+                        onChange={(event) => {
+                          setActiveLanguage(language.code)
+                          updateTranslation({ content_html: event.target.value })
+                        }}
+                        placeholder="请输入单页内容 HTML"
+                      />
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor={`manual-column-seo-title_${language.code}`}>SEO 标题</Label>
+                        <Input
+                          id={`manual-column-seo-title_${language.code}`}
+                          value={(translations[language.code] || createEmptyTranslation()).seo_title || ''}
+                          onChange={(event) => {
+                            setActiveLanguage(language.code)
+                            updateTranslation({ seo_title: event.target.value })
+                          }}
+                          placeholder="可选"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor={`manual-column-seo-keywords_${language.code}`}>SEO 关键词</Label>
+                        <Input
+                          id={`manual-column-seo-keywords_${language.code}`}
+                          value={(translations[language.code] || createEmptyTranslation()).seo_keywords || ''}
+                          onChange={(event) => {
+                            setActiveLanguage(language.code)
+                            updateTranslation({ seo_keywords: event.target.value })
+                          }}
+                          placeholder="可选"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor={`manual-column-seo-description_${language.code}`}>SEO 描述</Label>
+                      <Textarea
+                        id={`manual-column-seo-description_${language.code}`}
+                        value={(translations[language.code] || createEmptyTranslation()).seo_description || ''}
+                        onChange={(event) => {
+                          setActiveLanguage(language.code)
+                          updateTranslation({ seo_description: event.target.value })
+                        }}
+                        placeholder="可选"
+                      />
+                    </div>
+                  </>
+                ) : null}
+              </TabsContent>
+            ))}
+          </Tabs>
+
+          <div className="rounded border p-4 space-y-4">
+            <div>
+              <div className="font-medium">基础字段</div>
+              <div className="text-sm text-muted-foreground">这些字段不区分语言，所有语言共用同一份数据。</div>
+            </div>
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>打开方式</Label>
+                <Label>栏目类型</Label>
                 <Select
-                  value={String(formData.open_in_new_tab)}
-                  onValueChange={(value) => setFormData({ ...formData, open_in_new_tab: Number(value) })}
+                  disabled={mode === 'edit'}
+                  value={baseData.column_kind}
+                  onValueChange={(value: 'link' | 'single') => setBaseData({ ...baseData, column_kind: value })}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="0">当前窗口</SelectItem>
-                    <SelectItem value="1">新窗口</SelectItem>
+                    <SelectItem value="link">链接栏目</SelectItem>
+                    <SelectItem value="single">单页栏目</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-            </>
-          ) : (
-            <>
               <div className="space-y-2">
-                <Label htmlFor="manual-column-path">访问路径</Label>
-                <Input
-                  id="manual-column-path"
-                  value={formData.route_path}
-                  onChange={(event) => setFormData({ ...formData, route_path: event.target.value })}
-                  placeholder="/contact/"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>内容模板</Label>
-                <Select value={templateId} onValueChange={setTemplateId}>
+                <Label>父栏目</Label>
+                <Select
+                  value={String(baseData.parent_id)}
+                  onValueChange={(value) => setBaseData({ ...baseData, parent_id: Number(value) })}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={DEFAULT_TEMPLATE_VALUE}>不单独绑定</SelectItem>
-                    {contentTemplates.map((template) => (
-                      <SelectItem key={template.id} value={String(template.id)}>
-                        {template.name}
+                    <SelectItem value="0">顶级栏目</SelectItem>
+                    {parentOptions.map((item) => (
+                      <SelectItem key={item.id} value={String(item.id)}>
+                        {item.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="manual-column-content">页面内容</Label>
-                <Textarea
-                  id="manual-column-content"
-                  className="min-h-[220px]"
-                  value={formData.content_html}
-                  onChange={(event) => setFormData({ ...formData, content_html: event.target.value })}
-                  placeholder="请输入单页内容 HTML"
+                <Label htmlFor="manual-column-sort">排序</Label>
+                <Input
+                  id="manual-column-sort"
+                  type="number"
+                  value={String(baseData.sort_order)}
+                  onChange={(event) => setBaseData({ ...baseData, sort_order: Number.parseInt(event.target.value || '0', 10) || 0 })}
+                  placeholder="0"
                 />
               </div>
-              <div className="grid gap-4 md:grid-cols-2">
+              {baseData.column_kind === 'single' ? (
                 <div className="space-y-2">
-                  <Label htmlFor="manual-column-seo-title">SEO 标题</Label>
+                  <Label>内容模板</Label>
+                  <Select value={templateId} onValueChange={setTemplateId}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={DEFAULT_TEMPLATE_VALUE}>不单独绑定</SelectItem>
+                      {contentTemplates.map((template) => (
+                        <SelectItem key={template.id} value={String(template.id)}>
+                          {template.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+            </div>
+
+            {baseData.column_kind === 'link' ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="manual-column-url">链接地址</Label>
                   <Input
-                    id="manual-column-seo-title"
-                    value={formData.seo_title}
-                    onChange={(event) => setFormData({ ...formData, seo_title: event.target.value })}
-                    placeholder="可选"
+                    id="manual-column-url"
+                    value={baseData.custom_url}
+                    onChange={(event) => setBaseData({ ...baseData, custom_url: event.target.value })}
+                    placeholder="/ 或 https://example.com"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="manual-column-seo-keywords">SEO 关键词</Label>
-                  <Input
-                    id="manual-column-seo-keywords"
-                    value={formData.seo_keywords}
-                    onChange={(event) => setFormData({ ...formData, seo_keywords: event.target.value })}
-                    placeholder="可选"
-                  />
+                  <Label>打开方式</Label>
+                  <Select
+                    value={String(baseData.open_in_new_tab)}
+                    onValueChange={(value) => setBaseData({ ...baseData, open_in_new_tab: Number(value) })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="0">当前窗口</SelectItem>
+                      <SelectItem value="1">新窗口</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-              </div>
+              </>
+            ) : (
               <div className="space-y-2">
-                <Label htmlFor="manual-column-seo-description">SEO 描述</Label>
-                <Textarea
-                  id="manual-column-seo-description"
-                  value={formData.seo_description}
-                  onChange={(event) => setFormData({ ...formData, seo_description: event.target.value })}
-                  placeholder="可选"
+                <Label htmlFor="manual-column-path">访问路径</Label>
+                <Input
+                  id="manual-column-path"
+                  value={baseData.route_path}
+                  onChange={(event) => setBaseData({ ...baseData, route_path: event.target.value })}
+                  placeholder="/contact/"
                 />
               </div>
-            </>
-          )}
+            )}
+          </div>
 
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
@@ -299,4 +365,40 @@ export default function ManualColumnFormDialog({
       </DialogContent>
     </Dialog>
   )
+}
+
+function createEmptyTranslation(patch: Partial<ColumnTranslation> = {}): ColumnTranslation {
+  return {
+    name: '',
+    content_html: '',
+    seo_title: '',
+    seo_keywords: '',
+    seo_description: '',
+    ...patch,
+  }
+}
+
+function buildInitialTranslations(column: Column, defaultLanguageCode: string, availableLanguageCodes: string[]) {
+  const source = column.translations || {}
+  const output: Record<string, ColumnTranslation> = {}
+
+  for (const code of availableLanguageCodes) {
+    output[code] = createEmptyTranslation(source[code] || {})
+  }
+
+  if (!output[defaultLanguageCode]) {
+    output[defaultLanguageCode] = createEmptyTranslation()
+  }
+
+  if (!source[defaultLanguageCode]) {
+    output[defaultLanguageCode] = createEmptyTranslation({
+      name: column.name || '',
+      content_html: column.content_html || '',
+      seo_title: column.seo_title || '',
+      seo_keywords: column.seo_keywords || '',
+      seo_description: column.seo_description || '',
+    })
+  }
+
+  return output
 }

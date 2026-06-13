@@ -16,8 +16,8 @@ const NEWS_ROOT_ID = 4;
 const SERVICE_ROOT_ID = 12;
 const SITEMAP_CHUNK_SIZE = 1000;
 
-export function buildSitemap({ outputRoot, generatedAt = new Date().toISOString() }) {
-  const site = getSiteConfig();
+export function buildSitemap({ outputRoot, generatedAt = new Date().toISOString(), languageCode = null } = {}) {
+  const site = getSiteConfig(languageCode);
   const siteUrl = normalizeSiteUrl(site.web_url);
 
   if (!siteUrl) {
@@ -31,7 +31,7 @@ export function buildSitemap({ outputRoot, generatedAt = new Date().toISOString(
     };
   }
 
-  const urls = collectSitemapEntries({ siteUrl, generatedAt });
+  const urls = collectSitemapEntries({ siteUrl, generatedAt, languageCode });
   const chunks = chunkEntries(urls, SITEMAP_CHUNK_SIZE);
   const sitemapFiles = [];
 
@@ -60,10 +60,10 @@ export function buildSitemap({ outputRoot, generatedAt = new Date().toISOString(
   };
 }
 
-export function getSitemapDiagnostics({ generatedAt = new Date().toISOString() } = {}) {
-  const site = getSiteConfig();
+export function getSitemapDiagnostics({ generatedAt = new Date().toISOString(), languageCode = null } = {}) {
+  const site = getSiteConfig(languageCode);
   const siteUrl = normalizeSiteUrl(site.web_url);
-  const urls = siteUrl ? collectSitemapEntries({ siteUrl, generatedAt }) : [];
+  const urls = siteUrl ? collectSitemapEntries({ siteUrl, generatedAt, languageCode }) : [];
   const chunks = chunkEntries(urls, SITEMAP_CHUNK_SIZE);
   const products = queryAll(`
     SELECT id, updated_at
@@ -101,14 +101,14 @@ export function getSitemapDiagnostics({ generatedAt = new Date().toISOString() }
   };
 }
 
-function collectSitemapEntries({ siteUrl, generatedAt }) {
+function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   ensureProductsSchema();
   ensureCorporationCategoriesSchema();
 
   const entries = new Map();
-  const columns = listColumns();
-  const productCategories = listProductCategories();
-  const newsCategories = listNewsCategories();
+  const columns = listColumns({ languageCode });
+  const productCategories = listProductCategories({ languageCode });
+  const newsCategories = listNewsCategories({ languageCode });
   const products = queryAll(`
     SELECT id, category_id, is_visible, updated_at
     FROM products

@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
+import { languagesApi } from '@/api/languages'
 import { newsCategoriesApi } from '@/api/news-categories'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import type { NewsCategory } from '@/types'
+import type { NewsCategory, NewsCategoryTranslation } from '@/types'
 
 interface NewsCategoryFormDialogProps {
   open: boolean
@@ -25,43 +27,73 @@ export default function NewsCategoryFormDialog({
   mode
 }: NewsCategoryFormDialogProps) {
   const queryClient = useQueryClient()
-  const [formData, setFormData] = useState({
-    name: '',
+  const [activeLanguage, setActiveLanguage] = useState('zh-CN')
+  const [baseData, setBaseData] = useState({
     parent_id: 0,
     sort_order: 0,
   })
+  const [translations, setTranslations] = useState<Record<string, NewsCategoryTranslation>>({})
 
-  const { data: categoriesData } = useQuery({
-    queryKey: ['news-categories'],
-    queryFn: () => newsCategoriesApi.list(),
+  const { data: languagesData } = useQuery({
+    queryKey: ['languages'],
+    queryFn: () => languagesApi.list(),
   })
 
+  const { data: categoriesData } = useQuery({
+    queryKey: ['news-categories-options'],
+    queryFn: () => newsCategoriesApi.listOptions(),
+  })
+
+  const { data: categoryDetailData } = useQuery({
+    queryKey: ['news-category-detail', category?.id, open],
+    queryFn: () => newsCategoriesApi.get(category!.id, { include_translations: 1 }),
+    enabled: open && mode === 'edit' && Boolean(category?.id),
+  })
+
+  const languages = languagesData?.data || []
+  const defaultLanguageCode = languages.find((item) => item.is_default === 1)?.code || 'zh-CN'
+  const availableLanguageCodes = languages.map((item) => item.code)
+  const currentTranslation = translations[activeLanguage] || createEmptyTranslation()
+
   useEffect(() => {
-    if (category && mode === 'edit') {
-      setFormData({
-        name: category.name || '',
-        parent_id: category.parent_id || 0,
-        sort_order: category.sort_order || 0,
+    const source = mode === 'edit' ? (categoryDetailData?.data || category) : null
+    if (source && mode === 'edit') {
+      setBaseData({
+        parent_id: source.parent_id || 0,
+        sort_order: source.sort_order || 0,
       })
-    } else if (mode === 'create') {
-      setFormData({
-        name: '',
+      setTranslations(buildInitialTranslations(source, defaultLanguageCode, availableLanguageCodes))
+      setActiveLanguage(source.current_language_code || defaultLanguageCode)
+      return
+    }
+
+    if (mode === 'create') {
+      setBaseData({
         parent_id: currentParentId,
         sort_order: 0,
       })
+      setTranslations({
+        [defaultLanguageCode]: createEmptyTranslation(),
+      })
+      setActiveLanguage(defaultLanguageCode)
     }
-  }, [category, currentParentId, mode])
+  }, [category, categoryDetailData, currentParentId, mode, defaultLanguageCode])
 
   const mutation = useMutation({
     mutationFn: async () => {
-      if (mode === 'create') {
-        return newsCategoriesApi.create(formData)
-      } else {
-        return newsCategoriesApi.update(category!.id, formData)
+      const payload = {
+        base: baseData,
+        translations,
       }
+      if (mode === 'create') {
+        return newsCategoriesApi.create(payload)
+      }
+      return newsCategoriesApi.update(category!.id, payload)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['news-categories'] })
+      queryClient.invalidateQueries({ queryKey: ['news-categories-options'] })
+      queryClient.invalidateQueries({ queryKey: ['columns'] })
       toast.success(mode === 'create' ? '创建成功' : '更新成功')
       onOpenChange(false)
     },
@@ -72,11 +104,22 @@ export default function NewsCategoryFormDialog({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formData.name) {
-      toast.error('请输入分类名称')
+    if (!String(translations[defaultLanguageCode]?.name || '').trim()) {
+      toast.error('请输入默认语言的分类名称')
       return
     }
     mutation.mutate()
+  }
+
+  const updateTranslation = (patch: Partial<NewsCategoryTranslation>) => {
+    setTranslations((previous) => ({
+      ...previous,
+      [activeLanguage]: {
+        ...createEmptyTranslation(),
+        ...(previous[activeLanguage] || {}),
+        ...patch,
+      },
+    }))
   }
 
   const categoryOptions = categoriesData?.data || []
@@ -92,43 +135,75 @@ export default function NewsCategoryFormDialog({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="name">分类名称 *</Label>
-            <Input
-              id="name"
-              value={formData.name}
-              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="请输入分类名称"
-            />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="parent_id">父分类</Label>
-            <Select
-              value={formData.parent_id.toString()}
-              onValueChange={(value) => setFormData({ ...formData, parent_id: parseInt(value) })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">顶级分类</SelectItem>
-                {categoryOptions.map((cat: NewsCategory) => (
-                  <SelectItem key={cat.id} value={cat.id.toString()}>
-                    {cat.name}
-                  </SelectItem>
+          <Tabs value={activeLanguage} onValueChange={setActiveLanguage} className="rounded border p-4">
+            <div className="space-y-3">
+              <div>
+                <div className="font-medium">语言内容</div>
+                <div className="text-sm text-muted-foreground">分类树结构共用，分类名称按语言维护。</div>
+              </div>
+              <TabsList className="w-full justify-start">
+                {languages.map((language) => (
+                  <TabsTrigger key={language.id} value={language.code}>
+                    {language.name}
+                    {language.code === defaultLanguageCode ? ' *' : ''}
+                  </TabsTrigger>
                 ))}
-              </SelectContent>
-            </Select>
+              </TabsList>
+            </div>
+
+            {languages.map((language) => (
+              <TabsContent key={language.id} value={language.code}>
+                <div className="space-y-2">
+                  <Label htmlFor={`name_${language.code}`}>分类名称 {language.code === defaultLanguageCode ? '*' : ''}</Label>
+                  <Input
+                    id={`name_${language.code}`}
+                    value={(translations[language.code] || createEmptyTranslation()).name || ''}
+                    onChange={(e) => {
+                      setActiveLanguage(language.code)
+                      updateTranslation({ name: e.target.value })
+                    }}
+                    placeholder="请输入分类名称"
+                  />
+                </div>
+              </TabsContent>
+            ))}
+          </Tabs>
+
+          <div className="rounded border p-4 space-y-4">
+            <div>
+              <div className="font-medium">基础字段</div>
+              <div className="text-sm text-muted-foreground">这些字段不区分语言，所有语言共用同一份数据。</div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="parent_id">父分类</Label>
+              <Select
+                value={baseData.parent_id.toString()}
+                onValueChange={(value) => setBaseData({ ...baseData, parent_id: parseInt(value) })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0">顶级分类</SelectItem>
+                  {categoryOptions.map((cat: any) => (
+                    <SelectItem key={cat.id} value={cat.id.toString()}>
+                      {'　'.repeat(cat.depth || 0)}{cat.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="sort_order">排序</Label>
+              <Input
+                id="sort_order"
+                type="number"
+                value={baseData.sort_order}
+                onChange={(e) => setBaseData({ ...baseData, sort_order: parseInt(e.target.value) || 0 })}
+              />
+            </div>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="sort_order">排序</Label>
-            <Input
-              id="sort_order"
-              type="number"
-              value={formData.sort_order}
-              onChange={(e) => setFormData({ ...formData, sort_order: parseInt(e.target.value) || 0 })}
-            />
-          </div>
+
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               取消
@@ -141,4 +216,32 @@ export default function NewsCategoryFormDialog({
       </DialogContent>
     </Dialog>
   )
+}
+
+function createEmptyTranslation(patch: Partial<NewsCategoryTranslation> = {}): NewsCategoryTranslation {
+  return {
+    name: '',
+    ...patch,
+  }
+}
+
+function buildInitialTranslations(category: NewsCategory, defaultLanguageCode: string, availableLanguageCodes: string[]) {
+  const source = category.translations || {}
+  const output: Record<string, NewsCategoryTranslation> = {}
+
+  for (const code of availableLanguageCodes) {
+    output[code] = createEmptyTranslation(source[code] || {})
+  }
+
+  if (!output[defaultLanguageCode]) {
+    output[defaultLanguageCode] = createEmptyTranslation()
+  }
+
+  if (!source[defaultLanguageCode]) {
+    output[defaultLanguageCode] = createEmptyTranslation({
+      name: category.name || '',
+    })
+  }
+
+  return output
 }

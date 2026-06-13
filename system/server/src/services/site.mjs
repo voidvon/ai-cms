@@ -1,8 +1,152 @@
-import { execute, queryOne } from '../db.mjs';
+import { execute, getDb, queryAll, queryOne } from '../db.mjs';
+import { ensureLanguagesSchema, getDefaultLanguage, listLanguages } from './languages.mjs';
 import { listNews } from './news.mjs';
 import { listProducts, searchProducts } from './products.mjs';
 
-export function getSiteConfig() {
+const SITE_TRANSLATABLE_FIELDS = [
+  'web_name',
+  'company_name',
+  'company_address',
+  'contact_person',
+  'company_email',
+  'web_copyright',
+  'web_author'
+];
+
+let schemaEnsured = false;
+
+export function getSiteConfig(languageCode = null, options = {}) {
+  ensureSiteConfigSchema();
+  const { includeTranslations = false } = options;
+  const base = getBaseSiteConfig();
+  const selectedLanguage = resolveLanguageForContent(languageCode);
+  const translations = loadSiteConfigTranslations();
+  const translationMap = Object.fromEntries(translations.map((item) => [item.language_code, item]));
+  const selectedTranslation = translationMap[selectedLanguage.code];
+  const defaultTranslation = translationMap[selectedLanguage.default_code];
+  const fallbackTranslation = selectedTranslation || defaultTranslation || translations[0] || null;
+  const merged = applySiteTranslation(base, fallbackTranslation);
+
+  return {
+    ...merged,
+    current_language_code: fallbackTranslation?.language_code || selectedLanguage.code,
+    ...(includeTranslations ? {
+      translations: Object.fromEntries(
+        translations.map((item) => [
+          item.language_code,
+          pickTranslationFields(item)
+        ])
+      )
+    } : {})
+  };
+}
+
+export function updateSiteConfig(input) {
+  ensureSiteConfigSchema();
+  const existing = getSiteConfig(null, { includeTranslations: true });
+  const payload = normalizeSiteConfigMutationInput(input, { existingConfig: existing });
+  const defaultLanguage = getDefaultLanguage();
+  const defaultTranslation = resolveDefaultTranslationPayload(payload.translations, defaultLanguage?.code);
+  const basePayload = {
+    ...payload.base,
+    ...defaultTranslation
+  };
+
+  execute(
+    `
+      INSERT INTO site_config (
+        id,
+        web_name,
+        web_url,
+        company_name,
+        company_address,
+        postal_code,
+        company_phone,
+        company_fax,
+        contact_person,
+        company_email,
+        icp_number,
+        web_qq,
+        web_mobile,
+        web_copyright,
+        web_author,
+        legacy_extra
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET
+        web_name = excluded.web_name,
+        web_url = excluded.web_url,
+        company_name = excluded.company_name,
+        company_address = excluded.company_address,
+        postal_code = excluded.postal_code,
+        company_phone = excluded.company_phone,
+        company_fax = excluded.company_fax,
+        contact_person = excluded.contact_person,
+        company_email = excluded.company_email,
+        icp_number = excluded.icp_number,
+        web_qq = excluded.web_qq,
+        web_mobile = excluded.web_mobile,
+        web_copyright = excluded.web_copyright,
+        web_author = excluded.web_author,
+        legacy_extra = excluded.legacy_extra
+    `,
+    [
+      1,
+      basePayload.web_name,
+      basePayload.web_url,
+      basePayload.company_name,
+      basePayload.company_address,
+      basePayload.postal_code,
+      basePayload.company_phone,
+      basePayload.company_fax,
+      basePayload.contact_person,
+      basePayload.company_email,
+      basePayload.icp_number,
+      basePayload.web_qq,
+      basePayload.web_mobile,
+      basePayload.web_copyright,
+      basePayload.web_author,
+      basePayload.legacy_extra
+    ]
+  );
+
+  saveSiteConfigTranslations(payload.translations);
+  return getSiteConfig(null, { includeTranslations: true });
+}
+
+export { listNews, listProducts, searchProducts };
+
+function ensureSiteConfigSchema() {
+  if (schemaEnsured) {
+    return;
+  }
+
+  ensureLanguagesSchema();
+  getDb().exec(`
+    CREATE TABLE IF NOT EXISTS site_config_translations (
+      id INTEGER PRIMARY KEY,
+      site_config_id INTEGER NOT NULL,
+      language_id INTEGER NOT NULL,
+      web_name TEXT,
+      company_name TEXT,
+      company_address TEXT,
+      contact_person TEXT,
+      company_email TEXT,
+      web_copyright TEXT,
+      web_author TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(site_config_id, language_id),
+      FOREIGN KEY (language_id) REFERENCES languages(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_site_config_translations_site_config_id
+    ON site_config_translations(site_config_id, language_id);
+  `);
+
+  ensureDefaultSiteConfigTranslation();
+  schemaEnsured = true;
+}
+
+function getBaseSiteConfig() {
   return (
     queryOne(`
       SELECT
@@ -45,72 +189,6 @@ export function getSiteConfig() {
   );
 }
 
-export function updateSiteConfig(input) {
-  const existing = getSiteConfig();
-  const payload = normalizeSiteConfigInput({ ...existing, ...input });
-
-  execute(
-    `
-      INSERT INTO site_config (
-        id,
-        web_name,
-        web_url,
-        company_name,
-        company_address,
-        postal_code,
-        company_phone,
-        company_fax,
-        contact_person,
-        company_email,
-        icp_number,
-        web_qq,
-        web_mobile,
-        web_copyright,
-        web_author,
-        legacy_extra
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(id) DO UPDATE SET
-        web_name = excluded.web_name,
-        web_url = excluded.web_url,
-        company_name = excluded.company_name,
-        company_address = excluded.company_address,
-        postal_code = excluded.postal_code,
-        company_phone = excluded.company_phone,
-        company_fax = excluded.company_fax,
-        contact_person = excluded.contact_person,
-        company_email = excluded.company_email,
-        icp_number = excluded.icp_number,
-        web_qq = excluded.web_qq,
-        web_mobile = excluded.web_mobile,
-        web_copyright = excluded.web_copyright,
-        web_author = excluded.web_author,
-        legacy_extra = excluded.legacy_extra
-    `,
-    [
-      1,
-      payload.web_name,
-      payload.web_url,
-      payload.company_name,
-      payload.company_address,
-      payload.postal_code,
-      payload.company_phone,
-      payload.company_fax,
-      payload.contact_person,
-      payload.company_email,
-      payload.icp_number,
-      payload.web_qq,
-      payload.web_mobile,
-      payload.web_copyright,
-      payload.web_author,
-      payload.legacy_extra
-    ]
-  );
-
-  return getSiteConfig();
-}
-
-export { listNews, listProducts, searchProducts };
-
 function normalizeSiteConfigInput(input) {
   const webUrl = toNullableString(input.web_url);
   if (!webUrl) {
@@ -136,6 +214,261 @@ function normalizeSiteConfigInput(input) {
     web_copyright: toNullableString(input.web_copyright),
     web_author: toNullableString(input.web_author),
     legacy_extra: toNullableString(input.legacy_extra)
+  };
+}
+
+function normalizeSiteConfigMutationInput(input, { existingConfig = null } = {}) {
+  const defaultLanguageCode = getDefaultLanguage()?.code || 'zh-CN';
+
+  if (input?.base || input?.translations) {
+    const mergedBaseSource = {
+      ...(existingConfig || {}),
+      ...(input?.base || {})
+    };
+    const base = normalizeSiteConfigInput(mergedBaseSource);
+    const translations = normalizeSiteConfigTranslations(input?.translations || {}, {
+      defaultLanguageCode,
+      existingTranslations: existingConfig?.translations || {},
+      baseFallback: existingConfig || base
+    });
+    return { base, translations };
+  }
+
+  const legacy = normalizeSiteConfigInput({ ...(existingConfig || {}), ...(input || {}) });
+  return {
+    base: legacy,
+    translations: {
+      [defaultLanguageCode]: pickTranslationFields(legacy)
+    }
+  };
+}
+
+function normalizeSiteConfigTranslations(translations, {
+  defaultLanguageCode,
+  existingTranslations = {},
+  baseFallback = {}
+}) {
+  const output = {};
+  const knownCodes = new Set(listLanguages().map((language) => language.code));
+
+  for (const [languageCode, value] of Object.entries(translations || {})) {
+    if (!knownCodes.has(languageCode)) {
+      continue;
+    }
+    const existing = existingTranslations?.[languageCode] || {};
+    const normalized = {
+      web_name: toNullableString(value?.web_name ?? existing.web_name),
+      company_name: toNullableString(value?.company_name ?? existing.company_name),
+      company_address: toNullableString(value?.company_address ?? existing.company_address),
+      contact_person: toNullableString(value?.contact_person ?? existing.contact_person),
+      company_email: toNullableString(value?.company_email ?? existing.company_email),
+      web_copyright: toNullableString(value?.web_copyright ?? existing.web_copyright),
+      web_author: toNullableString(value?.web_author ?? existing.web_author)
+    };
+    if (languageCode === defaultLanguageCode && !String(normalized.web_name || '').trim()) {
+      throw new Error('默认语言的网站名称不能为空');
+    }
+    if (SITE_TRANSLATABLE_FIELDS.some((field) => normalized[field])) {
+      output[languageCode] = normalized;
+    }
+  }
+
+  if (!output[defaultLanguageCode]) {
+    output[defaultLanguageCode] = {
+      web_name: toNullableString(existingTranslations?.[defaultLanguageCode]?.web_name ?? baseFallback.web_name),
+      company_name: toNullableString(existingTranslations?.[defaultLanguageCode]?.company_name ?? baseFallback.company_name),
+      company_address: toNullableString(existingTranslations?.[defaultLanguageCode]?.company_address ?? baseFallback.company_address),
+      contact_person: toNullableString(existingTranslations?.[defaultLanguageCode]?.contact_person ?? baseFallback.contact_person),
+      company_email: toNullableString(existingTranslations?.[defaultLanguageCode]?.company_email ?? baseFallback.company_email),
+      web_copyright: toNullableString(existingTranslations?.[defaultLanguageCode]?.web_copyright ?? baseFallback.web_copyright),
+      web_author: toNullableString(existingTranslations?.[defaultLanguageCode]?.web_author ?? baseFallback.web_author)
+    };
+  }
+
+  if (!String(output[defaultLanguageCode]?.web_name || '').trim()) {
+    throw new Error('默认语言的网站名称不能为空');
+  }
+
+  return output;
+}
+
+function loadSiteConfigTranslations() {
+  return queryAll(
+    `
+      SELECT
+        t.id,
+        t.site_config_id,
+        t.language_id,
+        l.code AS language_code,
+        t.web_name,
+        t.company_name,
+        t.company_address,
+        t.contact_person,
+        t.company_email,
+        t.web_copyright,
+        t.web_author
+      FROM site_config_translations t
+      INNER JOIN languages l ON l.id = t.language_id
+      WHERE t.site_config_id = 1
+      ORDER BY l.sort_order ASC, l.id ASC
+    `
+  );
+}
+
+function saveSiteConfigTranslations(translations, now = new Date().toISOString()) {
+  const languageIdByCode = new Map(listLanguages().map((language) => [language.code, language.id]));
+
+  for (const [languageCode, translation] of Object.entries(translations || {})) {
+    const languageId = languageIdByCode.get(languageCode);
+    if (!languageId) {
+      continue;
+    }
+    execute(
+      `
+        INSERT INTO site_config_translations (
+          site_config_id,
+          language_id,
+          web_name,
+          company_name,
+          company_address,
+          contact_person,
+          company_email,
+          web_copyright,
+          web_author,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(site_config_id, language_id) DO UPDATE SET
+          web_name = excluded.web_name,
+          company_name = excluded.company_name,
+          company_address = excluded.company_address,
+          contact_person = excluded.contact_person,
+          company_email = excluded.company_email,
+          web_copyright = excluded.web_copyright,
+          web_author = excluded.web_author,
+          updated_at = excluded.updated_at
+      `,
+      [
+        1,
+        languageId,
+        toNullableString(translation?.web_name),
+        toNullableString(translation?.company_name),
+        toNullableString(translation?.company_address),
+        toNullableString(translation?.contact_person),
+        toNullableString(translation?.company_email),
+        toNullableString(translation?.web_copyright),
+        toNullableString(translation?.web_author),
+        now,
+        now
+      ]
+    );
+  }
+}
+
+function ensureDefaultSiteConfigTranslation() {
+  const defaultLanguage = getDefaultLanguage();
+  if (!defaultLanguage) {
+    return;
+  }
+
+  const existing = queryOne(
+    `
+      SELECT id
+      FROM site_config_translations
+      WHERE site_config_id = 1
+        AND language_id = ?
+      LIMIT 1
+    `,
+    [defaultLanguage.id]
+  );
+
+  if (existing) {
+    return;
+  }
+
+  const site = getBaseSiteConfig();
+  const now = new Date().toISOString();
+  execute(
+    `
+      INSERT INTO site_config_translations (
+        site_config_id,
+        language_id,
+        web_name,
+        company_name,
+        company_address,
+        contact_person,
+        company_email,
+        web_copyright,
+        web_author,
+        created_at,
+        updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      1,
+      defaultLanguage.id,
+      toNullableString(site.web_name),
+      toNullableString(site.company_name),
+      toNullableString(site.company_address),
+      toNullableString(site.contact_person),
+      toNullableString(site.company_email),
+      toNullableString(site.web_copyright),
+      toNullableString(site.web_author),
+      now,
+      now
+    ]
+  );
+}
+
+function resolveLanguageForContent(languageCode) {
+  const languages = listLanguages();
+  const defaultLanguage = languages.find((item) => Number(item.is_default || 0) === 1) || languages[0] || { code: 'zh-CN' };
+  const selected = languageCode
+    ? languages.find((item) => item.code === languageCode)
+    : defaultLanguage;
+
+  return {
+    code: selected?.code || defaultLanguage.code || 'zh-CN',
+    default_code: defaultLanguage.code || 'zh-CN'
+  };
+}
+
+function resolveDefaultTranslationPayload(translations, defaultLanguageCode) {
+  const code = defaultLanguageCode || 'zh-CN';
+  const direct = translations[code];
+  if (direct?.web_name) {
+    return direct;
+  }
+  const first = Object.values(translations).find((item) => item?.web_name);
+  if (first) {
+    return first;
+  }
+  throw new Error('至少需要提供默认语言的网站名称');
+}
+
+function applySiteTranslation(base, translation) {
+  if (!translation) {
+    return base;
+  }
+
+  const output = { ...base };
+  for (const field of SITE_TRANSLATABLE_FIELDS) {
+    if (translation[field] !== undefined && translation[field] !== null) {
+      output[field] = translation[field];
+    }
+  }
+  return output;
+}
+
+function pickTranslationFields(input) {
+  return {
+    web_name: toNullableString(input?.web_name),
+    company_name: toNullableString(input?.company_name),
+    company_address: toNullableString(input?.company_address),
+    contact_person: toNullableString(input?.contact_person),
+    company_email: toNullableString(input?.company_email),
+    web_copyright: toNullableString(input?.web_copyright),
+    web_author: toNullableString(input?.web_author)
   };
 }
 

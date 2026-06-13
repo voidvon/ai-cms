@@ -13,15 +13,17 @@ export default async function newsRoutes(app) {
   app.get('/news/admin', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
-    const { page, limit, category_id, categoryId, include_descendants, includeDescendants } = request.query;
+    const { page, limit, category_id, categoryId, include_descendants, includeDescendants, language, lang } = request.query;
     const selectedCategoryId = category_id ?? categoryId;
     const selectedIncludeDescendants = include_descendants ?? includeDescendants;
+    const selectedLanguage = language ?? lang;
 
     const result = listNewsAdmin({
       page: page ? parseInt(page) : undefined,
       limit: limit ? parseInt(limit) : undefined,
       categoryId: selectedCategoryId ? parseInt(selectedCategoryId) : undefined,
-      includeDescendants: selectedIncludeDescendants === '1' || selectedIncludeDescendants === 'true'
+      includeDescendants: selectedIncludeDescendants === '1' || selectedIncludeDescendants === 'true',
+      languageCode: selectedLanguage ? String(selectedLanguage) : undefined
     });
 
     return { success: true, ...result };
@@ -29,13 +31,12 @@ export default async function newsRoutes(app) {
 
   // 公开 API：新闻列表
   app.get('/news', async (request, reply) => {
-    const { category_id, featured, limit, offset } = request.query;
+    const { featured, limit, language, lang } = request.query;
 
     const news = listNews({
-      categoryId: category_id ? parseInt(category_id) : undefined,
       featured: featured === 'true' || featured === '1',
       limit: limit ? parseInt(limit) : undefined,
-      offset: offset ? parseInt(offset) : undefined
+      languageCode: language ?? lang
     });
 
     return { success: true, data: news };
@@ -43,7 +44,12 @@ export default async function newsRoutes(app) {
 
   // 公开 API：新闻详情
   app.get('/news/:id', async (request, reply) => {
-    const news = getNewsById(parseInt(request.params.id));
+    const { language, lang, include_translations, includeTranslations } = request.query;
+    const news = getNewsById(parseInt(request.params.id), {
+      languageCode: language ?? lang,
+      includeTranslations: include_translations === '1' || include_translations === 'true' || includeTranslations === '1' || includeTranslations === 'true',
+      includeTranslationStatuses: true
+    });
 
     if (!news) {
       return reply.notFound('新闻不存在');

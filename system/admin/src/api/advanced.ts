@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { ContentModel, CorporationCategory, Template, TemplateBinding, TemplateDependencyInfo, TemplatePreview, TemplateVariant, TemplateVersion, ApiResponse } from '@/types'
+import type { ContentModel, ContentModelField, CorporationCategory, Template, TemplateBinding, TemplateDependencyInfo, TemplatePreview, TemplateVariant, TemplateVersion, ApiResponse } from '@/types'
 
 // 公司信息分类 API
 export const corporationCategoriesApi = {
@@ -154,6 +154,11 @@ export const contentModelsApi = {
 
   get: async (id: number) => {
     const response = await apiClient.get<ApiResponse<ContentModel>>(`/content-models/${id}`)
+    return response.data
+  },
+
+  updateField: async (modelId: number, fieldName: string, data: Partial<ContentModelField>) => {
+    const response = await apiClient.put<ApiResponse<ContentModelField>>(`/content-models/${modelId}/fields/${fieldName}`, data)
     return response.data
   },
 }
