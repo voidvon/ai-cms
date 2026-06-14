@@ -57,6 +57,12 @@ export async function createApp(options = {}) {
     await authHook(request, reply);
   });
 
+  // 全局钩子：产品 URL 重定向
+  app.addHook('onRequest', async (request, reply) => {
+    const { redirectLegacyProductUrls } = await import('./middleware/product-redirects.mjs');
+    await redirectLegacyProductUrls(request, reply);
+  });
+
   // 注册路由模块
   await app.register(import('./routes/auth.mjs'), { prefix: '/admin' });
   await app.register(import('./routes/api/products.mjs'), { prefix: '/api' });

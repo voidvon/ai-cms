@@ -7,11 +7,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 This is a hybrid enterprise website in active migration from Classic ASP to Node.js + SQLite. The repository contains:
 - **Runtime entry**: Root `server.mjs` is the single startup entry; `package.json` exposes root-level scripts
 - **Deploy package**: `dist/` is generated locally as the unified upload package
-- **Published site**: `html/` contains generated static HTML, assets, uploads, and deployment files
+- **Published site**: `html/` contains generated static HTML (not in git, generated on server)
+- **Static assets**: `public/` contains source static resources (images, css, js, uploaded files)
 - **Runtime data**: `data/` contains local SQLite runtime data, defaulting to `data/site.sqlite`
 - **Modern layer**: Node.js application in `system/server/` using **Fastify** framework, providing REST APIs, admin backend, and static site generation
 - **Admin UI**: React + TypeScript + Vite application in `system/admin/`, served under `/admin/`
-- **Templates**: HTML templates in `system/templates/blue/` for static page generation
+- **Templates**: HTML templates stored in database, managed via admin UI
 
 The Node.js layer has been **fully refactored with Fastify framework** (2026-06-08), replacing the previous 5,880-line monolithic HTTP server with a modular, maintainable architecture.
 
@@ -79,6 +80,53 @@ Environment variables:
 - `CSV_ENCODING`: Encoding for CSV imports (default: utf-8, use `gbk` for legacy files)
 - `RESET_TABLES`: Set to `1` to reset tables before import
 - `STATIC_OUTPUT_DIR`: Output directory for static generation; defaults to root `html/`
+
+## Static Assets Management
+
+### Directory Structure
+
+- **`public/`** - Source static resources (committed to git, except uploads)
+  - `public/images/` - Website images (e.g., from spiraxsteam.cn)
+  - `public/css/`, `public/js/`, `public/skin/` - Frontend resources
+  - `public/upload/` - User uploaded files (**not in git**, created at runtime)
+    - `public/upload/products/` - Product images
+    - `public/upload/news/` - News images
+    - `public/upload/richtext/` - Rich text editor images
+
+- **`html/`** - Generated static site (**not in git**, generated on server)
+  - Generated HTML files, copied assets from `public/`
+  - This directory is the deployment target
+
+### Static File Serving
+
+The server serves files in this priority order:
+1. `public/` - Source static assets (images, css, js, uploads)
+2. `html/` - Generated static HTML and fallback assets
+
+This allows:
+- Development and production to share the same `public/` directory
+- Uploads to work in both environments without copying
+- Generated HTML to override specific routes
+
+### Upload Paths
+
+New upload path format (since 2026-06-14):
+- Product images: `/upload/products/`
+- News images: `/upload/news/`
+- Rich text images: `/upload/richtext/`
+
+Legacy paths (still supported for backward compatibility):
+- `/uploadfile/produppic/` → redirects to `/upload/products/`
+- `/uploadfile/newsuppic/` → redirects to `/upload/news/`
+
+### Image Management
+
+Download homepage images:
+```bash
+bash scripts/download-images.sh
+```
+
+This downloads images from spiraxsteam.cn into `public/images/`.
 
 ## Architecture (Fastify-based)
 
@@ -157,6 +205,7 @@ system/server/
 Core tables:
 - `admins`, `admin_sessions` - Authentication and session management
 - `product_categories`, `products`, `product_photos` - Product catalog
+  - `products.slug` - Custom URL slug for SEO-friendly URLs (unique, optional)
 - `news_categories`, `news` - News/articles
 - `jobs` - Job listings
 - `messages` - Contact form submissions
@@ -177,9 +226,15 @@ Products:
 - `GET /api/products` - List products (query: category_id, featured, visible, limit, offset)
 - `GET /api/products/search?q=keyword` - Search products
 - `GET /api/products/:id` - Product details
-- `POST /api/products` - Create product (auth required)
-- `PUT /api/products/:id` - Update product (auth required)
+- `POST /api/products` - Create product (auth required, supports `slug` field)
+- `PUT /api/products/:id` - Update product (auth required, supports `slug` field)
 - `DELETE /api/products/:id` - Delete product (auth required)
+
+**Product URL Structure**:
+- New format: `/products/{slug}/` (e.g., `/products/lp30/`, `/products/bsa3t-bellows-sealed-stop-valve/`)
+- Legacy format: `/product/{id}.html` (automatically redirects to new format with 301)
+- Products must have a `slug` field to use the new URL format
+- Slug must be unique, lowercase, alphanumeric with hyphens only
 
 News:
 - `GET /api/news` - List news (query: category_id, featured, limit, offset)
@@ -320,6 +375,7 @@ await app.register(async (instance) => {
 - **Database**: SQLite database is in root `data/` and not committed to git. Initialize it with `npm run db:init`.
 - **Authentication**: Sessions are stored in `admin_sessions` table with expiration. Both cookie-based (for web) and token-based (for API) auth are supported.
 - **Logging**: Fastify uses Pino for structured logging. Set `LOG_LEVEL=debug` for verbose output.
+- **Product URLs**: Products now use SEO-friendly slug URLs (`/products/{slug}/`). Legacy `/product/{id}.html` URLs automatically redirect (301) to the new format. See `docs/product-slug-implementation.md` for details.
 
 ## Migration Notes (2026-06-08)
 

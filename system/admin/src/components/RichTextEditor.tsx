@@ -114,23 +114,37 @@ export default function RichTextEditor({
   }, [value])
 
   const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
+    const files = event.target.files
     event.target.value = ''
 
-    if (!file || !quillRef.current) {
+    if (!files || files.length === 0 || !quillRef.current) {
       return
     }
 
     setIsUploading(true)
     try {
-      const result = await mediaApi.upload(file, uploadPurpose)
       const quill = quillRef.current
       const range = quill.getSelection(true)
-      const insertIndex = range?.index ?? quill.getLength()
+      let insertIndex = range?.index ?? quill.getLength()
 
-      quill.insertEmbed(insertIndex, 'image', result.data.relative_path, 'user')
-      quill.setSelection(insertIndex + 1, 0, 'silent')
-      toast.success('图片已插入')
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        try {
+          const result = await mediaApi.upload(file, uploadPurpose)
+          quill.insertEmbed(insertIndex, 'image', result.data.relative_path, 'user')
+          insertIndex += 1
+          // 在每张图片后插入换行，避免图片挤在一起
+          if (i < files.length - 1) {
+            quill.insertText(insertIndex, '\n', 'user')
+            insertIndex += 1
+          }
+        } catch (error: any) {
+          toast.error(`${file.name} 上传失败: ${error.response?.data?.message || error.message}`)
+        }
+      }
+
+      quill.setSelection(insertIndex, 0, 'silent')
+      toast.success(`已插入 ${files.length} 张图片`)
     } catch (error: any) {
       toast.error(error.response?.data?.message || error.message || '图片上传失败')
     } finally {
@@ -144,12 +158,13 @@ export default function RichTextEditor({
         ref={fileInputRef}
         type="file"
         accept="image/*"
+        multiple
         className="hidden"
         onChange={handleFileChange}
       />
       <div ref={mountRef} />
       {isUploading && (
-        <div className="mt-2 text-xs text-muted-foreground">图片上传中...</div>
+        <div className="mt-2 text-xs text-muted-foreground">图片上传中，请稍候...</div>
       )}
     </div>
   )

@@ -114,6 +114,7 @@ export function listColumns({ languageCode = null, includeTranslations = true } 
         custom_url,
         route_path,
         open_in_new_tab,
+        show_in_nav,
         content_html,
         seo_title,
         seo_keywords,

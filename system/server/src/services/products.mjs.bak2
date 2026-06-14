@@ -94,7 +94,6 @@ export function listProducts({ featured = false, visibleOnly = true, limit = 20,
         is_featured_home,
         is_visible,
         sort_order,
-        slug,
         updated_at
       FROM products
       ${where}
@@ -158,8 +157,6 @@ export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, inc
         p.is_featured_home,
         p.is_visible,
         p.sort_order,
-        slug,
-        p.slug,
         p.updated_at,
         c.name AS category_name
       FROM products p
@@ -213,7 +210,6 @@ export function getProductById(id, { languageCode = null, includeTranslations = 
         is_featured_home,
         is_visible,
         sort_order,
-        slug,
         updated_at
       FROM products
       WHERE id = ?
@@ -258,7 +254,6 @@ export function searchProducts(rawQuery, limit = 20, { languageCode = null } = {
         is_featured_home,
         is_visible,
         sort_order,
-        slug,
         updated_at
       FROM products
       WHERE is_visible = 1
@@ -303,7 +298,6 @@ export function searchProductsPaged(rawQuery, { page = 1, limit = 20, languageCo
           is_featured_home,
           is_visible,
           sort_order,
-        slug,
           slug,
           updated_at
         FROM products
@@ -346,7 +340,6 @@ export function searchProductsPaged(rawQuery, { page = 1, limit = 20, languageCo
         is_featured_home,
         is_visible,
         sort_order,
-        slug,
         updated_at
       FROM products
       WHERE is_visible = 1
@@ -410,7 +403,6 @@ export function createProduct(input) {
         is_featured_home,
         is_visible,
         sort_order,
-        slug,
         updated_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
@@ -425,7 +417,6 @@ export function createProduct(input) {
       payload.base.is_featured_home,
       payload.base.is_visible,
       payload.base.sort_order,
-        slug,
       now
     ]
   );
@@ -490,7 +481,6 @@ export function updateProduct(id, input) {
       payload.base.is_featured_home,
       payload.base.is_visible,
       payload.base.sort_order,
-        slug,
       now,
       id
     ]

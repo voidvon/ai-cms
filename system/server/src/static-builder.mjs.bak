@@ -35,31 +35,11 @@ const CORPORATION_ROOT_ID = 32;
 const NEWS_ROOT_ID = 4;
 const SERVICE_ROOT_ID = 12;
 
-// 全局分类slug映射，在静态生成时填充
-let globalCategorySlugMap = new Map();
-
-/**
- * 设置全局分类slug映射
- */
-function setGlobalCategorySlugMap(categories) {
-  globalCategorySlugMap = new Map(
-    categories.map(cat => [normalizeInteger(cat.id, 0), cat.slug])
-  );
-}
-
 /**
  * 生成产品URL
- * 格式: /products/{category-slug}/{product-slug}/
+ * 优先使用 slug，否则回退到 ID
  */
-function buildProductUrl(product, categorySlug = null) {
-  // 如果没有传入 categorySlug，尝试从全局映射查找
-  if (!categorySlug && product.category_id) {
-    categorySlug = globalCategorySlugMap.get(normalizeInteger(product.category_id, 0));
-  }
-
-  if (product.slug && categorySlug) {
-    return `/products/${categorySlug}/${product.slug}/`;
-  }
+function buildProductUrl(product) {
   if (product.slug) {
     return `/products/${product.slug}/`;
   }
@@ -80,7 +60,7 @@ const LEGACY_PRODUCT_BRAND_PATTERNS = [
   /我公司彪维/gi
 ];
 const MANAGED_STATIC_ROOT_FILES = ['index.html', 'contact.html', 'msg.html', 'sitemap.xml', 'robots.txt', 'llms.txt', 'llms-full.txt', 'index.md'];
-const MANAGED_STATIC_DIRS = ['about', 'news', 'product', 'products', 'service', 'products'];
+const MANAGED_STATIC_DIRS = ['about', 'news', 'product', 'products', 'service', 'valve'];
 const SHARED_STATIC_DIRS = ['css', 'js', 'images', 'skin', 'uploadfile'];
 const STATIC_COMPAT_ALIASES = [
   ['js', 'JS'],
@@ -145,10 +125,6 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
   for (const language of targetLanguages) {
     const normalizedOutputRoot = resolveLanguageOutputRoot(outputRoot, language);
     const results = [];
-
-    // 初始化全局分类slug映射
-    const templateContext = getLegacyTemplateContext(language.code);
-    setGlobalCategorySlugMap(templateContext.productCategories);
 
     fs.mkdirSync(normalizedOutputRoot, { recursive: true });
     if (cleanExisting) {
@@ -429,22 +405,7 @@ export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
       ]
     });
 
-    // 根据是否有 slug 决定文件路径
-    let outputPath;
-    const categorySlug = category?.slug;
-
-    if (product.slug && categorySlug) {
-      // 使用分类和产品 slug: /products/{category-slug}/{product-slug}/index.html
-      outputPath = path.join('products', categorySlug, product.slug, 'index.html');
-    } else if (product.slug) {
-      // 只有产品 slug: /products/{slug}/index.html
-      outputPath = path.join('products', product.slug, 'index.html');
-    } else {
-      // 回退到 ID: /product/{id}.html
-      outputPath = path.join('product', `${product.id}.html`);
-    }
-
-    writeTextFile(outputRoot, outputPath, html, templateContext.site);
+    writeTextFile(outputRoot, path.join('product', `${product.id}.html`), html, templateContext.site);
     filesWritten += 1;
   }
 
@@ -627,21 +588,9 @@ function getLegacyTemplateContext(languageCode = null) {
 }
 
 function buildLegacyCommonProps(templateContext) {
-  // 为 footer 准备顶级产品分类数据（只包含一级分类，排除id=0的根分类）
-  const footerProductCategories = templateContext.productCategories
-    .filter(cat => normalizeInteger(cat.parent_id, 0) === 0 && normalizeInteger(cat.id, 0) !== 0)
-    .slice(0, 11) // 取前11个一级分类，与原版一致
-    .map(cat => ({
-      id: cat.id,
-      name: cat.name,
-      slug: cat.slug,
-      url: cat.slug ? `/products/${cat.slug}/` : `/products/${cat.id}.html`
-    }));
-
   return {
     site: templateContext.site,
-    siteColumns: buildLegacySiteColumns(templateContext.columns, { productCategories: templateContext.productCategories }),
-    footerProductCategories,
+    siteColumns: buildLegacySiteColumns(templateContext.columns),
     fragments: {
       indextopHtml: '',
       topHtml: '',
@@ -713,7 +662,7 @@ function buildLegacyHomePageProps(templateContext) {
         id: item.id,
         name: item.name || '',
         title: item.name || '',
-        url: buildProductUrl(item),
+        url: `/product/${item.id}.html`,
         image: images[0] || '/skin/dfpic.gif',
         images: images,
         summary: item.summary || ''
@@ -819,7 +768,12 @@ function buildLegacySiteColumns(columns, options = {}) {
   const result = normalizedRows
     .filter((item) => item.parentId === 0)
     .filter((item) => !['contact_page', 'message_page'].includes(String(item?.sourceType || '')));
-
+  
+  console.log('[DEBUG] buildLegacySiteColumns - 顶层栏目 (过滤前):', result.length);
+  result.forEach(item => {
+    console.log(`  - ${item.name}: showInNav=${item.showInNav}, url=${item.url || '(空)'}`);
+  });
+  
   const finalResult = result
     .map((item) => ({
       ...item,
@@ -832,25 +786,13 @@ function buildLegacySiteColumns(columns, options = {}) {
       active: Boolean(item.active) || item.children.some((child) => child.active),
       showInNav: item.showInNav  // 再次明确传递
     }))
-    .filter((item) => item.url)
-    .map((item) => {
-      // 特殊处理：如果是产品展示栏目（product_root），用真实的产品分类替换其children
-      if (item.sourceType === 'product_root' && options.productCategories) {
-        const topCategories = options.productCategories
-          .filter(cat => normalizeInteger(cat.parent_id, 0) === 0 && normalizeInteger(cat.id, 0) !== 0)
-          .slice(0, 11)
-          .map(cat => ({
-            id: cat.id,
-            name: cat.name,
-            url: cat.slug ? `/products/${cat.slug}/` : `/products/${cat.id}.html`,
-            active: false,
-            showInNav: 1
-          }));
-        return { ...item, children: topCategories };
-      }
-      return item;
-    });
-
+    .filter((item) => item.url);
+  
+  console.log('[DEBUG] buildLegacySiteColumns - 最终返回:', finalResult.length, '个栏目');
+  finalResult.forEach(item => {
+    console.log(`  - ${item.name}: showInNav=${item.showInNav}, id=${item.id}, url=${item.url}`);
+  });
+  
   return finalResult;
 }
 
@@ -863,10 +805,10 @@ function buildLegacyColumnUrl(column, rowsById = new Map()) {
   const parentColumn = rowsById.get(normalizeInteger(column.parent_id, 0)) || null;
 
   if (sourceType === 'product_root') {
-    return '/products/';
+    return '/valve/';
   }
   if (sourceType === 'product_category') {
-    return sourceId > 0 ? `/products/${sourceId}.html` : '';
+    return sourceId > 0 ? `/valve/${sourceId}.html` : '';
   }
   if (sourceType === 'news_category') {
     if (sourceId === NEWS_ROOT_ID) {
@@ -1052,7 +994,7 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
       pageType: 'product-list',
       title: category.name || '',
       url: buildLegacyProductCategoryUrl(category),
-      section: { type: 'product', name: '产品展示', url: '/products/' },
+      section: { type: 'product', name: '产品展示', url: '/valve/' },
       categoryChain: buildTemplateCategoryChain({
         category,
         categories: templateContext.productCategories,
@@ -1084,7 +1026,7 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
       id: item.id,
       name: item.name || '',
       title: item.name || '',
-      url: buildProductUrl(item),
+      url: `/product/${item.id}.html`,
       image: item.primary_image || '/skin/dfpic.gif',
       summary: item.summary || ''
     })),
@@ -1112,8 +1054,8 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
     ...buildLegacyPageContextProps({
       pageType: 'product-detail',
       title: product.name || '',
-      url: buildProductUrl({ id: normalizeInteger(product.id, 0), slug: product.slug }),
-      section: { type: 'product', name: '产品展示', url: '/products/' },
+      url: `/product/${normalizeInteger(product.id, 0)}.html`,
+      section: { type: 'product', name: '产品展示', url: '/valve/' },
       categoryChain: buildTemplateCategoryChain({
         category,
         categories: templateContext.productCategories,
@@ -1127,9 +1069,9 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
       parentCategoryUrl: parent ? buildLegacyProductCategoryUrl(parent) : '',
       content: product,
       contentType: 'product',
-      contentUrl: buildProductUrl({ id: normalizeInteger(product.id, 0), slug: product.slug }),
+      contentUrl: `/product/${normalizeInteger(product.id, 0)}.html`,
       breadcrumbItems: [
-        { label: '产品展示', href: '/products/' },
+        { label: '产品展示', href: '/valve/' },
         ...buildLegacyProductCategoryBreadcrumbItems(category, parent),
         { label: product.name || '' }
       ]
@@ -1152,13 +1094,13 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
       bodyHtml: enrichedBody.html,
       pageData: productPageData,
       topPanel: productPageData?.topPanel || null,
-      url: buildProductUrl({ id: normalizeInteger(product.id, 0), slug: product.slug })
+      url: `/product/${normalizeInteger(product.id, 0)}.html`
     },
     relatedProductItems: relatedProducts.map((item) => ({
       id: item.id,
       name: item.name || '',
       title: item.name || '',
-      url: buildProductUrl(item),
+      url: `/product/${item.id}.html`,
       image: item.primary_image || '/skin/dfpic.gif',
       summary: item.summary || ''
     })),
@@ -1463,7 +1405,7 @@ function buildLegacyBreadcrumbLink(href, label) {
 }
 
 function buildLegacyProductBreadcrumbItems(category, parent) {
-  const items = [{ label: '产品展示', href: '/products/' }];
+  const items = [{ label: '产品展示', href: '/valve/' }];
   items.push(...buildLegacyProductCategoryBreadcrumbItems(category, parent));
   return items;
 }
@@ -1485,7 +1427,7 @@ function buildLegacyProductCategoryBreadcrumbItems(category, parent) {
 
 function buildLegacyProductCategoryUrl(category) {
   const id = normalizeInteger(category?.id, 0);
-  return id === 0 ? '/products/index.html' : `/products/${id}.html`;
+  return id === 0 ? '/valve/index.html' : `/valve/${id}.html`;
 }
 
 function normalizeLegacyTemplateMarkup(value, site) {
@@ -1535,12 +1477,12 @@ function buildLegacyTelText(companyPhone, companyMobile) {
 
 function buildLegacyProductsMenu(categories) {
   const roots = categories.filter((item) => normalizeInteger(item.parent_id, 0) === 0 && normalizeInteger(item.id, 0) !== 0);
-  return `<table width="100%" border="0" align="center" cellpadding="0" cellspacing="0">${roots.map((item) => `<li><a href="/products/${item.id}.html"><span>${escapeHtml(item.name || '')}</span></a></li>`).join('')}</table>`;
+  return `<table width="100%" border="0" align="center" cellpadding="0" cellspacing="0">${roots.map((item) => `<li><a href="/valve/${item.id}.html"><span>${escapeHtml(item.name || '')}</span></a></li>`).join('')}</table>`;
 }
 
 function buildLegacyProductsMenuCompact(categories) {
   const roots = categories.filter((item) => normalizeInteger(item.parent_id, 0) === 0 && normalizeInteger(item.id, 0) !== 0);
-  return roots.map((item, index) => `${index > 0 ? '&nbsp;' : ''}<a href="/products/${item.id}.html">${escapeHtml(item.name || '')}</a> |`).join('');
+  return roots.map((item, index) => `${index > 0 ? '&nbsp;' : ''}<a href="/valve/${item.id}.html">${escapeHtml(item.name || '')}</a> |`).join('');
 }
 
 function buildLegacyAboutCategoryList(categories, rootId) {
@@ -1599,7 +1541,7 @@ function buildLegacyNewsMenuItems(categories, rootId, dirName, activeId = 0) {
 function buildLegacyProductSmallCategories(categories) {
   let html = '<table width="95%" border="0" align="center" cellpadding="0" cellspacing="0"><tr><td><span class=abv>';
   categories.forEach((item) => {
-    html += `&nbsp;【<A href="/products/${item.id}.html" class="0a">${escapeHtml(item.name || '')}</a>】`;
+    html += `&nbsp;【<A href="/valve/${item.id}.html" class="0a">${escapeHtml(item.name || '')}</a>】`;
   });
   html += '</span></td></tr></table>';
   return html;
@@ -1614,7 +1556,7 @@ function buildLegacyProductMenuItems(categories, activeId = 0) {
         id: normalizeInteger(item.id, 0),
         label: item.name || '',
         title: item.name || '',
-        url: `/products/${normalizeInteger(item.id, 0)}.html`,
+        url: `/valve/${normalizeInteger(item.id, 0)}.html`,
         active: normalizeInteger(item.id, 0) === normalizeInteger(activeId, 0),
         description,
         ctaLabel: description ? 'Explore more' : '',
@@ -1822,7 +1764,7 @@ function buildLegacyProductListItems(pageItems) {
   return pageItems.map((item, index) => ({
     id: item.id,
     name: item.name || '',
-    url: buildProductUrl(item),
+    url: `/product/${item.id}.html`,
     image: item.primary_image || '/skin/dfpic.gif',
     summary: gotTopicLegacy(item.summary || '', 90),
     rowOpenHtml: index === 0 ? '<tr>' : '',
@@ -1877,14 +1819,14 @@ function writeProductCategoryPageSet({
     const fileName = buildLegacyListFileName(fileStem, pageNumber);
     writeTextFile(outputRoot, path.join('products', fileName), legacyHtml, templateContext.site);
     filesWritten += 1;
-    writeTextFile(outputRoot, path.join('products', fileName), legacyHtml, templateContext.site);
+    writeTextFile(outputRoot, path.join('valve', fileName), legacyHtml, templateContext.site);
     filesWritten += 1;
 
     if (pageNumber === 1) {
       const firstPageFileName = `${fileStem}.html`;
       writeTextFile(outputRoot, path.join('products', firstPageFileName), legacyHtml, templateContext.site);
       filesWritten += 1;
-      writeTextFile(outputRoot, path.join('products', firstPageFileName), legacyHtml, templateContext.site);
+      writeTextFile(outputRoot, path.join('valve', firstPageFileName), legacyHtml, templateContext.site);
       filesWritten += 1;
     }
   }
@@ -1978,7 +1920,7 @@ function buildLegacyIndexFeaturedProducts() {
   for (const item of items) {
     html += '<li>';
     html += `<img src="${escapeHtml(item.primary_image || '/skin/dfpic.gif')}" width="120" height="120" border="0" alt="${escapeHtml(item.name || '')}">`;
-    html += `<li><a href="${buildProductUrl(item)}" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${gotTopicLegacy(item.summary || '', 118)}</li>`;
+    html += `<li><a href="/product/${item.id}.html" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${gotTopicLegacy(item.summary || '', 118)}</li>`;
     html += '</li>';
   }
   return html;
@@ -1995,7 +1937,7 @@ function buildLegacyIndexFeaturedProductLinks() {
     `
   );
 
-  return items.map((item) => `<li><a href="${buildProductUrl(item)}">${escapeHtml(item.name || '')}</a></li>`).join('');
+  return items.map((item) => `<li><a href="/product/${item.id}.html">${escapeHtml(item.name || '')}</a></li>`).join('');
 }
 
 function buildLegacyIndexNews() {
@@ -2051,7 +1993,7 @@ function buildLegacyMessageSidebarProducts() {
     html += '<tr>';
     html += `<td width="160" height="100" align="center"><img src="${escapeHtml(item.primary_image || '/skin/dfpic.gif')}" alt="${escapeHtml(item.name || '')}" width="150" height="94" /></td>`;
     html += '</tr><tr>';
-    html += `<td><a href="${buildProductUrl(item)}" class="0a">${escapeHtml(item.name || '')}</a></td>`;
+    html += `<td><a href="/product/${item.id}.html" class="0a">${escapeHtml(item.name || '')}</a></td>`;
     html += '</tr>';
   }
   html += '</table>';

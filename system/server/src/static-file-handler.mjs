@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { ADMIN_DIST_ROOT, CONTENT_ROOT, MIME_TYPES } from './config.mjs';
+import { ADMIN_DIST_ROOT, CONTENT_ROOT, PUBLIC_ROOT, MIME_TYPES } from './config.mjs';
 
 const ADMIN_DEV_SERVER_URL = normalizeDevServerUrl(process.env.ADMIN_DEV_SERVER_URL);
 
@@ -16,6 +16,18 @@ export async function serveStatic(request, reply) {
     return serveAdminApp(request, reply, rewrittenPathname);
   }
 
+  // 优先从 public/ 目录查找静态资源
+  const publicHandled = await serveFromCandidates(
+    PUBLIC_ROOT,
+    getStaticCandidates(rewrittenPathname),
+    request,
+    reply
+  );
+  if (publicHandled) {
+    return true;
+  }
+
+  // 然后从 html/ 目录查找生成的内容
   const contentHandled = await serveFromCandidates(
     CONTENT_ROOT,
     getStaticCandidates(rewrittenPathname),

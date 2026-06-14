@@ -4,16 +4,16 @@
 set -e
 
 BASE_URL="https://www.spiraxsteam.cn"
-HTML_DIR="html"
+PUBLIC_DIR="public"
 
 echo "开始下载首页所需图片..."
 echo "=========================================="
 
 # 创建必要的目录
-mkdir -p "$HTML_DIR/images/global/generic-header-images"
-mkdir -p "$HTML_DIR/images/global/products/control-valves"
-mkdir -p "$HTML_DIR/images/global/products/steam-traps"
-mkdir -p "$HTML_DIR/images/global/dotcom-home/hero/q2-2023"
+mkdir -p "$PUBLIC_DIR/images/global/generic-header-images"
+mkdir -p "$PUBLIC_DIR/images/global/products/control-valves"
+mkdir -p "$PUBLIC_DIR/images/global/products/steam-traps"
+mkdir -p "$PUBLIC_DIR/images/global/dotcom-home/hero/q2-2023"
 
 # 固定图片列表
 declare -a FIXED_IMAGES=(
@@ -43,7 +43,7 @@ echo "【固定图片】下载中..."
 echo "------------------------------------------"
 
 for img_path in "${FIXED_IMAGES[@]}"; do
-  output_file="$HTML_DIR$img_path"
+  output_file="$PUBLIC_DIR$img_path"
   url="$BASE_URL$img_path"
 
   if [ -f "$output_file" ]; then
@@ -66,7 +66,7 @@ echo "【产品图片】下载中..."
 echo "------------------------------------------"
 
 for img_path in "${PRODUCT_IMAGES[@]}"; do
-  output_file="$HTML_DIR$img_path"
+  output_file="$PUBLIC_DIR$img_path"
   url="$BASE_URL$img_path"
 
   if [ -f "$output_file" ]; then

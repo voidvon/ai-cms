@@ -45,6 +45,7 @@ export function listProductCategories({ languageCode = null } = {}) {
         content_html,
         seo_keywords,
         seo_description,
+        slug,
         legacy_extra
       FROM product_categories
       WHERE id <> 0

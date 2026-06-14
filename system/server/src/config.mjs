@@ -6,6 +6,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const SERVER_ROOT = path.resolve(__dirname, '..');
 export const SYSTEM_ROOT = path.resolve(SERVER_ROOT, '..');
 export const PROJECT_ROOT = path.resolve(SYSTEM_ROOT, '..');
+export const PUBLIC_ROOT = path.join(PROJECT_ROOT, 'public');
 export const CONTENT_ROOT = path.join(PROJECT_ROOT, 'html');
 export const ADMIN_APP_ROOT = path.join(SYSTEM_ROOT, 'admin');
 export const ADMIN_DIST_ROOT = path.join(ADMIN_APP_ROOT, 'dist');
