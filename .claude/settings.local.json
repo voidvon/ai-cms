@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(sqlite3 *)"
+      "Bash(sqlite3 *)",
+      "WebFetch(domain:www.spiraxsteam.cn)",
+      "Bash(curl -s https://www.spiraxsteam.cn)",
+      "Bash(grep -E \"\\\\.\\(mjs|js\\)$\")"
     ]
   }
 }

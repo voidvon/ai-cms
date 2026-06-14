@@ -16,6 +16,17 @@ import { ensureTemplatesSchema } from './services/templates.mjs';
 import { listLanguages } from './services/languages.mjs';
 import { escapeHtml } from './utils/html.mjs';
 import { looksLikeLegacyMojibake } from './utils/legacy-text.mjs';
+import {
+  buildSeoMeta,
+  buildHreflangLinks,
+  buildJsonLdOrganization,
+  buildJsonLdProduct,
+  buildJsonLdArticle,
+  buildProductSeoMeta,
+  buildArticleSeoMeta,
+  generateFaviconLinks,
+  generateThemeColorMetas
+} from './services/seo-meta.mjs';
 
 const DEFAULT_OUTPUT_ROOT = CONTENT_ROOT;
 const PRODUCT_LIST_PAGE_SIZE = 14;
@@ -47,14 +58,14 @@ const STATIC_COMPAT_ALIASES = [
   ['uploadfile', 'UploadFile']
 ];
 const CMS_TEMPLATE_BY_PAGE = {
-  'legacy-home': 'home_default',
-  'legacy-contact': 'content_contact',
-  'legacy-message': 'content_message',
-  'legacy-content': 'content_default',
-  'legacy-product-list': 'list_product',
-  'legacy-product-detail': 'content_product',
-  'legacy-article-list': 'list_article',
-  'legacy-article-detail': 'content_article'
+  'legacy-home': 'spirax_home',
+  'legacy-contact': 'spirax_contact_page',
+  'legacy-message': 'spirax_message_page',
+  'legacy-content': 'spirax_content_page',
+  'legacy-product-list': 'spirax_product_list',
+  'legacy-product-detail': 'spirax_product_detail',
+  'legacy-article-list': 'spirax_article_list',
+  'legacy-article-detail': 'spirax_article_detail'
 };
 const CMS_TEMPLATE_TYPE_BY_PAGE = {
   'legacy-home': 'home',
@@ -619,13 +630,33 @@ function expandLegacyCommonPlaceholders(value, templateContext) {
 function buildLegacyHomePageProps(templateContext) {
   const featuredProducts = listProducts({ featured: true, visibleOnly: true, limit: 8, languageCode: templateContext.languageCode })
     .slice(0, 8)
-    .map((item) => ({
-      id: item.id,
-      title: item.name || '',
-      url: `/product/${item.id}.html`,
-      image: item.primary_image || '/skin/dfpic.gif',
-      summary: item.summary || ''
-    }));
+    .map((item) => {
+      // 解析images字段（JSON数组）
+      let images = [];
+
+      try {
+        // 如果已经是数组，直接使用
+        if (Array.isArray(item.images)) {
+          images = item.images;
+        } else if (typeof item.images === 'string') {
+          images = JSON.parse(item.images);
+        } else {
+          images = [];
+        }
+      } catch (e) {
+        images = [];
+      }
+
+      return {
+        id: item.id,
+        name: item.name || '',
+        title: item.name || '',
+        url: `/product/${item.id}.html`,
+        image: images[0] || '/skin/dfpic.gif',
+        images: images,
+        summary: item.summary || ''
+      };
+    });
   const homeNewsItems = listNews({ limit: 6, languageCode: templateContext.languageCode })
     .filter((item) => normalizeInteger(item.category_id, 0) !== SERVICE_ROOT_ID)
     .slice(0, 6)
@@ -662,7 +693,18 @@ function buildLegacyHomePageProps(templateContext) {
     serviceIndexHtml: buildLegacyServiceIndex(),
     homeFeaturedProductItems: featuredProducts,
     homeNewsItems,
-    homeServiceItems
+    homeServiceItems,
+    // SEO元数据
+    seoMeta: buildSeoMeta({
+      title: '斯派莎克阀门 蒸汽系统解决方案 | SpiraxSarco 中国',
+      description: '探索 Spirax Sarco 斯派莎克蒸汽系统解决方案，包括蒸汽疏水阀、压力控制阀、流量计、冷凝水回收以及蒸汽系统服务。',
+      url: templateContext.site.web_url,
+      site: templateContext.site
+    }),
+    jsonLd: buildJsonLdOrganization(templateContext.site),
+    faviconLinks: generateFaviconLinks(),
+    themeColorMetas: generateThemeColorMetas(),
+    hreflangLinks: buildHreflangLinks()
   };
 }
 
@@ -785,7 +827,18 @@ function buildLegacyContactPageProps(templateContext) {
       breadcrumbItems: [{ label: '联系我们' }],
       breadcrumbOptions: { separatorHtml: ' &gt;&gt; ' }
     }),
-    contactTableHtml: ''
+    contactTableHtml: '',
+    // SEO元数据
+    seoMeta: buildSeoMeta({
+      title: '联系我们 | Spirax Sarco 斯派莎克',
+      description: `联系 Spirax Sarco 斯派莎克中国团队，获取蒸汽系统专业支持。电话：${templateContext.site.company_phone || '+86 157 9019 6438'}`,
+      url: `${templateContext.site.web_url}/contact.html`,
+      site: templateContext.site
+    }),
+    jsonLd: buildJsonLdOrganization(templateContext.site),
+    faviconLinks: generateFaviconLinks(),
+    themeColorMetas: generateThemeColorMetas(),
+    hreflangLinks: buildHreflangLinks()
   };
 }
 
@@ -800,7 +853,18 @@ function buildLegacyMessagePageProps(templateContext) {
       breadcrumbItems: [{ label: '在线留言' }],
       breadcrumbOptions: { separatorHtml: ' &gt;&gt; ' }
     }),
-    messageSidebarProductsHtml: buildLegacyMessageSidebarProducts()
+    messageSidebarProductsHtml: buildLegacyMessageSidebarProducts(),
+    // SEO元数据
+    seoMeta: buildSeoMeta({
+      title: '在线留言 | Spirax Sarco 斯派莎克',
+      description: '向 Spirax Sarco 斯派莎克提交您的咨询和建议，我们将尽快回复您。',
+      url: `${templateContext.site.web_url}/msg.html`,
+      site: templateContext.site
+    }),
+    jsonLd: buildJsonLdOrganization(templateContext.site),
+    faviconLinks: generateFaviconLinks(),
+    themeColorMetas: generateThemeColorMetas(),
+    hreflangLinks: buildHreflangLinks()
   };
 }
 
@@ -829,7 +893,18 @@ function buildLegacyContentPageProps(templateContext, item) {
     }),
     title: item.name || '',
     contentHtml: normalizeLegacyRichTextHtml(item.content_html, templateContext.site) || '',
-    secondaryMenuItems: buildLegacyCorporationMenuItems(templateContext.corporationCategories, CORPORATION_ROOT_ID, normalizeInteger(item.id, 0))
+    secondaryMenuItems: buildLegacyCorporationMenuItems(templateContext.corporationCategories, CORPORATION_ROOT_ID, normalizeInteger(item.id, 0)),
+    // SEO元数据
+    seoMeta: buildSeoMeta({
+      title: `${item.name || ''} | Spirax Sarco 斯派莎克`,
+      description: item.summary || `了解 Spirax Sarco 斯派莎克的${item.name || ''}信息`,
+      url: `${templateContext.site.web_url}/about/about-${normalizeInteger(item.id, 0)}.html`,
+      site: templateContext.site
+    }),
+    jsonLd: buildJsonLdOrganization(templateContext.site),
+    faviconLinks: generateFaviconLinks(),
+    themeColorMetas: generateThemeColorMetas(),
+    hreflangLinks: buildHreflangLinks()
   };
 }
 
@@ -1005,7 +1080,13 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
     secondaryMenuParentUrl: productNavigation.parentUrl,
     sectionNavItems: enrichedBody.items,
     currentCategoryPageData: categoryPageData,
-    currentProductPageData: productPageData
+    currentProductPageData: productPageData,
+    // SEO元数据
+    seoMeta: buildProductSeoMeta(product, templateContext.site),
+    jsonLd: buildJsonLdProduct(product, templateContext.site),
+    faviconLinks: generateFaviconLinks(),
+    themeColorMetas: generateThemeColorMetas(),
+    hreflangLinks: buildHreflangLinks()
   };
 }
 
@@ -1119,7 +1200,13 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, item, cat
       date: formatLegacyDateOnly(entry.created_at)
     })),
     previousHtml: previous ? `<a href="${previous.id}.html" class="Font_2e4690_a ">${escapeHtml(previous.title || '')}</a>` : '<span class="Font_2e4690_a">没有上一篇</span>',
-    nextHtml: next ? `<a href="${next.id}.html" class="Font_2e4690_a ">${escapeHtml(next.title || '')}</a>` : '<span class="Font_2e4690_a">没有下一篇</span>'
+    nextHtml: next ? `<a href="${next.id}.html" class="Font_2e4690_a ">${escapeHtml(next.title || '')}</a>` : '<span class="Font_2e4690_a">没有下一篇</span>',
+    // SEO元数据
+    seoMeta: buildArticleSeoMeta(item, templateContext.site),
+    jsonLd: buildJsonLdArticle(item, templateContext.site),
+    faviconLinks: generateFaviconLinks(),
+    themeColorMetas: generateThemeColorMetas(),
+    hreflangLinks: buildHreflangLinks()
   };
 }
 
