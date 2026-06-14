@@ -18,7 +18,7 @@ const BUILTIN_MODELS = [
 
 const FIELD_LABELS = {
   id: 'ID',
-  category_id: '分类',
+  column_id: '栏目',
   name: '名称',
   title: '标题',
   code: '型号/编码',

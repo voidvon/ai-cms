@@ -2,7 +2,7 @@ import apiClient from './client';
 import type { News, ApiResponse, PaginationInfo } from '@/types';
 
 export const newsApi = {
-  list: async (params: { page?: number; limit?: number; category_id?: number; include_descendants?: number | boolean; language?: string }) => {
+  list: async (params: { page?: number; limit?: number; column_id?: number; include_descendants?: number | boolean; language?: string }) => {
     const response = await apiClient.get<ApiResponse<News[]> & { pagination: PaginationInfo }>('/news/admin', { params });
     return response.data;
   },

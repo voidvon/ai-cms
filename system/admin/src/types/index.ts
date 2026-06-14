@@ -28,7 +28,7 @@ export interface Language {
 
 export interface Product {
   id: number;
-  category_id: number;
+  column_id?: number | null;
   name: string;
   code?: string;
   summary?: string;
@@ -66,7 +66,7 @@ export interface ProductTranslationStatus {
 
 export interface News {
   id: number;
-  category_id: number;
+  column_id?: number | null;
   title: string;
   summary?: string;
   content_html?: string;
@@ -116,6 +116,8 @@ export interface Message {
 
 export interface ProductCategory {
   id: number;
+  column_id?: number;
+  source_id?: number;
   name: string;
   parent_id: number;
   sort_order: number;
@@ -127,6 +129,8 @@ export interface ProductCategory {
 
 export interface NewsCategory {
   id: number;
+  column_id?: number;
+  source_id?: number;
   name: string;
   parent_id: number;
   sort_order: number;

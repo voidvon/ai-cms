@@ -5,7 +5,6 @@ const PROTECTED_TRANSLATION_FIELDS = new Set([
   'parent_id',
   'source_id',
   'source_type',
-  'category_id',
   'route_path',
   'custom_url',
   'sort_order',

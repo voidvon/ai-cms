@@ -30,6 +30,7 @@ interface ManualColumnFormDialogProps {
   mode: 'create' | 'edit'
   column?: Column | null
   initialKind?: 'link' | 'single'
+  forceBasicOnly?: boolean
   columns: Column[]
   templates: Template[]
   initialTemplateId: string
@@ -45,6 +46,7 @@ export default function ManualColumnFormDialog({
   mode,
   column,
   initialKind = 'link',
+  forceBasicOnly = false,
   columns,
   templates,
   initialTemplateId,
@@ -73,6 +75,7 @@ export default function ManualColumnFormDialog({
   const defaultLanguageCode = languages.find((item) => item.is_default === 1)?.code || 'zh-CN'
   const availableLanguageCodes = languages.map((item) => item.code)
   const currentTranslation = translations[activeLanguage] || createEmptyTranslation()
+  const basicOnly = forceBasicOnly || (mode === 'edit' && column?.column_kind === 'category')
 
   useEffect(() => {
     if (!open) {
@@ -185,7 +188,7 @@ export default function ManualColumnFormDialog({
                   />
                 </div>
 
-                {baseData.column_kind === 'single' ? (
+                {!basicOnly && baseData.column_kind === 'single' ? (
                   <>
                     <div className="space-y-2">
                       <Label htmlFor={`manual-column-content_${language.code}`}>页面内容</Label>
@@ -250,6 +253,7 @@ export default function ManualColumnFormDialog({
               <div className="text-sm text-muted-foreground">这些字段不区分语言，所有语言共用同一份数据。</div>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
+              {!basicOnly ? (
               <div className="space-y-2">
                 <Label>栏目类型</Label>
                 <Select
@@ -266,6 +270,7 @@ export default function ManualColumnFormDialog({
                   </SelectContent>
                 </Select>
               </div>
+              ) : null}
               <div className="space-y-2">
                 <Label>父栏目</Label>
                 <Select
@@ -314,7 +319,7 @@ export default function ManualColumnFormDialog({
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              {baseData.column_kind === 'single' ? (
+              {!basicOnly && baseData.column_kind === 'single' ? (
                 <div className="space-y-2">
                   <Label>内容模板</Label>
                   <Select value={templateId} onValueChange={setTemplateId}>
@@ -334,7 +339,7 @@ export default function ManualColumnFormDialog({
               ) : null}
             </div>
 
-            {baseData.column_kind === 'link' ? (
+            {!basicOnly && baseData.column_kind === 'link' ? (
               <>
                 <div className="space-y-2">
                   <Label htmlFor="manual-column-url">链接地址</Label>
@@ -361,7 +366,7 @@ export default function ManualColumnFormDialog({
                   </Select>
                 </div>
               </>
-            ) : (
+            ) : !basicOnly ? (
               <div className="space-y-2">
                 <Label htmlFor="manual-column-path">访问路径</Label>
                 <Input
@@ -371,7 +376,7 @@ export default function ManualColumnFormDialog({
                   placeholder="/contact/"
                 />
               </div>
-            )}
+            ) : null}
           </div>
 
           <DialogFooter>

@@ -20,20 +20,8 @@ CREATE TABLE IF NOT EXISTS admin_sessions (
   FOREIGN KEY (admin_id) REFERENCES admins(id) ON DELETE CASCADE
 );
 
-CREATE TABLE IF NOT EXISTS product_categories (
-  id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL,
-  parent_id INTEGER NOT NULL DEFAULT 0,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  seo_keywords TEXT,
-  seo_description TEXT,
-  legacy_extra TEXT,
-  FOREIGN KEY (parent_id) REFERENCES product_categories(id) ON DELETE SET DEFAULT
-);
-
 CREATE TABLE IF NOT EXISTS products (
   id INTEGER PRIMARY KEY,
-  category_id INTEGER,
   name TEXT NOT NULL,
   code TEXT,
   summary TEXT,
@@ -44,7 +32,10 @@ CREATE TABLE IF NOT EXISTS products (
   is_visible INTEGER NOT NULL DEFAULT 1,
   sort_order INTEGER NOT NULL DEFAULT 0,
   legacy_extra TEXT,
-  FOREIGN KEY (category_id) REFERENCES product_categories(id) ON DELETE SET NULL
+  updated_at TEXT,
+  images TEXT NOT NULL DEFAULT '[]',
+  slug TEXT,
+  column_id INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS media_assets (
@@ -63,18 +54,8 @@ CREATE TABLE IF NOT EXISTS media_assets (
 CREATE INDEX IF NOT EXISTS idx_media_assets_purpose ON media_assets(purpose, id);
 CREATE INDEX IF NOT EXISTS idx_media_assets_status ON media_assets(status, id);
 
-CREATE TABLE IF NOT EXISTS news_categories (
-  id INTEGER PRIMARY KEY,
-  name TEXT NOT NULL,
-  parent_id INTEGER NOT NULL DEFAULT 0,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  legacy_extra TEXT,
-  FOREIGN KEY (parent_id) REFERENCES news_categories(id) ON DELETE SET DEFAULT
-);
-
 CREATE TABLE IF NOT EXISTS news (
   id INTEGER PRIMARY KEY,
-  category_id INTEGER,
   title TEXT NOT NULL,
   summary TEXT,
   content_html TEXT,
@@ -83,7 +64,7 @@ CREATE TABLE IF NOT EXISTS news (
   is_featured_home INTEGER NOT NULL DEFAULT 0,
   created_at TEXT,
   legacy_extra TEXT,
-  FOREIGN KEY (category_id) REFERENCES news_categories(id) ON DELETE SET NULL
+  column_id INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS messages (
@@ -191,19 +172,16 @@ CREATE TABLE IF NOT EXISTS template_versions (
   FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
 );
 
-CREATE INDEX IF NOT EXISTS idx_products_category_id ON products(category_id);
 CREATE INDEX IF NOT EXISTS idx_products_visible_sort ON products(is_visible, sort_order, id);
-CREATE INDEX IF NOT EXISTS idx_news_category_id ON news(category_id);
 CREATE INDEX IF NOT EXISTS idx_news_created_at ON news(created_at, id);
 CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at, id);
-CREATE INDEX IF NOT EXISTS idx_product_categories_parent_id ON product_categories(parent_id);
-CREATE INDEX IF NOT EXISTS idx_news_categories_parent_id ON news_categories(parent_id);
 CREATE INDEX IF NOT EXISTS idx_admin_sessions_admin_id ON admin_sessions(admin_id);
 CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires_at ON admin_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_templates_type_sort ON templates(type, sort_order, id);
 CREATE INDEX IF NOT EXISTS idx_templates_status ON templates(status);
 CREATE INDEX IF NOT EXISTS idx_template_bindings_target ON template_bindings(target_type, target_id, template_type);
 CREATE INDEX IF NOT EXISTS idx_template_versions_template_id ON template_versions(template_id, version_no);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_products_slug ON products(slug) WHERE slug IS NOT NULL;
 
 CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(
   name,

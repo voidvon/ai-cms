@@ -1,7 +1,5 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { ensureLanguagesSchema, getDefaultLanguage, listLanguages } from './languages.mjs';
-import { listNewsCategories } from './news-categories.mjs';
-import { listProductCategories } from './product-categories.mjs';
 import { ensureTemplatesSchema } from './templates.mjs';
 
 let schemaEnsured = false;
@@ -85,6 +83,7 @@ export function ensureColumnsSchema() {
   addColumnIfMissing('columns', 'seo_title', 'TEXT');
   addColumnIfMissing('columns', 'seo_keywords', 'TEXT');
   addColumnIfMissing('columns', 'seo_description', 'TEXT');
+  addColumnIfMissing('columns', 'slug', 'TEXT');
   addColumnIfMissing('columns', 'legacy_extra', 'TEXT');
 
   getDb().exec(`
@@ -117,6 +116,7 @@ export function listColumns({ languageCode = null, includeTranslations = true } 
         seo_title,
         seo_keywords,
         seo_description,
+        slug,
         legacy_extra,
         sort_order,
         is_system,
@@ -158,13 +158,14 @@ export function createManualColumn(input) {  const payload = normalizeManualColu
         seo_title,
         seo_keywords,
         seo_description,
+        slug,
         legacy_extra,
         sort_order,
         show_in_nav,
         is_system,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
     `,
     [
       defaultTranslation.name,
@@ -180,6 +181,7 @@ export function createManualColumn(input) {  const payload = normalizeManualColu
       defaultTranslation.seo_title,
       defaultTranslation.seo_keywords,
       defaultTranslation.seo_description,
+      payload.base.slug,
       payload.base.legacy_extra,
       payload.base.sort_order,
       payload.base.show_in_nav,
@@ -220,6 +222,7 @@ export function updateManualColumn(id, input) {  const existing = getColumnByIdR
         seo_title = ?,
         seo_keywords = ?,
         seo_description = ?,
+        slug = ?,
         legacy_extra = ?,
         sort_order = ?,
         show_in_nav = ?,
@@ -238,7 +241,44 @@ export function updateManualColumn(id, input) {  const existing = getColumnByIdR
       defaultTranslation.seo_title,
       defaultTranslation.seo_keywords,
       defaultTranslation.seo_description,
+      payload.base.slug,
       payload.base.legacy_extra,
+      payload.base.sort_order,
+      payload.base.show_in_nav,
+      new Date().toISOString(),
+      id
+    ]
+  );
+
+  saveColumnTranslations(id, payload.translations);
+  return getColumnById(id, { includeTranslations: true });
+}
+
+export function updateColumnRecord(id, input) {
+  const existing = getColumnByIdRaw(id);
+  if (!existing) {
+    return null;
+  }
+
+  const existingHydrated = getColumnById(id, { includeTranslations: true });
+  const payload = normalizeExistingColumnMutationInput(input, existingHydrated);
+  const defaultLanguage = getDefaultLanguage();
+  const defaultTranslation = resolveDefaultColumnTranslation(payload.translations, defaultLanguage?.code);
+
+  execute(
+    `
+      UPDATE columns
+      SET
+        name = ?,
+        parent_id = ?,
+        sort_order = ?,
+        show_in_nav = ?,
+        updated_at = ?
+      WHERE id = ?
+    `,
+    [
+      defaultTranslation.name,
+      payload.base.parent_id,
       payload.base.sort_order,
       payload.base.show_in_nav,
       new Date().toISOString(),
@@ -282,8 +322,6 @@ function hydrateColumns(rows, { languageCode, includeTranslations = true } = {})
   const columnIds = rows.map((row) => Number(row.id)).filter((id) => Number.isInteger(id) && id > 0);
   const translationsById = loadColumnTranslations(columnIds);
   const selectedLanguage = resolveLanguageForContent(languageCode);
-  const productCategoryNames = new Map(listProductCategories({ languageCode: selectedLanguage.code }).map((item) => [item.id, item.name]));
-  const newsCategoryNames = new Map(listNewsCategories({ languageCode: selectedLanguage.code }).map((item) => [item.id, item.name]));
 
   return rows.map((row) => {
     const translations = translationsById.get(Number(row.id)) || [];
@@ -291,8 +329,7 @@ function hydrateColumns(rows, { languageCode, includeTranslations = true } = {})
     const selectedTranslation = translationMap[selectedLanguage.code];
     const defaultTranslation = translationMap[selectedLanguage.default_code];
     const fallbackTranslation = selectedTranslation || defaultTranslation || translations[0] || null;
-    const categoryNameOverride = resolveSystemColumnName(row, productCategoryNames, newsCategoryNames);
-    const displayName = fallbackTranslation?.name || categoryNameOverride || row.name;
+    const displayName = fallbackTranslation?.name || row.name;
 
     return {
       ...row,
@@ -301,6 +338,7 @@ function hydrateColumns(rows, { languageCode, includeTranslations = true } = {})
       seo_title: fallbackTranslation?.seo_title ?? row.seo_title,
       seo_keywords: fallbackTranslation?.seo_keywords ?? row.seo_keywords,
       seo_description: fallbackTranslation?.seo_description ?? row.seo_description,
+      slug: row.slug || null,
       legacy_extra: row.legacy_extra || null,
       page_data: extractColumnPageData(row.legacy_extra),
       current_language_code: fallbackTranslation?.language_code || selectedLanguage.code,
@@ -453,16 +491,6 @@ function ensureDefaultColumnTranslations() {
   );
 }
 
-function resolveSystemColumnName(row, productCategoryNames, newsCategoryNames) {
-  if (row.source_type === 'product_category') {
-    return productCategoryNames.get(Number(row.source_id)) || null;
-  }
-  if (row.source_type === 'news_category') {
-    return newsCategoryNames.get(Number(row.source_id)) || null;
-  }
-  return null;
-}
-
 function getColumnBySource(sourceType, sourceId) {
   return queryOne(
     `
@@ -481,6 +509,7 @@ function getColumnBySource(sourceType, sourceId) {
         seo_title,
         seo_keywords,
         seo_description,
+        slug,
         legacy_extra,
         sort_order,
         is_system,
@@ -618,6 +647,35 @@ function normalizeManualColumnMutationInput(input, { currentId = 0, existingColu
         seo_description: legacy.seo_description
       }
     }
+  };
+}
+
+function normalizeExistingColumnMutationInput(input, existingColumn = null) {
+  const existing = existingColumn || {};
+  const defaultLanguageCode = getDefaultLanguage()?.code || 'zh-CN';
+  const parentId = toInteger(input?.parent_id ?? existing.parent_id, 0);
+  const sortOrder = toInteger(input?.sort_order ?? existing.sort_order, 0);
+  const showInNav = toBooleanInt(input?.show_in_nav ?? existing.show_in_nav, 1);
+
+  const translations = normalizeColumnTranslations(input?.translations || {}, {
+    defaultLanguageCode,
+    existingTranslations: existing.translations || {},
+    fallbackBase: {
+      name: String(existing.name || '').trim(),
+      content_html: String(existing.content_html || ''),
+      seo_title: toNullableString(existing.seo_title),
+      seo_keywords: toNullableString(existing.seo_keywords),
+      seo_description: toNullableString(existing.seo_description)
+    }
+  });
+
+  return {
+    base: {
+      parent_id: parentId || null,
+      sort_order: sortOrder,
+      show_in_nav: showInNav
+    },
+    translations
   };
 }
 

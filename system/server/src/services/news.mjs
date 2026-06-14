@@ -24,6 +24,8 @@ export function ensureNewsSchema() {
   }
 
   ensureLanguagesSchema();
+  addColumnIfMissing('news', 'column_id', 'INTEGER');
+  migrateNewsToColumnOnly();
   getDb().exec(`
     CREATE TABLE IF NOT EXISTS news_translations (
       id INTEGER PRIMARY KEY,
@@ -60,7 +62,7 @@ export function listNews({ limit = 20, languageCode = null } = {}) {
     `
       SELECT
         id,
-        category_id,
+        column_id,
         title,
         summary,
         content_html,
@@ -82,35 +84,35 @@ export function listNews({ limit = 20, languageCode = null } = {}) {
   });
 }
 
-export function listNewsAdmin({ page = 1, limit = 15, categoryId = null, includeDescendants = false, languageCode = null } = {}) {
+export function listNewsAdmin({ page = 1, limit = 15, categoryId = null, columnId = null, includeDescendants = false, languageCode = null } = {}) {
   ensureNewsSchema();
   const selectedLanguage = resolveLanguageForContent(languageCode);
   const safeLimit = Math.min(Math.max(Number.parseInt(String(limit), 10) || 15, 1), 200);
   const safePage = Math.max(Number.parseInt(String(page), 10) || 1, 1);
-  const safeCategoryId = Number.parseInt(String(categoryId ?? ''), 10);
-  const hasCategoryFilter = Number.isInteger(safeCategoryId) && safeCategoryId > 0;
+  const safeColumnId = Number.parseInt(String(columnId ?? ''), 10);
+  const hasColumnFilter = Number.isInteger(safeColumnId) && safeColumnId > 0;
   const withDescendants = Boolean(includeDescendants);
   const offset = (safePage - 1) * safeLimit;
-  const categoryTree = hasCategoryFilter && withDescendants
+  const categoryTree = hasColumnFilter && withDescendants
     ? `
       WITH RECURSIVE category_tree(id) AS (
-        SELECT id FROM news_categories WHERE id = ?
+        SELECT id FROM columns WHERE id = ?
         UNION ALL
         SELECT child.id
-        FROM news_categories child
+        FROM columns child
         INNER JOIN category_tree parent ON child.parent_id = parent.id
       )
     `
     : '';
-  const where = hasCategoryFilter
+  const where = hasColumnFilter
     ? withDescendants
-      ? 'WHERE n.category_id IN (SELECT id FROM category_tree)'
-      : 'WHERE n.category_id = ?'
+      ? 'WHERE n.column_id IN (SELECT id FROM category_tree)'
+      : 'WHERE n.column_id = ?'
     : '';
-  const countWhere = hasCategoryFilter
+  const countWhere = hasColumnFilter
     ? withDescendants
-      ? 'WHERE category_id IN (SELECT id FROM category_tree)'
-      : 'WHERE category_id = ?'
+      ? 'WHERE column_id IN (SELECT id FROM category_tree)'
+      : 'WHERE column_id = ?'
     : '';
 
   const rows = queryAll(
@@ -118,7 +120,7 @@ export function listNewsAdmin({ page = 1, limit = 15, categoryId = null, include
       ${categoryTree}
       SELECT
         n.id,
-        n.category_id,
+        n.column_id,
         n.title,
         n.summary,
         n.content_html,
@@ -128,13 +130,13 @@ export function listNewsAdmin({ page = 1, limit = 15, categoryId = null, include
         n.created_at,
         c.name AS category_name
       FROM news n
-      LEFT JOIN news_categories c ON c.id = n.category_id
+      LEFT JOIN columns c ON c.id = n.column_id
       ${where}
       ORDER BY n.id DESC
       LIMIT ?
       OFFSET ?
     `,
-    hasCategoryFilter ? [safeCategoryId, safeLimit, offset] : [safeLimit, offset]
+    hasColumnFilter ? [safeColumnId, safeLimit, offset] : [safeLimit, offset]
   );
 
   const total = queryOne(
@@ -144,7 +146,7 @@ export function listNewsAdmin({ page = 1, limit = 15, categoryId = null, include
       FROM news
       ${countWhere}
     `,
-    hasCategoryFilter ? [safeCategoryId] : []
+    hasColumnFilter ? [safeColumnId] : []
   )?.count || 0;
   return {
     items: hydrateNews(rows, {
@@ -167,7 +169,7 @@ export function getNewsById(id, { languageCode = null, includeTranslations = fal
     `
       SELECT
         id,
-        category_id,
+        column_id,
         title,
         summary,
         content_html,
@@ -200,7 +202,7 @@ export function createNews(input) {
   const result = execute(
     `
       INSERT INTO news (
-        category_id,
+        column_id,
         title,
         summary,
         content_html,
@@ -211,7 +213,7 @@ export function createNews(input) {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
-      payload.base.category_id,
+      payload.base.column_id,
       defaultTranslation.title,
       defaultTranslation.summary,
       defaultTranslation.content_html,
@@ -251,7 +253,7 @@ export function updateNews(id, input) {
     `
       UPDATE news
       SET
-        category_id = ?,
+        column_id = ?,
         title = ?,
         summary = ?,
         content_html = ?,
@@ -262,7 +264,7 @@ export function updateNews(id, input) {
       WHERE id = ?
     `,
     [
-      payload.base.category_id,
+      payload.base.column_id,
       defaultTranslation.title,
       defaultTranslation.summary,
       defaultTranslation.content_html,
@@ -307,7 +309,7 @@ export function normalizeNewsInput(input) {
   }
 
   return {
-    category_id: toNullableInteger(input.category_id),
+    column_id: toNullableInteger(input.column_id),
     title,
     summary: toNullableString(input.summary),
     content_html: toNullableString(input.content_html),
@@ -319,8 +321,9 @@ export function normalizeNewsInput(input) {
 }
 
 function normalizeNewsBaseInput(input) {
+  const columnId = toNullableInteger(input?.column_id);
   return {
-    category_id: toNullableInteger(input?.category_id),
+    column_id: columnId,
     picture: toNullableString(input?.picture) || DEFAULT_NEWS_IMAGE,
     is_featured_home: toBooleanInt(input?.is_featured_home),
     created_at: toNullableString(input?.created_at) || new Date().toISOString()
@@ -430,6 +433,83 @@ function isManagedNewsPicture(relativePath) {
   return normalizedPath !== '' && !LEGACY_NEWS_PLACEHOLDERS.has(normalizedPath);
 }
 
+function migrateNewsToColumnOnly() {
+  const columns = queryAll('PRAGMA table_info(news)');
+  const hasCategoryId = columns.some((column) => column.name === 'category_id');
+  if (!hasCategoryId) {
+    return;
+  }
+
+  execute(
+    `
+      UPDATE news
+      SET column_id = (
+        SELECT c.id
+        FROM columns c
+        WHERE c.source_type = 'news_category'
+          AND c.source_id = news.category_id
+        LIMIT 1
+      )
+      WHERE (column_id IS NULL OR column_id = 0)
+        AND category_id IS NOT NULL
+    `
+  );
+
+  getDb().exec(`
+    DROP TRIGGER IF EXISTS news_ai;
+    DROP TRIGGER IF EXISTS news_ad;
+    DROP TRIGGER IF EXISTS news_au;
+    DROP INDEX IF EXISTS idx_news_category_id;
+
+    ALTER TABLE news RENAME TO news_legacy_category;
+
+    CREATE TABLE news (
+      id INTEGER PRIMARY KEY,
+      title TEXT NOT NULL,
+      summary TEXT,
+      content_html TEXT,
+      picture TEXT,
+      keywords TEXT,
+      is_featured_home INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT,
+      legacy_extra TEXT,
+      column_id INTEGER
+    );
+
+    INSERT INTO news (
+      id, title, summary, content_html, picture, keywords,
+      is_featured_home, created_at, legacy_extra, column_id
+    )
+    SELECT
+      id, title, summary, content_html, picture, keywords,
+      is_featured_home, created_at, legacy_extra, column_id
+    FROM news_legacy_category;
+
+    DROP TABLE news_legacy_category;
+
+    CREATE INDEX IF NOT EXISTS idx_news_created_at ON news(created_at, id);
+
+    CREATE TRIGGER news_ai AFTER INSERT ON news BEGIN
+      INSERT INTO news_fts(rowid, title, summary, keywords)
+      VALUES (new.id, coalesce(new.title, ''), coalesce(new.summary, ''), coalesce(new.keywords, ''));
+    END;
+
+    CREATE TRIGGER news_ad AFTER DELETE ON news BEGIN
+      INSERT INTO news_fts(news_fts, rowid, title, summary, keywords)
+      VALUES('delete', old.id, old.title, old.summary, old.keywords);
+    END;
+
+    CREATE TRIGGER news_au AFTER UPDATE ON news BEGIN
+      INSERT INTO news_fts(news_fts, rowid, title, summary, keywords)
+      VALUES('delete', old.id, old.title, old.summary, old.keywords);
+      INSERT INTO news_fts(rowid, title, summary, keywords)
+      VALUES (new.id, coalesce(new.title, ''), coalesce(new.summary, ''), coalesce(new.keywords, ''));
+    END;
+
+    INSERT INTO news_fts(news_fts) VALUES('rebuild');
+  `);
+}
+
 function normalizeNewsRecord(row) {
   if (!row) {
     return row;
@@ -437,6 +517,7 @@ function normalizeNewsRecord(row) {
 
   return {
     ...row,
+    column_id: toNullableInteger(row.column_id),
     title: resolveNewsTitle(row),
     keywords: resolveNewsKeywords(row),
     summary: resolveNewsSummary(row)
@@ -506,6 +587,7 @@ function hydrateNews(rows, {
 
     return {
       ...merged,
+      column_id: toNullableInteger(merged.column_id),
       current_language_code: fallbackTranslation?.language_code || selectedLanguage.code,
       ...(includeTranslations ? { translations: mapTranslationsForApi(translationMap) } : {}),
       ...(includeTranslationStatuses ? { translation_statuses: buildTranslationStatuses(translations) } : {})
@@ -779,6 +861,14 @@ function truncateSummary(value, maxLength = 220) {
     return null;
   }
   return value.length > maxLength ? `${value.slice(0, maxLength)}...` : value;
+}
+
+function addColumnIfMissing(tableName, columnName, definition) {
+  const columns = queryAll(`PRAGMA table_info(${tableName})`);
+  if (columns.some((column) => column.name === columnName)) {
+    return;
+  }
+  getDb().exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
 }
 
 function stripLegacyMarketingText(value) {

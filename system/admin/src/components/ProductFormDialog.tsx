@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { columnsApi } from '@/api/columns'
 import { languagesApi } from '@/api/languages'
 import { productsApi } from '@/api/products'
 import { Button } from '@/components/ui/button'
@@ -19,15 +20,15 @@ interface ProductFormDialogProps {
   onOpenChange: (open: boolean) => void
   product?: Product
   mode: 'create' | 'edit'
-  defaultCategoryId?: number
+  defaultColumnId?: number
 }
 
-export default function ProductFormDialog({ open, onOpenChange, product, mode, defaultCategoryId = 1 }: ProductFormDialogProps) {
+export default function ProductFormDialog({ open, onOpenChange, product, mode, defaultColumnId }: ProductFormDialogProps) {
   const queryClient = useQueryClient()
   const [activeLanguage, setActiveLanguage] = useState('zh-CN')
   const [baseData, setBaseData] = useState({
     code: '',
-    category_id: defaultCategoryId,
+    column_id: undefined as number | undefined,
     images: [] as string[],
     is_featured_home: 0,
     is_visible: 1,
@@ -39,6 +40,9 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
     queryKey: ['languages'],
     queryFn: () => languagesApi.list(),
   })
+  const languages = languagesData?.data || []
+  const defaultLanguageCode = languages.find((item) => item.is_default === 1)?.code || 'zh-CN'
+  const availableLanguageCodes = languages.map((item) => item.code)
 
   const { data: productDetailData } = useQuery({
     queryKey: ['product-detail', product?.id, open],
@@ -46,9 +50,12 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
     enabled: open && mode === 'edit' && Boolean(product?.id),
   })
 
-  const languages = languagesData?.data || []
-  const defaultLanguageCode = languages.find((item) => item.is_default === 1)?.code || 'zh-CN'
-  const availableLanguageCodes = languages.map((item) => item.code)
+  const { data: columnsData } = useQuery({
+    queryKey: ['columns', defaultLanguageCode],
+    queryFn: () => columnsApi.list({ language: defaultLanguageCode }),
+  })
+
+  const productColumns = (columnsData?.data || []).filter((item) => item.model_code === 'product' && item.column_kind === 'category')
   const currentTranslation = translations[activeLanguage] || createEmptyTranslation()
 
   useEffect(() => {
@@ -57,7 +64,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
     if (source && mode === 'edit') {
       setBaseData({
         code: source.code || '',
-        category_id: source.category_id || 1,
+        column_id: source.column_id || undefined,
         images: Array.isArray(source.images) ? source.images : [],
         is_featured_home: source.is_featured_home || 0,
         is_visible: source.is_visible || 1,
@@ -71,7 +78,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
     if (mode === 'create') {
       setBaseData({
         code: '',
-        category_id: defaultCategoryId,
+        column_id: defaultColumnId,
         images: [],
         is_featured_home: 0,
         is_visible: 1,
@@ -82,7 +89,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
       })
       setActiveLanguage(defaultLanguageCode)
     }
-  }, [product, productDetailData, mode, defaultCategoryId, defaultLanguageCode])
+  }, [product, productDetailData, mode, defaultColumnId, defaultLanguageCode])
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -243,13 +250,22 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="category_id">分类ID</Label>
-              <Input
-                id="category_id"
-                type="number"
-                value={baseData.category_id}
-                onChange={(e) => setBaseData({ ...baseData, category_id: parseInt(e.target.value) })}
-              />
+              <Label>所属栏目</Label>
+              <Select
+                value={baseData.column_id ? String(baseData.column_id) : ''}
+                onValueChange={(value) => setBaseData({ ...baseData, column_id: Number.parseInt(value, 10) || undefined })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="请选择产品栏目" />
+                </SelectTrigger>
+                <SelectContent>
+                  {productColumns.map((column) => (
+                    <SelectItem key={column.id} value={String(column.id)}>
+                      {column.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="images">产品图片</Label>

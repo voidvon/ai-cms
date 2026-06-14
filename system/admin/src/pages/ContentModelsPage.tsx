@@ -218,7 +218,7 @@ function isProtectedField(fieldName: string) {
     'parent_id',
     'source_id',
     'source_type',
-    'category_id',
+    'column_id',
     'route_path',
     'custom_url',
     'sort_order',

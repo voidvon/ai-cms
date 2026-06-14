@@ -2,10 +2,13 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getSiteConfig } from './site.mjs';
 import { listColumns } from './columns.mjs';
+import { listColumnCategories } from './column-categories.mjs';
+import {
+  buildColumnTreeIndex,
+  isColumnUnderRoot
+} from './column-tree.mjs';
 import { listCorporationCategoriesAdmin, ensureCorporationCategoriesSchema } from './corporation-categories.mjs';
-import { listNewsCategories } from './news-categories.mjs';
 import { listNews } from './news.mjs';
-import { listProductCategories } from './product-categories.mjs';
 import { listProducts, ensureProductsSchema } from './products.mjs';
 
 const NEWS_ROOT_ID = 4;
@@ -105,14 +108,18 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   ensureCorporationCategoriesSchema();
 
   const columns = listColumns({ languageCode });
-  const productCategories = listProductCategories({ languageCode });
-  const newsCategories = listNewsCategories({ languageCode });
+  const productCategories = listColumnCategories('product', { languageCode });
+  const newsCategories = listColumnCategories('news', { languageCode });
   const products = listProducts({ visibleOnly: true, limit: 10000, languageCode });
   const newsItems = listNews({ limit: 10000, languageCode });
   const corporationCategories = collectCorporationCategories();
 
   const productCategoriesById = new Map(productCategories.map((item) => [toInteger(item.id, 0), item]));
   const newsCategoriesById = new Map(newsCategories.map((item) => [toInteger(item.id, 0), item]));
+  const newsColumns = columns.filter((item) => String(item.model_code || '') === 'news' && String(item.column_kind || '') === 'category');
+  const newsColumnById = new Map(newsColumns.map((item) => [toInteger(item.id, 0), item]));
+  const newsRootColumnId = resolveColumnIdBySource(columns, 'news_category', NEWS_ROOT_ID);
+  const serviceRootColumnId = resolveColumnIdBySource(columns, 'news_category', SERVICE_ROOT_ID);
   const corporationById = new Map(corporationCategories.map((item) => [toInteger(item.id, 0), item]));
   const pages = [];
 
@@ -204,7 +211,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   for (const category of productCategories) {
     const categoryId = toInteger(category.id, 0);
     const childCategories = productCategories.filter((item) => toInteger(item.parent_id, 0) === categoryId);
-    const categoryProducts = products.filter((item) => toInteger(item.category_id, 0) === categoryId).slice(0, MAX_LIST_SAMPLE_ITEMS);
+    const categoryProducts = products.filter((item) => toInteger(item.column_id, 0) === categoryId).slice(0, MAX_LIST_SAMPLE_ITEMS);
     pages.push(createPage({
       title: category.name,
       routePath: `/valve/${categoryId}.html`,
@@ -219,7 +226,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   }
 
   for (const product of products) {
-    const category = productCategoriesById.get(toInteger(product.category_id, 0));
+    const category = productCategoriesById.get(toInteger(product.column_id, 0));
     pages.push(createPage({
       title: product.name,
       routePath: `/product/${product.id}.html`,
@@ -234,8 +241,16 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     }));
   }
 
-  const newsRootCategories = newsCategories.filter((item) => toInteger(item.parent_id, 0) === NEWS_ROOT_ID);
-  const serviceRootCategories = newsCategories.filter((item) => toInteger(item.parent_id, 0) === SERVICE_ROOT_ID);
+  const newsRootCategories = newsCategories.filter((item) => {
+    const columnId = resolveColumnIdBySource(columns, 'news_category', item.id);
+    const parentId = toInteger(newsColumnById.get(columnId)?.parent_id, 0);
+    return newsRootColumnId > 0 && parentId === newsRootColumnId;
+  });
+  const serviceRootCategories = newsCategories.filter((item) => {
+    const columnId = resolveColumnIdBySource(columns, 'news_category', item.id);
+    const parentId = toInteger(newsColumnById.get(columnId)?.parent_id, 0);
+    return serviceRootColumnId > 0 && parentId === serviceRootColumnId;
+  });
 
   pages.push(createPage({
     title: '新闻中心',
@@ -255,7 +270,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
 
   for (const category of newsRootCategories) {
     const categoryId = toInteger(category.id, 0);
-    const items = newsItems.filter((item) => toInteger(item.category_id, 0) === categoryId).slice(0, MAX_LIST_SAMPLE_ITEMS);
+    const items = newsItems.filter((item) => toInteger(item.column_id, 0) === categoryId).slice(0, MAX_LIST_SAMPLE_ITEMS);
     pages.push(createPage({
       title: category.name,
       routePath: `/news/${categoryId}.html`,
@@ -267,7 +282,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
 
   for (const category of serviceRootCategories) {
     const categoryId = toInteger(category.id, 0);
-    const items = newsItems.filter((item) => toInteger(item.category_id, 0) === categoryId).slice(0, MAX_LIST_SAMPLE_ITEMS);
+    const items = newsItems.filter((item) => toInteger(item.column_id, 0) === categoryId).slice(0, MAX_LIST_SAMPLE_ITEMS);
     pages.push(createPage({
       title: category.name,
       routePath: `/service/${categoryId}.html`,
@@ -278,10 +293,10 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   }
 
   for (const item of newsItems) {
-    const category = newsCategoriesById.get(toInteger(item.category_id, 0));
-    const parentId = toInteger(category?.parent_id, 0);
-    const isNews = parentId === NEWS_ROOT_ID;
-    const isService = parentId === SERVICE_ROOT_ID;
+    const category = newsCategoriesById.get(toInteger(item.column_id, 0));
+    const columnId = toInteger(item.column_id, 0);
+    const isNews = newsRootColumnId > 0 && isColumnUnderRoot(newsColumnById, columnId, newsRootColumnId);
+    const isService = serviceRootColumnId > 0 && isColumnUnderRoot(newsColumnById, columnId, serviceRootColumnId);
     if (!isNews && !isService) {
       continue;
     }
@@ -744,6 +759,16 @@ function normalizeSiteUrl(value) {
     return '';
   }
   return normalized;
+}
+
+function resolveColumnIdBySource(columns, sourceType, sourceId) {
+  return toInteger(
+    columns.find((item) => (
+      String(item.source_type || '') === String(sourceType || '')
+      && toInteger(item.source_id, 0) === toInteger(sourceId, 0)
+    ))?.id,
+    0
+  );
 }
 
 function toInteger(value, fallback = 0) {

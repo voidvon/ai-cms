@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { columnsApi } from '@/api/columns'
 import { languagesApi } from '@/api/languages'
 import { newsApi } from '@/api/news'
 import { Button } from '@/components/ui/button'
@@ -19,14 +20,14 @@ interface NewsFormDialogProps {
   onOpenChange: (open: boolean) => void
   news?: News
   mode: 'create' | 'edit'
-  defaultCategoryId?: number
+  defaultColumnId?: number
 }
 
-export default function NewsFormDialog({ open, onOpenChange, news, mode, defaultCategoryId = 1 }: NewsFormDialogProps) {
+export default function NewsFormDialog({ open, onOpenChange, news, mode, defaultColumnId }: NewsFormDialogProps) {
   const queryClient = useQueryClient()
   const [activeLanguage, setActiveLanguage] = useState('zh-CN')
   const [baseData, setBaseData] = useState({
-    category_id: defaultCategoryId,
+    column_id: undefined as number | undefined,
     picture: '',
     is_featured_home: 0,
     created_at: '',
@@ -37,6 +38,9 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
     queryKey: ['languages'],
     queryFn: () => languagesApi.list(),
   })
+  const languages = languagesData?.data || []
+  const defaultLanguageCode = languages.find((item) => item.is_default === 1)?.code || 'zh-CN'
+  const availableLanguageCodes = languages.map((item) => item.code)
 
   const { data: newsDetailData } = useQuery({
     queryKey: ['news-detail', news?.id, open],
@@ -44,9 +48,12 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
     enabled: open && mode === 'edit' && Boolean(news?.id),
   })
 
-  const languages = languagesData?.data || []
-  const defaultLanguageCode = languages.find((item) => item.is_default === 1)?.code || 'zh-CN'
-  const availableLanguageCodes = languages.map((item) => item.code)
+  const { data: columnsData } = useQuery({
+    queryKey: ['columns', defaultLanguageCode],
+    queryFn: () => columnsApi.list({ language: defaultLanguageCode }),
+  })
+
+  const newsColumns = (columnsData?.data || []).filter((item) => item.model_code === 'news' && item.column_kind === 'category')
   const currentTranslation = translations[activeLanguage] || createEmptyTranslation()
 
   useEffect(() => {
@@ -54,7 +61,7 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
 
     if (source && mode === 'edit') {
       setBaseData({
-        category_id: source.category_id || defaultCategoryId,
+        column_id: source.column_id || undefined,
         picture: source.picture || source.image || '',
         is_featured_home: source.is_featured_home || source.is_featured || 0,
         created_at: source.created_at || '',
@@ -66,7 +73,7 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
 
     if (mode === 'create') {
       setBaseData({
-        category_id: defaultCategoryId,
+        column_id: defaultColumnId,
         picture: '',
         is_featured_home: 0,
         created_at: '',
@@ -76,7 +83,7 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
       })
       setActiveLanguage(defaultLanguageCode)
     }
-  }, [news, newsDetailData, mode, defaultCategoryId, defaultLanguageCode])
+  }, [news, newsDetailData, mode, defaultColumnId, defaultLanguageCode])
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -228,13 +235,22 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
               <div className="text-sm text-muted-foreground">这些字段不区分语言，所有语言共用同一份数据。</div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="category_id">分类ID</Label>
-              <Input
-                id="category_id"
-                type="number"
-                value={baseData.category_id}
-                onChange={(e) => setBaseData({ ...baseData, category_id: parseInt(e.target.value) })}
-              />
+              <Label>所属栏目</Label>
+              <Select
+                value={baseData.column_id ? String(baseData.column_id) : ''}
+                onValueChange={(value) => setBaseData({ ...baseData, column_id: Number.parseInt(value, 10) || undefined })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="请选择新闻栏目" />
+                </SelectTrigger>
+                <SelectContent>
+                  {newsColumns.map((column) => (
+                    <SelectItem key={column.id} value={String(column.id)}>
+                      {column.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-2">
               <Label htmlFor="picture">封面图片</Label>

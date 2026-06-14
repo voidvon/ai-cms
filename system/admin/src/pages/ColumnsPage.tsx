@@ -63,6 +63,10 @@ type EditingCategoryTarget =
   | { type: CategoryModel; id: number }
   | null
 
+type EditingColumnTarget =
+  | Column
+  | null
+
 type CategoryTreeTarget = {
   type: CategoryModel
   id: number
@@ -96,6 +100,7 @@ export default function ColumnsPage() {
   const [categoryFormOpen, setCategoryFormOpen] = useState(false)
   const [categoryFormMode, setCategoryFormMode] = useState<'create' | 'edit'>('edit')
   const [editingCategoryTarget, setEditingCategoryTarget] = useState<EditingCategoryTarget>(null)
+  const [editingColumnTarget, setEditingColumnTarget] = useState<EditingColumnTarget>(null)
   const [creatingCategoryTarget, setCreatingCategoryTarget] = useState<CategoryTreeTarget>(null)
   const [bindingCategoryTarget, setBindingCategoryTarget] = useState<CategoryTreeTarget>(null)
   const [categoryDeleteDialogOpen, setCategoryDeleteDialogOpen] = useState(false)
@@ -177,9 +182,7 @@ export default function ColumnsPage() {
   const isManualLinkColumn = selectedColumn?.column_kind === 'link'
   const isManualSingleColumn = selectedColumn?.column_kind === 'single' && selectedColumn?.source_type === 'single_page'
   const isManualColumn = isManualLinkColumn || isManualSingleColumn
-  const selectedSourceId = selectedColumn?.source_id || 0
   const selectedSourceType = selectedColumn?.source_type || ''
-  const selectedCategoryId = selectedSourceType.endsWith('_category') ? selectedSourceId : 0
   const categoryFormTargetType = editingCategoryTarget?.type || creatingCategoryTarget?.type
 
   const { data: productsData, isLoading: productsLoading } = useQuery({
@@ -187,8 +190,8 @@ export default function ColumnsPage() {
     queryFn: () => productsApi.list({
       page,
       limit,
-      category_id: selectedSourceType === 'product_category' ? selectedSourceId : undefined,
-      include_descendants: selectedSourceType === 'product_category' ? 1 : undefined,
+      column_id: isProductColumn ? (selectedColumn?.id || undefined) : undefined,
+      include_descendants: isProductColumn ? 1 : undefined,
       language: defaultLanguageCode,
     }),
     enabled: isProductColumn,
@@ -200,8 +203,8 @@ export default function ColumnsPage() {
     queryFn: () => newsApi.list({
       page,
       limit,
-      category_id: selectedSourceType === 'news_category' ? selectedSourceId : undefined,
-      include_descendants: selectedSourceType === 'news_category' ? 1 : undefined,
+      column_id: isNewsColumn ? (selectedColumn?.id || undefined) : undefined,
+      include_descendants: isNewsColumn ? 1 : undefined,
       language: defaultLanguageCode,
     }),
     enabled: isNewsColumn,
@@ -364,6 +367,25 @@ export default function ColumnsPage() {
     },
   })
 
+  const updateSystemColumnMutation = useMutation({
+    mutationFn: ({ id, value }: { id: number; value: ManualColumnFormValue }) => columnsApi.update(id, value.base.show_in_nav !== undefined ? {
+      parent_id: value.base.parent_id,
+      sort_order: value.base.sort_order,
+      show_in_nav: value.base.show_in_nav,
+      translations: value.translations,
+    } : value),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['columns'] })
+      toast.success('栏目已更新')
+      setManualColumnDialogOpen(false)
+      setEditingManualColumn(null)
+      setEditingColumnTarget(null)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || error.message || '更新失败')
+    },
+  })
+
   const deleteManualColumnMutation = useMutation({
     mutationFn: (id: number) => columnsApi.delete(id),
     onSuccess: () => {
@@ -436,6 +458,7 @@ export default function ColumnsPage() {
     setManualColumnDialogOpen(open)
     if (!open) {
       setEditingManualColumn(null)
+      setEditingColumnTarget(null)
       setManualColumnDialogMode('create')
     }
   }
@@ -453,6 +476,10 @@ export default function ColumnsPage() {
   }
 
   const handleSubmitManualColumn = (value: ManualColumnFormValue, templateId: string) => {
+    if (editingColumnTarget) {
+      updateSystemColumnMutation.mutate({ id: editingColumnTarget.id, value })
+      return
+    }
     if (manualColumnDialogMode === 'edit' && editingManualColumn) {
       updateManualColumnMutation.mutate({ id: editingManualColumn.id, value, templateId })
       return
@@ -478,8 +505,20 @@ export default function ColumnsPage() {
       return
     }
 
+    if (target.id === 0) {
+      setEditingCategoryTarget(null)
+      setCreatingCategoryTarget(null)
+      setEditingColumnTarget(column)
+      setManualColumnDialogMode('edit')
+      setManualColumnDialogKind('link')
+      setEditingManualColumn(column)
+      setManualColumnDialogOpen(true)
+      return
+    }
+
     setCategoryFormMode('edit')
     setCreatingCategoryTarget(null)
+    setEditingColumnTarget(null)
     setEditingCategoryTarget({ type: target.type, id: target.id })
     setCategoryFormOpen(true)
   }
@@ -535,42 +574,9 @@ export default function ColumnsPage() {
       return null
     }
 
-    if (isEditableManualColumn(column)) {
-      return (
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 shrink-0 opacity-0 transition-opacity group-hover/tree-item:opacity-100 group-focus-within/tree-item:opacity-100 data-[state=open]:opacity-100"
-              aria-label={`${column.name}栏目设置`}
-              onClick={(event) => event.stopPropagation()}
-            >
-              <Ellipsis className="size-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem onSelect={() => handleEditManualColumn(column)}>
-              <Pencil className="size-4" />
-              编辑栏目
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
-              onSelect={() => handleDeleteManualColumn(column)}
-            >
-              <Trash2 className="size-4" />
-              删除栏目
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )
-    }
-
-    if (!isEditableCategoryColumn(column)) {
-      return null
-    }
+    const categoryTarget = getCategoryTreeTarget(column)
+    const canEditManualColumn = isEditableManualColumn(column)
+    const hasActions = canEditManualColumn || Boolean(categoryTarget)
 
     return (
       <DropdownMenu>
@@ -580,34 +586,71 @@ export default function ColumnsPage() {
             variant="ghost"
             size="icon"
             className="h-7 w-7 shrink-0 opacity-0 transition-opacity group-hover/tree-item:opacity-100 group-focus-within/tree-item:opacity-100 data-[state=open]:opacity-100"
-            aria-label={`${column.name}分类设置`}
+            aria-label={`${column.name}栏目设置`}
             onClick={(event) => event.stopPropagation()}
           >
             <Ellipsis className="size-4" />
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem onSelect={() => handleCreateChildCategory(column)}>
-            <Plus className="size-4" />
-            添加子分类
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onSelect={() => handleEditColumnCategory(column)}>
-            <Pencil className="size-4" />
-            编辑分类
-          </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => handleTemplateBinding(column)}>
-            <LayoutTemplate className="size-4" />
-            模板绑定
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            className="text-destructive focus:text-destructive"
-            onSelect={() => handleDeleteColumnCategory(column)}
-          >
-            <Trash2 className="size-4" />
-            删除分类
-          </DropdownMenuItem>
+          {!hasActions ? (
+            <DropdownMenuItem disabled>
+              <Ellipsis className="size-4" />
+              暂无可用操作
+            </DropdownMenuItem>
+          ) : null}
+
+          {categoryTarget ? (
+            <DropdownMenuItem onSelect={() => handleCreateChildCategory(column)}>
+              <Plus className="size-4" />
+              添加子分类
+            </DropdownMenuItem>
+          ) : null}
+
+          {categoryTarget && canEditManualColumn ? <DropdownMenuSeparator /> : null}
+
+          {canEditManualColumn ? (
+            <DropdownMenuItem onSelect={() => handleEditManualColumn(column)}>
+              <Pencil className="size-4" />
+              编辑栏目
+            </DropdownMenuItem>
+          ) : null}
+
+          {categoryTarget ? (
+            <DropdownMenuItem onSelect={() => handleEditColumnCategory(column)}>
+              <Pencil className="size-4" />
+              编辑分类
+            </DropdownMenuItem>
+          ) : null}
+
+          {categoryTarget ? (
+            <DropdownMenuItem onSelect={() => handleTemplateBinding(column)}>
+              <LayoutTemplate className="size-4" />
+              模板绑定
+            </DropdownMenuItem>
+          ) : null}
+
+          {(canEditManualColumn || categoryTarget) ? <DropdownMenuSeparator /> : null}
+
+          {canEditManualColumn ? (
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={() => handleDeleteManualColumn(column)}
+            >
+              <Trash2 className="size-4" />
+              删除栏目
+            </DropdownMenuItem>
+          ) : null}
+
+          {categoryTarget ? (
+            <DropdownMenuItem
+              className="text-destructive focus:text-destructive"
+              onSelect={() => handleDeleteColumnCategory(column)}
+            >
+              <Trash2 className="size-4" />
+              删除分类
+            </DropdownMenuItem>
+          ) : null}
         </DropdownMenuContent>
       </DropdownMenu>
     )
@@ -840,7 +883,7 @@ export default function ColumnsPage() {
         onOpenChange={setProductFormOpen}
         product={editingProduct}
         mode={editingProduct ? 'edit' : 'create'}
-        defaultCategoryId={selectedSourceType === 'product_category' ? selectedSourceId : 1}
+        defaultColumnId={isProductColumn ? (selectedColumn?.id || undefined) : undefined}
       />
 
       <NewsFormDialog
@@ -848,7 +891,7 @@ export default function ColumnsPage() {
         onOpenChange={setNewsFormOpen}
         news={editingNews}
         mode={editingNews ? 'edit' : 'create'}
-        defaultCategoryId={selectedSourceType === 'news_category' ? selectedSourceId : 1}
+        defaultColumnId={isNewsColumn ? (selectedColumn?.id || undefined) : undefined}
       />
 
       <Dialog open={rootCategoryDialogOpen} onOpenChange={handleRootCategoryDialogOpenChange}>
@@ -939,12 +982,13 @@ export default function ColumnsPage() {
         open={manualColumnDialogOpen}
         onOpenChange={handleManualColumnDialogOpenChange}
         mode={manualColumnDialogMode}
-        column={editingManualColumn}
+        column={editingColumnTarget || editingManualColumn}
         initialKind={manualColumnDialogKind}
+        forceBasicOnly={Boolean(editingColumnTarget)}
         columns={columns}
         templates={contentTemplates}
         initialTemplateId={selectedManualColumnBinding?.template_id ? String(selectedManualColumnBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
-        submitting={createManualColumnMutation.isPending || updateManualColumnMutation.isPending}
+        submitting={createManualColumnMutation.isPending || updateManualColumnMutation.isPending || updateSystemColumnMutation.isPending}
         onSubmit={handleSubmitManualColumn}
       />
 
@@ -1091,7 +1135,7 @@ function ProductTable({
                 </div>
               </TableCell>
               <TableCell>{product.code || '-'}</TableCell>
-              <TableCell>{product.category_name || product.category_id || '-'}</TableCell>
+              <TableCell>{product.category_name || product.column_id || '-'}</TableCell>
               <TableCell>
                 <div className="flex flex-wrap gap-1">
                   {(product.translation_statuses || []).length === 0 ? (
@@ -1158,7 +1202,7 @@ function NewsTable({
             <TableRow key={item.id}>
               <TableCell>{item.id}</TableCell>
               <TableCell className="font-medium">{item.title}</TableCell>
-              <TableCell>{item.category_name || item.category_id || '-'}</TableCell>
+              <TableCell>{item.category_name || item.column_id || '-'}</TableCell>
               <TableCell>
                 <div className="flex flex-wrap gap-1">
                   {(item.translation_statuses || []).length === 0 ? (
@@ -1276,7 +1320,7 @@ function CategoryDetailPanel({
     ? (column.route_path || '-')
     : column.source_type === 'custom_link'
       ? (column.custom_url || '-')
-      : `源ID ${column.source_id || '-'}`
+      : `栏目ID ${column.id || '-'}`
   const seoSummary = column.seo_description?.trim() || '-'
   const seoKeywords = column.seo_keywords?.trim() || '-'
 
@@ -1296,7 +1340,7 @@ function CategoryDetailPanel({
           <div className="break-all">{detailText}</div>
           <div>模型：{column.model_code || '-'}</div>
           <div>来源类型：{column.source_type || '-'}</div>
-          {target ? <div>分类ID：{target.id}</div> : null}
+          {target ? <div>栏目ID：{target.id}</div> : null}
         </div>
         <div className="space-y-1 text-sm">
           <div className="text-muted-foreground">SEO</div>
@@ -1383,12 +1427,6 @@ function compareColumnTreeNodes(a: ColumnTreeNode, b: ColumnTreeNode) {
   return a.id - b.id
 }
 
-function isEditableCategoryColumn(column: Column) {
-  return column.source_type === 'product_category'
-    || column.source_type === 'news_category'
-    || column.source_type === 'corporation_category'
-}
-
 function getColumnKindLabel(column: Column) {
   if (column.column_kind === 'single') {
     return '单页'
@@ -1470,10 +1508,20 @@ function getTemplateTargetType(model: CategoryModel): Extract<TemplateBinding['t
 }
 
 function getCategoryTreeTarget(column: Column): CategoryTreeTarget {
+  if (column.source_type === 'product_root') {
+    return {
+      type: 'product',
+      id: column.id,
+      columnId: column.id,
+      name: column.name,
+      targetType: 'product_category',
+    }
+  }
+
   if (column.source_type === 'product_category') {
     return {
       type: 'product',
-      id: column.source_id,
+      id: column.id,
       columnId: column.id,
       name: column.name,
       targetType: 'product_category',
@@ -1483,7 +1531,7 @@ function getCategoryTreeTarget(column: Column): CategoryTreeTarget {
   if (column.source_type === 'news_category') {
     return {
       type: 'news',
-      id: column.source_id,
+      id: column.id,
       columnId: column.id,
       name: column.name,
       targetType: 'news_category',
@@ -1493,7 +1541,17 @@ function getCategoryTreeTarget(column: Column): CategoryTreeTarget {
   if (column.source_type === 'corporation_category') {
     return {
       type: 'corporation',
-      id: column.source_id,
+      id: column.id,
+      columnId: column.id,
+      name: column.name,
+      targetType: 'corporation_category',
+    }
+  }
+
+  if (column.source_type === 'corporation_root') {
+    return {
+      type: 'corporation',
+      id: column.id,
       columnId: column.id,
       name: column.name,
       targetType: 'corporation_category',
@@ -1509,7 +1567,7 @@ function toTreeItem(column: ColumnTreeNode): TreeItemData<Column> {
     ? (column.route_path || '-')
     : column.source_type === 'custom_link'
       ? (column.custom_url || '-')
-      : `源ID ${column.source_id || '-'}`
+      : `栏目ID ${column.id || '-'}`
   const seoSummary = column.seo_description?.trim() || column.seo_keywords?.trim() || ''
 
   return {

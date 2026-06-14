@@ -4,6 +4,7 @@ import {
   deleteManualColumn,
   getColumnById,
   listColumns,
+  updateColumnRecord,
   updateManualColumn
 } from '../../services/columns.mjs';
 
@@ -52,7 +53,16 @@ export default async function columnsRoutes(app) {
     onRequest: [requireAuth]
   }, async (request, reply) => {
     try {
-      const column = updateManualColumn(request.params.id, request.body || {});
+      const current = getColumnById(request.params.id, { includeTranslations: true });
+      if (!current) {
+        reply.code(404);
+        return { success: false, message: '栏目不存在' };
+      }
+
+      const isManual = String(current.source_type || '') === 'custom_link' || String(current.source_type || '') === 'single_page';
+      const column = isManual
+        ? updateManualColumn(request.params.id, request.body || {})
+        : updateColumnRecord(request.params.id, request.body || {});
       if (!column) {
         reply.code(404);
         return { success: false, message: '栏目不存在' };

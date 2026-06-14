@@ -4,9 +4,13 @@ import { CONTENT_ROOT } from './config.mjs';
 import { getDb, queryAll } from './db.mjs';
 import { createCmsTemplateRuntime } from './cms-template-runtime.mjs';
 import { listColumns } from './services/columns.mjs';
-import { listNewsCategories } from './services/news-categories.mjs';
+import { listColumnCategories } from './services/column-categories.mjs';
+import {
+  buildColumnTreeIndex,
+  getDescendantColumnIds,
+  isColumnUnderRoot
+} from './services/column-tree.mjs';
 import { listNews } from './services/news.mjs';
-import { listProductCategories } from './services/product-categories.mjs';
 import { listProducts } from './services/products.mjs';
 import { buildRobotsTxt } from './services/robots.mjs';
 import { buildSitemap } from './services/sitemap.mjs';
@@ -62,8 +66,8 @@ function setGlobalCategorySlugMap(categories) {
  */
 function buildProductUrl(product, categorySlugPath = null) {
   // 如果没有传入 categorySlugPath，尝试从全局映射查找
-  if (!categorySlugPath && product.category_id) {
-    categorySlugPath = globalCategorySlugMap.get(normalizeInteger(product.category_id, 0));
+  if (!categorySlugPath && product.column_id) {
+    categorySlugPath = globalCategorySlugMap.get(normalizeInteger(product.column_id, 0));
   }
 
   if (product.slug && categorySlugPath) {
@@ -356,12 +360,12 @@ export function buildServiceCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, fi
 }
 
 export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, finalizeClientAssets = true, languageCode = null } = {}) {
-  const categories = listProductCategories({ languageCode });
-  const products = listProducts({ visibleOnly: false, limit: 10000, languageCode });
   const templateContext = getLegacyTemplateContext(languageCode);
+  const categories = templateContext.productCategories;
+  const products = listProducts({ visibleOnly: false, limit: 10000, languageCode });
   const categoryMap = new Map(categories.map((item) => [item.id, item]));
   const childrenByParent = groupBy(categories, (item) => normalizeInteger(item.parent_id, 0));
-  const productsByCategory = groupBy(products, (item) => normalizeInteger(item.category_id, 0));
+  const productsByCategory = groupBy(products, (item) => normalizeInteger(item.column_id, 0));
   const topLevelCategories = childrenByParent.get(0) || [];
   let filesWritten = 0;
 
@@ -418,14 +422,14 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, fi
 export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange, finalizeClientAssets = true, languageCode = null } = {}) {
   const products = filterByIdRange(listProducts({ visibleOnly: false, limit: 10000, languageCode }), idRange);
   const templateContext = getLegacyTemplateContext(languageCode);
-  const productMap = groupBy(products, (item) => normalizeInteger(item.category_id, 0));
+  const productMap = groupBy(products, (item) => normalizeInteger(item.column_id, 0));
   const categoryMap = new Map(templateContext.productCategories.map((item) => [normalizeInteger(item.id, 0), item]));
   let filesWritten = 0;
 
   for (const product of products) {
-    const categoryProducts = (productMap.get(normalizeInteger(product.category_id, 0)) || []).filter((item) => item.id !== product.id);
+    const categoryProducts = (productMap.get(normalizeInteger(product.column_id, 0)) || []).filter((item) => item.id !== product.id);
     const relatedProducts = categoryProducts.slice().sort(compareBySortAndId).slice(0, 4);
-    const category = categoryMap.get(normalizeInteger(product.category_id, 0)) || null;
+    const category = categoryMap.get(normalizeInteger(product.column_id, 0)) || null;
     const parent = category ? categoryMap.get(normalizeInteger(category.parent_id, 0)) || null : null;
     const html = renderCmsSitePage('legacy-product-detail', buildLegacyProductDetailPageProps({
       templateContext,
@@ -435,7 +439,7 @@ export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
       parent
     }), templateContext, {
       targets: [
-        { target_type: 'product_category', target_id: normalizeInteger(product.category_id, 0) },
+        { target_type: 'product_category', target_id: normalizeInteger(product.column_id, 0) },
         { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.product }
       ]
     });
@@ -504,16 +508,25 @@ function buildLegacyNewsSectionCategoryPages({
   sectionLabel,
   summaryClassName
 }) {
-  const categories = listNewsCategories({ languageCode });
+  const columns = listColumns({ languageCode });
   const templateContext = getLegacyTemplateContext(languageCode);
-  const categoryList = categories.filter((item) => normalizeInteger(item.parent_id, 0) === rootId);
+  const rootColumnId = normalizeInteger(
+    columns.find((item) => (
+      String(item.source_type || '') === 'news_category'
+      && normalizeInteger(item.source_id, 0) === normalizeInteger(rootId, 0)
+    ))?.id,
+    0
+  );
+  const categoryList = templateContext.newsCategories.filter((item) => (
+    rootColumnId > 0 && normalizeInteger(item.parent_id, 0) === rootColumnId
+  ));
   const items = listNews({ limit: 10000, languageCode });
-  const categoryBuckets = groupBy(items, (item) => normalizeInteger(item.category_id, 0));
-  const directRootItems = (categoryBuckets.get(rootId) || []).slice();
+  const categoryBuckets = groupBy(items, (item) => normalizeInteger(item.column_id, 0));
+  const directRootItems = (categoryBuckets.get(rootColumnId) || []).slice();
   const effectiveCategoryList = categoryList.length > 0
     ? categoryList
     : directRootItems.length > 0
-      ? [categories.find((item) => normalizeInteger(item.id, 0) === rootId) || {
+      ? [templateContext.newsCategories.find((item) => normalizeInteger(item.id, 0) === rootId) || {
         id: rootId,
         name: dirName === 'service' ? '服务' : '公司新闻',
         parent_id: 0
@@ -547,12 +560,13 @@ function buildLegacyNewsSectionCategoryPages({
         ]
       });
 
-      const fileName = pageNumber === 1 ? `${categoryId}.html` : `${categoryId}-${pageNumber}.html`;
+      const publicCategoryId = resolveLegacyCategoryPublicId(category);
+      const fileName = pageNumber === 1 ? `${publicCategoryId}.html` : `${publicCategoryId}-${pageNumber}.html`;
       writeTextFile(outputRoot, path.join(dirName, fileName), html, templateContext.site);
       filesWritten += 1;
 
       if (pageNumber === 1) {
-        writeTextFile(outputRoot, path.join(dirName, `${categoryId}-1.html`), html, templateContext.site);
+        writeTextFile(outputRoot, path.join(dirName, `${publicCategoryId}-1.html`), html, templateContext.site);
         filesWritten += 1;
         if (categoryIndex === 0) {
           writeTextFile(outputRoot, path.join(dirName, 'index.html'), html, templateContext.site);
@@ -578,24 +592,33 @@ function buildLegacyNewsSectionDetailPages({
   sectionKey,
   sectionLabel
 }) {
-  const categories = listNewsCategories({ languageCode });
+  const columns = listColumns({ languageCode });
   const templateContext = getLegacyTemplateContext(languageCode);
-  const allowedCategoryIds = new Set(getDescendantNewsCategoryIds(categories, rootId));
-  const categoryMap = new Map(categories.map((item) => [item.id, item]));
+  const newsColumns = columns.filter((item) => String(item.model_code || '') === 'news' && String(item.column_kind || '') === 'category');
+  const newsColumnIndex = buildColumnTreeIndex(newsColumns);
+  const rootColumnId = normalizeInteger(
+    columns.find((item) => (
+      String(item.source_type || '') === 'news_category'
+      && normalizeInteger(item.source_id, 0) === normalizeInteger(rootId, 0)
+    ))?.id,
+    0
+  );
+  const allowedColumnIds = new Set(rootColumnId > 0 ? getDescendantColumnIds(newsColumnIndex.childrenByParentId, rootColumnId) : []);
+  const categoryMap = new Map(templateContext.newsCategories.map((item) => [item.id, item]));
   const allItems = listNews({ limit: 10000, languageCode })
-    .filter((item) => allowedCategoryIds.has(normalizeInteger(item.category_id, 0)))
+    .filter((item) => allowedColumnIds.has(normalizeInteger(item.column_id, 0)))
     .slice()
     .sort((left, right) => left.id - right.id);
   const items = filterByIdRange(allItems, idRange);
-  const categoryBuckets = groupBy(allItems, (item) => normalizeInteger(item.category_id, 0));
+  const categoryBuckets = groupBy(allItems, (item) => normalizeInteger(item.column_id, 0));
   let filesWritten = 0;
 
   for (const item of items) {
-    const siblings = (categoryBuckets.get(normalizeInteger(item.category_id, 0)) || []).slice().sort((left, right) => left.id - right.id);
+    const siblings = (categoryBuckets.get(normalizeInteger(item.column_id, 0)) || []).slice().sort((left, right) => left.id - right.id);
     const currentIndex = siblings.findIndex((entry) => entry.id === item.id);
     const previous = currentIndex > 0 ? siblings[currentIndex - 1] : null;
     const next = currentIndex >= 0 && currentIndex < siblings.length - 1 ? siblings[currentIndex + 1] : null;
-    const category = categoryMap.get(normalizeInteger(item.category_id, 0));
+    const category = categoryMap.get(normalizeInteger(item.column_id, 0));
     const html = renderCmsSitePage('legacy-article-detail', buildLegacyArticleDetailPageProps({
       templateContext,
       section: dirName === 'service' ? 'service' : 'news',
@@ -605,7 +628,7 @@ function buildLegacyNewsSectionDetailPages({
       next
     }), templateContext, {
       targets: [
-        { target_type: 'news_category', target_id: normalizeInteger(item.category_id, 0) },
+        { target_type: 'news_category', target_id: normalizeInteger(item.column_id, 0) },
         { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.article }
       ]
     });
@@ -623,11 +646,14 @@ function buildLegacyNewsSectionDetailPages({
 
 function getLegacyTemplateContext(languageCode = null) {
   const site = getSiteConfig(languageCode);
+  const columns = listColumns({ languageCode });
+  const productCategories = listColumnCategories('product', { languageCode }).slice().sort(compareCategoryOrder);
+  const newsCategories = listColumnCategories('news', { languageCode }).slice().sort(compareCategoryOrder);
 
   return {
     site,
     languageCode,
-    columns: listColumns({ languageCode }),
+    columns,
     corporationCategories: queryAll(
       `
         SELECT id, name, parent_id, sort_order, is_external, external_url, legacy_extra
@@ -635,8 +661,8 @@ function getLegacyTemplateContext(languageCode = null) {
         ORDER BY parent_id ASC, sort_order ASC, id ASC
       `
     ).map(normalizeCorporationCategoryRecord),
-    productCategories: listProductCategories({ languageCode }).slice().sort(compareCategoryOrder),
-    newsCategories: listNewsCategories({ languageCode }).slice().sort(compareCategoryOrder)
+    productCategories,
+    newsCategories
   };
 }
 
@@ -773,7 +799,19 @@ function buildLegacyHomePageProps(templateContext) {
       };
     });
   const homeNewsItems = listNews({ limit: 6, languageCode: templateContext.languageCode })
-    .filter((item) => normalizeInteger(item.category_id, 0) !== SERVICE_ROOT_ID)
+    .filter((item) => {
+      const newsRootColumnId = normalizeInteger(
+        templateContext.columns.find((entry) => (
+          String(entry.source_type || '') === 'news_category'
+          && normalizeInteger(entry.source_id, 0) === NEWS_ROOT_ID
+        ))?.id,
+        0
+      );
+      const columnId = normalizeInteger(item.column_id, 0);
+      const newsColumns = templateContext.columns.filter((entry) => String(entry.model_code || '') === 'news');
+      const newsColumnById = new Map(newsColumns.map((entry) => [normalizeInteger(entry.id, 0), entry]));
+      return newsRootColumnId > 0 ? isColumnUnderRoot(newsColumnById, columnId, newsRootColumnId) : false;
+    })
     .slice(0, 6)
     .map((item) => ({
       id: item.id,
@@ -785,9 +823,17 @@ function buildLegacyHomePageProps(templateContext) {
     }));
   const homeServiceItems = listNews({ limit: 1000, languageCode: templateContext.languageCode })
     .filter((item) => {
-      const categoryId = normalizeInteger(item.category_id, 0);
-      const chain = [SERVICE_ROOT_ID, ...getDescendantNewsCategoryIds(templateContext.newsCategories, SERVICE_ROOT_ID)];
-      return chain.includes(categoryId);
+      const columnId = normalizeInteger(item.column_id, 0);
+      const newsColumns = templateContext.columns.filter((entry) => String(entry.model_code || '') === 'news');
+      const newsColumnById = new Map(newsColumns.map((entry) => [normalizeInteger(entry.id, 0), entry]));
+      const serviceRootColumnId = normalizeInteger(
+        templateContext.columns.find((entry) => (
+          String(entry.source_type || '') === 'news_category'
+          && normalizeInteger(entry.source_id, 0) === SERVICE_ROOT_ID
+        ))?.id,
+        0
+      );
+      return serviceRootColumnId > 0 ? isColumnUnderRoot(newsColumnById, columnId, serviceRootColumnId) : false;
     })
     .slice(0, 6)
     .map((item) => ({
@@ -1406,7 +1452,7 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, item, cat
   const sectionDir = isService ? 'service' : 'news';
   const sectionLabel = isService ? '阀门知识' : '公司新闻';
   const relatedArticles = listNews({ limit: 10000, languageCode: templateContext.languageCode })
-    .filter((entry) => normalizeInteger(entry.category_id, 0) === normalizeInteger(item.category_id, 0) && normalizeInteger(entry.id, 0) !== normalizeInteger(item.id, 0))
+    .filter((entry) => normalizeInteger(entry.column_id, 0) === normalizeInteger(item.column_id, 0) && normalizeInteger(entry.id, 0) !== normalizeInteger(item.id, 0))
     .slice(0, 3);
   return {
     ...buildLegacyCommonProps(templateContext),
@@ -1440,7 +1486,7 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, item, cat
     title: item.title || '',
     newsKeywords: item.keywords || '',
     newsDescription: resolveRenderableNewsSummary(item) || '',
-    typeId: normalizeInteger(item.category_id, 0),
+    typeId: normalizeInteger(item.column_id, 0),
     catName: category?.name || '',
     bodyHtml: normalizeLegacyRichTextHtml(item.content_html, templateContext.site) || '',
     currentArticle: {
@@ -2234,28 +2280,36 @@ function buildLegacyIndexFeaturedProductLinks() {
 }
 
 function buildLegacyIndexNews() {
-  const items = queryAll(
-    `
-      SELECT id, title
-      FROM news
-      WHERE category_id IN (6, 17)
-      ORDER BY id DESC
-      LIMIT 10
-    `
+  const columns = listColumns();
+  const newsColumns = columns.filter((item) => String(item.model_code || '') === 'news');
+  const newsColumnById = new Map(newsColumns.map((item) => [normalizeInteger(item.id, 0), item]));
+  const newsRootColumnId = normalizeInteger(
+    columns.find((item) => (
+      String(item.source_type || '') === 'news_category'
+      && normalizeInteger(item.source_id, 0) === NEWS_ROOT_ID
+    ))?.id,
+    0
   );
+  const items = listNews({ limit: 10000 })
+    .filter((item) => newsRootColumnId > 0 && isColumnUnderRoot(newsColumnById, normalizeInteger(item.column_id, 0), newsRootColumnId))
+    .slice(0, 10);
   return items.map((item) => `<li><a href="/news/detail/${item.id}.html" class="Ba">${escapeHtml(item.title || '')}</a></li>`).join('');
 }
 
 function buildLegacyServiceIndex() {
-  const items = queryAll(
-    `
-      SELECT id, title
-      FROM news
-      WHERE category_id IN (13, 14)
-      ORDER BY id DESC
-      LIMIT 16
-    `
+  const columns = listColumns();
+  const newsColumns = columns.filter((item) => String(item.model_code || '') === 'news');
+  const newsColumnById = new Map(newsColumns.map((item) => [normalizeInteger(item.id, 0), item]));
+  const serviceRootColumnId = normalizeInteger(
+    columns.find((item) => (
+      String(item.source_type || '') === 'news_category'
+      && normalizeInteger(item.source_id, 0) === SERVICE_ROOT_ID
+    ))?.id,
+    0
   );
+  const items = listNews({ limit: 10000 })
+    .filter((item) => serviceRootColumnId > 0 && isColumnUnderRoot(newsColumnById, normalizeInteger(item.column_id, 0), serviceRootColumnId))
+    .slice(0, 16);
   return items.map((item) => `<li><a href="/service/detail/${item.id}.html">${escapeHtml(item.title || '')}</a></li>`).join('');
 }
 

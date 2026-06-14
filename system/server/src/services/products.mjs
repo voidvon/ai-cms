@@ -26,7 +26,9 @@ export function ensureProductsSchema() {
 
   ensureLanguagesSchema();
   addColumnIfMissing('products', 'updated_at', 'TEXT');
+  addColumnIfMissing('products', 'column_id', 'INTEGER');
   migrateProductImagesColumn();
+  migrateProductsToColumnOnly();
   execute(
     `
       UPDATE products
@@ -83,7 +85,7 @@ export function listProducts({ featured = false, visibleOnly = true, limit = 20,
     `
       SELECT
         id,
-        category_id,
+        column_id,
         name,
         code,
         summary,
@@ -111,35 +113,35 @@ export function listProducts({ featured = false, visibleOnly = true, limit = 20,
   });
 }
 
-export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, includeDescendants = false, languageCode = null } = {}) {
+export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, columnId = null, includeDescendants = false, languageCode = null } = {}) {
   ensureProductsSchema();
   const selectedLanguage = resolveLanguageForContent(languageCode);
   const safeLimit = Math.min(Math.max(Number.parseInt(String(limit), 10) || 50, 1), 200);
   const safePage = Math.max(Number.parseInt(String(page), 10) || 1, 1);
-  const safeCategoryId = Number.parseInt(String(categoryId ?? ''), 10);
-  const hasCategoryFilter = Number.isInteger(safeCategoryId) && safeCategoryId > 0;
+  const safeColumnId = Number.parseInt(String(columnId ?? ''), 10);
+  const hasColumnFilter = Number.isInteger(safeColumnId) && safeColumnId > 0;
   const withDescendants = Boolean(includeDescendants);
   const offset = (safePage - 1) * safeLimit;
-  const categoryTree = hasCategoryFilter && withDescendants
+  const categoryTree = hasColumnFilter && withDescendants
     ? `
       WITH RECURSIVE category_tree(id) AS (
-        SELECT id FROM product_categories WHERE id = ?
+        SELECT id FROM columns WHERE id = ?
         UNION ALL
         SELECT child.id
-        FROM product_categories child
+        FROM columns child
         INNER JOIN category_tree parent ON child.parent_id = parent.id
       )
     `
     : '';
-  const where = hasCategoryFilter
+  const where = hasColumnFilter
     ? withDescendants
-      ? 'WHERE p.category_id IN (SELECT id FROM category_tree)'
-      : 'WHERE p.category_id = ?'
+      ? 'WHERE p.column_id IN (SELECT id FROM category_tree)'
+      : 'WHERE p.column_id = ?'
     : '';
-  const countWhere = hasCategoryFilter
+  const countWhere = hasColumnFilter
     ? withDescendants
-      ? 'WHERE category_id IN (SELECT id FROM category_tree)'
-      : 'WHERE category_id = ?'
+      ? 'WHERE column_id IN (SELECT id FROM category_tree)'
+      : 'WHERE column_id = ?'
     : '';
 
   const rows = queryAll(
@@ -147,7 +149,7 @@ export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, inc
       ${categoryTree}
       SELECT
         p.id,
-        p.category_id,
+        p.column_id,
         p.name,
         p.code,
         p.summary,
@@ -162,13 +164,13 @@ export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, inc
         p.updated_at,
         c.name AS category_name
       FROM products p
-      LEFT JOIN product_categories c ON c.id = p.category_id
+      LEFT JOIN columns c ON c.id = p.column_id
       ${where}
       ORDER BY p.sort_order ASC, p.id DESC
       LIMIT ?
       OFFSET ?
     `,
-    hasCategoryFilter ? [safeCategoryId, safeLimit, offset] : [safeLimit, offset]
+    hasColumnFilter ? [safeColumnId, safeLimit, offset] : [safeLimit, offset]
   );
 
   const total = queryOne(
@@ -178,7 +180,7 @@ export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, inc
       FROM products
       ${countWhere}
     `,
-    hasCategoryFilter ? [safeCategoryId] : []
+    hasColumnFilter ? [safeColumnId] : []
   )?.count || 0;
   return {
     items: hydrateProducts(rows, {
@@ -201,7 +203,7 @@ export function getProductById(id, { languageCode = null, includeTranslations = 
     `
       SELECT
         id,
-        category_id,
+        column_id,
         name,
         code,
         summary,
@@ -246,7 +248,7 @@ export function searchProducts(rawQuery, limit = 20, { languageCode = null } = {
     `
       SELECT
         id,
-        category_id,
+        column_id,
         name,
         code,
         summary,
@@ -290,22 +292,21 @@ export function searchProductsPaged(rawQuery, { page = 1, limit = 20, languageCo
   if (normalizedQuery === '') {
     const rows = queryAll(
       `
-        SELECT
-          id,
-          category_id,
-          name,
-          code,
-          summary,
-          content_html,
-          images,
-          keywords,
-          is_featured_home,
-          is_visible,
-          sort_order,
+      SELECT
+        id,
+        column_id,
+        name,
+        code,
+        summary,
+        content_html,
+        images,
+        keywords,
+        is_featured_home,
+        is_visible,
+        sort_order,
         slug,
-          slug,
-          updated_at
-        FROM products
+        updated_at
+      FROM products
         WHERE is_visible = 1
         ORDER BY sort_order ASC, id DESC
         LIMIT ?
@@ -335,7 +336,7 @@ export function searchProductsPaged(rawQuery, { page = 1, limit = 20, languageCo
     `
       SELECT
         id,
-        category_id,
+        column_id,
         name,
         code,
         summary,
@@ -399,7 +400,7 @@ export function createProduct(input) {
   const result = execute(
     `
       INSERT INTO products (
-        category_id,
+        column_id,
         name,
         code,
         summary,
@@ -411,10 +412,10 @@ export function createProduct(input) {
         sort_order,
         slug,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
-      payload.base.category_id,
+      payload.base.column_id,
       defaultTranslation.name,
       payload.base.code,
       defaultTranslation.summary,
@@ -424,7 +425,7 @@ export function createProduct(input) {
       payload.base.is_featured_home,
       payload.base.is_visible,
       payload.base.sort_order,
-        slug,
+      payload.base.slug,
       now
     ]
   );
@@ -465,7 +466,7 @@ export function updateProduct(id, input) {
     `
       UPDATE products
       SET
-        category_id = ?,
+        column_id = ?,
         name = ?,
         code = ?,
         summary = ?,
@@ -475,11 +476,12 @@ export function updateProduct(id, input) {
         is_featured_home = ?,
         is_visible = ?,
         sort_order = ?,
+        slug = ?,
         updated_at = ?
       WHERE id = ?
     `,
     [
-      payload.base.category_id,
+      payload.base.column_id,
       defaultTranslation.name,
       payload.base.code,
       defaultTranslation.summary,
@@ -489,7 +491,7 @@ export function updateProduct(id, input) {
       payload.base.is_featured_home,
       payload.base.is_visible,
       payload.base.sort_order,
-        slug,
+      payload.base.slug,
       now,
       id
     ]
@@ -526,7 +528,7 @@ export function normalizeProductInput(input) {
   }
 
   return {
-    category_id: toNullableInteger(input.category_id),
+    column_id: toNullableInteger(input.column_id),
     name,
     code: toNullableString(input.code),
     summary: toNullableString(input.summary),
@@ -540,13 +542,15 @@ export function normalizeProductInput(input) {
 }
 
 function normalizeProductBaseInput(input) {
+  const columnId = toNullableInteger(input?.column_id);
   return {
-    category_id: toNullableInteger(input?.category_id),
+    column_id: columnId,
     code: toNullableString(input?.code),
     images: normalizeImagesInput(input?.images ?? input?.small_image),
     is_featured_home: toBooleanInt(input?.is_featured_home),
     is_visible: toBooleanInt(input?.is_visible, 1),
-    sort_order: toInteger(input?.sort_order, 0)
+    sort_order: toInteger(input?.sort_order, 0),
+    slug: toNullableString(input?.slug)
   };
 }
 
@@ -670,6 +674,89 @@ function migrateProductImagesColumn() {
   }
 }
 
+function migrateProductsToColumnOnly() {
+  const columns = queryAll('PRAGMA table_info(products)');
+  const hasCategoryId = columns.some((column) => column.name === 'category_id');
+  if (!hasCategoryId) {
+    return;
+  }
+
+  execute(
+    `
+      UPDATE products
+      SET column_id = (
+        SELECT c.id
+        FROM columns c
+        WHERE c.source_type = 'product_category'
+          AND c.source_id = products.category_id
+        LIMIT 1
+      )
+      WHERE (column_id IS NULL OR column_id = 0)
+        AND category_id IS NOT NULL
+    `
+  );
+
+  getDb().exec(`
+    DROP TRIGGER IF EXISTS products_ai;
+    DROP TRIGGER IF EXISTS products_ad;
+    DROP TRIGGER IF EXISTS products_au;
+    DROP INDEX IF EXISTS idx_products_category_id;
+
+    ALTER TABLE products RENAME TO products_legacy_category;
+
+    CREATE TABLE products (
+      id INTEGER PRIMARY KEY,
+      name TEXT NOT NULL,
+      code TEXT,
+      summary TEXT,
+      content_html TEXT,
+      small_image TEXT,
+      keywords TEXT,
+      is_featured_home INTEGER NOT NULL DEFAULT 0,
+      is_visible INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      legacy_extra TEXT,
+      updated_at TEXT,
+      images TEXT NOT NULL DEFAULT '[]',
+      slug TEXT,
+      column_id INTEGER
+    );
+
+    INSERT INTO products (
+      id, name, code, summary, content_html, small_image, keywords,
+      is_featured_home, is_visible, sort_order, legacy_extra, updated_at, images, slug, column_id
+    )
+    SELECT
+      id, name, code, summary, content_html, small_image, keywords,
+      is_featured_home, is_visible, sort_order, legacy_extra, updated_at, images, slug, column_id
+    FROM products_legacy_category;
+
+    DROP TABLE products_legacy_category;
+
+    CREATE INDEX IF NOT EXISTS idx_products_visible_sort ON products(is_visible, sort_order, id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_products_slug ON products(slug) WHERE slug IS NOT NULL;
+
+    CREATE TRIGGER products_ai AFTER INSERT ON products BEGIN
+      INSERT INTO products_fts(rowid, name, summary, keywords)
+      VALUES (new.id, coalesce(new.name, ''), coalesce(new.summary, ''), coalesce(new.keywords, ''));
+    END;
+
+    CREATE TRIGGER products_ad AFTER DELETE ON products BEGIN
+      INSERT INTO products_fts(products_fts, rowid, name, summary, keywords)
+      VALUES('delete', old.id, old.name, old.summary, old.keywords);
+    END;
+
+    CREATE TRIGGER products_au AFTER UPDATE ON products BEGIN
+      INSERT INTO products_fts(products_fts, rowid, name, summary, keywords)
+      VALUES('delete', old.id, old.name, old.summary, old.keywords);
+      INSERT INTO products_fts(rowid, name, summary, keywords)
+      VALUES (new.id, coalesce(new.name, ''), coalesce(new.summary, ''), coalesce(new.keywords, ''));
+    END;
+
+    INSERT INTO products_fts(products_fts) VALUES('rebuild');
+  `);
+}
+
 function markProductImagesActive(imagesValue) {
   for (const relativePath of parseImagesValue(imagesValue)) {
     if (!isManagedProductImage(relativePath)) {
@@ -760,6 +847,7 @@ function normalizeProductRecord(row) {
 
   return {
     ...row,
+    column_id: toNullableInteger(row.column_id),
     images: parseImagesValue(row.images ?? row.small_image),
     primary_image: resolvePrimaryProductImage(row.images ?? row.small_image),
     name: resolveProductName(row),
@@ -796,6 +884,7 @@ function hydrateProducts(rows, {
 
     return {
       ...merged,
+      column_id: toNullableInteger(merged.column_id),
       current_language_code: fallbackTranslation?.language_code || selectedLanguage.code,
       ...(includeTranslations ? { translations: mapTranslationsForApi(translationMap) } : {}),
       ...(includeTranslationStatuses ? { translation_statuses: buildTranslationStatuses(translations) } : {})

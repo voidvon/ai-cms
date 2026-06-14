@@ -636,7 +636,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
 
   if (effectiveMode === 'product-detail') {
     const product = getPreviewProduct();
-    const category = getPreviewProductCategory(product.category_id);
+    const category = getPreviewProductCategory(product.column_id);
     return {
       ...props,
       ...buildPreviewPageContext({
@@ -705,7 +705,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
   if (effectiveMode === 'article-detail' || effectiveMode === 'service-detail') {
     const sectionConfig = buildPreviewArticleSectionConfig(effectiveMode, template);
     const article = getPreviewArticle();
-    const category = getPreviewNewsCategory(article.category_id);
+    const category = getPreviewNewsCategory(article.column_id);
     return {
       ...props,
       ...buildPreviewPageContext({
@@ -736,7 +736,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       title: article.title,
       newsKeywords: article.keywords || article.title,
       newsDescription: article.summary || '',
-      typeId: article.category_id || category.id,
+      typeId: article.column_id || category.id,
       catName: category.name,
       bodyHtml: article.content_html || article.summary || '',
       previousHtml: '<span class="Font_2e4690_a">没有上一篇</span>',
@@ -882,14 +882,14 @@ function buildPreviewPageContext({ pageType, title, url, section, category, cont
 function getPreviewProduct() {
   return queryOne(
     `
-      SELECT id, category_id, name, code, summary, content_html, images, keywords
+      SELECT id, column_id, name, code, summary, content_html, images, keywords
       FROM products
       ORDER BY is_featured_home DESC, sort_order ASC, id DESC
       LIMIT 1
     `
   ) || {
     id: 1,
-    category_id: 1,
+    column_id: 1,
     name: '示例产品',
     code: 'DEMO',
     summary: '示例产品摘要',
@@ -903,7 +903,7 @@ function getPreviewProduct() {
 function getPreviewProducts(limit = 8) {
   const rows = queryAll(
     `
-      SELECT id, category_id, name, code, summary, content_html, images, keywords
+      SELECT id, column_id, name, code, summary, content_html, images, keywords
       FROM products
       ORDER BY is_featured_home DESC, sort_order ASC, id DESC
       LIMIT ?
@@ -914,36 +914,40 @@ function getPreviewProducts(limit = 8) {
 }
 
 function getPreviewProductCategory(id = null) {
-  const row = id ? queryOne(
+  const rows = queryAll(
     `
-      SELECT id, name, parent_id, seo_keywords, seo_description
-      FROM product_categories
-      WHERE id = ?
-      LIMIT 1
-    `,
-    [id]
-  ) : queryOne(
-    `
-      SELECT id, name, parent_id, seo_keywords, seo_description
-      FROM product_categories
+      SELECT id, parent_id, name, seo_keywords, seo_description
+      FROM columns
+      WHERE model_code = 'product'
+        AND source_type = 'product_category'
       ORDER BY parent_id ASC, sort_order ASC, id ASC
-      LIMIT 1
     `
   );
-  return row || { id: 1, name: '产品', parent_id: 0, seo_keywords: '产品', seo_description: '' };
+  const row = id
+    ? rows.find((item) => toInteger(item.id, 0) === toInteger(id, 0))
+    : rows[0];
+  return row
+    ? {
+        id: toInteger(row.id, 0),
+        name: row.name || '产品',
+        parent_id: toInteger(row.parent_id, 0),
+        seo_keywords: row.seo_keywords || row.name || '产品',
+        seo_description: row.seo_description || ''
+      }
+    : { id: 1, name: '产品', parent_id: 0, seo_keywords: '产品', seo_description: '' };
 }
 
 function getPreviewArticle() {
   return queryOne(
     `
-      SELECT id, category_id, title, summary, content_html, keywords, created_at
+      SELECT id, column_id, title, summary, content_html, keywords, created_at
       FROM news
       ORDER BY coalesce(created_at, '') DESC, id DESC
       LIMIT 1
     `
   ) || {
     id: 1,
-    category_id: 1,
+    column_id: 1,
     title: '示例文章',
     summary: '示例文章摘要',
     content_html: '示例文章正文',
@@ -955,7 +959,7 @@ function getPreviewArticle() {
 function getPreviewArticles(limit = 6) {
   const rows = queryAll(
     `
-      SELECT id, category_id, title, summary, content_html, keywords, created_at
+      SELECT id, column_id, title, summary, content_html, keywords, created_at
       FROM news
       ORDER BY coalesce(created_at, '') DESC, id DESC
       LIMIT ?
@@ -966,23 +970,25 @@ function getPreviewArticles(limit = 6) {
 }
 
 function getPreviewNewsCategory(id = null) {
-  const row = id ? queryOne(
+  const rows = queryAll(
     `
-      SELECT id, name, parent_id
-      FROM news_categories
-      WHERE id = ?
-      LIMIT 1
-    `,
-    [id]
-  ) : queryOne(
-    `
-      SELECT id, name, parent_id
-      FROM news_categories
+      SELECT id, parent_id, name
+      FROM columns
+      WHERE model_code = 'news'
+        AND source_type = 'news_category'
       ORDER BY parent_id ASC, sort_order ASC, id ASC
-      LIMIT 1
     `
   );
-  return row || { id: 1, name: '公司新闻', parent_id: 0 };
+  const row = id
+    ? rows.find((item) => toInteger(item.id, 0) === toInteger(id, 0))
+    : rows[0];
+  return row
+    ? {
+        id: toInteger(row.id, 0),
+        name: row.name || '公司新闻',
+        parent_id: toInteger(row.parent_id, 0)
+      }
+    : { id: 1, name: '公司新闻', parent_id: 0 };
 }
 
 function getPreviewCorporationCategory() {
@@ -1185,15 +1191,28 @@ function buildPreviewColumnUrl(column, rowsById = new Map()) {
 }
 
 function buildPreviewNewsMenuItems(rootId, dirName, activeId = 0) {
-  const rows = queryAll(
+  const rootColumn = queryOne(
     `
-      SELECT id, name
-      FROM news_categories
-      WHERE parent_id = ?
-      ORDER BY sort_order ASC, id ASC
+      SELECT id
+      FROM columns
+      WHERE model_code = 'news'
+        AND source_type = 'news_category'
+        AND source_id = ?
+      LIMIT 1
     `,
     [rootId]
   );
+  const rows = rootColumn ? queryAll(
+    `
+      SELECT id, name
+      FROM columns
+      WHERE parent_id = ?
+        AND model_code = 'news'
+        AND source_type = 'news_category'
+      ORDER BY sort_order ASC, id ASC
+    `,
+    [rootColumn.id]
+  ) : [];
   const items = rows.length > 0
     ? rows
     : [{ id: activeId || 1, name: '示例分类' }];
@@ -1207,14 +1226,26 @@ function buildPreviewNewsMenuItems(rootId, dirName, activeId = 0) {
 
 function buildPreviewProductMenuItems(category) {
   const currentCategory = category || getPreviewProductCategory();
-  const rows = queryAll(
+  const rootColumn = queryOne(
     `
-      SELECT id, name, parent_id
-      FROM product_categories
-      WHERE parent_id = 0
-      ORDER BY sort_order ASC, id ASC
+      SELECT id
+      FROM columns
+      WHERE model_code = 'product'
+        AND source_type = 'product_root'
+      LIMIT 1
     `
   );
+  const rows = rootColumn ? queryAll(
+    `
+      SELECT id, name, 0 AS parent_id
+      FROM columns
+      WHERE parent_id = ?
+        AND model_code = 'product'
+        AND source_type = 'product_category'
+      ORDER BY sort_order ASC, id ASC
+    `,
+    [rootColumn.id]
+  ) : [];
   const items = rows.length > 0
     ? rows
     : [currentCategory].filter(Boolean);

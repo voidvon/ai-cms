@@ -3,9 +3,13 @@ import path from 'node:path';
 import { queryAll } from '../db.mjs';
 import { getSiteConfig } from './site.mjs';
 import { listColumns } from './columns.mjs';
-import { listNewsCategories } from './news-categories.mjs';
+import { listColumnCategories } from './column-categories.mjs';
+import {
+  buildColumnTreeIndex,
+  getDescendantColumnIds,
+  isColumnUnderRoot
+} from './column-tree.mjs';
 import { ensureCorporationCategoriesSchema } from './corporation-categories.mjs';
-import { listProductCategories } from './product-categories.mjs';
 import { ensureProductsSchema } from './products.mjs';
 import { escapeHtml } from '../utils/html.mjs';
 
@@ -107,16 +111,20 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
 
   const entries = new Map();
   const columns = listColumns({ languageCode });
-  const productCategories = listProductCategories({ languageCode });
-  const newsCategories = listNewsCategories({ languageCode });
+  const productCategories = listColumnCategories('product', { languageCode });
+  const newsCategories = listColumnCategories('news', { languageCode });
+  const newsColumns = columns.filter((item) => String(item.model_code || '') === 'news' && String(item.column_kind || '') === 'category');
+  const newsColumnById = new Map(newsColumns.map((item) => [toInteger(item.id, 0), item]));
+  const newsRootColumnId = resolveColumnIdBySource(columns, 'news_category', NEWS_ROOT_ID);
+  const serviceRootColumnId = resolveColumnIdBySource(columns, 'news_category', SERVICE_ROOT_ID);
   const products = queryAll(`
-    SELECT id, category_id, is_visible, updated_at
+    SELECT id, column_id, is_visible, updated_at
     FROM products
     WHERE is_visible = 1
     ORDER BY sort_order ASC, id DESC
   `);
   const newsItems = queryAll(`
-    SELECT id, category_id, created_at
+    SELECT id, column_id, created_at
     FROM news
     ORDER BY coalesce(created_at, '') DESC, id DESC
   `);
@@ -128,8 +136,8 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   `);
   const productCountByCategory = buildDescendantProductCountMap(productCategories, products);
   const latestProductDateByCategory = buildDescendantLatestDateMap(productCategories, products, generatedAt);
-  const newsCountByCategory = buildCountMap(newsItems, (item) => toInteger(item.category_id, 0));
-  const latestNewsDateByCategory = buildLatestDateMap(newsItems, (item) => toInteger(item.category_id, 0), 'created_at', generatedAt);
+  const newsCountByCategory = buildCountMap(newsItems, (item) => toInteger(item.column_id, 0));
+  const latestNewsDateByCategory = buildLatestDateMap(newsItems, (item) => toInteger(item.column_id, 0), 'created_at', generatedAt);
   const corporationLatestDateById = buildCorporationLatestDateMap(corporationCategories, generatedAt);
   const corporationIndexId = corporationCategories.find((item) => toInteger(item.parent_id, 0) === CORPORATION_ROOT_ID)?.id
     ?? corporationCategories[0]?.id
@@ -164,7 +172,7 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   addSectionEntries({
     entries,
     siteUrl,
-    categories: newsCategories.filter((item) => toInteger(item.parent_id, 0) === NEWS_ROOT_ID),
+    categories: newsCategories.filter((item) => toInteger(item.parent_id, 0) === newsRootColumnId),
     itemsPerPage: NEWS_LIST_PAGE_SIZE,
     sectionDir: 'news',
     getItemCount: (categoryId) => newsCountByCategory.get(categoryId) || 0,
@@ -174,7 +182,7 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   addSectionEntries({
     entries,
     siteUrl,
-    categories: newsCategories.filter((item) => toInteger(item.parent_id, 0) === SERVICE_ROOT_ID),
+    categories: newsCategories.filter((item) => toInteger(item.parent_id, 0) === serviceRootColumnId),
     itemsPerPage: NEWS_LIST_PAGE_SIZE,
     sectionDir: 'service',
     getItemCount: (categoryId) => newsCountByCategory.get(categoryId) || 0,
@@ -182,12 +190,11 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   });
 
   for (const item of newsItems) {
-    const categoryId = toInteger(item.category_id, 0);
-    const parentId = getNewsCategoryParentId(newsCategories, categoryId);
-    if (parentId === NEWS_ROOT_ID) {
+    const columnId = toInteger(item.column_id, 0);
+    if (newsRootColumnId > 0 && isColumnUnderRoot(newsColumnById, columnId, newsRootColumnId)) {
       addEntry(entries, siteUrl, `/news/detail/${item.id}.html`, item.created_at || generatedAt);
     }
-    if (parentId === SERVICE_ROOT_ID) {
+    if (serviceRootColumnId > 0 && isColumnUnderRoot(newsColumnById, columnId, serviceRootColumnId)) {
       addEntry(entries, siteUrl, `/service/detail/${item.id}.html`, item.created_at || generatedAt);
     }
   }
@@ -310,7 +317,7 @@ function buildDescendantProductCountMap(categories, products) {
     childrenByParent.get(parentId).push(category);
   }
 
-  const directCount = buildCountMap(products, (item) => toInteger(item.category_id, 0));
+  const directCount = buildCountMap(products, (item) => toInteger(item.column_id, 0));
   const result = new Map();
 
   function countCategory(categoryId) {
@@ -368,7 +375,7 @@ function buildDescendantLatestDateMap(categories, products, fallbackDate) {
 
   const directLatest = new Map();
   for (const product of products) {
-    const categoryId = toInteger(product.category_id, 0);
+    const categoryId = toInteger(product.column_id, 0);
     const current = toSitemapDate(product.updated_at || fallbackDate);
     const previous = directLatest.get(categoryId);
     if (!previous || current > previous) {
@@ -437,9 +444,14 @@ function buildCorporationLatestDateMap(categories, fallbackDate) {
   return result;
 }
 
-function getNewsCategoryParentId(categories, categoryId) {
-  const category = categories.find((item) => toInteger(item.id, 0) === categoryId);
-  return toInteger(category?.parent_id, 0);
+function resolveColumnIdBySource(columns, sourceType, sourceId) {
+  return toInteger(
+    columns.find((item) => (
+      String(item.source_type || '') === String(sourceType || '')
+      && toInteger(item.source_id, 0) === toInteger(sourceId, 0)
+    ))?.id,
+    0
+  );
 }
 
 function renderSitemapXml(entries) {
