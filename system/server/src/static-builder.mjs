@@ -37,28 +37,37 @@ const SERVICE_ROOT_ID = 12;
 
 // 全局分类slug映射，在静态生成时填充
 let globalCategorySlugMap = new Map();
+let globalCategoryMap = new Map(); // 新增：存储完整的分类对象映射
 
 /**
  * 设置全局分类slug映射
  */
 function setGlobalCategorySlugMap(categories) {
+  globalCategoryMap = new Map(
+    categories.map(cat => [normalizeInteger(cat.id, 0), cat])
+  );
+
+  // 为每个分类构建完整的slug路径
   globalCategorySlugMap = new Map(
-    categories.map(cat => [normalizeInteger(cat.id, 0), cat.slug])
+    categories.map(cat => {
+      const slugPath = buildCategorySlugPath(cat, globalCategoryMap);
+      return [normalizeInteger(cat.id, 0), slugPath.join('/')];
+    })
   );
 }
 
 /**
  * 生成产品URL
- * 格式: /products/{category-slug}/{product-slug}/
+ * 格式: /products/{parent-slug}/{category-slug}/{product-slug}/
  */
-function buildProductUrl(product, categorySlug = null) {
-  // 如果没有传入 categorySlug，尝试从全局映射查找
-  if (!categorySlug && product.category_id) {
-    categorySlug = globalCategorySlugMap.get(normalizeInteger(product.category_id, 0));
+function buildProductUrl(product, categorySlugPath = null) {
+  // 如果没有传入 categorySlugPath，尝试从全局映射查找
+  if (!categorySlugPath && product.category_id) {
+    categorySlugPath = globalCategorySlugMap.get(normalizeInteger(product.category_id, 0));
   }
 
-  if (product.slug && categorySlug) {
-    return `/products/${categorySlug}/${product.slug}/`;
+  if (product.slug && categorySlugPath) {
+    return `/products/${categorySlugPath}/${product.slug}/`;
   }
   if (product.slug) {
     return `/products/${product.slug}/`;
@@ -358,10 +367,10 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, fi
 
   const rootCategory = {
     id: 0,
-    name: '产品展示',
+    name: '产品',
     parent_id: 0,
-    seo_keywords: templateContext.site.web_name || '产品展示',
-    seo_description: templateContext.site.web_name || '产品展示'
+    seo_keywords: templateContext.site.web_name || '产品',
+    seo_description: templateContext.site.web_name || '产品'
   };
 
   filesWritten += writeProductCategoryPageSet({
@@ -371,7 +380,8 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, fi
     parent: null,
     children: topLevelCategories,
     items: products.slice().sort(compareBySortAndId),
-    fileStem: 'index'
+    fileStem: 'index',
+    categoryMap
   });
 
   for (const category of categories) {
@@ -394,7 +404,8 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, fi
       parent,
       children,
       items,
-      fileStem: String(categoryId)
+      fileStem: String(categoryId),
+      categoryMap
     });
   }
 
@@ -434,8 +445,11 @@ export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
     const categorySlug = category?.slug;
 
     if (product.slug && categorySlug) {
-      // 使用分类和产品 slug: /products/{category-slug}/{product-slug}/index.html
-      outputPath = path.join('products', categorySlug, product.slug, 'index.html');
+      // 构建完整的分类路径（包含所有祖先分类）
+      const categorySlugPath = buildCategorySlugPath(category, categoryMap);
+
+      // 使用完整分类路径和产品 slug: /products/{parent-slug}/{category-slug}/{product-slug}/index.html
+      outputPath = path.join('products', ...categorySlugPath, product.slug, 'index.html');
     } else if (product.slug) {
       // 只有产品 slug: /products/{slug}/index.html
       outputPath = path.join('products', product.slug, 'index.html');
@@ -501,7 +515,7 @@ function buildLegacyNewsSectionCategoryPages({
     : directRootItems.length > 0
       ? [categories.find((item) => normalizeInteger(item.id, 0) === rootId) || {
         id: rootId,
-        name: dirName === 'service' ? '服务支持' : '新闻资讯',
+        name: dirName === 'service' ? '服务' : '公司新闻',
         parent_id: 0
       }]
       : [];
@@ -627,20 +641,59 @@ function getLegacyTemplateContext(languageCode = null) {
 }
 
 function buildLegacyCommonProps(templateContext) {
-  // 为 footer 准备顶级产品分类数据（只包含一级分类，排除id=0的根分类）
-  const footerProductCategories = templateContext.productCategories
+  // 为 footer 准备产品分类数据：一级分类及其二级分类
+  const level1Categories = templateContext.productCategories
     .filter(cat => normalizeInteger(cat.parent_id, 0) === 0 && normalizeInteger(cat.id, 0) !== 0)
-    .slice(0, 11) // 取前11个一级分类，与原版一致
-    .map(cat => ({
+    .slice(0, 11); // 取前11个一级分类
+
+  // 创建分类映射表，用于构建完整URL
+  const categoryMap = new Map(templateContext.productCategories.map((item) => [normalizeInteger(item.id, 0), item]));
+
+  const footerProductCategories = level1Categories.map(cat => {
+    // 获取该一级分类下的所有二级分类
+    const catId = normalizeInteger(cat.id, 0);
+    const children = templateContext.productCategories
+      .filter(subCat => normalizeInteger(subCat.parent_id, 0) === catId)
+      .map(subCat => ({
+        id: subCat.id,
+        name: subCat.name,
+        slug: subCat.slug,
+        url: buildLegacyProductCategoryUrl(subCat, categoryMap)
+      }));
+
+    return {
       id: cat.id,
       name: cat.name,
       slug: cat.slug,
-      url: cat.slug ? `/products/${cat.slug}/` : `/products/${cat.id}.html`
-    }));
+      url: cat.slug ? `/products/${cat.slug}/` : `/products/${cat.id}.html`,
+      children // 添加二级分类
+    };
+  });
+
+  // 构建siteColumns用于header导航（保留原始的顶级栏目结构）
+  const siteColumns = buildLegacySiteColumns(templateContext.columns, { productCategories: templateContext.productCategories });
+  
+  // 构建footer专用的栏目结构（展开产品分类）
+  const footerColumns = [];
+  for (const col of siteColumns) {
+    if (col.modelCode === 'product' && col.name === '产品') {
+      // 为每个一级产品分类创建独立的栏目用于footer
+      for (const cat of footerProductCategories.slice(0, 11)) {
+        footerColumns.push({
+          ...col,
+          name: cat.name,
+          url: cat.url,
+          children: cat.children && cat.children.length > 0 ? cat.children : [cat]
+        });
+      }
+    }
+    // 不添加其他栏目到footer
+  }
 
   return {
     site: templateContext.site,
-    siteColumns: buildLegacySiteColumns(templateContext.columns, { productCategories: templateContext.productCategories }),
+    siteColumns,
+    footerColumns,
     footerProductCategories,
     fragments: {
       indextopHtml: '',
@@ -834,7 +887,7 @@ function buildLegacySiteColumns(columns, options = {}) {
     }))
     .filter((item) => item.url)
     .map((item) => {
-      // 特殊处理：如果是产品展示栏目（product_root），用真实的产品分类替换其children
+      // 特殊处理：如果是产品栏目（product_root），用真实的产品分类替换其children
       if (item.sourceType === 'product_root' && options.productCategories) {
         const topCategories = options.productCategories
           .filter(cat => normalizeInteger(cat.parent_id, 0) === 0 && normalizeInteger(cat.id, 0) !== 0)
@@ -1033,16 +1086,80 @@ function buildLegacySingleColumnPageProps(templateContext, column) {
   };
 }
 
-function buildLegacyProductListPageProps({ templateContext, category, parent, children, pageItems, pageNumber, pageCount, totalRecords }) {
+function buildLegacyProductListPageProps({ templateContext, category, parent, children, pageItems, pageNumber, pageCount, totalRecords, categoryMap = null }) {
   const rootLevelCategories = templateContext.productCategories.filter((item) => normalizeInteger(item.parent_id, 0) === 0);
   const fileStem = normalizeInteger(category.id, 0) === 0 ? 'index' : String(category.id);
+
+  // 如果没有传入 categoryMap，则创建一个
+  if (!categoryMap) {
+    categoryMap = new Map(templateContext.productCategories.map((item) => [normalizeInteger(item.id, 0), item]));
+  }
+
   const productNavigation = buildLegacyProductNavigation({
     categories: templateContext.productCategories,
     currentCategory: category,
     currentParent: parent,
-    fallbackCategories: rootLevelCategories.length > 0 ? rootLevelCategories : [category].filter(Boolean)
+    fallbackCategories: rootLevelCategories.length > 0 ? rootLevelCategories : [category].filter(Boolean),
+    categoryMap
   });
-  const categoryPageData = normalizeLegacyCategoryPageData(category?.page_data);
+  let categoryPageData = normalizeLegacyCategoryPageData(category?.page_data);
+
+  // 修正 pageData.cards 中的子分类 URL，使用完整的层级路径
+  if (categoryPageData && Array.isArray(categoryPageData.cards) && categoryPageData.cards.length > 0) {
+    categoryPageData = {
+      ...categoryPageData,
+      cards: categoryPageData.cards.map((card) => {
+        // 尝试从 children 中找到匹配的分类
+        const matchingChild = (children || []).find((child) =>
+          card.title === child.name ||
+          card.link?.includes(`/${child.id}.html`) ||
+          (child.slug && card.link?.includes(`/${child.slug}`))
+        );
+        if (matchingChild) {
+          return {
+            ...card,
+            href: buildLegacyProductCategoryUrl(matchingChild, categoryMap),
+            link: buildLegacyProductCategoryUrl(matchingChild, categoryMap)
+          };
+        }
+        return card;
+      })
+    };
+  }
+
+  // 修正 pageData.models 中的产品 URL，使用完整的层级路径并添加尾部斜杠
+  if (categoryPageData && Array.isArray(categoryPageData.models) && categoryPageData.models.length > 0) {
+    // 如果 pageItems 中已经有产品，清空 models 避免重复显示
+    // models 的作用是为那些只有 page_data 但没有实际产品的分类提供产品
+    if (pageItems.length > 0) {
+      categoryPageData = {
+        ...categoryPageData,
+        models: []
+      };
+    } else {
+      // 如果没有实际产品，则修正 models 中的 URL
+      categoryPageData = {
+        ...categoryPageData,
+        models: categoryPageData.models.map((model) => {
+          // 尝试从 pageItems 中找到匹配的产品
+          const matchingProduct = pageItems.find((product) =>
+            model.title === product.name ||
+            (product.slug && model.link?.includes(`/${product.slug}`))
+          );
+          if (matchingProduct) {
+            return {
+              ...model,
+              href: buildProductUrl(matchingProduct),
+              link: buildProductUrl(matchingProduct),
+              url: buildProductUrl(matchingProduct)
+            };
+          }
+          return model;
+        })
+      };
+    }
+  }
+
   const normalizedCategoryBodyHtml = normalizeLegacyRichTextHtml(category?.content_html, templateContext.site) || '';
   const enrichedCategoryBody = buildLegacyProductSectionNavigation(normalizedCategoryBodyHtml);
 
@@ -1051,20 +1168,20 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
     ...buildLegacyPageContextProps({
       pageType: 'product-list',
       title: category.name || '',
-      url: buildLegacyProductCategoryUrl(category),
-      section: { type: 'product', name: '产品展示', url: '/products/' },
+      url: buildLegacyProductCategoryUrl(category, categoryMap),
+      section: { type: 'product', name: '产品', url: '/products/' },
       categoryChain: buildTemplateCategoryChain({
         category,
         categories: templateContext.productCategories,
         type: 'product',
-        urlBuilder: buildLegacyProductCategoryUrl
+        urlBuilder: (cat) => buildLegacyProductCategoryUrl(cat, categoryMap)
       }),
       categoryType: 'product',
-      categoryUrl: buildLegacyProductCategoryUrl(category),
+      categoryUrl: buildLegacyProductCategoryUrl(category, categoryMap),
       parentCategory: parent,
       parentCategoryType: 'product',
-      parentCategoryUrl: parent ? buildLegacyProductCategoryUrl(parent) : '',
-      breadcrumbItems: buildLegacyProductBreadcrumbItems(category, parent)
+      parentCategoryUrl: parent ? buildLegacyProductCategoryUrl(parent, categoryMap) : '',
+      breadcrumbItems: buildLegacyProductBreadcrumbItems(category, parent, categoryMap)
     }),
     smallName: category.name || '',
     bigId: normalizeInteger(parent?.id, category.id),
@@ -1080,14 +1197,24 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
     bodyHtml: enrichedCategoryBody.html,
     sectionNavItems: enrichedCategoryBody.items,
     items: buildLegacyProductListItems(pageItems),
-    productCardItems: pageItems.map((item) => ({
-      id: item.id,
-      name: item.name || '',
-      title: item.name || '',
-      url: buildProductUrl(item),
-      image: item.primary_image || '/skin/dfpic.gif',
-      summary: item.summary || ''
-    })),
+    // 如果有产品，显示产品卡片；否则显示子分类卡片
+    productCardItems: pageItems.length > 0
+      ? pageItems.map((item) => ({
+          id: item.id,
+          name: item.name || '',
+          title: item.name || '',
+          url: buildProductUrl(item),
+          image: item.primary_image || '/skin/dfpic.gif',
+          summary: item.summary || ''
+        }))
+      : (children || []).map((child) => ({
+          id: normalizeInteger(child.id, 0),
+          name: child.name || '',
+          title: child.name || '',
+          url: buildLegacyProductCategoryUrl(child, categoryMap),
+          image: child.primary_image || '',
+          summary: child.seo_description || ''
+        })),
     pagerHtml: buildLegacyProductPager(fileStem, pageNumber, pageCount, totalRecords),
     prodKeywords: category.seo_keywords || category.name || ''
   };
@@ -1095,17 +1222,64 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
 
 function buildLegacyProductDetailPageProps({ templateContext, product, relatedProducts, category, parent }) {
   const rootLevelCategories = templateContext.productCategories.filter((item) => normalizeInteger(item.parent_id, 0) === 0);
+
+  // 构建 categoryMap 用于生成完整的slug URL
+  const categoryMap = new Map(templateContext.productCategories.map((item) => [normalizeInteger(item.id, 0), item]));
+
   const productNavigation = buildLegacyProductNavigation({
     categories: templateContext.productCategories,
     currentCategory: category,
     currentParent: parent,
-    fallbackCategories: rootLevelCategories.length > 0 ? rootLevelCategories : [category].filter(Boolean)
+    fallbackCategories: rootLevelCategories.length > 0 ? rootLevelCategories : [category].filter(Boolean),
+    categoryMap
   });
   const normalizedBodyHtml = normalizeLegacyRichTextHtml(product.content_html, templateContext.site) || '';
   const enrichedBody = buildLegacyProductSectionNavigation(normalizedBodyHtml);
   const productImages = normalizeLegacyProductImages(product);
   const categoryPageData = normalizeLegacyCategoryPageData(category?.page_data);
-  const productPageData = normalizeLegacyCategoryPageData(parseLegacyExtra(product?.legacy_extra)?.page_data);
+  let productPageData = normalizeLegacyCategoryPageData(parseLegacyExtra(product?.legacy_extra)?.page_data);
+
+  // 修正 productPageData.brandPathSection.cards 中的URL，确保使用完整路径并添加尾部斜杠
+  if (productPageData?.brandPathSection?.cards && Array.isArray(productPageData.brandPathSection.cards)) {
+    productPageData = {
+      ...productPageData,
+      brandPathSection: {
+        ...productPageData.brandPathSection,
+        cards: productPageData.brandPathSection.cards.map((card) => {
+          if (!card.href) return card;
+
+          // 如果是分类链接，尝试匹配并修正
+          const categoryMatch = card.href.match(/\/products\/([^/]+(?:\/[^/]+)?)$/);
+          if (categoryMatch) {
+            const slugPath = categoryMatch[1];
+            // 查找匹配的分类
+            const matchingCategory = templateContext.productCategories.find((cat) =>
+              cat.slug && (
+                card.href.endsWith(`/${cat.slug}`) ||
+                card.href.includes(`/${cat.slug}/`)
+              )
+            );
+            if (matchingCategory) {
+              return {
+                ...card,
+                href: buildLegacyProductCategoryUrl(matchingCategory, categoryMap)
+              };
+            }
+          }
+
+          // 确保所有产品链接都有尾部斜杠
+          if (card.href.startsWith('/products/') && !card.href.endsWith('/') && !card.href.endsWith('.html')) {
+            return {
+              ...card,
+              href: card.href + '/'
+            };
+          }
+
+          return card;
+        })
+      }
+    };
+  }
 
   return {
     ...buildLegacyCommonProps(templateContext),
@@ -1113,24 +1287,24 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
       pageType: 'product-detail',
       title: product.name || '',
       url: buildProductUrl({ id: normalizeInteger(product.id, 0), slug: product.slug }),
-      section: { type: 'product', name: '产品展示', url: '/products/' },
+      section: { type: 'product', name: '产品', url: '/products/' },
       categoryChain: buildTemplateCategoryChain({
         category,
         categories: templateContext.productCategories,
         type: 'product',
-        urlBuilder: buildLegacyProductCategoryUrl
+        urlBuilder: (cat) => buildLegacyProductCategoryUrl(cat, categoryMap)
       }),
       categoryType: 'product',
-      categoryUrl: category ? buildLegacyProductCategoryUrl(category) : '',
+      categoryUrl: category ? buildLegacyProductCategoryUrl(category, categoryMap) : '',
       parentCategory: parent,
       parentCategoryType: 'product',
-      parentCategoryUrl: parent ? buildLegacyProductCategoryUrl(parent) : '',
+      parentCategoryUrl: parent ? buildLegacyProductCategoryUrl(parent, categoryMap) : '',
       content: product,
       contentType: 'product',
       contentUrl: buildProductUrl({ id: normalizeInteger(product.id, 0), slug: product.slug }),
       breadcrumbItems: [
-        { label: '产品展示', href: '/products/' },
-        ...buildLegacyProductCategoryBreadcrumbItems(category, parent),
+        { label: '产品', href: '/products/' },
+        ...buildLegacyProductCategoryBreadcrumbItems(category, parent, categoryMap),
         { label: product.name || '' }
       ]
     }),
@@ -1180,7 +1354,7 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
 function buildLegacyArticleListPageProps({ templateContext, section, category, pageItems, pageNumber, pageCount, totalRecords, summaryClassName }) {
   const isService = section === 'service';
   const sectionDir = isService ? 'service' : 'news';
-  const sectionLabel = isService ? '阀门知识' : '新闻资讯';
+  const sectionLabel = isService ? '阀门知识' : '公司新闻';
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
@@ -1230,7 +1404,7 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
 function buildLegacyArticleDetailPageProps({ templateContext, section, item, category, previous, next }) {
   const isService = section === 'service';
   const sectionDir = isService ? 'service' : 'news';
-  const sectionLabel = isService ? '阀门知识' : '新闻资讯';
+  const sectionLabel = isService ? '阀门知识' : '公司新闻';
   const relatedArticles = listNews({ limit: 10000, languageCode: templateContext.languageCode })
     .filter((entry) => normalizeInteger(entry.category_id, 0) === normalizeInteger(item.category_id, 0) && normalizeInteger(entry.id, 0) !== normalizeInteger(item.id, 0))
     .slice(0, 3);
@@ -1462,30 +1636,63 @@ function buildLegacyBreadcrumbLink(href, label) {
   return `<a href="${escapeHtmlAttribute(href)}">${escapeHtml(label)}</a>`;
 }
 
-function buildLegacyProductBreadcrumbItems(category, parent) {
-  const items = [{ label: '产品展示', href: '/products/' }];
-  items.push(...buildLegacyProductCategoryBreadcrumbItems(category, parent));
+function buildLegacyProductBreadcrumbItems(category, parent, categoryMap = null) {
+  const items = [{ label: '产品', href: '/products/' }];
+  items.push(...buildLegacyProductCategoryBreadcrumbItems(category, parent, categoryMap));
   return items;
 }
 
-function buildLegacyProductCategoryBreadcrumbItems(category, parent) {
+function buildLegacyProductCategoryBreadcrumbItems(category, parent, categoryMap = null) {
   const items = [];
   const parentName = String(parent?.name || '').trim();
   const categoryName = String(category?.name || '').trim();
 
-  if (parentName && parentName !== '产品展示') {
-    items.push({ label: parentName, href: buildLegacyProductCategoryUrl(parent) });
+  if (parentName && parentName !== '产品') {
+    items.push({ label: parentName, href: buildLegacyProductCategoryUrl(parent, categoryMap) });
   }
-  if (categoryName && categoryName !== '产品展示' && categoryName !== parentName) {
-    items.push({ label: categoryName, href: buildLegacyProductCategoryUrl(category) });
+  if (categoryName && categoryName !== '产品' && categoryName !== parentName) {
+    items.push({ label: categoryName, href: buildLegacyProductCategoryUrl(category, categoryMap) });
   }
 
   return items;
 }
 
-function buildLegacyProductCategoryUrl(category) {
+function buildLegacyProductCategoryUrl(category, categoryMap = null) {
   const id = normalizeInteger(category?.id, 0);
+
+  // 如果有slug和categoryMap，使用完整的slug路径
+  if (category?.slug && categoryMap) {
+    const slugPath = buildCategorySlugPath(category, categoryMap);
+    if (slugPath.length > 0) {
+      return `/products/${slugPath.join('/')}/`;
+    }
+  }
+
+  // 回退到数字ID格式
   return id === 0 ? '/products/index.html' : `/products/${id}.html`;
+}
+
+/**
+ * 构建产品分类的完整slug路径（包含所有祖先分类）
+ * @param {Object} category - 当前分类
+ * @param {Map} categoryMap - 分类ID到分类对象的映射
+ * @returns {string[]} - slug路径数组，从根到叶
+ */
+function buildCategorySlugPath(category, categoryMap) {
+  const slugs = [];
+  let current = category;
+
+  // 向上遍历到根分类
+  while (current && current.slug) {
+    slugs.unshift(current.slug);
+    const parentId = normalizeInteger(current.parent_id, 0);
+    if (parentId === 0) {
+      break;
+    }
+    current = categoryMap.get(parentId);
+  }
+
+  return slugs;
 }
 
 function normalizeLegacyTemplateMarkup(value, site) {
@@ -1605,17 +1812,18 @@ function buildLegacyProductSmallCategories(categories) {
   return html;
 }
 
-function buildLegacyProductMenuItems(categories, activeId = 0) {
+function buildLegacyProductMenuItems(categories, activeId = 0, categoryMap = null) {
   return (categories || [])
     .filter(Boolean)
     .map((item) => {
       const description = resolveLegacyProductCategoryDescription(item);
+      const itemId = normalizeInteger(item.id, 0);
       return {
-        id: normalizeInteger(item.id, 0),
+        id: itemId,
         label: item.name || '',
         title: item.name || '',
-        url: `/products/${normalizeInteger(item.id, 0)}.html`,
-        active: normalizeInteger(item.id, 0) === normalizeInteger(activeId, 0),
+        url: buildLegacyProductCategoryUrl(item, categoryMap),
+        active: itemId === normalizeInteger(activeId, 0),
         description,
         ctaLabel: description ? 'Explore more' : '',
         image: '',
@@ -1624,7 +1832,7 @@ function buildLegacyProductMenuItems(categories, activeId = 0) {
     });
 }
 
-function buildLegacyProductNavigation({ categories, currentCategory, currentParent, fallbackCategories = [] }) {
+function buildLegacyProductNavigation({ categories, currentCategory, currentParent, fallbackCategories = [], categoryMap = null }) {
   const safeCategories = Array.isArray(categories) ? categories : [];
   const activeId = normalizeInteger(currentCategory?.id, 0);
   const parentId = normalizeInteger(currentCategory?.parent_id, 0);
@@ -1637,15 +1845,15 @@ function buildLegacyProductNavigation({ categories, currentCategory, currentPare
   if (siblingCategories.length > 0) {
     return {
       title: currentParent?.name || 'Browse categories',
-      parentUrl: currentParent ? buildLegacyProductCategoryUrl(currentParent) : '',
-      items: buildLegacyProductMenuItems(siblingCategories, activeId)
+      parentUrl: currentParent ? buildLegacyProductCategoryUrl(currentParent, categoryMap) : '',
+      items: buildLegacyProductMenuItems(siblingCategories, activeId, categoryMap)
     };
   }
 
   return {
     title: 'Browse categories',
     parentUrl: '',
-    items: buildLegacyProductMenuItems(fallbackCategories, activeId)
+    items: buildLegacyProductMenuItems(fallbackCategories, activeId, categoryMap)
   };
 }
 
@@ -1849,11 +2057,19 @@ function writeProductCategoryPageSet({
   parent,
   children,
   items,
-  fileStem
+  fileStem,
+  categoryMap
 }) {
   const pages = paginate(items, PRODUCT_LIST_PAGE_SIZE);
   const pageList = pages.length > 0 ? pages : [[]];
   let filesWritten = 0;
+
+  // 计算分类的完整slug路径
+  const categoryId = normalizeInteger(category.id, 0);
+  const categorySlugPath = category.slug && categoryMap
+    ? buildCategorySlugPath(category, categoryMap)
+    : [];
+  const useSlugPath = categorySlugPath.length > 0 || categoryId === 0; // 根分类也使用新路径格式
 
   for (let index = 0; index < pageList.length; index += 1) {
     const pageNumber = index + 1;
@@ -1866,7 +2082,8 @@ function writeProductCategoryPageSet({
       pageItems,
       pageNumber,
       pageCount: pageList.length,
-      totalRecords: items.length
+      totalRecords: items.length,
+      categoryMap
     }), templateContext, {
       targets: [
         { target_type: 'product_category', target_id: normalizeInteger(category.id, 0) },
@@ -1874,18 +2091,36 @@ function writeProductCategoryPageSet({
       ]
     });
 
-    const fileName = buildLegacyListFileName(fileStem, pageNumber);
-    writeTextFile(outputRoot, path.join('products', fileName), legacyHtml, templateContext.site);
-    filesWritten += 1;
-    writeTextFile(outputRoot, path.join('products', fileName), legacyHtml, templateContext.site);
+    // 根据是否有slug路径决定输出路径
+    let outputDir, fileName;
+
+    if (useSlugPath) {
+      // 使用完整slug路径: /products/{parent-slug}/{category-slug}/
+      // 或根目录: /products/
+      outputDir = categorySlugPath.length > 0
+        ? path.join('products', ...categorySlugPath)
+        : 'products';
+      fileName = pageNumber === 1 ? 'index.html' : `page-${pageNumber}.html`;
+    } else {
+      // 回退到数字ID: /products/{id}.html
+      outputDir = 'products';
+      fileName = buildLegacyListFileName(fileStem, pageNumber);
+    }
+
+    writeTextFile(outputRoot, path.join(outputDir, fileName), legacyHtml, templateContext.site);
     filesWritten += 1;
 
-    if (pageNumber === 1) {
-      const firstPageFileName = `${fileStem}.html`;
-      writeTextFile(outputRoot, path.join('products', firstPageFileName), legacyHtml, templateContext.site);
+    // 兼容性：如果使用slug路径，也生成旧的数字ID路径（301重定向）
+    if (useSlugPath && fileStem !== 'index') {
+      const legacyFileName = buildLegacyListFileName(fileStem, pageNumber);
+      writeTextFile(outputRoot, path.join('products', legacyFileName), legacyHtml, templateContext.site);
       filesWritten += 1;
-      writeTextFile(outputRoot, path.join('products', firstPageFileName), legacyHtml, templateContext.site);
-      filesWritten += 1;
+
+      if (pageNumber === 1) {
+        const firstPageFileName = `${fileStem}.html`;
+        writeTextFile(outputRoot, path.join('products', firstPageFileName), legacyHtml, templateContext.site);
+        filesWritten += 1;
+      }
     }
   }
 
@@ -2456,7 +2691,15 @@ function normalizeLegacyRichTextHtml(value, siteConfig = null) {
     .replace(/https?:\/\/(?:www\.)?(?:spiraxsarcocn\.com|bilvie\.com|bilwe\.com)(\/uploadfile\/[^\s"'<>]+)/gi, (_, relativePath) => {
       return relativePath.replace(/^\/uploadfile\//i, '/UploadFile/');
     })
-    .replace(/(["'(=])\/uploadfile\//gi, '$1/UploadFile/');
+    .replace(/(["'(=])\/uploadfile\//gi, '$1/UploadFile/')
+    // 修正产品链接：确保所有 /products/.../slug 格式的链接都有尾部斜杠
+    .replace(/href="(\/products\/[a-z0-9/-]+[a-z0-9])"/gi, (match, url) => {
+      // 如果不是以 .html 或 / 结尾，添加尾部斜杠
+      if (!url.endsWith('.html') && !url.endsWith('/')) {
+        return `href="${url}/"`;
+      }
+      return match;
+    });
 }
 
 function normalizeLegacyMetaAttributes(html) {

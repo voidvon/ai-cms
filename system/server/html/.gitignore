@@ -1,0 +1,13 @@
+# Generated HTML files
+*.html
+*.htm
+*.md
+
+# But keep uploads directory
+!uploads/
+!uploads/**
+
+# Sitemaps
+sitemap*.xml
+robots.txt
+llms*.txt

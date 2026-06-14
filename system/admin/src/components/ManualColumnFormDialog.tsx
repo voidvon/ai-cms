@@ -6,6 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import type { Column, ColumnTranslation, Template } from '@/types'
@@ -18,6 +19,7 @@ export interface ManualColumnFormValue {
     route_path: string
     open_in_new_tab: number
     sort_order: number
+    show_in_nav: number
   }
   translations: Record<string, ColumnTranslation>
 }
@@ -56,7 +58,8 @@ export default function ManualColumnFormDialog({
     custom_url: '',
     route_path: '',
     open_in_new_tab: 0,
-    sort_order: 0
+    sort_order: 0,
+    show_in_nav: 1
   })
   const [translations, setTranslations] = useState<Record<string, ColumnTranslation>>({})
   const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
@@ -83,7 +86,8 @@ export default function ManualColumnFormDialog({
         custom_url: column.custom_url || '',
         route_path: column.route_path || '',
         open_in_new_tab: Number(column.open_in_new_tab || 0),
-        sort_order: Number(column.sort_order || 0)
+        sort_order: Number(column.sort_order || 0),
+        show_in_nav: Number(column.show_in_nav ?? 1)
       })
       setTranslations(buildInitialTranslations(column, defaultLanguageCode, availableLanguageCodes))
       setActiveLanguage(column.current_language_code || defaultLanguageCode)
@@ -97,7 +101,8 @@ export default function ManualColumnFormDialog({
       custom_url: '',
       route_path: '',
       open_in_new_tab: 0,
-      sort_order: 0
+      sort_order: 0,
+      show_in_nav: 1
     })
     setTranslations({
       [defaultLanguageCode]: createEmptyTranslation()
@@ -293,6 +298,22 @@ export default function ManualColumnFormDialog({
                   placeholder="0"
                 />
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="manual-column-show-nav">显示在导航栏</Label>
+                <div className="flex items-center space-x-2 h-10">
+                  <Switch
+                    id="manual-column-show-nav"
+                    checked={baseData.show_in_nav === 1}
+                    onCheckedChange={(checked) => setBaseData({ ...baseData, show_in_nav: checked ? 1 : 0 })}
+                  />
+                  <Label htmlFor="manual-column-show-nav" className="cursor-pointer">
+                    {baseData.show_in_nav === 1 ? '显示' : '隐藏'}
+                  </Label>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
               {baseData.column_kind === 'single' ? (
                 <div className="space-y-2">
                   <Label>内容模板</Label>

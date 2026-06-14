@@ -15,7 +15,7 @@
     "db:backfill-media": "node scripts/backfill-media-assets.mjs",
     "db:repair-encoding": "node scripts/repair-legacy-encoding.mjs --write",
     "admin:create": "node scripts/create-admin.mjs",
-    "build:static": "node scripts/build-static.mjs && node scripts/patch-footer-products.mjs"
+    "build:static": "node scripts/build-static.mjs"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

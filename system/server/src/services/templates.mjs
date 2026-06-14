@@ -608,11 +608,11 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         pageType: 'product-list',
         title: category.name,
         url: `/valve/${category.id}.html`,
-        section: { type: 'product', name: '产品展示', url: '/valve/' },
+        section: { type: 'product', name: '产品', url: '/valve/' },
         category,
         content: null,
         breadcrumbItems: [
-          { label: '产品展示', url: '/valve/' },
+          { label: '产品', url: '/valve/' },
           { label: category.name, url: '' }
         ]
       }),
@@ -643,11 +643,11 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         pageType: 'product-detail',
         title: product.name,
         url: `/product/${product.id}.html`,
-        section: { type: 'product', name: '产品展示', url: '/valve/' },
+        section: { type: 'product', name: '产品', url: '/valve/' },
         category,
         content: { id: product.id, title: product.name, name: product.name, type: 'product', url: `/product/${product.id}.html` },
         breadcrumbItems: [
-          { label: '产品展示', url: '/valve/' },
+          { label: '产品', url: '/valve/' },
           { label: category.name, url: `/valve/${category.id}.html` },
           { label: product.name, url: '' }
         ]
@@ -930,7 +930,7 @@ function getPreviewProductCategory(id = null) {
       LIMIT 1
     `
   );
-  return row || { id: 1, name: '产品展示', parent_id: 0, seo_keywords: '产品展示', seo_description: '' };
+  return row || { id: 1, name: '产品', parent_id: 0, seo_keywords: '产品', seo_description: '' };
 }
 
 function getPreviewArticle() {
@@ -982,7 +982,7 @@ function getPreviewNewsCategory(id = null) {
       LIMIT 1
     `
   );
-  return row || { id: 1, name: '新闻资讯', parent_id: 0 };
+  return row || { id: 1, name: '公司新闻', parent_id: 0 };
 }
 
 function getPreviewCorporationCategory() {
@@ -1024,7 +1024,7 @@ function buildPreviewArticleSectionConfig(mode, template) {
         rootId: NEWS_ROOT_ID,
         sectionType: 'news',
         sectionDir: 'news',
-        sectionLabel: '新闻资讯',
+        sectionLabel: '公司新闻',
         pageType: 'article-list',
         detailPageType: 'article-detail',
         contentType: 'news-article'
@@ -1071,8 +1071,8 @@ function buildPreviewSiteColumns() {
 
   if (rows.length === 0) {
     return [
-      { id: 1, name: '产品展示', parentId: 0, modelCode: 'product', sourceType: 'product_root', sourceId: 0, url: '/valve/', children: [] },
-      { id: 2, name: '新闻资讯', parentId: 0, modelCode: 'news', sourceType: 'news_category', sourceId: NEWS_ROOT_ID, url: '/news/', children: [] },
+      { id: 1, name: '产品', parentId: 0, modelCode: 'product', sourceType: 'product_root', sourceId: 0, url: '/valve/', children: [] },
+      { id: 2, name: '公司新闻', parentId: 0, modelCode: 'news', sourceType: 'news_category', sourceId: NEWS_ROOT_ID, url: '/news/', children: [] },
       { id: 3, name: '阀门知识', parentId: 0, modelCode: 'news', sourceType: 'news_category', sourceId: SERVICE_ROOT_ID, url: '/service/', children: [] },
       { id: 4, name: '公司信息', parentId: 0, modelCode: 'corporation', sourceType: 'corporation_root', sourceId: 0, url: '/about/', children: [] }
     ];
@@ -1124,8 +1124,8 @@ function buildPreviewPrimaryMenuItems(activeKey = '') {
   const items = [
     { key: 'home', label: '首页', url: '/index.html' },
     { key: 'corporation', label: '公司栏目', url: '/about/' },
-    { key: 'product', label: '产品展示', url: '/valve/' },
-    { key: 'news', label: '新闻资讯', url: '/news/' },
+    { key: 'product', label: '产品', url: '/valve/' },
+    { key: 'news', label: '公司新闻', url: '/news/' },
     { key: 'service', label: '阀门知识', url: '/service/' },
     { key: 'contact', label: '联系我们', url: '/contact.html' },
     { key: 'message', label: '在线留言', url: '/msg.html' }
@@ -1509,7 +1509,7 @@ function buildTemplateValidationProps(template) {
     code: 'DEMO',
     section: 'news',
     sectionDir: 'news',
-    sectionLabel: '新闻资讯',
+    sectionLabel: '公司新闻',
     categoryId: 1,
     newsKeywords: '示例关键词',
     newsDescription: '示例描述',

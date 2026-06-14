@@ -99,9 +99,7 @@ export function ensureColumnsSchema() {
   schemaEnsured = true;
 }
 
-export function listColumns({ languageCode = null, includeTranslations = true } = {}) {
-  syncBuiltinColumns();
-  const rows = queryAll(
+export function listColumns({ languageCode = null, includeTranslations = true } = {}) {  const rows = queryAll(
     `
       SELECT
         id,
@@ -131,18 +129,14 @@ export function listColumns({ languageCode = null, includeTranslations = true } 
   return hydrateColumns(rows, { languageCode, includeTranslations });
 }
 
-export function getColumnById(id, { languageCode = null, includeTranslations = true } = {}) {
-  syncBuiltinColumns();
-  const row = getColumnByIdRaw(id);
+export function getColumnById(id, { languageCode = null, includeTranslations = true } = {}) {  const row = getColumnByIdRaw(id);
   if (!row) {
     return null;
   }
   return hydrateColumns([row], { languageCode, includeTranslations })[0] || null;
 }
 
-export function createManualColumn(input) {
-  syncBuiltinColumns();
-  const payload = normalizeManualColumnMutationInput(input);
+export function createManualColumn(input) {  const payload = normalizeManualColumnMutationInput(input);
   const defaultLanguage = getDefaultLanguage();
   const defaultTranslation = resolveDefaultColumnTranslation(payload.translations, defaultLanguage?.code);
   const now = new Date().toISOString();
@@ -166,10 +160,11 @@ export function createManualColumn(input) {
         seo_description,
         legacy_extra,
         sort_order,
+        show_in_nav,
         is_system,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
     `,
     [
       defaultTranslation.name,
@@ -187,6 +182,7 @@ export function createManualColumn(input) {
       defaultTranslation.seo_description,
       payload.base.legacy_extra,
       payload.base.sort_order,
+      payload.base.show_in_nav,
       now,
       now
     ]
@@ -196,9 +192,7 @@ export function createManualColumn(input) {
   return getColumnById(result.lastInsertRowid, { includeTranslations: true });
 }
 
-export function updateManualColumn(id, input) {
-  syncBuiltinColumns();
-  const existing = getColumnByIdRaw(id);
+export function updateManualColumn(id, input) {  const existing = getColumnByIdRaw(id);
   if (!existing) {
     return null;
   }
@@ -228,6 +222,7 @@ export function updateManualColumn(id, input) {
         seo_description = ?,
         legacy_extra = ?,
         sort_order = ?,
+        show_in_nav = ?,
         updated_at = ?
       WHERE id = ?
     `,
@@ -245,6 +240,7 @@ export function updateManualColumn(id, input) {
       defaultTranslation.seo_description,
       payload.base.legacy_extra,
       payload.base.sort_order,
+      payload.base.show_in_nav,
       new Date().toISOString(),
       id
     ]
@@ -254,9 +250,7 @@ export function updateManualColumn(id, input) {
   return getColumnById(id, { includeTranslations: true });
 }
 
-export function deleteManualColumn(id) {
-  syncBuiltinColumns();
-  const existing = getColumnByIdRaw(id);
+export function deleteManualColumn(id) {  const existing = getColumnByIdRaw(id);
   if (!existing) {
     return null;
   }
@@ -279,117 +273,6 @@ export function deleteManualColumn(id) {
   return existing;
 }
 
-export function syncBuiltinColumns() {
-  ensureColumnsSchema();
-  upsertColumn({
-    name: '产品展示',
-    parent_id: null,
-    model_code: 'product',
-    source_type: 'product_root',
-    source_id: 0,
-    column_kind: 'category',
-    sort_order: 10
-  });
-
-  const productRoot = getColumnBySource('product_root', 0);
-  const productCategories = queryAll(
-    `
-      SELECT id, name, parent_id, sort_order
-      FROM product_categories
-      WHERE id <> 0
-      ORDER BY parent_id ASC, sort_order ASC, id ASC
-    `
-  );
-  pruneStaleCategoryColumns('product_category', productCategories.map((category) => category.id));
-  syncCategoryColumns(productCategories, {
-    modelCode: 'product',
-    sourceType: 'product_category',
-    rootParentId: productRoot.id,
-    rootSortOffset: 0
-  });
-
-  const newsCategories = queryAll(
-    `
-      SELECT id, name, parent_id, sort_order
-      FROM news_categories
-      WHERE id <> 0
-      ORDER BY parent_id ASC, sort_order ASC, id ASC
-    `
-  );
-  pruneStaleCategoryColumns('news_category', newsCategories.map((category) => category.id));
-  syncCategoryColumns(newsCategories, {
-    modelCode: 'news',
-    sourceType: 'news_category',
-    rootParentId: null,
-    rootSortOffset: 100
-  });
-
-  upsertColumn({
-    name: '公司信息',
-    parent_id: null,
-    model_code: 'corporation',
-    source_type: 'corporation_root',
-    source_id: 0,
-    column_kind: 'category',
-    sort_order: 200
-  });
-
-  upsertColumn({
-    name: '联系我们',
-    parent_id: null,
-    model_code: 'page',
-    source_type: 'contact_page',
-    source_id: 0,
-    column_kind: 'single',
-    route_path: '/contact.html',
-    sort_order: 300
-  });
-
-  upsertColumn({
-    name: '在线留言',
-    parent_id: null,
-    model_code: 'page',
-    source_type: 'message_page',
-    source_id: 0,
-    column_kind: 'single',
-    route_path: '/msg.html',
-    sort_order: 310
-  });
-
-  const corporationRoot = getColumnBySource('corporation_root', 0);
-  const corporationCategories = queryAll(
-    `
-      SELECT id, name, parent_id, sort_order
-      FROM corporation_categories
-      WHERE id <> 0
-      ORDER BY parent_id ASC, sort_order ASC, id ASC
-    `
-  );
-  pruneStaleCategoryColumns('corporation_category', corporationCategories.map((category) => category.id));
-  syncCategoryColumns(corporationCategories, {
-    modelCode: 'corporation',
-    sourceType: 'corporation_category',
-    rootParentId: corporationRoot.id,
-    rootSortOffset: 0
-  });
-}
-
-function syncCategoryColumns(categories, { modelCode, sourceType, rootParentId, rootSortOffset }) {
-  for (const category of categories) {
-    const parentColumn = category.parent_id
-      ? getColumnBySource(sourceType, category.parent_id)
-      : null;
-    upsertColumn({
-      name: category.name,
-      parent_id: parentColumn?.id ?? rootParentId,
-      model_code: modelCode,
-      source_type: sourceType,
-      source_id: category.id,
-      column_kind: 'category',
-      sort_order: rootSortOffset + Number(category.sort_order || 0)
-    });
-  }
-}
 
 function hydrateColumns(rows, { languageCode, includeTranslations = true } = {}) {
   if (!rows.length) {
@@ -580,64 +463,6 @@ function resolveSystemColumnName(row, productCategoryNames, newsCategoryNames) {
   return null;
 }
 
-function upsertColumn(input) {
-  const now = new Date().toISOString();
-  execute(
-    `
-      INSERT INTO columns (
-        name,
-        parent_id,
-        model_code,
-        source_type,
-        source_id,
-        column_kind,
-        custom_url,
-        route_path,
-        open_in_new_tab,
-        content_html,
-        seo_title,
-        seo_keywords,
-        seo_description,
-        legacy_extra,
-        sort_order,
-        is_system,
-        created_at,
-        updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-      ON CONFLICT(source_type, source_id) DO UPDATE SET
-        name = excluded.name,
-        parent_id = excluded.parent_id,
-        model_code = excluded.model_code,
-        column_kind = excluded.column_kind,
-        custom_url = excluded.custom_url,
-        route_path = excluded.route_path,
-        open_in_new_tab = excluded.open_in_new_tab,
-        sort_order = excluded.sort_order,
-        is_system = 1,
-        updated_at = excluded.updated_at
-    `,
-    [
-      input.name,
-      input.parent_id,
-      input.model_code,
-      input.source_type,
-      input.source_id,
-      input.column_kind || 'category',
-      input.custom_url ?? null,
-      input.route_path ?? null,
-      toBooleanInt(input.open_in_new_tab, 0),
-      '',
-      null,
-      null,
-      null,
-      input.legacy_extra ?? null,
-      input.sort_order,
-      now,
-      now
-    ]
-  );
-}
-
 function getColumnBySource(sourceType, sourceId) {
   return queryOne(
     `
@@ -699,25 +524,6 @@ function getColumnByIdRaw(id) {
   ) || null;
 }
 
-function pruneStaleCategoryColumns(sourceType, sourceIds) {
-  const ids = sourceIds.map((id) => Number(id)).filter((id) => Number.isInteger(id));
-  if (ids.length === 0) {
-    execute('DELETE FROM columns WHERE is_system = 1 AND source_type = ?', [sourceType]);
-    return;
-  }
-
-  const placeholders = ids.map(() => '?').join(', ');
-  execute(
-    `
-      DELETE FROM columns
-      WHERE is_system = 1
-        AND source_type = ?
-        AND source_id NOT IN (${placeholders})
-    `,
-    [sourceType, ...ids]
-  );
-}
-
 function normalizeManualColumnInput(input, options = {}) {
   const currentId = toInteger(options.currentId, 0);
   const existing = currentId ? getColumnByIdRaw(currentId) : null;
@@ -741,6 +547,7 @@ function normalizeManualColumnInput(input, options = {}) {
   }
 
   const sortOrder = toInteger(input.sort_order ?? existing?.sort_order, 0);
+  const showInNav = toBooleanInt(input.show_in_nav ?? existing?.show_in_nav, 1);
   const seoTitle = toNullableString(input.seo_title ?? existing?.seo_title);
   const seoKeywords = toNullableString(input.seo_keywords ?? existing?.seo_keywords);
   const seoDescription = toNullableString(input.seo_description ?? existing?.seo_description);
@@ -760,7 +567,8 @@ function normalizeManualColumnInput(input, options = {}) {
       seo_keywords: seoKeywords,
       seo_description: seoDescription,
       legacy_extra: existing?.legacy_extra ?? null,
-      sort_order: sortOrder
+      sort_order: sortOrder,
+      show_in_nav: showInNav
     };
   }
 
@@ -779,7 +587,8 @@ function normalizeManualColumnInput(input, options = {}) {
     seo_keywords: seoKeywords,
     seo_description: seoDescription,
     legacy_extra: existing?.legacy_extra ?? null,
-    sort_order: sortOrder
+    sort_order: sortOrder,
+    show_in_nav: showInNav
   };
 }
 

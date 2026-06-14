@@ -241,15 +241,15 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     title: '新闻中心',
     routePath: '/news/index.html',
     section: '新闻栏目',
-    summary: '新闻资讯分类与文章入口。',
+    summary: '公司新闻分类与文章入口。',
     contentLines: buildCategorySampleLines(newsRootCategories)
   }));
 
   pages.push(createPage({
-    title: '服务支持',
+    title: '服务',
     routePath: '/service/index.html',
     section: '服务栏目',
-    summary: '服务支持分类与文章入口。',
+    summary: '服务分类与文章入口。',
     contentLines: buildCategorySampleLines(serviceRootCategories)
   }));
 

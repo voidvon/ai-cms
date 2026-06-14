@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 临时补丁：在footer产品展示section添加缺失的3个产品分类链接
+ * 临时补丁：在footer产品section添加缺失的3个产品分类链接
  * 原因：模板渲染只显示8个，但应该显示11个
  */
 
@@ -21,12 +21,12 @@ if (!fs.existsSync(htmlFile)) {
 
 let html = fs.readFileSync(htmlFile, 'utf-8');
 
-// 查找产品展示section的</ul>标签
-const pattern = /<h2[^>]*>产品展示<\/h2>.*?<ul[^>]*>(.*?)<\/ul>/s;
+// 查找产品section的</ul>标签
+const pattern = /<h2[^>]*>产品<\/h2>.*?<ul[^>]*>(.*?)<\/ul>/s;
 const match = html.match(pattern);
 
 if (!match) {
-  console.error('❌ 未找到产品展示section');
+  console.error('❌ 未找到产品section');
   process.exit(1);
 }
 
@@ -34,7 +34,7 @@ if (!match) {
 const existingLinks = (match[1].match(/<li/g) || []).length;
 
 if (existingLinks >= 11) {
-  console.log('✅ Footer产品展示已有11个链接');
+  console.log('✅ Footer产品已有11个链接');
   process.exit(0);
 }
 
@@ -46,9 +46,9 @@ const additionalItems = `
 
 // 在</ul>之前插入
 html = html.replace(
-  /(<h2[^>]*>产品展示<\/h2>.*?<ul[^>]*>.*?)(<\/ul>)/s,
+  /(<h2[^>]*>产品<\/h2>.*?<ul[^>]*>.*?)(<\/ul>)/s,
   `$1${additionalItems}\n        $2`
 );
 
 fs.writeFileSync(htmlFile, html, 'utf-8');
-console.log('✅ Footer产品展示已补全至11个链接');
+console.log('✅ Footer产品已补全至11个链接');

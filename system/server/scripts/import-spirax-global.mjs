@@ -903,14 +903,14 @@ function ensureLegacyNewsRoots() {
     `
       INSERT OR IGNORE INTO news_categories (id, name, parent_id, sort_order, legacy_extra)
       VALUES
-        (?, '新闻资讯', 0, 0, ?),
-        (?, '服务支持', 0, 0, ?)
+        (?, '公司新闻', 0, 0, ?),
+        (?, '服务', 0, 0, ?)
     `,
     [NEWS_ROOT_ID, buildLegacyExtraKey('root/news'), SERVICE_ROOT_ID, buildLegacyExtraKey('root/services')]
   );
 
-  saveNewsCategoryTranslation(NEWS_ROOT_ID, 'zh-CN', { name: '新闻资讯' });
-  saveNewsCategoryTranslation(SERVICE_ROOT_ID, 'zh-CN', { name: '服务支持' });
+  saveNewsCategoryTranslation(NEWS_ROOT_ID, 'zh-CN', { name: '公司新闻' });
+  saveNewsCategoryTranslation(SERVICE_ROOT_ID, 'zh-CN', { name: '服务' });
 }
 
 function findIndexFiles(rootDir) {

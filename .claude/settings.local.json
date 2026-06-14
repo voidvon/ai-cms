@@ -4,7 +4,12 @@
       "Bash(sqlite3 *)",
       "WebFetch(domain:www.spiraxsteam.cn)",
       "Bash(curl -s https://www.spiraxsteam.cn)",
-      "Bash(grep -E \"\\\\.\\(mjs|js\\)$\")"
+      "Bash(grep -E \"\\\\.\\(mjs|js\\)$\")",
+      "Bash(npm start *)",
+      "Read(//Users/yytest/.claude/**)",
+      "Bash(curl -s \"http://127.0.0.1:3000/api/products/admin?page=1&limit=10\" -H \"Cookie: $\\(grep -r 'admin_token' ~/.claude)",
+      "Bash(node *)",
+      "Bash(curl -s \"http://127.0.0.1:3000/api/products/admin?page=1&limit=10&language=zh-CN\")"
     ]
   }
 }

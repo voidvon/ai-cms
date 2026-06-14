@@ -648,7 +648,7 @@ export default function Template(props) {
               <p className="home-hero__summary">{props.site?.company_address || '蒸汽系统解决方案、产品与服务。'}</p>
               <div className="home-hero__actions">
                 <a className="btn btn--primary" href="/valve/">查看产品</a>
-                <a className="btn btn--secondary" href="/service/">服务支持</a>
+                <a className="btn btn--secondary" href="/service/">服务</a>
               </div>
             </div>
             <div className="home-hero__panel">
@@ -677,7 +677,7 @@ export default function Template(props) {
       <section className="bg--white">
         <div className="wrapper wrapper--pad-l">
           <div className="section-header">
-            <h2 className="section-header__title">新闻资讯</h2>
+            <h2 className="section-header__title">公司新闻</h2>
           </div>
           {newsCards}
         </div>
@@ -686,7 +686,7 @@ export default function Template(props) {
       <section className="bg--light-blue">
         <div className="wrapper wrapper--pad-l">
           <div className="section-header">
-            <h2 className="section-header__title">服务支持</h2>
+            <h2 className="section-header__title">服务</h2>
           </div>
           {serviceCards}
         </div>
@@ -1986,7 +1986,7 @@ export default function Component(props) {
 }
 
 function buildArticleListTemplate(cssText, mode) {
-  const sectionTitle = mode === 'service' ? '服务支持' : '新闻资讯';
+  const sectionTitle = mode === 'service' ? '服务' : '公司新闻';
   return `
 import React from 'react';
 

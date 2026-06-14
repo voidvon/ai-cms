@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { PUBLIC_ROOT, CONTENT_ROOT, UPLOAD_ALLOWED_EXTENSIONS, UPLOAD_MAX_SIZE_KB } from '../config.mjs';
+import { CONTENT_ROOT, UPLOAD_ALLOWED_EXTENSIONS, UPLOAD_MAX_SIZE_KB } from '../config.mjs';
 
 export function saveUploadedFile(file, options = {}) {
   if (!file) {
@@ -20,7 +20,8 @@ export function saveUploadedFile(file, options = {}) {
 
   const target = resolveUploadTarget(options.uploadType);
   const fileName = buildFileName(extension);
-  const fsDir = path.join(PUBLIC_ROOT, target.fsDir);
+  // 修改：上传到 html/uploads/images/ 目录
+  const fsDir = path.join(CONTENT_ROOT, target.fsDir);
   fs.mkdirSync(fsDir, { recursive: true });
   const filePath = path.join(fsDir, fileName);
   fs.writeFileSync(filePath, file.data);
@@ -37,23 +38,23 @@ export function resolveUploadTarget(uploadType) {
   if (uploadType === 'news') {
     return {
       uploadType: 'news',
-      fsDir: 'upload/news',
-      urlPrefix: '/upload/news'
+      fsDir: 'uploads/images/news',
+      urlPrefix: '/uploads/images/news'
     };
   }
 
   if (uploadType === 'richtext_image') {
     return {
       uploadType: 'richtext_image',
-      fsDir: 'upload/richtext',
-      urlPrefix: '/upload/richtext'
+      fsDir: 'uploads/images/richtext',
+      urlPrefix: '/uploads/images/richtext'
     };
   }
 
   return {
     uploadType: 'prod',
-    fsDir: 'upload/products',
-    urlPrefix: '/upload/products'
+    fsDir: 'uploads/images/products',
+    urlPrefix: '/uploads/images/products'
   };
 }
 
@@ -92,7 +93,15 @@ export function resolveUploadedFilePath(relativePath) {
     return null;
   }
 
-  // 先尝试从 PUBLIC_ROOT 查找（新路径）
+  // 新路径：从 html/uploads/images/ 查找
+  const newCandidates = resolveNewUploadCandidates(normalized);
+  for (const candidate of newCandidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  // 兼容旧路径：从 public/upload/ 查找
   const publicCandidates = resolvePublicUploadCandidates(normalized);
   for (const candidate of publicCandidates) {
     if (fs.existsSync(candidate)) {
@@ -100,7 +109,7 @@ export function resolveUploadedFilePath(relativePath) {
     }
   }
 
-  // 兼容旧路径：从 CONTENT_ROOT 查找
+  // 兼容旧路径：从 html/uploadfile/ 查找
   const legacyCandidates = resolveDirectUploadCandidates(normalized);
   for (const candidate of legacyCandidates) {
     if (fs.existsSync(candidate)) {
@@ -108,28 +117,54 @@ export function resolveUploadedFilePath(relativePath) {
     }
   }
 
-  return publicCandidates[0] || legacyCandidates[0] || null;
+  return newCandidates[0] || publicCandidates[0] || legacyCandidates[0] || null;
 }
 
-function resolvePublicUploadCandidates(normalized) {
-  const uploadsRoot = path.resolve(PUBLIC_ROOT, 'upload');
+function resolveNewUploadCandidates(normalized) {
+  const uploadsRoot = path.resolve(CONTENT_ROOT, 'uploads/images');
   const stripped = normalized.replace(/^\/+/, '');
   const segments = stripped.split('/').filter(Boolean);
 
-  // 新格式：/upload/products/xxx.jpg, /upload/news/xxx.jpg, /upload/richtext/xxx.jpg
-  if (segments.length >= 2 && segments[0].toLowerCase() === 'upload') {
-    segments[0] = 'upload';
-    segments[1] = segments[1].toLowerCase();
-    const filePath = path.resolve(PUBLIC_ROOT, segments.join('/'));
+  // 新格式：/uploads/images/products/xxx.jpg, /uploads/images/news/xxx.jpg, /uploads/images/richtext/xxx.jpg
+  if (segments.length >= 3 && segments[0].toLowerCase() === 'uploads' && segments[1].toLowerCase() === 'images') {
+    segments[0] = 'uploads';
+    segments[1] = 'images';
+    segments[2] = segments[2].toLowerCase();
+    const filePath = path.resolve(CONTENT_ROOT, segments.join('/'));
     return isInsideUploadsRoot(filePath, uploadsRoot) ? [filePath] : [];
   }
 
   // 单个文件名，尝试所有上传目录
   if (segments.length === 1 && /\.[a-z0-9]+$/i.test(segments[0])) {
     return [
-      path.resolve(PUBLIC_ROOT, 'upload/products', segments[0]),
-      path.resolve(PUBLIC_ROOT, 'upload/news', segments[0]),
-      path.resolve(PUBLIC_ROOT, 'upload/richtext', segments[0])
+      path.resolve(CONTENT_ROOT, 'uploads/images/products', segments[0]),
+      path.resolve(CONTENT_ROOT, 'uploads/images/news', segments[0]),
+      path.resolve(CONTENT_ROOT, 'uploads/images/richtext', segments[0])
+    ].filter((filePath) => isInsideUploadsRoot(filePath, uploadsRoot));
+  }
+
+  return [];
+}
+
+function resolvePublicUploadCandidates(normalized) {
+  const uploadsRoot = path.resolve(CONTENT_ROOT, 'upload');
+  const stripped = normalized.replace(/^\/+/, '');
+  const segments = stripped.split('/').filter(Boolean);
+
+  // 旧格式：/upload/products/xxx.jpg, /upload/news/xxx.jpg, /upload/richtext/xxx.jpg
+  if (segments.length >= 2 && segments[0].toLowerCase() === 'upload') {
+    segments[0] = 'upload';
+    segments[1] = segments[1].toLowerCase();
+    const filePath = path.resolve(CONTENT_ROOT, segments.join('/'));
+    return isInsideUploadsRoot(filePath, uploadsRoot) ? [filePath] : [];
+  }
+
+  // 单个文件名，尝试所有上传目录
+  if (segments.length === 1 && /\.[a-z0-9]+$/i.test(segments[0])) {
+    return [
+      path.resolve(CONTENT_ROOT, 'upload/products', segments[0]),
+      path.resolve(CONTENT_ROOT, 'upload/news', segments[0]),
+      path.resolve(CONTENT_ROOT, 'upload/richtext', segments[0])
     ].filter((filePath) => isInsideUploadsRoot(filePath, uploadsRoot));
   }
 

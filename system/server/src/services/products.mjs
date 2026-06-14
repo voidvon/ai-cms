@@ -158,7 +158,6 @@ export function listProductsAdmin({ page = 1, limit = 50, categoryId = null, inc
         p.is_featured_home,
         p.is_visible,
         p.sort_order,
-        slug,
         p.slug,
         p.updated_at,
         c.name AS category_name

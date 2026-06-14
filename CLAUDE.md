@@ -85,48 +85,58 @@ Environment variables:
 
 ### Directory Structure
 
-- **`public/`** - Source static resources (committed to git, except uploads)
-  - `public/images/` - Website images (e.g., from spiraxsteam.cn)
+- **`public/`** - Source static resources (committed to git)
+  - `public/images/global/` - Global images from spirax-global project (products, industries, news, etc.)
   - `public/css/`, `public/js/`, `public/skin/` - Frontend resources
-  - `public/upload/` - User uploaded files (**not in git**, created at runtime)
-    - `public/upload/products/` - Product images
-    - `public/upload/news/` - News images
-    - `public/upload/richtext/` - Rich text editor images
 
 - **`html/`** - Generated static site (**not in git**, generated on server)
-  - Generated HTML files, copied assets from `public/`
-  - This directory is the deployment target
+  - Generated HTML files
+  - `html/uploads/images/` - User uploaded files (**not in git**, preserved during static generation)
+    - `html/uploads/images/products/` - Product images uploaded via admin
+    - `html/uploads/images/news/` - News images uploaded via admin
+    - `html/uploads/images/richtext/` - Rich text editor images
 
 ### Static File Serving
 
 The server serves files in this priority order:
-1. `public/` - Source static assets (images, css, js, uploads)
-2. `html/` - Generated static HTML and fallback assets
+1. `public/` - Source static assets (images, css, js)
+2. `html/` - Generated static HTML and user uploads
 
 This allows:
 - Development and production to share the same `public/` directory
-- Uploads to work in both environments without copying
+- User uploads in `html/uploads/` work in both environments
 - Generated HTML to override specific routes
+- Static generation preserves `html/uploads/` directory (never deleted)
 
 ### Upload Paths
 
-New upload path format (since 2026-06-14):
-- Product images: `/upload/products/`
-- News images: `/upload/news/`
-- Rich text images: `/upload/richtext/`
+Upload path format (updated 2026-06-14):
+- Product images: `/uploads/images/products/` → saved to `html/uploads/images/products/`
+- News images: `/uploads/images/news/` → saved to `html/uploads/images/news/`
+- Rich text images: `/uploads/images/richtext/` → saved to `html/uploads/images/richtext/`
 
-Legacy paths (still supported for backward compatibility):
-- `/uploadfile/produppic/` → redirects to `/upload/products/`
-- `/uploadfile/newsuppic/` → redirects to `/upload/news/`
+The system maintains backward compatibility for old paths:
+- Old: `/upload/products/` (legacy, still readable)
+- Old: `/uploadfile/produppic/` (legacy, still readable)
 
 ### Image Management
 
-Download homepage images:
+Import product images from spirax-global project:
 ```bash
-bash scripts/download-images.sh
+bash scripts/import-images-from-global.sh
 ```
 
-This downloads images from spiraxsteam.cn into `public/images/`.
+This imports 500+ images from `/Users/yytest/Documents/projects/spirax-global` into `public/images/global/`, including:
+- Product images (390+ files)
+- Industry, news, contact, and other global images
+
+**Important Notes:**
+- User uploaded images are stored in `html/uploads/images/` (not `public/upload/`)
+- Static generation **preserves** `html/uploads/` directory and all uploaded files
+- Image files (`.jpg`, `.png`, `.gif`) are never deleted during static generation
+- Only `.html`, `.htm`, `.md` files in managed directories are cleaned up
+
+For detailed image management documentation, see `docs/images-management.md`.
 
 ## Architecture (Fastify-based)
 
@@ -230,11 +240,15 @@ Products:
 - `PUT /api/products/:id` - Update product (auth required, supports `slug` field)
 - `DELETE /api/products/:id` - Delete product (auth required)
 
-**Product URL Structure**:
-- New format: `/products/{slug}/` (e.g., `/products/lp30/`, `/products/bsa3t-bellows-sealed-stop-valve/`)
-- Legacy format: `/product/{id}.html` (automatically redirects to new format with 301)
-- Products must have a `slug` field to use the new URL format
+**Product URL Structure** (Updated 2026-06-14):
+- Category list: `/products/{parent-slug}/{category-slug}/` (e.g., `/products/steam-traps/thermodynamic-steam-traps/`)
+- Product detail: `/products/{parent-slug}/{category-slug}/{product-slug}/` (e.g., `/products/steam-traps/thermodynamic-steam-traps/td52/`)
+- URL includes complete ancestor path for better SEO and clarity
+- Legacy numeric format: `/products/{id}.html` (still generated for backward compatibility)
+- Legacy product format: `/product/{id}.html` (deprecated, not generated if product has slug)
+- Products and categories must have a `slug` field to use the new URL format
 - Slug must be unique, lowercase, alphanumeric with hyphens only
+- See `docs/product-url-hierarchy-update.md` for implementation details
 
 News:
 - `GET /api/news` - List news (query: category_id, featured, limit, offset)

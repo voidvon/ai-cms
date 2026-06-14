@@ -8,6 +8,7 @@ export const SYSTEM_ROOT = path.resolve(SERVER_ROOT, '..');
 export const PROJECT_ROOT = path.resolve(SYSTEM_ROOT, '..');
 export const PUBLIC_ROOT = path.join(PROJECT_ROOT, 'public');
 export const CONTENT_ROOT = path.join(PROJECT_ROOT, 'html');
+export const UPLOADS_ROOT = path.join(CONTENT_ROOT, 'uploads/images'); // 新增：上传到html/uploads/images
 export const ADMIN_APP_ROOT = path.join(SYSTEM_ROOT, 'admin');
 export const ADMIN_DIST_ROOT = path.join(ADMIN_APP_ROOT, 'dist');
 export const DATA_DIR = path.join(PROJECT_ROOT, 'data');

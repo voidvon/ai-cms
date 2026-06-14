@@ -41,7 +41,7 @@ function cCssHead(children: React.ReactNode) {
 }
 
 function productLeft(props: LegacyPageBaseProps, headingTag: 'h2' | 'span' = 'h2') {
-  const heading = headingTag === 'h2' ? '<h2><span>产品展示</span></h2>' : '<span>产品展示</span>'
+  const heading = headingTag === 'h2' ? '<h2><span>产品</span></h2>' : '<span>产品</span>'
   return `${heading}
         <div id="LeftMenu" class="ddsmoothmenu-v">
           <ul>
@@ -76,7 +76,7 @@ export function LegacyHomePage(props: LegacyHomePageProps) {
 <h2><span>新闻中心</span><a href="/news"><img src="images/more.gif" width="32" height="5" alt="新闻中心" /></a></h2><ul>${props.newsIndexHtml}</ul>
 </div><div class="index-about">
 <h2><span>关于我们</span><a href="/about"><img src="images/more.gif" width="32" height="5" alt="关于我们" /></a></h2>
-<p><img src="images/index_aboutpic.jpg" alt="关于我们" width="145" height="181" />${props.fragments.aboutHtml || ''}</div><div class="index-newproducts"><h2><a href="/valve"><img src="images/more.gif" width="32" height="5" alt="产品展示" /></a></h2>
+<p><img src="images/index_aboutpic.jpg" alt="关于我们" width="145" height="181" />${props.fragments.aboutHtml || ''}</div><div class="index-newproducts"><h2><a href="/valve"><img src="images/more.gif" width="32" height="5" alt="产品" /></a></h2>
 <div class="productsroll"><div id="LeftArr1"></div><div id="RightArr1"></div><ul id="ScrollBox" class="clearfix">${props.featuredProductsHtml}</ul>
 <script language="javascript" type="text/javascript"><!--//--><![CDATA[//><!--
 var scrollPic_01 = new ScrollPic();
@@ -92,7 +92,7 @@ scrollPic_01.autoPlayTime   = 3;
 scrollPic_01.initialize();
 //--><!]]></script> 
 </div></div><div class="index-products">
-<h2><span>产品展示</span><a href="/valve"><img src="images/more.gif" width="32" height="5" alt="产品展示" /></a></h2>
+<h2><span>产品</span><a href="/valve"><img src="images/more.gif" width="32" height="5" alt="产品" /></a></h2>
 <ul class="clearfix">${props.featuredProductLinksHtml}</ul></div></div>
 <div class="index-right"><div class="index-search"><h2><span>站内搜索</span></h2>
 ${legacySearchForm()}</div>
@@ -209,7 +209,7 @@ export function LegacyContentPage(props: LegacyContentPageProps) {
 }
 
 export function LegacyProductListPage(props: LegacyProductListPageProps) {
-  const body = cLayoutBody(props, `<div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> -<a href="/valve/" > 产品展示 </a>-<A href="/valve/${html(props.bigId)}.html" class="F_a"> ${html(props.bigName)} </A>-${html(props.smallName)}</div>
+  const body = cLayoutBody(props, `<div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> -<a href="/valve/" > 产品 </a>-<A href="/valve/${html(props.bigId)}.html" class="F_a"> ${html(props.bigName)} </A>-${html(props.smallName)}</div>
 	  <table width="100%" border="0" cellpadding="0" cellspacing="0"><tr><td>${props.productsSmallCatHtml}</td></tr></table>
       <div class="page-products"><ul class="clearfix">${props.bodyHtml}</ul><div class="page_list"><div class="list_info"></div></div></div>`)
   return (
@@ -227,7 +227,7 @@ export function LegacyProductListPage(props: LegacyProductListPageProps) {
 }
 
 export function LegacyProductDetailPage(props: LegacyProductDetailPageProps) {
-  const body = cLayoutBody(props, `<div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> - <a href="/valve/">产品展示</a> - ${html(props.title)}</div>
+  const body = cLayoutBody(props, `<div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> - <a href="/valve/">产品</a> - ${html(props.title)}</div>
       <table width="100%" border="0" cellpadding="0" cellspacing="0" class="in4">
 	    <tr><td width="19%" height="151" align="center" valign="top" class="in5"><img src="${html(props.image)}" alt="${html(props.title)}" width="160" height="134" /></td>
 <td width="41%" valign="top" class="in5"><table width="100%" height="151" border="0"">
@@ -278,7 +278,7 @@ ${props.fragments.productsMenuHtml || ''}</td></tr></table><DIV style="clear:bot
 
 export function LegacyArticleListPage(props: LegacyArticleListPageProps) {
   const isService = props.section === 'service'
-  const label = isService ? '阀门知识' : '新闻资讯'
+  const label = isService ? '阀门知识' : '公司新闻'
   const dir = isService ? 'service' : 'news'
   const body = `${props.fragments.topHtml || ''}<table width="${isService ? '986' : '972'}" border="0" align="center" cellpadding="0" cellspacing="0"><tr><td width="173" valign="top">
 ${articleSidebar(props)}</td><td width="${isService ? '821' : '812'}" valign="top" ><table width="100%" border="0" align="right" cellpadding="0" cellspacing="0"><tr>
@@ -307,7 +307,7 @@ ${articleSidebar(props)}</td><td width="${isService ? '821' : '812'}" valign="to
 
 export function LegacyArticleDetailPage(props: LegacyArticleDetailPageProps) {
   const isService = props.section === 'service'
-  const label = isService ? '阀门知识' : '新闻资讯'
+  const label = isService ? '阀门知识' : '公司新闻'
   const dir = isService ? 'service' : 'news'
   const body = `${props.fragments.topHtml || ''}<table width="972" border="0" align="center" cellpadding="0" cellspacing="0"><tr><td width="173" height="239" valign="top">
 ${articleSidebar(props)}</td><td width="812" valign="top" ><table width="812" border="0" align="right" cellpadding="0" cellspacing="0"><tr>
