@@ -1,5 +1,5 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
-import { ensureLanguagesSchema, getDefaultLanguage, listLanguages } from './languages.mjs';
+import { ensureLanguagesSchema, getDefaultLanguage, hasMultipleEnabledLanguages, listLanguages } from './languages.mjs';
 import { ensureTemplatesSchema } from './templates.mjs';
 
 let schemaEnsured = false;
@@ -323,13 +323,16 @@ function hydrateColumns(rows, { languageCode, includeTranslations = true } = {})
   const columnIds = rows.map((row) => Number(row.id)).filter((id) => Number.isInteger(id) && id > 0);
   const translationsById = loadColumnTranslations(columnIds);
   const selectedLanguage = resolveLanguageForContent(languageCode);
+  const translationEnabled = hasMultipleEnabledLanguages();
 
   return rows.map((row) => {
     const translations = translationsById.get(Number(row.id)) || [];
     const translationMap = Object.fromEntries(translations.map((translation) => [translation.language_code, translation]));
     const selectedTranslation = translationMap[selectedLanguage.code];
     const defaultTranslation = translationMap[selectedLanguage.default_code];
-    const fallbackTranslation = selectedTranslation || defaultTranslation || translations[0] || null;
+    const fallbackTranslation = translationEnabled
+      ? (selectedTranslation || defaultTranslation || translations[0] || null)
+      : null;
     const displayName = fallbackTranslation?.name || row.name;
 
     return {

@@ -128,6 +128,10 @@ export function getDefaultLanguage() {
   return row ? mapLanguageRow(row) : null;
 }
 
+export function hasMultipleEnabledLanguages() {
+  return listLanguages().filter((language) => Number(language.is_enabled || 0) === 1).length > 1;
+}
+
 export function createLanguage(input) {
   ensureLanguagesSchema();
   const payload = normalizeLanguageInput(input, { isCreate: true });

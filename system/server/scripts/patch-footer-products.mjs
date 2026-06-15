@@ -41,7 +41,7 @@ if (existingLinks >= 11) {
 // 添加缺失的3个产品分类
 const additionalItems = `
           <li class="sg-site-footer__item"><a class="sg-site-footer__link" href="/products/isolation-valves/">关断阀</a></li>
-          <li class="sg-site-footer__item"><a class="sg-site-footer__link" href="/products/pipeline-ancillaries/">蒸汽系统管道附件 | 止回阀、过滤器、汽水分离器</a></li>
+          <li class="sg-site-footer__item"><a class="sg-site-footer__link" href="/products/pipeline-ancillaries/">管道附件</a></li>
           <li class="sg-site-footer__item"><a class="sg-site-footer__link" href="/products/steam-traps/">蒸汽疏水阀</a></li>`;
 
 // 在</ul>之前插入

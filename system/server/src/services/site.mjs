@@ -1,5 +1,5 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
-import { ensureLanguagesSchema, getDefaultLanguage, listLanguages } from './languages.mjs';
+import { ensureLanguagesSchema, getDefaultLanguage, hasMultipleEnabledLanguages, listLanguages } from './languages.mjs';
 import { listNews } from './news.mjs';
 import { listProducts, searchProducts } from './products.mjs';
 
@@ -24,7 +24,9 @@ export function getSiteConfig(languageCode = null, options = {}) {
   const translationMap = Object.fromEntries(translations.map((item) => [item.language_code, item]));
   const selectedTranslation = translationMap[selectedLanguage.code];
   const defaultTranslation = translationMap[selectedLanguage.default_code];
-  const fallbackTranslation = selectedTranslation || defaultTranslation || translations[0] || null;
+  const fallbackTranslation = hasMultipleEnabledLanguages()
+    ? (selectedTranslation || defaultTranslation || translations[0] || null)
+    : null;
   const merged = applySiteTranslation(base, fallbackTranslation);
 
   return {

@@ -1,6 +1,6 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { markMediaAssetStatusByPath } from './media-assets.mjs';
-import { ensureLanguagesSchema, getDefaultLanguage, listLanguages } from './languages.mjs';
+import { ensureLanguagesSchema, getDefaultLanguage, hasMultipleEnabledLanguages, listLanguages } from './languages.mjs';
 import { looksLikeLegacyMojibake } from '../utils/legacy-text.mjs';
 
 const LEGACY_MARKETING_PATTERNS = [
@@ -870,6 +870,7 @@ function hydrateProducts(rows, {
   const productIds = rows.map((row) => Number(row.id)).filter((id) => Number.isInteger(id) && id > 0);
   const translationsByProductId = loadTranslationsByProductIds(productIds);
   const selectedLanguage = resolveLanguageForContent(languageCode);
+  const translationEnabled = hasMultipleEnabledLanguages();
 
   return rows.map((row) => {
     const normalized = normalizeProductRecord(row);
@@ -879,7 +880,9 @@ function hydrateProducts(rows, {
     );
     const selectedTranslation = translationMap[selectedLanguage.code];
     const defaultTranslation = translationMap[selectedLanguage.default_code];
-    const fallbackTranslation = selectedTranslation || defaultTranslation || translations[0] || null;
+    const fallbackTranslation = translationEnabled
+      ? (selectedTranslation || defaultTranslation || translations[0] || null)
+      : null;
     const merged = applyProductTranslation(normalized, fallbackTranslation);
 
     return {
