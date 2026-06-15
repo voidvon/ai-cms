@@ -13,6 +13,53 @@ export type SiteConfig = {
   web_mobile?: string | null
   web_author?: string | null
   web_copyright?: string | null
+  seo_site_name?: string | null
+  seo_organization_name?: string | null
+  seo_default_title?: string | null
+  seo_default_description?: string | null
+  seo_home_title?: string | null
+  seo_home_description?: string | null
+  seo_default_image?: string | null
+  seo_twitter_handle?: string | null
+  seo_same_as?: string[] | null
+  seo_hreflang_links?: Array<{ lang?: string | null; url?: string | null }> | null
+  current_language_code?: string | null
+}
+
+export type SeoMetaPayload = {
+  basic?: {
+    description?: string | null
+    robots?: string | null
+    canonical?: string | null
+  }
+  openGraph?: {
+    title?: string | null
+    site_name?: string | null
+    locale?: string | null
+    localeAlternates?: string[] | null
+    description?: string | null
+    url?: string | null
+    type?: string | null
+    image?: string | null
+    imageSecureUrl?: string | null
+    imageWidth?: number | null
+    imageHeight?: number | null
+    imageAlt?: string | null
+    imageType?: string | null
+  }
+  twitter?: {
+    card?: string | null
+    site?: string | null
+    title?: string | null
+    description?: string | null
+    image?: string | null
+    imageAlt?: string | null
+  }
+}
+
+export type HreflangLink = {
+  lang?: string | null
+  url?: string | null
 }
 
 export type ProductSummary = {
@@ -125,6 +172,11 @@ export type LegacyCommonFragments = {
 export type LegacyPageBaseProps = {
   site: SiteConfig
   fragments: LegacyCommonFragments
+  seoMeta?: SeoMetaPayload | null
+  jsonLd?: Record<string, unknown> | null
+  hreflangLinks?: HreflangLink[] | null
+  faviconLinks?: Array<Record<string, string>> | null
+  themeColorMetas?: Array<Record<string, string>> | null
 }
 
 export type LegacyHomePageProps = LegacyPageBaseProps & {

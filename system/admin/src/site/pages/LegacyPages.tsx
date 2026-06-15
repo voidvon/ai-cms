@@ -1,5 +1,6 @@
 import React from 'react'
 import type {
+  HreflangLink,
   LegacyArticleDetailPageProps,
   LegacyArticleListPageProps,
   LegacyContactPageProps,
@@ -8,6 +9,7 @@ import type {
   LegacyPageBaseProps,
   LegacyProductDetailPageProps,
   LegacyProductListPageProps,
+  SeoMetaPayload,
 } from '../types'
 
 function html(value: string | number | null | undefined): string {
@@ -36,6 +38,73 @@ function cCssHead(children: React.ReactNode) {
       {children}
       <link href="/css/c.css" rel="stylesheet" type="text/css" />
     </head>
+  )
+}
+
+function renderSeoHead(props: {
+  seoMeta?: SeoMetaPayload | null
+  jsonLd?: Record<string, unknown> | null
+  hreflangLinks?: HreflangLink[] | null
+  faviconLinks?: Array<Record<string, string>> | null
+  themeColorMetas?: Array<Record<string, string>> | null
+}) {
+  const seoMeta = props.seoMeta || {}
+  const basic = seoMeta.basic || {}
+  const openGraph = seoMeta.openGraph || {}
+  const twitter = seoMeta.twitter || {}
+  const hreflangLinks = Array.isArray(props.hreflangLinks) ? props.hreflangLinks : []
+  const faviconLinks = Array.isArray(props.faviconLinks) ? props.faviconLinks : []
+  const themeColorMetas = Array.isArray(props.themeColorMetas) ? props.themeColorMetas : []
+
+  return (
+    <>
+      {basic.robots ? <meta name="robots" content={basic.robots} /> : null}
+      {basic.description ? <meta name="description" content={basic.description} /> : null}
+      {basic.canonical ? <link rel="canonical" href={basic.canonical} /> : null}
+
+      {openGraph.title ? <meta property="og:title" content={openGraph.title} /> : null}
+      {openGraph.site_name ? <meta property="og:site_name" content={openGraph.site_name} /> : null}
+      {openGraph.locale ? <meta property="og:locale" content={openGraph.locale} /> : null}
+      {(openGraph.localeAlternates || []).filter(Boolean).map((locale) => (
+        <meta key={`og-locale-${locale}`} property="og:locale:alternate" content={locale || ''} />
+      ))}
+      {openGraph.description ? <meta property="og:description" content={openGraph.description} /> : null}
+      {openGraph.url ? <meta property="og:url" content={openGraph.url} /> : null}
+      {openGraph.type ? <meta property="og:type" content={openGraph.type} /> : null}
+      {openGraph.image ? <meta property="og:image" content={openGraph.image} /> : null}
+      {openGraph.imageSecureUrl ? <meta property="og:image:secure_url" content={openGraph.imageSecureUrl} /> : null}
+      {openGraph.imageWidth ? <meta property="og:image:width" content={String(openGraph.imageWidth)} /> : null}
+      {openGraph.imageHeight ? <meta property="og:image:height" content={String(openGraph.imageHeight)} /> : null}
+      {openGraph.imageAlt ? <meta property="og:image:alt" content={openGraph.imageAlt} /> : null}
+      {openGraph.imageType ? <meta property="og:image:type" content={openGraph.imageType} /> : null}
+
+      {twitter.card ? <meta name="twitter:card" content={twitter.card} /> : null}
+      {twitter.site ? <meta name="twitter:site" content={twitter.site} /> : null}
+      {twitter.title ? <meta name="twitter:title" content={twitter.title} /> : null}
+      {twitter.description ? <meta name="twitter:description" content={twitter.description} /> : null}
+      {twitter.image ? <meta name="twitter:image" content={twitter.image} /> : null}
+      {twitter.imageAlt ? <meta name="twitter:image:alt" content={twitter.imageAlt} /> : null}
+
+      {hreflangLinks
+        .filter((item) => item?.lang && item?.url)
+        .map((item) => (
+          <link key={`hreflang-${item.lang}-${item.url}`} rel="alternate" hrefLang={item.lang || ''} href={item.url || ''} />
+        ))}
+
+      {faviconLinks.map((item, index) => (
+        <link key={`favicon-${index}`} {...item} />
+      ))}
+      {themeColorMetas.map((item, index) => (
+        <meta key={`theme-meta-${index}`} {...item} />
+      ))}
+
+      {props.jsonLd ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={raw(JSON.stringify(props.jsonLd))}
+        />
+      ) : null}
+    </>
   )
 }
 
@@ -107,13 +176,10 @@ ${legacySearchForm()}</div>
     <html xmlns="http://www.w3.org/1999/xhtml">
       <head>
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
-        <title>{props.site.web_name || ''}</title>
-        <meta name="robots" content="all" />
+        <title>{props.seoMeta?.openGraph?.title || props.site.web_name || ''}</title>
+        {renderSeoHead(props)}
         <meta name="keywords" content="" />
-        <meta name="description" content="" />
         <meta httpEquiv="X-UA-Compatible" content="IE=EmulateIE7" />
-        <link rel="icon" href="/favicon.ico" type="image/x-icon" />
-        <link rel="shortcut icon" href="/favicon.ico" type="image/x-icon" />
         <link href="css/webmain.css" rel="stylesheet" type="text/css" />
         <meta content="MSHTML 6.00.2900.3132" name="GENERATOR" />
         <base target="_blank" />
@@ -151,9 +217,9 @@ ${props.contactTableHtml}</ul><div class="page_list"><div class="list_info"></di
     <html xmlns="http://www.w3.org/1999/xhtml">
       {cCssHead(<>
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
-        <title>{`联系${props.site.web_name || ''}`}</title>
+        <title>{props.seoMeta?.openGraph?.title || `联系${props.site.web_name || ''}`}</title>
+        {renderSeoHead(props)}
         <meta name="keywords" content="" />
-        <meta name="description" content="" />
       </>)}
       <body dangerouslySetInnerHTML={raw(cLayoutBody(props, rightHtml, '', 'span'))} />
     </html>
@@ -168,9 +234,9 @@ export function LegacyContentPage(props: LegacyContentPageProps) {
     <html xmlns="http://www.w3.org/1999/xhtml">
       {cCssHead(<>
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
-        <title>{`${props.title || ''}_${props.site.web_name || ''}`}</title>
+        <title>{props.seoMeta?.openGraph?.title || `${props.title || ''}_${props.site.web_name || ''}`}</title>
+        {renderSeoHead(props)}
         <meta name="keywords" content={props.title || ''} />
-        <meta name="description" content={props.title || ''} />
       </>)}
       <body dangerouslySetInnerHTML={raw(cLayoutBody(props, rightHtml, props.fragments.aboutCategoryHtml || ''))} />
     </html>
@@ -186,6 +252,7 @@ export function LegacyProductListPage(props: LegacyProductListPageProps) {
       {cCssHead(<>
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
         <title>{`${props.smallName}|${props.smallName}型号|${props.smallName}尺寸|${props.site.web_name || ''}`}</title>
+        {renderSeoHead(props)}
         <meta name="keywords" content={props.prodKeywords} />
         <meta name="description" content={`${props.smallName}制造标准：中国GB、美标API、德标DIN等标准生产。${props.smallName}材质：铜、铸铁、铸钢、不锈钢、低温钢等。连接方式：螺纹、法兰、焊接。驱动方式：手动、气动、电动。拥有顶尖的生产设备和技术工程师，按照各国标准以及各种行业标准生产制造各种阀门。`} />
         <meta httpEquiv="X-UA-Compatible" content="IE=EmulateIE7" />
@@ -214,9 +281,10 @@ export function LegacyProductDetailPage(props: LegacyProductDetailPageProps) {
     <html>
       <head>
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
-        <title>{`${props.title}|${props.prodKeywords}`}</title>
+        <title>{props.seoMeta?.openGraph?.title || `${props.title}|${props.prodKeywords}`}</title>
+        {renderSeoHead(props)}
         <meta name="keywords" content={props.prodKeywords} />
-        <meta name="description" content={props.prodDescription} />
+        {!props.seoMeta?.basic?.description ? <meta name="description" content={props.prodDescription} /> : null}
         <meta httpEquiv="X-UA-Compatible" content="IE=EmulateIE7" />
         <meta name="classification" content={props.title} />
         <link href="/css/c.css" rel="stylesheet" type="text/css" />
@@ -261,9 +329,10 @@ ${articleSidebar(props)}</td><td width="${isService ? '821' : '812'}" valign="to
     <html xmlns="http://www.w3.org/1999/xhtml">
       <head>
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
-        <title>{`${props.title || label}_${props.site.web_name || ''}`}</title>
+        <title>{props.seoMeta?.openGraph?.title || `${props.title || label}_${props.site.web_name || ''}`}</title>
+        {renderSeoHead(props)}
         <meta name="keywords" content={props.title || label} />
-        <meta name="description" content={props.title || label} />
+        {!props.seoMeta?.basic?.description ? <meta name="description" content={props.title || label} /> : null}
         <meta content="阀门，球阀，闸阀" name="classification" />
         <link href="/img/css.css" type="text/css" rel="stylesheet" />
         <link href="/css/webmain.css" rel="stylesheet" type="text/css" />
@@ -290,9 +359,10 @@ ${articleSidebar(props)}</td><td width="812" valign="top" ><table width="812" bo
     <html xmlns="http://www.w3.org/1999/xhtml">
       <head>
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
-        <title>{`${props.title}_${isService ? props.catName : props.site.web_name || ''}`}</title>
+        <title>{props.seoMeta?.openGraph?.title || `${props.title}_${isService ? props.catName : props.site.web_name || ''}`}</title>
+        {renderSeoHead(props)}
         <meta name="keywords" content={`${props.title},${props.newsKeywords}`} />
-        <meta name="description" content={props.newsDescription} />
+        {!props.seoMeta?.basic?.description ? <meta name="description" content={props.newsDescription} /> : null}
         <meta content="阀门，球阀，闸阀" name="classification" />
         <link href="/img/css.css" type="text/css" rel="stylesheet" />
         <link href="/css/webmain.css" rel="stylesheet" type="text/css" />

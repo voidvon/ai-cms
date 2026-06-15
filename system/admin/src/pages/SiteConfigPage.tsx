@@ -19,6 +19,12 @@ type SiteConfigBaseForm = {
   icp_number: string
   web_qq: string
   web_mobile: string
+  seo_default_image: string
+  seo_site_name: string
+  seo_twitter_handle: string
+  seo_organization_name: string
+  seo_same_as_text: string
+  seo_hreflang_links_text: string
 }
 
 export default function SiteConfigPage() {
@@ -65,6 +71,12 @@ export default function SiteConfigPage() {
       icp_number: source.icp_number || '',
       web_qq: source.web_qq || '',
       web_mobile: source.web_mobile || '',
+      seo_default_image: source.seo_default_image || '',
+      seo_site_name: source.seo_site_name || '',
+      seo_twitter_handle: source.seo_twitter_handle || '',
+      seo_organization_name: source.seo_organization_name || '',
+      seo_same_as_text: source.seo_same_as_text || '',
+      seo_hreflang_links_text: source.seo_hreflang_links_text || '',
     })
     setTranslations(buildInitialTranslations(source, defaultLanguageCode, availableLanguageCodes))
     setActiveLanguage(source.current_language_code || defaultLanguageCode)
@@ -198,10 +210,75 @@ export default function SiteConfigPage() {
             </div>
 
             <div className="rounded border p-4 space-y-4">
+              <div>
+                <div className="font-medium">全局 SEO</div>
+                <div className="text-sm text-muted-foreground">分享图、站点名、组织名、社媒和 hreflang 为全站共用配置。</div>
+              </div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="seo_default_image">默认分享图</Label>
+                  <Input
+                    id="seo_default_image"
+                    value={baseData.seo_default_image}
+                    onChange={(e) => setBaseData({ ...baseData, seo_default_image: e.target.value })}
+                    placeholder="/images/share/default.jpg"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="seo_site_name">Open Graph 站点名</Label>
+                  <Input
+                    id="seo_site_name"
+                    value={baseData.seo_site_name}
+                    onChange={(e) => setBaseData({ ...baseData, seo_site_name: e.target.value })}
+                    placeholder="请输入站点名"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="seo_organization_name">组织名称</Label>
+                  <Input
+                    id="seo_organization_name"
+                    value={baseData.seo_organization_name}
+                    onChange={(e) => setBaseData({ ...baseData, seo_organization_name: e.target.value })}
+                    placeholder="请输入组织名称"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="seo_twitter_handle">Twitter 账号</Label>
+                  <Input
+                    id="seo_twitter_handle"
+                    value={baseData.seo_twitter_handle}
+                    onChange={(e) => setBaseData({ ...baseData, seo_twitter_handle: e.target.value })}
+                    placeholder="@example"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="seo_same_as_text">社媒链接</Label>
+                  <Textarea
+                    id="seo_same_as_text"
+                    value={baseData.seo_same_as_text}
+                    onChange={(e) => setBaseData({ ...baseData, seo_same_as_text: e.target.value })}
+                    placeholder={"每行一个 URL"}
+                    rows={4}
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="seo_hreflang_links_text">hreflang 列表</Label>
+                  <Textarea
+                    id="seo_hreflang_links_text"
+                    value={baseData.seo_hreflang_links_text}
+                    onChange={(e) => setBaseData({ ...baseData, seo_hreflang_links_text: e.target.value })}
+                    placeholder={"每行一条，格式：zh-CN|https://example.com/"}
+                    rows={5}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded border p-4 space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <div className="font-medium">语言内容</div>
-                  <div className="text-sm text-muted-foreground">网站名称、公司名称、地址、联系人等字段按语言分别维护。</div>
+                  <div className="text-sm text-muted-foreground">网站名称、公司名称、地址、联系人，以及默认 SEO 文案按语言分别维护。</div>
                 </div>
                 <div className="w-48">
                   <Select value={activeLanguage} onValueChange={setActiveLanguage}>
@@ -285,6 +362,44 @@ export default function SiteConfigPage() {
                     placeholder="请输入网站作者"
                   />
                 </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="seo_default_title">默认 SEO 标题</Label>
+                  <Input
+                    id="seo_default_title"
+                    value={currentTranslation.seo_default_title || ''}
+                    onChange={(e) => updateTranslation({ seo_default_title: e.target.value })}
+                    placeholder="用于未单独设置页面 SEO 标题时兜底"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="seo_default_description">默认 SEO 描述</Label>
+                  <Textarea
+                    id="seo_default_description"
+                    value={currentTranslation.seo_default_description || ''}
+                    onChange={(e) => updateTranslation({ seo_default_description: e.target.value })}
+                    placeholder="用于未单独设置页面 SEO 描述时兜底"
+                    rows={3}
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="seo_home_title">首页 SEO 标题</Label>
+                  <Input
+                    id="seo_home_title"
+                    value={currentTranslation.seo_home_title || ''}
+                    onChange={(e) => updateTranslation({ seo_home_title: e.target.value })}
+                    placeholder="首页专用标题，可留空回退默认 SEO 标题"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="seo_home_description">首页 SEO 描述</Label>
+                  <Textarea
+                    id="seo_home_description"
+                    value={currentTranslation.seo_home_description || ''}
+                    onChange={(e) => updateTranslation({ seo_home_description: e.target.value })}
+                    placeholder="首页专用描述，可留空回退默认 SEO 描述"
+                    rows={3}
+                  />
+                </div>
               </div>
             </div>
 
@@ -307,6 +422,12 @@ function createEmptyBaseData(): SiteConfigBaseForm {
     icp_number: '',
     web_qq: '',
     web_mobile: '',
+    seo_default_image: '',
+    seo_site_name: '',
+    seo_twitter_handle: '',
+    seo_organization_name: '',
+    seo_same_as_text: '',
+    seo_hreflang_links_text: '',
   }
 }
 
@@ -319,6 +440,10 @@ function createEmptyTranslation(patch: Partial<SiteConfigTranslation> = {}): Sit
     company_email: '',
     web_copyright: '',
     web_author: '',
+    seo_default_title: '',
+    seo_default_description: '',
+    seo_home_title: '',
+    seo_home_description: '',
     ...patch,
   }
 }
@@ -344,6 +469,10 @@ function buildInitialTranslations(config: SiteConfig, defaultLanguageCode: strin
       company_email: config.company_email || '',
       web_copyright: config.web_copyright || '',
       web_author: config.web_author || '',
+      seo_default_title: config.seo_default_title || '',
+      seo_default_description: config.seo_default_description || '',
+      seo_home_title: config.seo_home_title || '',
+      seo_home_description: config.seo_home_description || '',
     })
   }
 

@@ -46,7 +46,8 @@ export function createCmsTemplateRuntime({
 
     return injectPageAssets(html, {
       templateCode: template.code,
-      styleTemplates
+      styleTemplates,
+      props
     });
   }
 
@@ -85,8 +86,129 @@ export function createCmsTemplateRuntime({
     }
   }
 
-  function injectPageAssets(html, { templateCode, styleTemplates }) {
-    return injectStylesheetLinks(html, templateCode, styleTemplates);
+  function injectPageAssets(html, { templateCode, styleTemplates, props }) {
+    const withSeoHead = injectSeoHead(html, props);
+    return injectStylesheetLinks(withSeoHead, templateCode, styleTemplates);
+  }
+
+  function injectSeoHead(html, props = {}) {
+    const headMarkup = buildSeoHeadMarkup(props);
+    if (!headMarkup) {
+      return html;
+    }
+
+    let output = String(html || '');
+    const title = String(props?.seoMeta?.openGraph?.title || '').trim();
+    if (title) {
+      if (/<title>[\s\S]*?<\/title>/i.test(output)) {
+        output = output.replace(/<title>[\s\S]*?<\/title>/i, `<title>${escapeHtml(title)}</title>`);
+      } else if (/<head[^>]*>/i.test(output)) {
+        output = output.replace(/<head[^>]*>/i, (head) => `${head}<title>${escapeHtml(title)}</title>`);
+      }
+    }
+
+    output = output
+      .replace(/<meta\s+name="description"[\s\S]*?>/gi, '')
+      .replace(/<meta\s+name="robots"[\s\S]*?>/gi, '')
+      .replace(/<link\s+rel="canonical"[\s\S]*?>/gi, '')
+      .replace(/<meta\s+property="og:[^"]+"[\s\S]*?>/gi, '')
+      .replace(/<meta\s+name="twitter:[^"]+"[\s\S]*?>/gi, '')
+      .replace(/<link\s+rel="alternate"[\s\S]*?hreflang[\s\S]*?>/gi, '')
+      .replace(/<script\s+type="application\/ld\+json"[\s\S]*?<\/script>/gi, '');
+
+    if (/<\/head>/i.test(output)) {
+      return output.replace(/<\/head>/i, `${headMarkup}\n</head>`);
+    }
+    return `${headMarkup}\n${output}`;
+  }
+
+  function buildSeoHeadMarkup(props = {}) {
+    const lines = [];
+    const seoMeta = props?.seoMeta || {};
+    const basic = seoMeta.basic || {};
+    const openGraph = seoMeta.openGraph || {};
+    const twitter = seoMeta.twitter || {};
+    const hreflangLinks = Array.isArray(props?.hreflangLinks) ? props.hreflangLinks : [];
+    const faviconLinks = Array.isArray(props?.faviconLinks) ? props.faviconLinks : [];
+    const themeColorMetas = Array.isArray(props?.themeColorMetas) ? props.themeColorMetas : [];
+
+    appendMeta(lines, 'name', 'description', basic.description);
+    appendMeta(lines, 'name', 'robots', basic.robots);
+    appendLink(lines, { rel: 'canonical', href: basic.canonical });
+
+    appendMeta(lines, 'property', 'og:title', openGraph.title);
+    appendMeta(lines, 'property', 'og:site_name', openGraph.site_name);
+    appendMeta(lines, 'property', 'og:locale', openGraph.locale);
+    for (const locale of Array.isArray(openGraph.localeAlternates) ? openGraph.localeAlternates : []) {
+      appendMeta(lines, 'property', 'og:locale:alternate', locale);
+    }
+    appendMeta(lines, 'property', 'og:description', openGraph.description);
+    appendMeta(lines, 'property', 'og:url', openGraph.url);
+    appendMeta(lines, 'property', 'og:type', openGraph.type);
+    appendMeta(lines, 'property', 'og:image', openGraph.image);
+    appendMeta(lines, 'property', 'og:image:secure_url', openGraph.imageSecureUrl);
+    appendMeta(lines, 'property', 'og:image:width', openGraph.imageWidth);
+    appendMeta(lines, 'property', 'og:image:height', openGraph.imageHeight);
+    appendMeta(lines, 'property', 'og:image:alt', openGraph.imageAlt);
+    appendMeta(lines, 'property', 'og:image:type', openGraph.imageType);
+
+    appendMeta(lines, 'name', 'twitter:card', twitter.card);
+    appendMeta(lines, 'name', 'twitter:site', twitter.site);
+    appendMeta(lines, 'name', 'twitter:title', twitter.title);
+    appendMeta(lines, 'name', 'twitter:description', twitter.description);
+    appendMeta(lines, 'name', 'twitter:image', twitter.image);
+    appendMeta(lines, 'name', 'twitter:image:alt', twitter.imageAlt);
+
+    for (const item of hreflangLinks) {
+      appendLink(lines, {
+        rel: 'alternate',
+        hreflang: item?.lang,
+        href: item?.url
+      });
+    }
+
+    for (const item of faviconLinks) {
+      appendLink(lines, item);
+    }
+    for (const item of themeColorMetas) {
+      appendTag(lines, 'meta', item);
+    }
+
+    if (props?.jsonLd && typeof props.jsonLd === 'object') {
+      lines.push(`<script type="application/ld+json">${escapeHtml(JSON.stringify(props.jsonLd))}</script>`);
+    }
+
+    return lines.join('\n');
+  }
+
+  function appendMeta(lines, attrName, attrValue, content) {
+    if (content === undefined || content === null || content === '') {
+      return;
+    }
+    lines.push(`<meta ${attrName}="${escapeHtml(String(attrValue))}" content="${escapeHtml(String(content))}" />`);
+  }
+
+  function appendLink(lines, attributes = {}) {
+    const rendered = renderAttributes(attributes);
+    if (!rendered) {
+      return;
+    }
+    lines.push(`<link ${rendered} />`);
+  }
+
+  function appendTag(lines, tagName, attributes = {}) {
+    const rendered = renderAttributes(attributes);
+    if (!rendered) {
+      return;
+    }
+    lines.push(`<${tagName} ${rendered} />`);
+  }
+
+  function renderAttributes(attributes = {}) {
+    return Object.entries(attributes)
+      .filter(([, value]) => value !== undefined && value !== null && value !== '')
+      .map(([key, value]) => `${key}="${escapeHtml(String(value))}"`)
+      .join(' ');
   }
 
   function injectStylesheetLinks(html, templateCode, styleTemplates) {

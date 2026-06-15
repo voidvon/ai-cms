@@ -96,6 +96,30 @@ CREATE TABLE IF NOT EXISTS site_config (
   legacy_extra TEXT
 );
 
+CREATE TABLE IF NOT EXISTS site_config_translations (
+  id INTEGER PRIMARY KEY,
+  site_config_id INTEGER NOT NULL,
+  language_id INTEGER NOT NULL,
+  web_name TEXT,
+  company_name TEXT,
+  company_address TEXT,
+  contact_person TEXT,
+  company_email TEXT,
+  web_copyright TEXT,
+  web_author TEXT,
+  seo_default_title TEXT,
+  seo_default_description TEXT,
+  seo_home_title TEXT,
+  seo_home_description TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(site_config_id, language_id),
+  FOREIGN KEY (language_id) REFERENCES languages(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_site_config_translations_site_config_id
+ON site_config_translations(site_config_id, language_id);
+
 CREATE TABLE IF NOT EXISTS template_variants (
   id INTEGER PRIMARY KEY,
   template_name TEXT NOT NULL,

@@ -90,20 +90,6 @@ function buildLegacyNewsCategoryUrl(dirName, category) {
   return `/${dirName}/${resolveLegacyCategoryPublicId(category)}.html`;
 }
 
-const LEGACY_MARKETING_PATTERNS = [
-  /以上内容由彪维公司[（(](?:www\.)?(?:bilwe|bilvie)\.com[）)]编写，?转载请注明文章出处。?/gi,
-  /[-,，\s]*上海彪维供应[-,，\s]*中国驰名商标/gi,
-  /[-,，\s]*上海彪维疏水阀/gi,
-  /[,，]?\s*上海彪维专业制造/gi,
-  /彪维传热介绍[，,]*/gi,
-  /[,，]?\s*彪维公司始终站在蒸汽利用的历史前沿[\s\S]*$/gi
-];
-const LEGACY_PRODUCT_BRAND_PATTERNS = [
-  /(?:美国|进口)?彪维(?=[\u4E00-\u9FFFA-Za-z0-9])/gi,
-  /[-,，\s]*中国驰名商标/gi,
-  /【\s*彪维\s*】/gi,
-  /我公司彪维/gi
-];
 const MANAGED_STATIC_ROOT_FILES = ['index.html', 'contact.html', 'sitemap.xml', 'robots.txt', 'llms.txt', 'llms-full.txt', 'index.md'];
 const MANAGED_STATIC_DIRS = ['about', 'news', 'product', 'products', 'service', 'products'];
 const SHARED_STATIC_DIRS = ['css', 'images', 'skin', 'uploads'];
@@ -791,17 +777,16 @@ function buildLegacyHomePageProps(templateContext) {
     homeFeaturedProductItems: featuredProducts,
     homeNewsItems,
     homeServiceItems,
-    // SEO元数据
     seoMeta: buildSeoMeta({
-      title: '斯派莎克阀门 蒸汽系统解决方案 | SpiraxSarco 中国',
-      description: '探索 Spirax Sarco 斯派莎克蒸汽系统解决方案，包括蒸汽疏水阀、压力控制阀、流量计、冷凝水回收以及蒸汽系统服务。',
-      url: templateContext.site.web_url,
+      title: templateContext.site.seo_home_title || templateContext.site.seo_default_title || templateContext.site.web_name || '',
+      description: templateContext.site.seo_home_description || templateContext.site.seo_default_description || templateContext.site.company_name || templateContext.site.web_name || '',
+      url: '/',
       site: templateContext.site
     }),
     jsonLd: buildJsonLdOrganization(templateContext.site),
     faviconLinks: generateFaviconLinks(),
     themeColorMetas: generateThemeColorMetas(),
-    hreflangLinks: buildHreflangLinks()
+    hreflangLinks: buildHreflangLinks(templateContext.site)
   };
 }
 
@@ -894,6 +879,7 @@ function buildLegacyColumnUrl(column, rowsById = new Map()) {
 }
 
 function buildLegacyContactPageProps(templateContext) {
+  const pageTitleBase = templateContext.site.seo_organization_name || templateContext.site.company_name || templateContext.site.web_name || '';
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
@@ -905,28 +891,29 @@ function buildLegacyContactPageProps(templateContext) {
       breadcrumbOptions: { separatorHtml: ' &gt;&gt; ' }
     }),
     contactTableHtml: '',
-    // SEO元数据
     seoMeta: buildSeoMeta({
-      title: '联系我们 | Spirax Sarco 斯派莎克',
-      description: `联系 Spirax Sarco 斯派莎克中国团队，获取蒸汽系统专业支持。电话：${templateContext.site.company_phone || '+86 157 9019 6438'}`,
-      url: `${templateContext.site.web_url}/contact.html`,
+      title: pageTitleBase ? `联系我们 | ${pageTitleBase}` : '联系我们',
+      description: templateContext.site.seo_default_description || templateContext.site.company_address || templateContext.site.company_phone || pageTitleBase || '联系我们',
+      url: '/contact.html',
       site: templateContext.site
     }),
     jsonLd: buildJsonLdOrganization(templateContext.site),
     faviconLinks: generateFaviconLinks(),
     themeColorMetas: generateThemeColorMetas(),
-    hreflangLinks: buildHreflangLinks()
+    hreflangLinks: buildHreflangLinks(templateContext.site)
   };
 }
 
 function buildLegacyContentPageProps(templateContext, item) {
   const parentCategory = templateContext.corporationCategories.find((entry) => normalizeInteger(entry.id, 0) === normalizeInteger(item.parent_id, 0)) || null;
+  const pageUrl = `/about/about-${normalizeInteger(item.id, 0)}.html`;
+  const pageTitleBase = templateContext.site.seo_organization_name || templateContext.site.company_name || templateContext.site.web_name || '';
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
       pageType: 'content',
       title: item.name || '',
-      url: `/about/about-${normalizeInteger(item.id, 0)}.html`,
+      url: pageUrl,
       section: { type: 'corporation', name: '公司栏目', url: '/about/' },
       categoryChain: buildTemplateCategoryChain({
         category: item,
@@ -935,7 +922,7 @@ function buildLegacyContentPageProps(templateContext, item) {
         urlBuilder: (categoryItem) => `/about/about-${normalizeInteger(categoryItem.id, 0)}.html`
       }),
       categoryType: 'corporation',
-      categoryUrl: `/about/about-${normalizeInteger(item.id, 0)}.html`,
+      categoryUrl: pageUrl,
       parentCategory,
       parentCategoryType: 'corporation',
       parentCategoryUrl: parentCategory ? `/about/about-${normalizeInteger(parentCategory.id, 0)}.html` : '',
@@ -945,17 +932,16 @@ function buildLegacyContentPageProps(templateContext, item) {
     title: item.name || '',
     contentHtml: normalizeLegacyRichTextHtml(item.content_html, templateContext.site) || '',
     secondaryMenuItems: buildLegacyCorporationMenuItems(templateContext.corporationCategories, normalizeInteger(item.id, 0)),
-    // SEO元数据
     seoMeta: buildSeoMeta({
-      title: `${item.name || ''} | Spirax Sarco 斯派莎克`,
-      description: item.summary || `了解 Spirax Sarco 斯派莎克的${item.name || ''}信息`,
-      url: `${templateContext.site.web_url}/about/about-${normalizeInteger(item.id, 0)}.html`,
+      title: item.seo_title || (item.name && pageTitleBase ? `${item.name} | ${pageTitleBase}` : item.name || pageTitleBase),
+      description: item.seo_description || item.summary || templateContext.site.seo_default_description || item.name || '',
+      url: pageUrl,
       site: templateContext.site
     }),
     jsonLd: buildJsonLdOrganization(templateContext.site),
     faviconLinks: generateFaviconLinks(),
     themeColorMetas: generateThemeColorMetas(),
-    hreflangLinks: buildHreflangLinks()
+    hreflangLinks: buildHreflangLinks(templateContext.site)
   };
 }
 
@@ -993,13 +979,27 @@ function buildLegacySingleColumnPageProps(templateContext, column) {
     newsDescription: column.seo_description || '',
     newsKeywords: column.seo_keywords || '',
     keywords: column.seo_keywords || '',
-    description: column.seo_description || ''
+    description: column.seo_description || '',
+    seoMeta: buildSeoMeta({
+      title: column.seo_title || buildSectionSeoTitle(column.name, templateContext.site),
+      description: column.seo_description || columnPageData?.summary || templateContext.site.seo_default_description || column.name || '',
+      url,
+      image: columnPageData?.mastheadImage || columnPageData?.heroImage || '',
+      site: templateContext.site
+    }),
+    jsonLd: buildJsonLdOrganization(templateContext.site),
+    faviconLinks: generateFaviconLinks(),
+    themeColorMetas: generateThemeColorMetas(),
+    hreflangLinks: buildHreflangLinks(templateContext.site)
   };
 }
 
 function buildLegacyProductListPageProps({ templateContext, category, parent, children, pageItems, pageNumber, pageCount, totalRecords, categoryMap = null }) {
   const rootLevelCategories = templateContext.productCategories.filter((item) => normalizeInteger(item.parent_id, 0) === 0);
   const fileStem = normalizeInteger(category.id, 0) === 0 ? 'index' : String(category.id);
+  const categoryUrl = normalizeInteger(category?.id, 0) === 0
+    ? '/products/'
+    : buildLegacyProductCategoryUrl(category, categoryMap);
 
   // 如果没有传入 categoryMap，则创建一个
   if (!categoryMap) {
@@ -1079,7 +1079,7 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
     ...buildLegacyPageContextProps({
       pageType: 'product-list',
       title: category.name || '',
-      url: buildLegacyProductCategoryUrl(category, categoryMap),
+      url: categoryUrl,
       section: { type: 'product', name: '产品', url: '/products/' },
       categoryChain: buildTemplateCategoryChain({
         category,
@@ -1088,7 +1088,7 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
         urlBuilder: (cat) => buildLegacyProductCategoryUrl(cat, categoryMap)
       }),
       categoryType: 'product',
-      categoryUrl: buildLegacyProductCategoryUrl(category, categoryMap),
+      categoryUrl,
       parentCategory: parent,
       parentCategoryType: 'product',
       parentCategoryUrl: parent ? buildLegacyProductCategoryUrl(parent, categoryMap) : '',
@@ -1127,7 +1127,18 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
           summary: child.seo_description || ''
         })),
     pagerHtml: buildLegacyProductPager(fileStem, pageNumber, pageCount, totalRecords),
-    prodKeywords: category.seo_keywords || category.name || ''
+    prodKeywords: category.seo_keywords || category.name || '',
+    seoMeta: buildSeoMeta({
+      title: category.seo_title || buildSectionSeoTitle(category.name || '产品', templateContext.site),
+      description: category.seo_description || categoryPageData?.summary || templateContext.site.seo_default_description || category.name || '',
+      url: categoryUrl,
+      image: categoryPageData?.mastheadImage || categoryPageData?.heroImage || category.primary_image || '',
+      site: templateContext.site
+    }),
+    jsonLd: buildJsonLdOrganization(templateContext.site),
+    faviconLinks: generateFaviconLinks(),
+    themeColorMetas: generateThemeColorMetas(),
+    hreflangLinks: buildHreflangLinks(templateContext.site)
   };
 }
 
@@ -1192,12 +1203,13 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
     };
   }
 
+  const productUrl = buildProductUrl({ id: normalizeInteger(product.id, 0), slug: product.slug, column_id: product.column_id });
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
       pageType: 'product-detail',
       title: product.name || '',
-      url: buildProductUrl({ id: normalizeInteger(product.id, 0), slug: product.slug }),
+      url: productUrl,
       section: { type: 'product', name: '产品', url: '/products/' },
       categoryChain: buildTemplateCategoryChain({
         category,
@@ -1212,7 +1224,7 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
       parentCategoryUrl: parent ? buildLegacyProductCategoryUrl(parent, categoryMap) : '',
       content: product,
       contentType: 'product',
-      contentUrl: buildProductUrl({ id: normalizeInteger(product.id, 0), slug: product.slug }),
+      contentUrl: productUrl,
       breadcrumbItems: [
         { label: '产品', href: '/products/' },
         ...buildLegacyProductCategoryBreadcrumbItems(category, parent, categoryMap),
@@ -1237,7 +1249,7 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
       bodyHtml: enrichedBody.html,
       pageData: productPageData,
       topPanel: productPageData?.topPanel || null,
-      url: buildProductUrl({ id: normalizeInteger(product.id, 0), slug: product.slug })
+      url: productUrl
     },
     relatedProductItems: relatedProducts.map((item) => ({
       id: item.id,
@@ -1253,12 +1265,11 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
     sectionNavItems: enrichedBody.items,
     currentCategoryPageData: categoryPageData,
     currentProductPageData: productPageData,
-    // SEO元数据
-    seoMeta: buildProductSeoMeta(product, templateContext.site),
-    jsonLd: buildJsonLdProduct(product, templateContext.site),
+    seoMeta: buildProductSeoMeta(product, templateContext.site, { url: productUrl }),
+    jsonLd: buildJsonLdProduct(product, templateContext.site, { url: productUrl }),
     faviconLinks: generateFaviconLinks(),
     themeColorMetas: generateThemeColorMetas(),
-    hreflangLinks: buildHreflangLinks()
+    hreflangLinks: buildHreflangLinks(templateContext.site)
   };
 }
 
@@ -1269,12 +1280,13 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
   const sectionDir = sectionConfig.dirName;
   const sectionLabel = sectionConfig.sectionLabel;
   const categoryPublicId = resolveLegacyCategoryPublicId(category);
+  const categoryUrl = buildLegacyNewsCategoryUrl(sectionDir, category);
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
       pageType: 'article-list',
       title: category.name || '',
-      url: buildLegacyNewsCategoryUrl(sectionDir, category),
+      url: categoryUrl,
       section: { type: isService ? 'service' : 'news', name: sectionLabel, url: `/${sectionDir}/` },
       categoryChain: buildTemplateCategoryChain({
         category,
@@ -1283,7 +1295,7 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
         urlBuilder: (categoryItem) => buildLegacyNewsCategoryUrl(sectionDir, categoryItem)
       }),
       categoryType: isService ? 'service' : 'news',
-      categoryUrl: buildLegacyNewsCategoryUrl(sectionDir, category),
+      categoryUrl,
       breadcrumbItems: [
         { label: sectionLabel, href: `/${sectionDir}/` },
         { label: category.name || '' }
@@ -1311,7 +1323,17 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
       pageNumber,
       pageCount,
       totalRecords
-    })
+    }),
+    seoMeta: buildSeoMeta({
+      title: category.seo_title || buildSectionSeoTitle(category.name || sectionLabel, templateContext.site),
+      description: category.seo_description || templateContext.site.seo_default_description || category.name || sectionLabel,
+      url: categoryUrl,
+      site: templateContext.site
+    }),
+    jsonLd: buildJsonLdOrganization(templateContext.site),
+    faviconLinks: generateFaviconLinks(),
+    themeColorMetas: generateThemeColorMetas(),
+    hreflangLinks: buildHreflangLinks(templateContext.site)
   };
 }
 
@@ -1321,6 +1343,7 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, item, cat
     || { dirName: isService ? 'service' : 'news', sectionLabel: isService ? '服务' : '公司新闻', sectionType: isService ? 'service' : 'news' };
   const sectionDir = sectionConfig.dirName;
   const sectionLabel = sectionConfig.sectionLabel;
+  const articleUrl = `/${sectionDir}/detail/${normalizeInteger(item.id, 0)}.html`;
   const relatedArticles = listNews({ limit: 10000, languageCode: templateContext.languageCode })
     .filter((entry) => normalizeInteger(entry.column_id, 0) === normalizeInteger(item.column_id, 0) && normalizeInteger(entry.id, 0) !== normalizeInteger(item.id, 0))
     .slice(0, 3);
@@ -1329,7 +1352,7 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, item, cat
     ...buildLegacyPageContextProps({
       pageType: 'article-detail',
       title: item.title || '',
-      url: `/${sectionDir}/detail/${normalizeInteger(item.id, 0)}.html`,
+      url: articleUrl,
       section: { type: isService ? 'service' : 'news', name: sectionLabel, url: `/${sectionDir}/` },
       categoryChain: buildTemplateCategoryChain({
         category,
@@ -1341,7 +1364,7 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, item, cat
       categoryUrl: category ? buildLegacyNewsCategoryUrl(sectionDir, category) : '',
       content: item,
       contentType: isService ? 'service-article' : 'news-article',
-      contentUrl: `/${sectionDir}/detail/${normalizeInteger(item.id, 0)}.html`,
+      contentUrl: articleUrl,
       breadcrumbItems: [
         { label: sectionLabel, href: `/${sectionDir}/` },
         { label: category?.name || '' }
@@ -1366,7 +1389,7 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, item, cat
       bodyHtml: normalizeLegacyRichTextHtml(item.content_html, templateContext.site) || '',
       image: item.picture || '',
       date: formatLegacyDateOnly(item.created_at),
-      url: `/${sectionDir}/detail/${normalizeInteger(item.id, 0)}.html`
+      url: articleUrl
     },
     relatedArticleItems: relatedArticles.map((entry) => ({
       id: entry.id,
@@ -1378,12 +1401,11 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, item, cat
     })),
     previousHtml: previous ? `<a href="${previous.id}.html" class="Font_2e4690_a ">${escapeHtml(previous.title || '')}</a>` : '<span class="Font_2e4690_a">没有上一篇</span>',
     nextHtml: next ? `<a href="${next.id}.html" class="Font_2e4690_a ">${escapeHtml(next.title || '')}</a>` : '<span class="Font_2e4690_a">没有下一篇</span>',
-    // SEO元数据
-    seoMeta: buildArticleSeoMeta(item, templateContext.site),
-    jsonLd: buildJsonLdArticle(item, templateContext.site),
+    seoMeta: buildArticleSeoMeta(item, templateContext.site, { url: articleUrl }),
+    jsonLd: buildJsonLdArticle(item, templateContext.site, { url: articleUrl }),
     faviconLinks: generateFaviconLinks(),
     themeColorMetas: generateThemeColorMetas(),
-    hreflangLinks: buildHreflangLinks()
+    hreflangLinks: buildHreflangLinks(templateContext.site)
   };
 }
 
@@ -1552,6 +1574,18 @@ function buildLegacyBreadcrumbLink(href, label) {
   return `<a href="${escapeHtmlAttribute(href)}">${escapeHtml(label)}</a>`;
 }
 
+function buildSectionSeoTitle(title, site) {
+  const normalizedTitle = String(title || '').trim();
+  const siteTitleBase = String(site?.seo_organization_name || site?.company_name || site?.web_name || '').trim();
+  if (!normalizedTitle) {
+    return siteTitleBase;
+  }
+  if (!siteTitleBase || normalizedTitle === siteTitleBase) {
+    return normalizedTitle;
+  }
+  return `${normalizedTitle} | ${siteTitleBase}`;
+}
+
 function buildLegacyProductBreadcrumbItems(category, parent, categoryMap = null) {
   const items = [{ label: '产品', href: '/products/' }];
   items.push(...buildLegacyProductCategoryBreadcrumbItems(category, parent, categoryMap));
@@ -1612,45 +1646,11 @@ function buildCategorySlugPath(category, categoryMap) {
 }
 
 function normalizeLegacyTemplateMarkup(value, site) {
-  const companyName = site.company_name || site.web_name || '';
-  const companyPhone = site.company_phone || '';
-  const companyFax = site.company_fax || '';
-  const companyMobile = site.web_mobile || '';
-  const companyEmail = site.company_email || '';
-  const siteUrl = site.web_url || '/';
-  let output = String(value || '');
-
-  output = output
+  return String(value || '')
     .replace(/\/Search\.asp\?action=search/gi, '/search')
     .replace(/\/search\.asp\?action=search/gi, '/search')
     .replace(/\/Search\.asp\b/gi, '/search')
-    .replace(/\/search\.asp\b/gi, '/search')
-    .replace(/https?:\/\/(?:www\.)?bilvie\.com\/?/gi, siteUrl)
-    .replace(/https?:\/\/(?:www\.)?bilwe\.com\/?/gi, siteUrl)
-    .replace(/彪维阀门品牌/gi, '斯派莎克阀门品牌')
-    .replace(/彪维流体设备/gi, companyName)
-    .replace(/彪维流体设备（上海）有限公司|彪维流体设备\(上海\)有限公司|彪维阀门有限公司/gi, companyName)
-    .replace(/alt="彪维流体设备"/gi, `alt="${escapeHtmlAttribute(companyName)}"`)
-    .replace(/全国服务电话：\s*021-51602737/gi, companyPhone ? `全国服务电话：${companyPhone}` : '')
-    .replace(/TEL:\s*021-51602737\s*18121314445/gi, buildLegacyTelText(companyPhone, companyMobile))
-    .replace(/电话:\s*021-51602737/gi, companyPhone ? `电话:${companyPhone}` : '')
-    .replace(/传真:\s*021-51062757/gi, companyFax ? `传真:${companyFax}` : '')
-    .replace(/info@(?:<strong>)?spiraxsarcocn(?:<\/strong>)?\.com/gi, companyEmail);
-
-  return output;
-}
-
-function buildLegacyTelText(companyPhone, companyMobile) {
-  if (companyPhone && companyMobile) {
-    return `TEL:${companyPhone} ${companyMobile}`;
-  }
-  if (companyPhone) {
-    return `TEL:${companyPhone}`;
-  }
-  if (companyMobile) {
-    return `TEL:${companyMobile}`;
-  }
-  return '';
+    .replace(/\/search\.asp\b/gi, '/search');
 }
 
 function buildLegacyProductsMenu(categories) {
@@ -2489,7 +2489,7 @@ function extractRenderableNewsContentSummary(value) {
 }
 
 function normalizeRenderableLegacyText(value) {
-  let output = String(value || '')
+  return String(value || '')
     .replace(/[\u0000-\u001F\u007F]/g, ' ')
     .replace(/&nbsp;/gi, ' ')
     .replace(/&quot;/gi, '"')
@@ -2498,14 +2498,7 @@ function normalizeRenderableLegacyText(value) {
     .replace(/&gt;/gi, '>')
     .replace(/&amp;/gi, '&')
     .replace(/\s+/g, ' ')
-    .trim();
-  for (const pattern of LEGACY_MARKETING_PATTERNS) {
-    output = output.replace(pattern, ' ');
-  }
-  for (const pattern of LEGACY_PRODUCT_BRAND_PATTERNS) {
-    output = output.replace(pattern, ' ');
-  }
-  return output
+    .trim()
     .replace(/^\s*[●•\-|,，、/]+\s*/g, '')
     .replace(/\s*[●•\-|,，、/]+\s*$/g, '')
     .replace(/\s+/g, ' ')
@@ -2573,58 +2566,14 @@ function normalizeLegacyRichTextHtml(value, siteConfig = null) {
   if (!html) {
     return '';
   }
-  const site = siteConfig || getSiteConfig();
-  const companyName = site.company_name || site.web_name || '斯派莎克阀门制造有限公司';
-  const siteUrl = site.web_url || '/';
-  const companyEmail = site.company_email || '';
-
-  let output = html
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '')
-    .replace(/<p[^>]*>\s*以上内容由彪维公司[（(](?:www\.)?(?:bilwe|bilvie)\.com[）)]编写，?转载请注明文章出处。?\s*<\/p>/gi, '')
-    .replace(/以上内容由彪维公司[（(](?:www\.)?(?:bilwe|bilvie)\.com[）)]编写，?转载请注明文章出处。?/gi, '');
-
-  for (const pattern of LEGACY_MARKETING_PATTERNS) {
-    output = output.replace(pattern, ' ');
-  }
-  for (const pattern of LEGACY_PRODUCT_BRAND_PATTERNS) {
-    output = output.replace(pattern, ' ');
-  }
+  let output = html.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
 
   output = normalizeLegacyMetaAttributes(output);
 
   return output
-    .replaceAll('/service/detail/www.bilvie.com', siteUrl)
-    .replaceAll('/service/detail/www.bilwe.com', siteUrl)
-    .replaceAll('www.bilvie.com', siteUrl)
-    .replaceAll('www.bilwe.com', siteUrl)
-    .replace(/data-ke-src="[^"]*(?:bilvie|bilwe)\.com[^"]*"/gi, `data-ke-src="${escapeHtmlAttribute(siteUrl)}"`)
-    .replace(/(?:https?:\/\/)?www\.(?:bilvie|bilwe)\.com/gi, siteUrl)
-    .replace(/https?:\/\/(?:www\.)?bilvie\.com\/?/gi, siteUrl)
-    .replace(/https?:\/\/(?:www\.)?bilwe\.com\/?/gi, siteUrl)
-    .replace(/彪维阀门品牌/gi, '斯派莎克阀门品牌')
-    .replace(/彪维流体设备（上海）有限公司|彪维流体设备\(上海\)有限公司|彪维阀门有限公司/gi, companyName)
-    .replace(/彪维流体设备/gi, companyName)
-    .replace(/<a[^>]*>\s*彪维\s*<\/a>\s*流体/gi, companyName)
-    .replace(/彪维流体/gi, companyName)
-    .replace(/彪维阀门集团/gi, companyName)
-    .replace(/合资牌彪维/gi, '合资品牌')
-    .replace(/彪维专业生产/gi, '专业生产')
-    .replace(/彪维公司的/gi, '公司的')
-    .replace(/彪维公司/gi, '公司')
-    .replace(/<strong>\s*彪维\s*<\/strong>(\s*<a\b)/gi, '$1')
-    .replace(/【\s*彪维\s*】/gi, '')
-    .replace(/我公司彪维/gi, '我公司')
-    .replace(/alt="彪维流体设备"/gi, `alt="${escapeHtmlAttribute(companyName)}"`)
-    .replace(/info@(?:<strong>)?spiraxsarcocn(?:<\/strong>)?\.com/gi, companyEmail)
     .replace(/href="https?:\/\/\/+"/gi, 'href="/"')
     .replace(/data-ke-src="https?:\/\/\/+"/gi, 'data-ke-src="/"')
     .replace(/https?:\/\/\/+(?=[^/"])/gi, '/')
-    .replace(/https?:\/\/(?:www\.)?spiraxsarcocn\.com(\/[^\s"'<>]*)?/gi, (_, relativePath = '/') => relativePath || '/')
-    .replace(/https?:\/\/(?:www\.)?(?:bilvie\.com|bilwe\.com)(\/(?:Product|product|products|valve)\/\d+(?:-\d+)?\.html)/gi, '$1')
-    .replace(/https?:\/\/(?:www\.)?(?:bilvie\.com|bilwe\.com)(\/(?:news|service)\/detail\/\d+\.html)/gi, '$1')
-    .replace(/https?:\/\/(?:www\.)?(?:spiraxsarcocn\.com|bilvie\.com|bilwe\.com)(\/(?:UploadFile|uploadfile|upload)\/[^\s"'<>]+)/gi, (_, relativePath) => {
-      return normalizeUploadedRelativePath(relativePath);
-    })
     .replace(/(["'(=])(\/(?:UploadFile|uploadfile|upload)\/[^\s"'<>]+)/gi, (_, prefix, relativePath) => {
       return `${prefix}${normalizeUploadedRelativePath(relativePath)}`;
     })

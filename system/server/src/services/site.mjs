@@ -10,7 +10,11 @@ const SITE_TRANSLATABLE_FIELDS = [
   'contact_person',
   'company_email',
   'web_copyright',
-  'web_author'
+  'web_author',
+  'seo_default_title',
+  'seo_default_description',
+  'seo_home_title',
+  'seo_home_description'
 ];
 
 let schemaEnsured = false;
@@ -135,6 +139,10 @@ function ensureSiteConfigSchema() {
       company_email TEXT,
       web_copyright TEXT,
       web_author TEXT,
+      seo_default_title TEXT,
+      seo_default_description TEXT,
+      seo_home_title TEXT,
+      seo_home_description TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(site_config_id, language_id),
@@ -143,13 +151,17 @@ function ensureSiteConfigSchema() {
     CREATE INDEX IF NOT EXISTS idx_site_config_translations_site_config_id
     ON site_config_translations(site_config_id, language_id);
   `);
+  addColumnIfMissing('site_config_translations', 'seo_default_title', 'TEXT');
+  addColumnIfMissing('site_config_translations', 'seo_default_description', 'TEXT');
+  addColumnIfMissing('site_config_translations', 'seo_home_title', 'TEXT');
+  addColumnIfMissing('site_config_translations', 'seo_home_description', 'TEXT');
 
   ensureDefaultSiteConfigTranslation();
   schemaEnsured = true;
 }
 
 function getBaseSiteConfig() {
-  return (
+  const base = (
     queryOne(`
       SELECT
         id,
@@ -189,6 +201,10 @@ function getBaseSiteConfig() {
       legacy_extra: null
     }
   );
+  return {
+    ...base,
+    ...readSiteSeoBaseConfig(base.legacy_extra)
+  };
 }
 
 function normalizeSiteConfigInput(input) {
@@ -199,6 +215,20 @@ function normalizeSiteConfigInput(input) {
   if (!/^https?:\/\//i.test(webUrl)) {
     throw new Error('网站地址必须以 http:// 或 https:// 开头');
   }
+
+  const existingLegacyExtra = parseLegacyExtra(input.legacy_extra);
+  const mergedLegacyExtra = {
+    ...existingLegacyExtra,
+    seo: {
+      ...(existingLegacyExtra.seo && typeof existingLegacyExtra.seo === 'object' ? existingLegacyExtra.seo : {}),
+      default_image: toNullableString(input.seo_default_image),
+      site_name: toNullableString(input.seo_site_name),
+      twitter_handle: toNullableString(input.seo_twitter_handle),
+      organization_name: toNullableString(input.seo_organization_name),
+      same_as: normalizeMultilineList(input.seo_same_as_text),
+      hreflang_links: normalizeHreflangText(input.seo_hreflang_links_text)
+    }
+  };
 
   return {
     web_name: toNullableString(input.web_name),
@@ -215,7 +245,15 @@ function normalizeSiteConfigInput(input) {
     web_mobile: toNullableString(input.web_mobile),
     web_copyright: toNullableString(input.web_copyright),
     web_author: toNullableString(input.web_author),
-    legacy_extra: toNullableString(input.legacy_extra)
+    legacy_extra: stringifyLegacyExtra(mergedLegacyExtra),
+    seo_default_image: toNullableString(input.seo_default_image),
+    seo_site_name: toNullableString(input.seo_site_name),
+    seo_twitter_handle: toNullableString(input.seo_twitter_handle),
+    seo_organization_name: toNullableString(input.seo_organization_name),
+    seo_same_as: normalizeMultilineList(input.seo_same_as_text),
+    seo_same_as_text: stringifyMultilineList(normalizeMultilineList(input.seo_same_as_text)),
+    seo_hreflang_links: normalizeHreflangText(input.seo_hreflang_links_text),
+    seo_hreflang_links_text: stringifyHreflangList(normalizeHreflangText(input.seo_hreflang_links_text))
   };
 }
 
@@ -265,7 +303,11 @@ function normalizeSiteConfigTranslations(translations, {
       contact_person: toNullableString(value?.contact_person ?? existing.contact_person),
       company_email: toNullableString(value?.company_email ?? existing.company_email),
       web_copyright: toNullableString(value?.web_copyright ?? existing.web_copyright),
-      web_author: toNullableString(value?.web_author ?? existing.web_author)
+      web_author: toNullableString(value?.web_author ?? existing.web_author),
+      seo_default_title: toNullableString(value?.seo_default_title ?? existing.seo_default_title),
+      seo_default_description: toNullableString(value?.seo_default_description ?? existing.seo_default_description),
+      seo_home_title: toNullableString(value?.seo_home_title ?? existing.seo_home_title),
+      seo_home_description: toNullableString(value?.seo_home_description ?? existing.seo_home_description)
     };
     if (languageCode === defaultLanguageCode && !String(normalized.web_name || '').trim()) {
       throw new Error('默认语言的网站名称不能为空');
@@ -283,7 +325,11 @@ function normalizeSiteConfigTranslations(translations, {
       contact_person: toNullableString(existingTranslations?.[defaultLanguageCode]?.contact_person ?? baseFallback.contact_person),
       company_email: toNullableString(existingTranslations?.[defaultLanguageCode]?.company_email ?? baseFallback.company_email),
       web_copyright: toNullableString(existingTranslations?.[defaultLanguageCode]?.web_copyright ?? baseFallback.web_copyright),
-      web_author: toNullableString(existingTranslations?.[defaultLanguageCode]?.web_author ?? baseFallback.web_author)
+      web_author: toNullableString(existingTranslations?.[defaultLanguageCode]?.web_author ?? baseFallback.web_author),
+      seo_default_title: toNullableString(existingTranslations?.[defaultLanguageCode]?.seo_default_title ?? baseFallback.seo_default_title),
+      seo_default_description: toNullableString(existingTranslations?.[defaultLanguageCode]?.seo_default_description ?? baseFallback.seo_default_description),
+      seo_home_title: toNullableString(existingTranslations?.[defaultLanguageCode]?.seo_home_title ?? baseFallback.seo_home_title),
+      seo_home_description: toNullableString(existingTranslations?.[defaultLanguageCode]?.seo_home_description ?? baseFallback.seo_home_description)
     };
   }
 
@@ -308,7 +354,11 @@ function loadSiteConfigTranslations() {
         t.contact_person,
         t.company_email,
         t.web_copyright,
-        t.web_author
+        t.web_author,
+        t.seo_default_title,
+        t.seo_default_description,
+        t.seo_home_title,
+        t.seo_home_description
       FROM site_config_translations t
       INNER JOIN languages l ON l.id = t.language_id
       WHERE t.site_config_id = 1
@@ -337,9 +387,13 @@ function saveSiteConfigTranslations(translations, now = new Date().toISOString()
           company_email,
           web_copyright,
           web_author,
+          seo_default_title,
+          seo_default_description,
+          seo_home_title,
+          seo_home_description,
           created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(site_config_id, language_id) DO UPDATE SET
           web_name = excluded.web_name,
           company_name = excluded.company_name,
@@ -348,6 +402,10 @@ function saveSiteConfigTranslations(translations, now = new Date().toISOString()
           company_email = excluded.company_email,
           web_copyright = excluded.web_copyright,
           web_author = excluded.web_author,
+          seo_default_title = excluded.seo_default_title,
+          seo_default_description = excluded.seo_default_description,
+          seo_home_title = excluded.seo_home_title,
+          seo_home_description = excluded.seo_home_description,
           updated_at = excluded.updated_at
       `,
       [
@@ -360,6 +418,10 @@ function saveSiteConfigTranslations(translations, now = new Date().toISOString()
         toNullableString(translation?.company_email),
         toNullableString(translation?.web_copyright),
         toNullableString(translation?.web_author),
+        toNullableString(translation?.seo_default_title),
+        toNullableString(translation?.seo_default_description),
+        toNullableString(translation?.seo_home_title),
+        toNullableString(translation?.seo_home_description),
         now,
         now
       ]
@@ -402,9 +464,13 @@ function ensureDefaultSiteConfigTranslation() {
         company_email,
         web_copyright,
         web_author,
+        seo_default_title,
+        seo_default_description,
+        seo_home_title,
+        seo_home_description,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       1,
@@ -416,6 +482,10 @@ function ensureDefaultSiteConfigTranslation() {
       toNullableString(site.company_email),
       toNullableString(site.web_copyright),
       toNullableString(site.web_author),
+      toNullableString(site.seo_default_title),
+      toNullableString(site.seo_default_description),
+      toNullableString(site.seo_home_title),
+      toNullableString(site.seo_home_description),
       now,
       now
     ]
@@ -470,8 +540,127 @@ function pickTranslationFields(input) {
     contact_person: toNullableString(input?.contact_person),
     company_email: toNullableString(input?.company_email),
     web_copyright: toNullableString(input?.web_copyright),
-    web_author: toNullableString(input?.web_author)
+    web_author: toNullableString(input?.web_author),
+    seo_default_title: toNullableString(input?.seo_default_title),
+    seo_default_description: toNullableString(input?.seo_default_description),
+    seo_home_title: toNullableString(input?.seo_home_title),
+    seo_home_description: toNullableString(input?.seo_home_description)
   };
+}
+
+function readSiteSeoBaseConfig(legacyExtra) {
+  const parsed = parseLegacyExtra(legacyExtra);
+  const seo = parsed.seo && typeof parsed.seo === 'object' ? parsed.seo : {};
+  const sameAs = Array.isArray(seo.same_as)
+    ? seo.same_as.map((item) => String(item || '').trim()).filter(Boolean)
+    : [];
+  const hreflangLinks = Array.isArray(seo.hreflang_links)
+    ? seo.hreflang_links
+      .map((item) => ({
+        lang: toNullableString(item?.lang),
+        url: toNullableString(item?.url)
+      }))
+      .filter((item) => item.lang && item.url)
+    : [];
+
+  return {
+    seo_default_image: toNullableString(seo.default_image),
+    seo_site_name: toNullableString(seo.site_name),
+    seo_twitter_handle: toNullableString(seo.twitter_handle),
+    seo_organization_name: toNullableString(seo.organization_name),
+    seo_same_as: sameAs,
+    seo_same_as_text: stringifyMultilineList(sameAs),
+    seo_hreflang_links: hreflangLinks,
+    seo_hreflang_links_text: stringifyHreflangList(hreflangLinks)
+  };
+}
+
+function normalizeMultilineList(value) {
+  return String(value || '')
+    .split(/\r?\n/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function stringifyMultilineList(items) {
+  return Array.isArray(items)
+    ? items.map((item) => String(item || '').trim()).filter(Boolean).join('\n')
+    : '';
+}
+
+function normalizeHreflangText(value) {
+  return String(value || '')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [langPart, ...urlParts] = line.split('|');
+      const lang = String(langPart || '').trim();
+      const url = String(urlParts.join('|') || '').trim();
+      return {
+        lang: toNullableString(lang),
+        url: toNullableString(url)
+      };
+    })
+    .filter((item) => item.lang && item.url);
+}
+
+function stringifyHreflangList(items) {
+  return Array.isArray(items)
+    ? items
+      .map((item) => {
+        const lang = String(item?.lang || '').trim();
+        const url = String(item?.url || '').trim();
+        return lang && url ? `${lang}|${url}` : '';
+      })
+      .filter(Boolean)
+      .join('\n')
+    : '';
+}
+
+function parseLegacyExtra(value) {
+  if (!value) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function stringifyLegacyExtra(value) {
+  if (!value || typeof value !== 'object') {
+    return null;
+  }
+
+  const payload = { ...value };
+  if (payload.seo && typeof payload.seo === 'object') {
+    const seoPayload = Object.fromEntries(
+      Object.entries(payload.seo).filter(([, item]) => {
+        if (Array.isArray(item)) {
+          return item.length > 0;
+        }
+        return item !== undefined && item !== null && item !== '';
+      })
+    );
+    if (Object.keys(seoPayload).length > 0) {
+      payload.seo = seoPayload;
+    } else {
+      delete payload.seo;
+    }
+  }
+
+  return Object.keys(payload).length > 0 ? JSON.stringify(payload) : null;
+}
+
+function addColumnIfMissing(tableName, columnName, definition) {
+  const columns = queryAll(`PRAGMA table_info(${tableName})`);
+  if (columns.some((column) => column.name === columnName)) {
+    return;
+  }
+  getDb().exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
 }
 
 function toNullableString(value) {

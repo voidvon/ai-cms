@@ -290,6 +290,15 @@ export interface SiteConfigTranslation {
   company_email?: string | null;
   web_copyright?: string | null;
   web_author?: string | null;
+  seo_default_title?: string | null;
+  seo_default_description?: string | null;
+  seo_home_title?: string | null;
+  seo_home_description?: string | null;
+}
+
+export interface SiteHreflangLink {
+  lang: string;
+  url: string;
 }
 
 export interface SiteConfig {
@@ -308,6 +317,18 @@ export interface SiteConfig {
   web_mobile: string;
   web_copyright: string;
   web_author: string;
+  seo_default_image?: string | null;
+  seo_site_name?: string | null;
+  seo_twitter_handle?: string | null;
+  seo_organization_name?: string | null;
+  seo_same_as?: string[];
+  seo_same_as_text?: string;
+  seo_hreflang_links?: SiteHreflangLink[];
+  seo_hreflang_links_text?: string;
+  seo_default_title?: string | null;
+  seo_default_description?: string | null;
+  seo_home_title?: string | null;
+  seo_home_description?: string | null;
   legacy_extra?: string | null;
   current_language_code?: string;
   translations?: Record<string, SiteConfigTranslation>;
