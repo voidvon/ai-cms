@@ -160,7 +160,7 @@ function getStaticCandidates(pathname) {
 function getSharedAssetCandidates(pathname) {
   const normalized = String(pathname || '').replace(/\/{2,}/g, '/');
   const match = normalized.match(
-    /^\/([^/]+)\/(css|js|images|img|skin|uploadfile|upload|assets)(\/.*)?$/i
+    /^\/([^/]+)\/(css|js|images|img|skin|uploadfile|upload|uploads|assets)(\/.*)?$/i
   );
 
   if (!match) {

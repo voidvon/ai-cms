@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { CONTENT_ROOT } from './config.mjs';
+import { CONTENT_ROOT, PUBLIC_ROOT } from './config.mjs';
 import { getDb, queryAll } from './db.mjs';
 import { createCmsTemplateRuntime } from './cms-template-runtime.mjs';
 import { listColumns } from './services/columns.mjs';
@@ -78,6 +78,23 @@ function buildProductUrl(product, categorySlugPath = null) {
   }
   return `/product/${product.id}.html`;
 }
+
+function listNewsCategories({ languageCode = null } = {}) {
+  return listColumnCategories('news', { languageCode });
+}
+
+function resolveLegacyCategoryPublicId(category) {
+  const sourceId = normalizeInteger(category?.source_id, 0);
+  if (sourceId > 0) {
+    return String(sourceId);
+  }
+  return String(normalizeInteger(category?.id, 0));
+}
+
+function buildLegacyNewsCategoryUrl(dirName, category) {
+  return `/${dirName}/${resolveLegacyCategoryPublicId(category)}.html`;
+}
+
 const LEGACY_MARKETING_PATTERNS = [
   /以上内容由彪维公司[（(](?:www\.)?(?:bilwe|bilvie)\.com[）)]编写，?转载请注明文章出处。?/gi,
   /[-,，\s]*上海彪维供应[-,，\s]*中国驰名商标/gi,
@@ -94,9 +111,10 @@ const LEGACY_PRODUCT_BRAND_PATTERNS = [
 ];
 const MANAGED_STATIC_ROOT_FILES = ['index.html', 'contact.html', 'msg.html', 'sitemap.xml', 'robots.txt', 'llms.txt', 'llms-full.txt', 'index.md'];
 const MANAGED_STATIC_DIRS = ['about', 'news', 'product', 'products', 'service', 'products'];
-const SHARED_STATIC_DIRS = ['css', 'js', 'images', 'skin', 'uploadfile'];
+const SHARED_STATIC_DIRS = ['css', 'images', 'skin', 'uploadfile', 'uploads'];
+const SHARED_STATIC_ROOT_FILES = ['logo.svg'];
+const OBSOLETE_SHARED_STATIC_DIRS = ['js', 'JS'];
 const STATIC_COMPAT_ALIASES = [
-  ['js', 'JS'],
   ['images', 'Images'],
   ['skin', 'Skin'],
   ['uploadfile', 'UploadFile']
@@ -1401,21 +1419,22 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
   const isService = section === 'service';
   const sectionDir = isService ? 'service' : 'news';
   const sectionLabel = isService ? '阀门知识' : '公司新闻';
+  const categoryPublicId = resolveLegacyCategoryPublicId(category);
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
       pageType: 'article-list',
       title: category.name || '',
-      url: `/${sectionDir}/${normalizeInteger(category.id, 0)}.html`,
+      url: buildLegacyNewsCategoryUrl(sectionDir, category),
       section: { type: isService ? 'service' : 'news', name: sectionLabel, url: `/${sectionDir}/` },
       categoryChain: buildTemplateCategoryChain({
         category,
         categories: templateContext.newsCategories,
         type: isService ? 'service' : 'news',
-        urlBuilder: (categoryItem) => `/${sectionDir}/${normalizeInteger(categoryItem.id, 0)}.html`
+        urlBuilder: (categoryItem) => buildLegacyNewsCategoryUrl(sectionDir, categoryItem)
       }),
       categoryType: isService ? 'service' : 'news',
-      categoryUrl: `/${sectionDir}/${normalizeInteger(category.id, 0)}.html`,
+      categoryUrl: buildLegacyNewsCategoryUrl(sectionDir, category),
       breadcrumbItems: [
         { label: sectionLabel, href: `/${sectionDir}/` },
         { label: category.name || '' }
@@ -1427,7 +1446,7 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
     sectionLabel,
     sectionCategoryHtml: isService ? buildLegacyNewsCategoryList(templateContext.newsCategories, SERVICE_ROOT_ID, 'service') : buildLegacyNewsCategoryList(templateContext.newsCategories, NEWS_ROOT_ID, 'news'),
     secondaryMenuItems: buildLegacyNewsMenuItems(templateContext.newsCategories, isService ? SERVICE_ROOT_ID : NEWS_ROOT_ID, sectionDir, normalizeInteger(category.id, 0)),
-    categoryId: normalizeInteger(category.id, 0),
+    categoryId: categoryPublicId,
     title: category.name || '',
     items: buildLegacyArticleListItems({ pageItems, summaryClassName }),
     articleCardItems: pageItems.map((item) => ({
@@ -1439,7 +1458,7 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
       date: formatLegacyDateOnly(item.created_at)
     })),
     pagerHtml: buildLegacyArticlePager({
-      categoryId: normalizeInteger(category.id, 0),
+      categoryId: categoryPublicId,
       pageNumber,
       pageCount,
       totalRecords
@@ -1465,10 +1484,10 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, item, cat
         category,
         categories: templateContext.newsCategories,
         type: isService ? 'service' : 'news',
-        urlBuilder: (categoryItem) => `/${sectionDir}/${normalizeInteger(categoryItem.id, 0)}.html`
+        urlBuilder: (categoryItem) => buildLegacyNewsCategoryUrl(sectionDir, categoryItem)
       }),
       categoryType: isService ? 'service' : 'news',
-      categoryUrl: category ? `/${sectionDir}/${normalizeInteger(category.id, 0)}.html` : '',
+      categoryUrl: category ? buildLegacyNewsCategoryUrl(sectionDir, category) : '',
       content: item,
       contentType: isService ? 'service-article' : 'news-article',
       contentUrl: `/${sectionDir}/detail/${normalizeInteger(item.id, 0)}.html`,
@@ -1832,7 +1851,7 @@ function buildLegacyNewsCategoryList(categories, rootId, dirName) {
     const isLast = index === items.length - 1;
     html += '<tr>';
     html += `<td width="15%" height="25" align="center"${isLast ? '' : ' class="p1"'}><img src="/Skin/blue/Images/Co_left_ico.gif" width="15" height="13" /></td>`;
-    html += `<td width="85%"${isLast ? '' : ' class="p1"'}>&nbsp;<a href="/${dirName}/${item.id}.html" class="0a">${escapeHtml(item.name || '')}</a></td>`;
+    html += `<td width="85%"${isLast ? '' : ' class="p1"'}>&nbsp;<a href="${buildLegacyNewsCategoryUrl(dirName, item)}" class="0a">${escapeHtml(item.name || '')}</a></td>`;
     html += '</tr>';
   });
   html += '</table>';
@@ -1844,7 +1863,7 @@ function buildLegacyNewsMenuItems(categories, rootId, dirName, activeId = 0) {
     .filter((item) => normalizeInteger(item.parent_id, 0) === normalizeInteger(rootId, 0))
     .map((item) => ({
       label: item.name || '',
-      url: `/${dirName}/${normalizeInteger(item.id, 0)}.html`,
+      url: buildLegacyNewsCategoryUrl(dirName, item),
       active: normalizeInteger(item.id, 0) === normalizeInteger(activeId, 0)
     }));
 }
@@ -2475,17 +2494,59 @@ function syncStaticSupportAssets(sharedRoot, outputRoot) {
   const resolvedSharedRoot = path.resolve(sharedRoot);
   const resolvedOutputRoot = path.resolve(outputRoot);
 
-  if (resolvedSharedRoot !== resolvedOutputRoot) {
-    for (const dirName of SHARED_STATIC_DIRS) {
-      syncDirectory(path.join(resolvedSharedRoot, dirName), path.join(resolvedOutputRoot, dirName));
-    }
-  }
+  cleanupObsoleteSharedStaticDirs(resolvedOutputRoot);
+  syncSharedStaticDirs(resolvedSharedRoot, resolvedOutputRoot);
+  syncSharedStaticRootFiles(resolvedSharedRoot, resolvedOutputRoot);
 
   for (const [sourceName, targetName] of STATIC_COMPAT_ALIASES) {
-    syncDirectory(path.join(resolvedOutputRoot, sourceName), path.join(resolvedOutputRoot, targetName));
+    const sourceDir = path.join(resolvedOutputRoot, sourceName);
+    const targetDir = path.join(resolvedOutputRoot, targetName);
+    if (path.resolve(sourceDir).toLowerCase() === path.resolve(targetDir).toLowerCase()) {
+      continue;
+    }
+    syncDirectory(sourceDir, targetDir);
   }
 
   syncLegacyImgAlias(resolvedOutputRoot);
+}
+
+function cleanupObsoleteSharedStaticDirs(outputRoot) {
+  for (const dirName of OBSOLETE_SHARED_STATIC_DIRS) {
+    fs.rmSync(path.join(outputRoot, dirName), { recursive: true, force: true });
+  }
+}
+
+function syncSharedStaticDirs(sharedRoot, outputRoot) {
+  for (const dirName of SHARED_STATIC_DIRS) {
+    const targetDir = path.join(outputRoot, dirName);
+    const sourceDir = [
+      path.join(sharedRoot, dirName),
+      path.join(PUBLIC_ROOT, dirName)
+    ].find((candidate) => fs.existsSync(candidate) && path.resolve(candidate) !== path.resolve(targetDir));
+
+    if (!sourceDir) {
+      continue;
+    }
+
+    syncDirectory(sourceDir, targetDir);
+  }
+}
+
+function syncSharedStaticRootFiles(sharedRoot, outputRoot) {
+  for (const fileName of SHARED_STATIC_ROOT_FILES) {
+    const targetFile = path.join(outputRoot, fileName);
+    const sourceFile = [
+      path.join(sharedRoot, fileName),
+      path.join(PUBLIC_ROOT, fileName)
+    ].find((candidate) => fs.existsSync(candidate));
+
+    if (!sourceFile || path.resolve(sourceFile) === path.resolve(targetFile)) {
+      continue;
+    }
+
+    fs.mkdirSync(path.dirname(targetFile), { recursive: true });
+    fs.copyFileSync(sourceFile, targetFile);
+  }
 }
 
 function syncDirectory(sourceDir, targetDir) {

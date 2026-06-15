@@ -16,6 +16,7 @@ const RESERVED_SINGLE_PAGE_PREFIXES = [
   '/api',
   '/assets',
   '/upload',
+  '/uploads',
   '/uploadfile',
   '/skin'
 ];

@@ -14,6 +14,7 @@ async function main() {
   await copyServer();
   await copyAdminDist();
   await copyAdminSiteSource();
+  await copyPublicAssets();
   await createRuntimeDirs();
   await writeDeployReadme();
 
@@ -57,11 +58,27 @@ async function copyAdminSiteSource() {
   await copyDir('system/admin/tsconfig.node.json');
 }
 
+async function copyPublicAssets() {
+  await copyDir('public');
+}
+
 async function createRuntimeDirs() {
   await fs.mkdir(path.join(distRoot, 'html'), { recursive: true });
   await fs.writeFile(path.join(distRoot, 'html/.gitkeep'), '');
+  await copyOptionalFile('public/logo.svg', 'html/logo.svg');
   await fs.mkdir(path.join(distRoot, 'data'), { recursive: true });
   await fs.writeFile(path.join(distRoot, 'data/.gitkeep'), '');
+}
+
+async function copyOptionalFile(sourceRelativePath, targetRelativePath = sourceRelativePath) {
+  try {
+    await fs.access(path.join(root, sourceRelativePath));
+  } catch {
+    return;
+  }
+
+  await fs.mkdir(path.dirname(path.join(distRoot, targetRelativePath)), { recursive: true });
+  await fs.copyFile(path.join(root, sourceRelativePath), path.join(distRoot, targetRelativePath));
 }
 
 async function writeDistPackageJson() {

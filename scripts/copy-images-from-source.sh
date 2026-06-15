@@ -24,9 +24,9 @@ mkdir -p "$DEST_IMG/global"
 echo "开始复制..."
 echo "------------------------------------------"
 
-# 复制整个global目录
+# 复制 global 目录。产品内容图片已统一迁移到 html/uploads/images/YYYYMM/。
 echo "复制 global/ 目录..."
-rsync -av --progress "$SOURCE_IMG/global/" "$DEST_IMG/global/" 2>&1 | grep -E "sending|total size|speedup" || true
+rsync -av --progress --exclude "products/" "$SOURCE_IMG/global/" "$DEST_IMG/global/" 2>&1 | grep -E "sending|total size|speedup" || true
 
 # 复制site-wide目录（如果有logo等）
 if [ -d "$SOURCE_IMG/site-wide" ]; then
@@ -53,8 +53,6 @@ echo "------------------------------------------"
 
 declare -a KEY_IMAGES=(
   "global/generic-header-images/header_engineers_07-60993fae75.jpg"
-  "global/products/steam_traps_02-97182c4207.jpg"
-  "global/products/steam-traps/td52-cover-4x3.jpg"
   "global/dotcom-home/hero/q2-2023/gettyimages-1481065126-31b88d3a67.jpg"
 )
 

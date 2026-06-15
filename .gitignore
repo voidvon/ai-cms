@@ -1,3 +1,5 @@
+.DS_Store
+
 /html/
 
 node_modules/
@@ -13,4 +15,5 @@ node_modules/
 
 # 用户上传的文件
 public/upload/
-/public/
+/public/*
+!/public/logo.svg

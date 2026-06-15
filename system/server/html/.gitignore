@@ -6,6 +6,7 @@
 # But keep uploads directory
 !uploads/
 !uploads/**
+uploads/**/.DS_Store
 
 # Sitemaps
 sitemap*.xml

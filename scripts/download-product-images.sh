@@ -8,19 +8,20 @@ PUBLIC_DIR="public"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 DB_PATH="$PROJECT_ROOT/data/site.sqlite"
+UPLOADS_ROOT="$PROJECT_ROOT/html"
 
 echo "开始下载产品图片..."
 echo "=========================================="
 
 # 从数据库提取产品图片路径
-IMAGE_LIST=$(sqlite3 "$DB_PATH" "SELECT images FROM products WHERE images != '[]';" | grep -o '"/images/[^"]*"' | sed 's/"//g' | sort -u)
+IMAGE_LIST=$(sqlite3 "$DB_PATH" "SELECT images FROM products WHERE images != '[]';" | grep -o '"/uploads/images/[^"]*"' | sed 's/"//g' | sort -u)
 
 SUCCESS_COUNT=0
 FAIL_COUNT=0
 SKIP_COUNT=0
 
 for img_path in $IMAGE_LIST; do
-  output_file="$PUBLIC_DIR$img_path"
+  output_file="$UPLOADS_ROOT$img_path"
   output_dir=$(dirname "$output_file")
   url="$BASE_URL$img_path"
 

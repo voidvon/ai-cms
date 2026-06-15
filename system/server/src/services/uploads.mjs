@@ -8,53 +8,52 @@ export function saveUploadedFile(file, options = {}) {
     throw new Error('uploadfile is required');
   }
 
-  const extension = String(file.extension || '').toLowerCase();
+  const originalFilename = file.originalFilename || file.filename || '';
+  const extension = String(file.extension || path.extname(originalFilename)).toLowerCase();
   if (!UPLOAD_ALLOWED_EXTENSIONS.has(extension)) {
     throw new Error('unsupported file type');
   }
 
+  const data = file.data || file.buffer;
+  if (!data) {
+    throw new Error('uploadfile is required');
+  }
+
   const maxBytes = (options.maxSizeKb || UPLOAD_MAX_SIZE_KB) * 1024;
-  if (file.data.length > maxBytes) {
+  if (data.length > maxBytes) {
     throw new Error('uploaded file exceeds size limit');
   }
 
-  const target = resolveUploadTarget(options.uploadType);
+  const monthSegment = getUploadMonthSegment();
   const fileName = buildFileName(extension);
-  // 修改：上传到 html/uploads/images/ 目录
-  const fsDir = path.join(CONTENT_ROOT, target.fsDir);
+  const fsDir = path.join(CONTENT_ROOT, 'uploads/images', monthSegment);
   fs.mkdirSync(fsDir, { recursive: true });
   const filePath = path.join(fsDir, fileName);
-  fs.writeFileSync(filePath, file.data);
+  fs.writeFileSync(filePath, data);
 
   return {
     fileName,
-    relativePath: `${target.urlPrefix}/${fileName}`,
+    relativePath: `/uploads/images/${monthSegment}/${fileName}`,
     legacyFileName: fileName,
-    uploadType: target.uploadType
+    uploadType: resolveUploadTarget(options.uploadType).uploadType
   };
 }
 
 export function resolveUploadTarget(uploadType) {
   if (uploadType === 'news') {
     return {
-      uploadType: 'news',
-      fsDir: 'uploads/images/news',
-      urlPrefix: '/uploads/images/news'
+      uploadType: 'news'
     };
   }
 
   if (uploadType === 'richtext_image') {
     return {
-      uploadType: 'richtext_image',
-      fsDir: 'uploads/images/richtext',
-      urlPrefix: '/uploads/images/richtext'
+      uploadType: 'richtext_image'
     };
   }
 
   return {
-    uploadType: 'prod',
-    fsDir: 'uploads/images/products',
-    urlPrefix: '/uploads/images/products'
+    uploadType: 'prod'
   };
 }
 
@@ -85,6 +84,12 @@ function buildFileName(extension) {
     .replaceAll('Z', '');
   const suffix = randomBytes(4).toString('hex');
   return `${stamp}_${suffix}${extension}`;
+}
+
+function getUploadMonthSegment(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}${month}`;
 }
 
 export function resolveUploadedFilePath(relativePath) {

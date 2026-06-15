@@ -11,7 +11,7 @@ const LEGACY_MARKETING_PATTERNS = [
   /彪维传热介绍[，,]*/gi,
   /[,，]?\s*彪维公司始终站在蒸汽利用的历史前沿[\s\S]*$/gi
 ];
-const DEFAULT_NEWS_IMAGE = '/UploadFile/nopicture.gif';
+const DEFAULT_NEWS_IMAGE = '';
 const LEGACY_NEWS_PLACEHOLDERS = new Set([
   DEFAULT_NEWS_IMAGE,
   '/UploadFile/Newsuppic/nopicture.gif',

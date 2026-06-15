@@ -104,7 +104,7 @@
 
 ### 静态资源
 - **CSS：** 内联在模板中
-- **JavaScript：** `/js/promo-slider.js` (4KB)
+- **JavaScript：** 由 `spirax_home` 模板的 `client()` 产物输出到 `/assets/cms-templates/page-spirax_home.js`
 - **图片：** 从 `spirax-global` 导入的548张图片
 
 ### 数据来源
@@ -113,8 +113,8 @@
 
 ### 轮播实现
 - **方案：** 纯原生JavaScript实现（不依赖外部库）
-- **文件：** `public/js/promo-slider.js`
-- **大小：** 4.0KB
+- **归属：** `spirax_home` 主题模板客户端运行时代码
+- **产物：** `html/assets/cms-templates/page-spirax_home.js`
 - **兼容性：** 支持现代浏览器 + IE11+
 
 ## 📊 验证结果
@@ -129,7 +129,7 @@
 ✅ 轮播控制: 前后按钮 + 分页点
 ✅ 联系section: 存在
 ✅ 行业卡片: 6个
-✅ JavaScript: promo-slider.js 已引入
+✅ JavaScript: page-spirax_home.js 已引入
 ```
 
 ## 🎨 样式特点
@@ -195,7 +195,7 @@ UPDATE products SET is_featured_home = 1 WHERE id = ?;
 ## ⚠️ 注意事项
 
 1. **图片依赖：** 确保所有引用的图片都已从 `spirax-global` 导入
-2. **JavaScript：** 确保 `public/js/promo-slider.js` 文件存在
+2. **主题脚本：** 首页轮播脚本跟随 `spirax_home` 模板一起生成，不再依赖 `public/js`
 3. **浏览器兼容性：** 轮播功能需要现代浏览器支持（IE11+）
 4. **性能：** 轮播自动播放，建议在用户离开页面时停止
 

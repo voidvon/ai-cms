@@ -15,25 +15,23 @@
 
 ### 2. 从 spirax-global 导入产品图片
 
-**操作：** 
+**当前状态：已被新规则取代。**
+
+产品内容图片不再保存在 `public/images/global/products/`，已统一迁移到 `html/uploads/images/YYYYMM/`，访问路径为 `/uploads/images/YYYYMM/文件名`。
+
+**历史操作：**
 ```bash
 bash scripts/import-images-from-global.sh
 ```
 
 **结果：**
-- ✅ 导入 548 张图片到 `public/images/global/`
-- ✅ 包含 390+ 张产品图片
+- ✅ 当时导入 548 张图片到 `public/images/global/`
+- ✅ 当时包含 390+ 张产品图片
 - ✅ 包含行业、新闻、联系等页面图片
 
 **目录结构：**
 ```
 public/images/global/
-├── products/              # 390+ 产品图片
-│   ├── boilerhouse/
-│   ├── boiler-controls-and-systems/
-│   ├── clean-steam/
-│   ├── compressed-air/
-│   └── ...
 ├── industries/            # 行业图片
 ├── news/                  # 新闻图片
 ├── contact-us/            # 联系页面图片
@@ -65,8 +63,7 @@ public/images/global/
 项目根目录/
 ├── public/
 │   ├── images/
-│   │   └── global/           # ✅ 从 spirax-global 导入（548 张）
-│   │       ├── products/     # 产品官方图片
+│   │   └── global/           # ✅ 从 spirax-global 导入的通用静态图片
 │   │       ├── industries/   # 行业图片
 │   │       └── ...
 │   ├── css/
@@ -78,9 +75,7 @@ public/images/global/
 │   ├── products/             # ✅ 生成的产品页面（会被清理）
 │   └── uploads/              # ⚠️ 用户上传（永不清理）
 │       └── images/
-│           ├── products/     # 通过后台上传的产品图片
-│           ├── news/         # 通过后台上传的新闻图片
-│           └── richtext/     # 富文本编辑器上传的图片
+│           └── 202606/       # 按 YYYYMM 存放上传和迁移后的图片
 │
 ├── scripts/
 │   └── import-images-from-global.sh  # ✅ 新增脚本
@@ -91,16 +86,16 @@ public/images/global/
 
 ## 🔗 图片访问路径
 
-### 1. 静态产品图片（官方）
-- **来源：** spirax-global 项目
-- **位置：** `public/images/global/products/`
-- **URL：** `/images/global/products/boilerhouse/lp30-cover-4x3.jpg`
-- **特点：** 提交到 Git，高质量官方图片
+### 1. 产品内容图片
+- **来源：** 后台上传或旧产品图片迁移
+- **位置：** `html/uploads/images/YYYYMM/`
+- **URL：** `/uploads/images/YYYYMM/文件名.jpg`
+- **特点：** 不提交到 Git，静态生成时保留
 
-### 2. 用户上传图片（后台管理）
+### 2. 其他用户上传图片（后台管理）
 - **来源：** 通过 `/admin/` 后台上传
-- **位置：** `html/uploads/images/products/`
-- **URL：** `/uploads/images/products/20260614105230_abc123.jpg`
+- **位置：** `html/uploads/images/YYYYMM/`
+- **URL：** `/uploads/images/202606/20260614105230_abc123.jpg`
 - **特点：** 不提交到 Git，静态生成时保留
 
 ## 🛡️ 安全保护
@@ -136,10 +131,10 @@ ls html/uploads/images/products/test.jpg  # 文件仍然存在
 
 ## 🚀 使用方法
 
-### 导入新图片（如果 spirax-global 更新）
+### 迁移旧产品图片
 
 ```bash
-bash scripts/import-images-from-global.sh
+npm --prefix system/server run db:migrate-uploads -- --write
 npm run build:static
 ```
 
@@ -157,7 +152,7 @@ npm run build:static
 sqlite3 data/site.sqlite "SELECT name, images FROM products LIMIT 5;"
 
 # 验证文件存在
-ls -lh public/images/global/products/boilerhouse/lp30-*.jpg
+ls -lh html/uploads/images/202606/
 ```
 
 ## ⚠️ 注意事项

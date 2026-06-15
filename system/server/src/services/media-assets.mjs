@@ -8,26 +8,18 @@ import { resolveUploadedFilePath } from './uploads.mjs';
 const PURPOSE_TARGETS = {
   product_cover: {
     purpose: 'product_cover',
-    fsDir: 'uploadfile/product-cover',
-    urlPrefix: '/UploadFile/product-cover',
     mimeFallback: 'image/jpeg',
   },
   news_cover: {
     purpose: 'news_cover',
-    fsDir: 'uploadfile/news-cover',
-    urlPrefix: '/UploadFile/news-cover',
     mimeFallback: 'image/jpeg',
   },
   richtext_image: {
     purpose: 'richtext_image',
-    fsDir: 'uploadfile/richtext',
-    urlPrefix: '/UploadFile/richtext',
     mimeFallback: 'image/jpeg',
   },
   attachment: {
     purpose: 'attachment',
-    fsDir: 'uploadfile/attachment',
-    urlPrefix: '/UploadFile/attachment',
     mimeFallback: 'application/octet-stream',
   },
 };
@@ -82,13 +74,14 @@ export function uploadMediaAsset({ buffer, originalFilename, purpose }) {
   }
 
   const target = PURPOSE_TARGETS[normalizedPurpose];
+  const monthSegment = getUploadMonthSegment();
   const fileName = buildFileName(extension);
-  const fsDir = path.join(CONTENT_ROOT, target.fsDir);
+  const fsDir = path.join(CONTENT_ROOT, 'uploads/images', monthSegment);
   fs.mkdirSync(fsDir, { recursive: true });
   const fsPath = path.join(fsDir, fileName);
   fs.writeFileSync(fsPath, buffer);
 
-  const relativePath = `${target.urlPrefix}/${fileName}`;
+  const relativePath = `/uploads/images/${monthSegment}/${fileName}`;
   const result = execute(
     `
       INSERT INTO media_assets (
@@ -339,4 +332,10 @@ function buildFileName(extension) {
     .replaceAll('Z', '');
   const suffix = randomBytes(4).toString('hex');
   return `${stamp}_${suffix}${extension}`;
+}
+
+function getUploadMonthSegment(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  return `${year}${month}`;
 }

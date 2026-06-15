@@ -17,15 +17,7 @@ fi
 echo "🚀 开始从 spirax-global 项目导入图片..."
 echo ""
 
-# 1. 复制产品图片（必需）
-echo "📦 复制产品图片..."
-mkdir -p "$TARGET_BASE/products"
-rsync -a "$SOURCE_BASE/products/" "$TARGET_BASE/products/"
-PRODUCT_COUNT=$(find "$TARGET_BASE/products" -type f \( -name "*.jpg" -o -name "*.png" -o -name "*.gif" -o -name "*.svg" \) | wc -l)
-echo "   ✅ 产品图片: $PRODUCT_COUNT 个文件"
-echo ""
-
-# 2. 复制其他全局图片
+# 复制全局图片。产品内容图片已统一迁移到 html/uploads/images/YYYYMM/。
 GLOBAL_DIRS=(
   "contact-us"
   "industries"
@@ -57,6 +49,6 @@ echo "   - 目标目录: $TARGET_BASE"
 echo "   - 总图片数: $TOTAL_COUNT 个文件"
 echo ""
 echo "💡 提示："
-echo "   - 产品图片访问路径: /images/global/products/..."
 echo "   - 其他图片访问路径: /images/global/{category}/..."
+echo "   - 产品内容图片路径: /uploads/images/YYYYMM/文件名"
 echo "   - 运行 'npm run build:static' 重新生成静态站点"

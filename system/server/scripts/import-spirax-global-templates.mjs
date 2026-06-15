@@ -629,6 +629,120 @@ import React from 'react';
 
 export const css = ${JSON.stringify(cssText)};
 
+export const clientProps = false;
+
+export function client() {
+  const slider = document.querySelector('[data-promo-slider]');
+  if (!slider || slider.dataset.sliderInitialized === 'true') {
+    return;
+  }
+  slider.dataset.sliderInitialized = 'true';
+
+  const slidesList = slider.querySelector('.splide__list');
+  const slides = Array.from(slider.querySelectorAll('.splide__slide'));
+  const pagination = slider.querySelector('.splide__pagination');
+  const prevBtn = slider.querySelector('.splide__arrow--prev');
+  const nextBtn = slider.querySelector('.splide__arrow--next');
+
+  if (!slidesList || !pagination || slides.length === 0) {
+    return;
+  }
+
+  let currentIndex = 0;
+  let autoplayTimer = null;
+  const autoplayInterval = 5000;
+
+  slides.forEach((_, index) => {
+    const dot = document.createElement('li');
+    const button = document.createElement('button');
+    button.className = 'splide__pagination__page';
+    button.type = 'button';
+    button.setAttribute('aria-label', '跳转到第 ' + (index + 1) + ' 张');
+    if (index === 0) {
+      button.classList.add('is-active');
+    }
+    button.addEventListener('click', () => goToSlide(index));
+    dot.appendChild(button);
+    pagination.appendChild(dot);
+  });
+
+  const dots = Array.from(pagination.querySelectorAll('.splide__pagination__page'));
+
+  function updateButtons() {
+    if (prevBtn) prevBtn.disabled = currentIndex === 0;
+    if (nextBtn) nextBtn.disabled = currentIndex === slides.length - 1;
+  }
+
+  function stopAutoplay() {
+    if (autoplayTimer) {
+      clearInterval(autoplayTimer);
+      autoplayTimer = null;
+    }
+  }
+
+  function startAutoplay() {
+    stopAutoplay();
+    autoplayTimer = window.setInterval(next, autoplayInterval);
+  }
+
+  function goToSlide(index) {
+    if (index < 0 || index >= slides.length) {
+      return;
+    }
+
+    currentIndex = index;
+    slidesList.style.transform = 'translateX(' + (-index * 100) + '%)';
+    dots.forEach((dot, dotIndex) => {
+      dot.classList.toggle('is-active', dotIndex === index);
+    });
+    updateButtons();
+    startAutoplay();
+  }
+
+  function next() {
+    goToSlide(currentIndex < slides.length - 1 ? currentIndex + 1 : 0);
+  }
+
+  function prev() {
+    goToSlide(currentIndex > 0 ? currentIndex - 1 : slides.length - 1);
+  }
+
+  let touchStartX = 0;
+  slidesList.addEventListener('touchstart', (event) => {
+    touchStartX = event.changedTouches[0]?.screenX || 0;
+  }, { passive: true });
+
+  slidesList.addEventListener('touchend', (event) => {
+    const touchEndX = event.changedTouches[0]?.screenX || 0;
+    const diff = touchStartX - touchEndX;
+    if (Math.abs(diff) <= 50) {
+      return;
+    }
+    if (diff > 0) {
+      next();
+    } else {
+      prev();
+    }
+  }, { passive: true });
+
+  if (prevBtn) prevBtn.addEventListener('click', prev);
+  if (nextBtn) nextBtn.addEventListener('click', next);
+
+  slider.addEventListener('mouseenter', stopAutoplay);
+  slider.addEventListener('mouseleave', startAutoplay);
+  slider.addEventListener('keydown', (event) => {
+    if (event.key === 'ArrowLeft') {
+      prev();
+    } else if (event.key === 'ArrowRight') {
+      next();
+    }
+  });
+
+  slidesList.style.transition = 'transform 0.5s ease';
+  updateButtons();
+  startAutoplay();
+}
+
 export default function Template(props) {
   const shell = props.component('spirax_shell', props);
   const newsItems = Array.isArray(props.homeNewsItems) ? props.homeNewsItems : [];
