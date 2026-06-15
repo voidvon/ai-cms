@@ -24,10 +24,12 @@ export function runProductVisibilityRepair() {
     const isVisible = parseLegacyVisibility(row.show, 1);
     const result = execute(
       `
-        UPDATE products
+        UPDATE columns
         SET is_visible = ?
         WHERE id = ?
           AND coalesce(is_visible, -1) <> ?
+          AND model_code = 'product'
+          AND node_type = 'content'
       `,
       [isVisible, id, isVisible]
     );

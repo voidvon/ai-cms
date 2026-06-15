@@ -10,10 +10,10 @@ import {
 import { listCorporationCategoriesAdmin, ensureCorporationCategoriesSchema } from './corporation-categories.mjs';
 import { listNews } from './news.mjs';
 import { listProducts, ensureProductsSchema } from './products.mjs';
+import {
+  resolvePublicSectionContext
+} from './public-sections.mjs';
 
-const NEWS_ROOT_ID = 4;
-const SERVICE_ROOT_ID = 12;
-const CORPORATION_ROOT_ID = 32;
 const MAX_FULL_TEXT_PAGES = 500;
 const MAX_LIST_SAMPLE_ITEMS = 12;
 const MAX_RECENT_PAGES = 20;
@@ -108,6 +108,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   ensureCorporationCategoriesSchema();
 
   const columns = listColumns({ languageCode });
+  const publicSections = resolvePublicSectionContext(columns);
   const productCategories = listColumnCategories('product', { languageCode });
   const newsCategories = listColumnCategories('news', { languageCode });
   const products = listProducts({ visibleOnly: true, limit: 10000, languageCode });
@@ -116,10 +117,6 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
 
   const productCategoriesById = new Map(productCategories.map((item) => [toInteger(item.id, 0), item]));
   const newsCategoriesById = new Map(newsCategories.map((item) => [toInteger(item.id, 0), item]));
-  const newsColumns = columns.filter((item) => String(item.model_code || '') === 'news' && String(item.column_kind || '') === 'category');
-  const newsColumnById = new Map(newsColumns.map((item) => [toInteger(item.id, 0), item]));
-  const newsRootColumnId = resolveColumnIdBySource(columns, 'news_category', NEWS_ROOT_ID);
-  const serviceRootColumnId = resolveColumnIdBySource(columns, 'news_category', SERVICE_ROOT_ID);
   const corporationById = new Map(corporationCategories.map((item) => [toInteger(item.id, 0), item]));
   const pages = [];
 
@@ -143,17 +140,6 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     contentLines: buildSiteFactLines(site)
   }));
 
-  pages.push(createPage({
-    title: '在线留言',
-    routePath: '/msg.html',
-    section: '核心页面',
-    summary: '在线留言与咨询反馈入口。',
-    contentLines: [
-      buildCompanyFact(site),
-      buildContactFact(site)
-    ].filter(Boolean)
-  }));
-
   for (const column of columns) {
     const routePath = String(column.route_path || '').trim();
     if (
@@ -175,7 +161,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     }
   }
 
-  const corporationIndex = corporationCategories.find((item) => toInteger(item.parent_id, 0) === CORPORATION_ROOT_ID)
+  const corporationIndex = corporationCategories.find((item) => toInteger(item.parent_id, 0) === 0)
     ?? corporationCategories[0];
   if (corporationIndex) {
     pages.push(createPage({
@@ -241,16 +227,14 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     }));
   }
 
-  const newsRootCategories = newsCategories.filter((item) => {
-    const columnId = resolveColumnIdBySource(columns, 'news_category', item.id);
-    const parentId = toInteger(newsColumnById.get(columnId)?.parent_id, 0);
-    return newsRootColumnId > 0 && parentId === newsRootColumnId;
-  });
-  const serviceRootCategories = newsCategories.filter((item) => {
-    const columnId = resolveColumnIdBySource(columns, 'news_category', item.id);
-    const parentId = toInteger(newsColumnById.get(columnId)?.parent_id, 0);
-    return serviceRootColumnId > 0 && parentId === serviceRootColumnId;
-  });
+  const newsSection = publicSections.getNewsSectionByDirName('news');
+  const serviceSection = publicSections.getNewsSectionByDirName('service');
+  const newsRootCategories = newsSection
+    ? newsCategories.filter((item) => toInteger(item.parent_id, 0) === newsSection.rootColumnId)
+    : [];
+  const serviceRootCategories = serviceSection
+    ? newsCategories.filter((item) => toInteger(item.parent_id, 0) === serviceSection.rootColumnId)
+    : [];
 
   pages.push(createPage({
     title: '新闻中心',
@@ -295,16 +279,15 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   for (const item of newsItems) {
     const category = newsCategoriesById.get(toInteger(item.column_id, 0));
     const columnId = toInteger(item.column_id, 0);
-    const isNews = newsRootColumnId > 0 && isColumnUnderRoot(newsColumnById, columnId, newsRootColumnId);
-    const isService = serviceRootColumnId > 0 && isColumnUnderRoot(newsColumnById, columnId, serviceRootColumnId);
-    if (!isNews && !isService) {
+    const section = publicSections.getNewsSectionByColumnId(columnId);
+    if (!section) {
       continue;
     }
 
     pages.push(createPage({
       title: item.title,
-      routePath: isNews ? `/news/detail/${item.id}.html` : `/service/detail/${item.id}.html`,
-      section: isNews ? '新闻详情' : '服务详情',
+      routePath: `/${section.dirName}/detail/${item.id}.html`,
+      section: section.dirName === 'service' ? '服务详情' : '新闻详情',
       summary: item.summary || item.title,
       contentLines: [
         category?.name ? `分类：${category.name}` : '',
@@ -648,7 +631,7 @@ function dedupePages(items) {
 }
 
 function cleanupExistingLlmsFiles(outputRoot) {
-  const rootFiles = ['llms.txt', 'llms-full.txt', 'index.md', 'contact.md', 'msg.md'];
+  const rootFiles = ['llms.txt', 'llms-full.txt', 'index.md', 'contact.md'];
   const managedDirs = ['about', 'news', 'service', 'valve', 'product'];
 
   for (const relativePath of rootFiles) {
@@ -759,16 +742,6 @@ function normalizeSiteUrl(value) {
     return '';
   }
   return normalized;
-}
-
-function resolveColumnIdBySource(columns, sourceType, sourceId) {
-  return toInteger(
-    columns.find((item) => (
-      String(item.source_type || '') === String(sourceType || '')
-      && toInteger(item.source_id, 0) === toInteger(sourceId, 0)
-    ))?.id,
-    0
-  );
 }
 
 function toInteger(value, fallback = 0) {

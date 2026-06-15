@@ -19,10 +19,11 @@ export async function redirectLegacyProductUrls(request, reply) {
   // 从数据库查询产品的 slug 和分类 slug
   const product = queryOne(
     `
-      SELECT p.id, p.slug, p.column_id, c.slug AS category_slug
-      FROM products p
-      LEFT JOIN columns c ON c.id = p.column_id
+      SELECT p.id, p.slug, p.parent_id AS column_id, c.slug AS category_slug
+      FROM columns p
+      LEFT JOIN columns c ON c.id = p.parent_id
       WHERE p.id = ?
+        AND p.source_type = 'product_item'
     `,
     [productId]
   );

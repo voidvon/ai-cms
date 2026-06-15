@@ -3,7 +3,6 @@ import { Toaster } from '@/components/ui/sonner'
 import LoginPage from '@/pages/LoginPage'
 import DashboardLayout from '@/layouts/DashboardLayout'
 import ColumnsPage from '@/pages/ColumnsPage'
-import MessagesPage from '@/pages/MessagesPage'
 import MediaAssetsPage from '@/pages/MediaAssetsPage'
 import TemplateVariantsPage from '@/pages/TemplateVariantsPage'
 import ContentModelsPage from '@/pages/ContentModelsPage'
@@ -24,7 +23,6 @@ function App() {
           <Route path="dashboard" element={<Navigate to="/columns" replace />} />
           <Route path="columns" element={<ColumnsPage />} />
           <Route path="corporation-categories" element={<Navigate to="/columns" replace />} />
-          <Route path="messages" element={<MessagesPage />} />
           <Route path="themes" element={<TemplateVariantsPage />} />
           <Route path="templates" element={<Navigate to="/themes" replace />} />
           <Route path="content-models" element={<ContentModelsPage />} />

@@ -92,7 +92,6 @@ export default function StaticGenerationPage() {
     { title: '基础页面', items: [
       { label: '生成首页', value: 'index' },
       { label: '生成联系我们', value: 'contact' },
-      { label: '生成留言页', value: 'message' },
       { label: '生成公司页面', value: 'corporation' },
     ]},
     { title: '产品相关', items: [

@@ -5,7 +5,6 @@ import type {
   LegacyContactPageProps,
   LegacyContentPageProps,
   LegacyHomePageProps,
-  LegacyMessagePageProps,
   LegacyPageBaseProps,
   LegacyProductDetailPageProps,
   LegacyProductListPageProps,
@@ -161,36 +160,6 @@ ${props.contactTableHtml}</ul><div class="page_list"><div class="list_info"></di
   )
 }
 
-export function LegacyMessagePage(props: LegacyMessagePageProps) {
-  const rightHtml = `<div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> &gt;&gt; <a href="/msg.html" title="在线留言">在线留言</a> </div>
-	  <div class="page-products">
-      <ul class="clearfix"><table width="705" border="0" cellpadding="0" cellspacing="0"><tr><td width="567" valign="top">
-<form id="addform" name="addform" method="post" action="/ajaxcode/prodmsg?action=msgadd"><DIV style="PADDING-TOP:8px"></DIV>
-<table width="98%" border="0" align="center" cellpadding="0" cellspacing="0"><tr><td width="13%" height="25">姓名：</td><td colspan="3"><input name="name" type="text" id="name" /><span class="Font_FF0000_a">*</span></td></tr><tr><td height="25">地址：</td><td colspan="3"><input name="address" type="text" id="address" size="62" />
- <span class="Font_FF0000_a">*</span></td></tr><tr><td height="25">电话：</td><td width="34%"><input name="phone" type="text" id="phone" /><span class="Font_FF0000_a">*
- </span></td><td width="10%">手机：</td><td width="43%"><input name="mobile" type="text" id="mobile" /></td></tr><tr><td height="25">传真：</td><td><input name="fax" 
- type="text" id="fax" /></td><td>Email：</td><td><input name="email" type="text" id="email" /><span class="Font_FF0000_a">*</span></td></tr><tr><td height="25">主题：
- </td><td colspan="3"><input name="Title" type="text" id="Title" size="62" /><span class="Font_FF0000_a">*</span></td></tr><tr><td height="25">内容：</td><td colspan="3">
- <textarea name="content" cols="60" rows="6" id="content"></textarea></td></tr><tr><td height="50" colspan="4" align="center"><input type="button" name="Submit" value="
- 提交留言" onclick="add();" />&nbsp;<input type="reset" name="Submit2" value="重 写" /></td></tr></table></form></td><td width="138" align="center" valign="top" class="
- Right_dashedl_line">${props.messageSidebarProductsHtml}</td></tr></table>
-</ul><div class="page_list"><div class="list_info"></div></div></div>`
-  return (
-    <html xmlns="http://www.w3.org/1999/xhtml">
-      <head>
-        <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
-        <title>{`在线留言_${props.site.web_name || ''}`}</title>
-        <meta name="keywords" content="" />
-        <meta name="description" content="" />
-        <link href="/css/c.css" rel="stylesheet" type="text/css" />
-        <script language="javascript" type="text/javascript" src="/js/ajaxrequest.js"></script>
-        <script language="javascript" dangerouslySetInnerHTML={raw('function add(){if(document.addform.name.value==""){alert("姓名不能为空!");document.addform.name.focus();return false;}if(document.addform.address.value==""){alert("地址不能为空!");document.addform.address.focus();return false;}if(document.addform.phone.value==""){alert("电话不能为空!");document.addform.phone.focus();return false;}if(document.addform.email.value==""){alert("Email不能为空!");document.addform.email.focus();return false;}if(document.addform.Title.value==""){alert("主题不能为空!");document.addform.Title.focus();return false;}var ajax=new AJAXRequest;ajax.setcharset("GB2312");ajax.postf(document.getElementById("addform"),function(obj) { if(obj.responseText=="true"){alert("留言成功")}; });}')} />
-      </head>
-      <body dangerouslySetInnerHTML={raw(cLayoutBody(props, rightHtml))} />
-    </html>
-  )
-}
-
 export function LegacyContentPage(props: LegacyContentPageProps) {
   const rightHtml = `<div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> &gt;&gt; ${html(props.title)} </div>
 	  <div class="page-products"><ul class="clearfix">${props.contentHtml}
@@ -272,8 +241,7 @@ ${props.fragments.productsMenuHtml || ''}</td></tr></table><DIV style="clear:bot
 <table width="165" border="0" align="left" cellpadding="0" cellspacing="0" class="Table_boder"><tr><td width="71" rowspan="3" align="right">
 <img src="../../Skin/blue/Images/service.jpg" width="70" height="130" /></td>
     <td width="81">&nbsp;<A href="/Contact.html" class="0a">业务联系</A></td></tr><tr>
-  <td height="30">&nbsp;<a href="/Contact.html" class="0a">客服电话</a></td></tr><tr>
-    <td height="30">&nbsp;<a href="/msg.html" class="0a">在线联系</a></td></tr></table>`
+  <td height="30">&nbsp;<a href="/Contact.html" class="0a">客服电话</a></td></tr></table>`
 }
 
 export function LegacyArticleListPage(props: LegacyArticleListPageProps) {

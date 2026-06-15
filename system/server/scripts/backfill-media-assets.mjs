@@ -10,8 +10,15 @@ const NEWS_PLACEHOLDERS = new Set([
 let productCount = 0;
 let newsCount = 0;
 
-for (const row of queryAll('SELECT DISTINCT small_image FROM products WHERE small_image IS NOT NULL AND TRIM(small_image) <> ?', [PRODUCT_PLACEHOLDER])) {
-  const relativePath = String(row.small_image || '').trim();
+for (const row of queryAll(`
+  SELECT DISTINCT primary_image
+  FROM columns
+  WHERE model_code = 'product'
+    AND node_type = 'content'
+    AND TRIM(coalesce(primary_image, '')) <> ''
+    AND TRIM(coalesce(primary_image, '')) <> ?
+`, [PRODUCT_PLACEHOLDER])) {
+  const relativePath = String(row.primary_image || '').trim();
   if (!relativePath.startsWith('/UploadFile/')) {
     continue;
   }
@@ -20,8 +27,14 @@ for (const row of queryAll('SELECT DISTINCT small_image FROM products WHERE smal
   }
 }
 
-for (const row of queryAll('SELECT DISTINCT picture FROM news WHERE picture IS NOT NULL AND TRIM(picture) <> \'\'', [])) {
-  const relativePath = String(row.picture || '').trim();
+for (const row of queryAll(`
+  SELECT DISTINCT primary_image
+  FROM columns
+  WHERE model_code = 'news'
+    AND node_type = 'content'
+    AND TRIM(coalesce(primary_image, '')) <> ''
+`, [])) {
+  const relativePath = String(row.primary_image || '').trim();
   if (!relativePath.startsWith('/UploadFile/') || NEWS_PLACEHOLDERS.has(relativePath)) {
     continue;
   }

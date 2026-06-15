@@ -67,42 +67,4 @@ export default async function legacyRoutes(app) {
     return reply.type('text/html; charset=utf-8').send(html);
   });
 
-  // 前台留言提交（兼容旧 ASP 路径）
-  app.post('/ajaxcode/msg', async (request, reply) => {
-    const { action } = request.query;
-
-    if (action === 'msgadd' || action === 'add') {
-      const { createMessage } = await import('../services/messages.mjs');
-
-      try {
-        const message = createMessage(request.body);
-        return { success: true, message: '留言提交成功', data: message };
-      } catch (error) {
-        return reply.code(400).send({ success: false, message: error.message });
-      }
-    }
-
-    return reply.badRequest('无效的操作');
-  });
-
-  // 产品留言提交
-  app.post('/ajaxcode/prodmsg', async (request, reply) => {
-    const { action } = request.query;
-
-    if (action === 'add') {
-      const { createMessage } = await import('../services/messages.mjs');
-
-      try {
-        const message = createMessage({
-          ...request.body,
-          type: 'product'
-        });
-        return { success: true, message: '咨询提交成功', data: message };
-      } catch (error) {
-        return reply.code(400).send({ success: false, message: error.message });
-      }
-    }
-
-    return reply.badRequest('无效的操作');
-  });
 }

@@ -67,23 +67,6 @@ CREATE TABLE IF NOT EXISTS news (
   column_id INTEGER
 );
 
-CREATE TABLE IF NOT EXISTS messages (
-  id INTEGER PRIMARY KEY,
-  contact_name TEXT NOT NULL,
-  phone TEXT NOT NULL,
-  title TEXT NOT NULL,
-  content TEXT,
-  product_id INTEGER,
-  address TEXT,
-  mobile TEXT,
-  fax TEXT,
-  email TEXT,
-  status INTEGER NOT NULL DEFAULT 0,
-  created_at TEXT,
-  legacy_extra TEXT,
-  FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE SET NULL
-);
-
 CREATE TABLE IF NOT EXISTS corporation_categories (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
@@ -174,7 +157,6 @@ CREATE TABLE IF NOT EXISTS template_versions (
 
 CREATE INDEX IF NOT EXISTS idx_products_visible_sort ON products(is_visible, sort_order, id);
 CREATE INDEX IF NOT EXISTS idx_news_created_at ON news(created_at, id);
-CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at, id);
 CREATE INDEX IF NOT EXISTS idx_admin_sessions_admin_id ON admin_sessions(admin_id);
 CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires_at ON admin_sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_templates_type_sort ON templates(type, sort_order, id);

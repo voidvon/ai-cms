@@ -1446,9 +1446,6 @@ function getColumnKindLabel(column: Column) {
   if (column.source_type === 'contact_page') {
     return '联系'
   }
-  if (column.source_type === 'message_page') {
-    return '留言'
-  }
   return '栏目'
 }
 

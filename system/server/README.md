@@ -32,16 +32,6 @@
 - `PUT /api/news/:id` - 更新新闻（需认证）
 - `DELETE /api/news/:id` - 删除新闻（需认证）
 
-#### 留言相关
-- `POST /api/messages` - 提交留言（公开）
-- `GET /api/messages` - 留言列表（需认证）
-- `GET /api/messages/:id` - 留言详情（需认证）
-- `PUT /api/messages/:id` - 更新留言（需认证）
-- `DELETE /api/messages/:id` - 删除留言（需认证）
-
-#### 上传相关
-- `POST /api/uploads?utype=prod|news` - 文件上传（需认证）
-
 #### 管理员相关
 - `GET /api/admin/me` - 获取当前用户信息（需认证）
 - `GET /api/admin/list` - 管理员列表（需认证）
@@ -60,8 +50,6 @@
 
 ### 前台动态路由
 - `GET /search?keyword=关键词` - 搜索页面
-- `POST /ajaxcode/msg?action=add` - 提交留言
-- `POST /ajaxcode/prodmsg?action=add` - 提交产品咨询
 
 ### 静态文件服务
 - 自动服务根目录 `html/` 下的所有前台静态文件
@@ -150,11 +138,10 @@ src/
 │   └── auth.mjs              # 认证中间件
 ├── routes/
 │   ├── auth.mjs              # 登录/登出
-│   ├── legacy.mjs            # 前台动态路由（搜索、留言）
+│   ├── legacy.mjs            # 前台动态路由（搜索）
 │   ├── api/                  # REST API 路由
 │   │   ├── products.mjs
 │   │   ├── news.mjs
-│   │   ├── messages.mjs
 │   │   ├── uploads.mjs
 │   │   ├── admin.mjs
 │   │   └── site-config.mjs
@@ -195,8 +182,6 @@ src/
 
 ✅ **前台动态 URL 保持兼容**：
 - `/search?keyword=xxx` - 正常工作
-- `/ajaxcode/msg?action=add` - 正常工作
-- `/ajaxcode/prodmsg?action=add` - 正常工作
 
 ### Services 层无变化
 
@@ -232,17 +217,10 @@ curl -X POST http://127.0.0.1:3000/api/admin/login \
 统一上传 API：
 
 ```bash
-curl -X POST 'http://127.0.0.1:3000/api/uploads?utype=news' \
+curl -X POST 'http://127.0.0.1:3000/api/media/upload?purpose=news_cover' \
   -H "Authorization: Bearer <token>" \
-  -F 'uploadfile=@./lo.gif'
+  -F 'file=@./lo.gif'
 ```
-
-后台 iframe 上传页：
-
-- `/admin/uploads/frame?tMode=2&utype=news`
-- `/admin/uploads/frame?tMode=3&utype=prod`
-- `/admin/uploads/frame-image?tMode=3&utype=prod`
-- `/admin/uploads/frame-gallery?tMode=3&utype=prod`
 
 允许格式：`jpg`、`jpeg`、`png`、`gif`
 

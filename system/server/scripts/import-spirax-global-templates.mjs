@@ -3,6 +3,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ensureTemplateVariantsSchema, createTemplateVariant, getSelectedTemplateVariant, listTemplateVariants, setSelectedTemplateVariant } from '../src/services/template-variants.mjs';
 import { ensureTemplatesSchema, createTemplate, publishTemplate, updateTemplate, upsertTemplateBinding } from '../src/services/templates.mjs';
+import { listColumns } from '../src/services/columns.mjs';
+import { resolvePublicSectionContext } from '../src/services/public-sections.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '../../..');
@@ -11,12 +13,13 @@ const sourceRoot = process.env.SPIRAX_GLOBAL_DIR
   : '/Users/yytest/Documents/projects/spirax-global';
 const dryRun = process.argv.includes('--dry-run');
 const selectTheme = process.argv.includes('--select');
+const includeHomeTemplate = process.argv.includes('--include-home');
+const includeShellTemplate = process.argv.includes('--include-shell');
 
 const THEME_NAME = 'Spirax Global';
 const CONTENT_TYPE_PRODUCT_ID = 1;
 const CONTENT_TYPE_ARTICLE_ID = 2;
 const CONTENT_TYPE_CONTACT_ID = 4;
-const CONTENT_TYPE_MESSAGE_ID = 5;
 const CONTENT_TYPE_CORPORATION_ID = 6;
 
 ensureTemplateVariantsSchema();
@@ -24,22 +27,25 @@ ensureTemplatesSchema();
 
 const themeId = ensureTheme();
 const templates = buildTemplates();
+const publicSections = resolvePublicSectionContext(listColumns());
+const serviceSection = publicSections.getNewsSectionByDirName('service');
 
 for (const template of templates) {
   upsertPublishedTemplate(template);
 }
 
 const bindings = [
-  { target_type: 'site', target_id: null, template_type: 'home', template_code: 'spirax_home' },
+  ...(includeHomeTemplate ? [{ target_type: 'site', target_id: null, template_type: 'home', template_code: 'spirax_home' }] : []),
   { target_type: 'content_type', target_id: CONTENT_TYPE_PRODUCT_ID, template_type: 'list', template_code: 'spirax_product_list' },
   { target_type: 'content_type', target_id: CONTENT_TYPE_PRODUCT_ID, template_type: 'content', template_code: 'spirax_product_detail' },
   { target_type: 'content_type', target_id: CONTENT_TYPE_ARTICLE_ID, template_type: 'list', template_code: 'spirax_article_list' },
   { target_type: 'content_type', target_id: CONTENT_TYPE_ARTICLE_ID, template_type: 'content', template_code: 'spirax_article_detail' },
-  { target_type: 'news_category', target_id: 12, template_type: 'list', template_code: 'spirax_service_list' },
-  { target_type: 'news_category', target_id: 12, template_type: 'content', template_code: 'spirax_service_detail' },
+  ...(serviceSection ? [
+    { target_type: 'news_category', target_id: serviceSection.rootColumnId, template_type: 'list', template_code: 'spirax_service_list' },
+    { target_type: 'news_category', target_id: serviceSection.rootColumnId, template_type: 'content', template_code: 'spirax_service_detail' }
+  ] : []),
   { target_type: 'content_type', target_id: CONTENT_TYPE_CORPORATION_ID, template_type: 'content', template_code: 'spirax_content_page' },
   { target_type: 'content_type', target_id: CONTENT_TYPE_CONTACT_ID, template_type: 'content', template_code: 'spirax_contact_page' },
-  { target_type: 'content_type', target_id: CONTENT_TYPE_MESSAGE_ID, template_type: 'content', template_code: 'spirax_message_page' },
 ];
 
 for (const binding of bindings) {
@@ -57,6 +63,8 @@ console.log(JSON.stringify({
   templates: templates.map((item) => item.code),
   bindings,
   selected: Boolean(selectTheme && !dryRun),
+  includeHomeTemplate,
+  includeShellTemplate,
   sourceRoot,
 }, null, 2));
 
@@ -79,6 +87,14 @@ function ensureTheme() {
 
 function upsertPublishedTemplate(definition) {
   if (dryRun) {
+    return;
+  }
+
+  if (definition.type === 'home' && !includeHomeTemplate) {
+    return;
+  }
+
+  if (definition.code === 'spirax_shell' && !includeShellTemplate) {
     return;
   }
 
@@ -331,21 +347,65 @@ function buildTemplates() {
       sort_order: 80,
       content: buildContactPageTemplate(),
     },
-    {
-      code: 'spirax_message_page',
-      name: 'Spirax 留言页模板',
-      type: 'content',
-      sort_order: 90,
-      content: buildMessagePageTemplate(),
-    },
   ];
 }
 
 function buildShellComponent(cssText) {
+  const staticCss = `${cssText}
+
+@media (max-width: 940px) {
+  .sg-site-nav-shell {
+    --sg-mobile-nav-offset: 54px;
+  }
+
+  .sg-global-nav__menu-toggle,
+  .sg-global-nav__drawer-backdrop {
+    display: none !important;
+  }
+
+  .sg-global-nav__main--desktop {
+    position: static;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    max-width: none;
+    overflow: visible;
+    background: rgba(255, 255, 255, 0.96);
+    color: #002d72;
+    box-shadow: none;
+    transform: none;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+  }
+
+  .sg-global-nav__main-item .sg-global-nav__flyout {
+    display: block;
+  }
+}
+
+@media (max-width: 1050px) {
+  .sg-site-footer__title--desktop {
+    display: block;
+    margin: 0 0 18px;
+  }
+
+  .sg-site-footer__trigger--mobile {
+    display: none !important;
+  }
+
+  .sg-site-footer__list {
+    display: block;
+    padding: 0 0 18px;
+  }
+}
+`;
+
   return `
 import React from 'react';
 
-export const css = ${JSON.stringify(cssText)};
+export const scss = String.raw\`${staticCss.replace(/`/g, '\\`')}\`;
 
 function renderNavItems(items = [], currentUrl = '') {
   return items.map((item, index) => {
@@ -423,127 +483,6 @@ function renderFooterLinks(columns = []) {
       </section>
     );
   });
-}
-
-export function client() {
-  const root = document.querySelector('[data-site-nav]');
-  const header = root?.querySelector('.sg-global-nav');
-  const toggle = root?.querySelector('[data-nav-toggle]');
-  const backdrop = root?.querySelector('[data-nav-backdrop]');
-  const panel = root?.querySelector('[data-nav-panel]');
-  const groups = Array.from(root?.querySelectorAll('[data-nav-group]') || []);
-  const mobileQuery = window.matchMedia('(max-width: 940px)');
-  const footerRoot = document.querySelector('.sg-site-footer');
-  const footerToggles = Array.from(footerRoot?.querySelectorAll('[data-footer-toggle]') || []);
-
-  function syncNavOffset() {
-    if (!(root instanceof HTMLElement) || !(header instanceof HTMLElement)) {
-      return;
-    }
-    root.style.setProperty('--sg-mobile-nav-offset', \`\${Math.ceil(header.getBoundingClientRect().height)}px\`);
-  }
-
-  function bindMediaQuery(mediaQuery, handler) {
-    if (typeof mediaQuery.addEventListener === 'function') {
-      mediaQuery.addEventListener('change', handler);
-      return;
-    }
-    mediaQuery.addListener(handler);
-  }
-
-  function setPanelOpen(open) {
-    if (!(root instanceof HTMLElement)) {
-      return;
-    }
-    root.classList.toggle('is-panel-open', open);
-    document.body.classList.toggle('sg-nav-open', mobileQuery.matches && open);
-    if (toggle instanceof HTMLButtonElement) {
-      toggle.setAttribute('aria-expanded', String(open));
-      toggle.classList.toggle('sg-nav-hamburger--active', open);
-    }
-    if (panel instanceof HTMLElement) {
-      panel.setAttribute('aria-hidden', String(mobileQuery.matches ? !open : false));
-    }
-  }
-
-  function setGroupOpen(group, open) {
-    if (!(group instanceof HTMLElement)) {
-      return;
-    }
-    group.dataset.open = String(open);
-    const groupToggle = group.querySelector('[data-nav-group-toggle]');
-    if (groupToggle instanceof HTMLButtonElement) {
-      groupToggle.setAttribute('aria-expanded', String(open));
-    }
-  }
-
-  function resetNavState() {
-    setPanelOpen(false);
-    groups.forEach((group) => setGroupOpen(group, false));
-  }
-
-  if (toggle instanceof HTMLButtonElement) {
-    toggle.addEventListener('click', () => {
-      setPanelOpen(toggle.getAttribute('aria-expanded') !== 'true');
-    });
-  }
-
-  backdrop?.addEventListener('click', () => {
-    if (mobileQuery.matches) {
-      setPanelOpen(false);
-    }
-  });
-
-  groups.forEach((group) => {
-    const groupToggle = group.querySelector('[data-nav-group-toggle]');
-    if (!(groupToggle instanceof HTMLButtonElement)) {
-      return;
-    }
-    groupToggle.addEventListener('click', () => {
-      if (!mobileQuery.matches) {
-        return;
-      }
-      setGroupOpen(group, groupToggle.getAttribute('aria-expanded') !== 'true');
-    });
-  });
-
-  function setFooterSectionOpen(section, open) {
-    if (!(section instanceof HTMLElement)) {
-      return;
-    }
-    section.classList.toggle('is-open', open);
-    const footerToggle = section.querySelector('[data-footer-toggle]');
-    if (footerToggle instanceof HTMLButtonElement) {
-      footerToggle.setAttribute('aria-expanded', String(open));
-    }
-  }
-
-  function resetFooterState() {
-    footerToggles.forEach((footerToggle) => {
-      const section = footerToggle.closest('[data-footer-section]');
-      setFooterSectionOpen(section, false);
-    });
-  }
-
-  footerToggles.forEach((footerToggle) => {
-    if (!(footerToggle instanceof HTMLButtonElement)) {
-      return;
-    }
-    footerToggle.addEventListener('click', () => {
-      if (!window.matchMedia('(max-width: 1050px)').matches) {
-        return;
-      }
-      const section = footerToggle.closest('[data-footer-section]');
-      setFooterSectionOpen(section, footerToggle.getAttribute('aria-expanded') !== 'true');
-    });
-  });
-
-  bindMediaQuery(mobileQuery, resetNavState);
-  bindMediaQuery(window.matchMedia('(max-width: 1050px)'), resetFooterState);
-  window.addEventListener('resize', syncNavOffset, { passive: true });
-  syncNavOffset();
-  resetNavState();
-  resetFooterState();
 }
 
 export default function Template({ site, siteColumns = [], currentPage, children }) {
@@ -627,121 +566,7 @@ function buildHomeTemplate(cssText) {
   return `
 import React from 'react';
 
-export const css = ${JSON.stringify(cssText)};
-
-export const clientProps = false;
-
-export function client() {
-  const slider = document.querySelector('[data-promo-slider]');
-  if (!slider || slider.dataset.sliderInitialized === 'true') {
-    return;
-  }
-  slider.dataset.sliderInitialized = 'true';
-
-  const slidesList = slider.querySelector('.splide__list');
-  const slides = Array.from(slider.querySelectorAll('.splide__slide'));
-  const pagination = slider.querySelector('.splide__pagination');
-  const prevBtn = slider.querySelector('.splide__arrow--prev');
-  const nextBtn = slider.querySelector('.splide__arrow--next');
-
-  if (!slidesList || !pagination || slides.length === 0) {
-    return;
-  }
-
-  let currentIndex = 0;
-  let autoplayTimer = null;
-  const autoplayInterval = 5000;
-
-  slides.forEach((_, index) => {
-    const dot = document.createElement('li');
-    const button = document.createElement('button');
-    button.className = 'splide__pagination__page';
-    button.type = 'button';
-    button.setAttribute('aria-label', '跳转到第 ' + (index + 1) + ' 张');
-    if (index === 0) {
-      button.classList.add('is-active');
-    }
-    button.addEventListener('click', () => goToSlide(index));
-    dot.appendChild(button);
-    pagination.appendChild(dot);
-  });
-
-  const dots = Array.from(pagination.querySelectorAll('.splide__pagination__page'));
-
-  function updateButtons() {
-    if (prevBtn) prevBtn.disabled = currentIndex === 0;
-    if (nextBtn) nextBtn.disabled = currentIndex === slides.length - 1;
-  }
-
-  function stopAutoplay() {
-    if (autoplayTimer) {
-      clearInterval(autoplayTimer);
-      autoplayTimer = null;
-    }
-  }
-
-  function startAutoplay() {
-    stopAutoplay();
-    autoplayTimer = window.setInterval(next, autoplayInterval);
-  }
-
-  function goToSlide(index) {
-    if (index < 0 || index >= slides.length) {
-      return;
-    }
-
-    currentIndex = index;
-    slidesList.style.transform = 'translateX(' + (-index * 100) + '%)';
-    dots.forEach((dot, dotIndex) => {
-      dot.classList.toggle('is-active', dotIndex === index);
-    });
-    updateButtons();
-    startAutoplay();
-  }
-
-  function next() {
-    goToSlide(currentIndex < slides.length - 1 ? currentIndex + 1 : 0);
-  }
-
-  function prev() {
-    goToSlide(currentIndex > 0 ? currentIndex - 1 : slides.length - 1);
-  }
-
-  let touchStartX = 0;
-  slidesList.addEventListener('touchstart', (event) => {
-    touchStartX = event.changedTouches[0]?.screenX || 0;
-  }, { passive: true });
-
-  slidesList.addEventListener('touchend', (event) => {
-    const touchEndX = event.changedTouches[0]?.screenX || 0;
-    const diff = touchStartX - touchEndX;
-    if (Math.abs(diff) <= 50) {
-      return;
-    }
-    if (diff > 0) {
-      next();
-    } else {
-      prev();
-    }
-  }, { passive: true });
-
-  if (prevBtn) prevBtn.addEventListener('click', prev);
-  if (nextBtn) nextBtn.addEventListener('click', next);
-
-  slider.addEventListener('mouseenter', stopAutoplay);
-  slider.addEventListener('mouseleave', startAutoplay);
-  slider.addEventListener('keydown', (event) => {
-    if (event.key === 'ArrowLeft') {
-      prev();
-    } else if (event.key === 'ArrowRight') {
-      next();
-    }
-  });
-
-  slidesList.style.transition = 'transform 0.5s ease';
-  updateButtons();
-  startAutoplay();
-}
+export const scss = String.raw\`${cssText.replace(/`/g, '\\`')}\`;
 
 export default function Template(props) {
   const shell = props.component('spirax_shell', props);
@@ -816,7 +641,7 @@ function buildProductListTemplate(cssText) {
   return `
 import React from 'react';
 
-export const css = ${JSON.stringify(cssText)};
+export const scss = String.raw\`${cssText.replace(/`/g, '\\`')}\`;
 
 export default function Template(props) {
   const shell = props.component('spirax_shell', props);
@@ -1104,87 +929,10 @@ function buildProductOverviewComponent() {
   return `
 import React from 'react';
 
-export const clientProps = false;
-
-export function client() {
-  const roots = Array.from(document.querySelectorAll('[data-product-overview]'));
-
-  roots.forEach((root) => {
-    if (!(root instanceof HTMLElement)) {
-      return;
-    }
-
-    const content = root.querySelector('[data-overview-content]');
-    const toggle = root.querySelector('[data-overview-toggle]');
-
-    if (!(content instanceof HTMLElement) || !(toggle instanceof HTMLButtonElement)) {
-      return;
-    }
-
-    const showAllLabel = toggle.getAttribute('data-show-label') || 'Show all';
-    const collapseLabel = toggle.getAttribute('data-collapse-label') || 'Collapse';
-
-    function isExpanded() {
-      return toggle.getAttribute('aria-expanded') === 'true';
-    }
-
-    function syncExpandedState(expanded) {
-      toggle.setAttribute('aria-expanded', String(expanded));
-      toggle.textContent = expanded ? collapseLabel : showAllLabel;
-      content.classList.toggle('product-overview__text--collapsed', !expanded);
-    }
-
-    function measureOverflow() {
-      const computedStyle = window.getComputedStyle(content);
-      const lineHeight = Number.parseFloat(computedStyle.lineHeight);
-
-      if (!Number.isFinite(lineHeight) || lineHeight <= 0) {
-        toggle.hidden = true;
-        toggle.setAttribute('aria-expanded', 'false');
-        content.classList.remove('product-overview__text--collapsed');
-        return;
-      }
-
-      const expanded = isExpanded();
-      content.classList.remove('product-overview__text--collapsed');
-      const naturalHeight = content.scrollHeight;
-      const maxHeight = lineHeight * 4;
-      const hasOverflow = naturalHeight > maxHeight + 1;
-
-      toggle.hidden = !hasOverflow;
-
-      if (!hasOverflow) {
-        toggle.setAttribute('aria-expanded', 'false');
-        toggle.textContent = showAllLabel;
-        return;
-      }
-
-      syncExpandedState(expanded);
-    }
-
-    syncExpandedState(false);
-    measureOverflow();
-
-    if (typeof ResizeObserver !== 'undefined') {
-      const resizeObserver = new ResizeObserver(() => {
-        measureOverflow();
-      });
-      resizeObserver.observe(content);
-    }
-
-    window.addEventListener('resize', measureOverflow);
-    toggle.addEventListener('click', () => {
-      syncExpandedState(!isExpanded());
-    });
-  });
-}
-
 export default function Component(props) {
   const {
-    collapseLabel = 'Collapse',
     componentId = 'product-overview',
     paragraphs = [],
-    showAllLabel = 'Show all',
     title = 'Overview',
     wrapperClassName = 'wrapper wrapper--sml wrapper--pad-l'
   } = props || {};
@@ -1196,22 +944,11 @@ export default function Component(props) {
   }
 
   return (
-    <section className="intro-text-section bg--white product-overview" data-product-overview="" id={componentId}>
+    <section className="intro-text-section bg--white product-overview" id={componentId}>
       <div className={wrapperClassName}>
         <h2 className="display-heading">{title}</h2>
         <div className="intro__copy copy intro__copy--left">
-          <p className="product-overview__text product-overview__text--collapsed" data-overview-content="">{overviewText}</p>
-          <button
-            aria-expanded="false"
-            className="product-overview__toggle"
-            data-collapse-label={collapseLabel}
-            data-overview-toggle=""
-            data-show-label={showAllLabel}
-            hidden
-            type="button"
-          >
-            {showAllLabel}
-          </button>
+          <p className="product-overview__text">{overviewText}</p>
         </div>
       </div>
     </section>
@@ -1361,7 +1098,7 @@ function buildProductDetailTemplate(cssText) {
   return `
 import React from 'react';
 
-export const css = ${JSON.stringify(cssText)};
+export const scss = String.raw\`${cssText.replace(/`/g, '\\`')}\`;
 
 export default function Template(props) {
   const shell = props.component('spirax_shell', props);
@@ -1689,54 +1426,11 @@ function buildProductImageGalleryComponent() {
   return `
 import React from 'react';
 
-export function client() {
-  const roots = Array.from(document.querySelectorAll('[data-product-image-gallery]'));
-  roots.forEach((root) => {
-    if (!(root instanceof HTMLElement)) {
-      return;
-    }
-    const buttons = Array.from(root.querySelectorAll('[data-gallery-thumb-index]'));
-    const slides = Array.from(root.querySelectorAll('[data-gallery-slide-index]'));
-    if (buttons.length === 0 || slides.length === 0) {
-      return;
-    }
-
-    function setActive(index) {
-      slides.forEach((slide) => {
-        if (!(slide instanceof HTMLElement)) {
-          return;
-        }
-        const active = Number(slide.dataset.gallerySlideIndex) === index;
-        slide.style.display = active ? '' : 'none';
-      });
-      buttons.forEach((button) => {
-        if (!(button instanceof HTMLButtonElement)) {
-          return;
-        }
-        const active = Number(button.dataset.galleryThumbIndex) === index;
-        button.closest('.product-image-gallery__thumb-item')?.classList.toggle('is-active', active);
-      });
-    }
-
-    buttons.forEach((button) => {
-      if (!(button instanceof HTMLButtonElement)) {
-        return;
-      }
-      button.addEventListener('click', () => {
-        setActive(Number(button.dataset.galleryThumbIndex || '0'));
-      });
-    });
-
-    setActive(0);
-  });
-}
-
 export default function Component(props) {
   const images = Array.isArray(props?.images) ? props.images.filter((image) => image?.src) : [];
   const label = props?.label || 'Product image gallery';
   const title = props?.title || '';
   const hasMultipleImages = images.length > 1;
-  const galleryId = props?.galleryId || 'product-gallery';
 
   if (images.length === 0) {
     return null;
@@ -1758,34 +1452,16 @@ export default function Component(props) {
   return (
     <div
       aria-label={label}
-      className="product-image-gallery product-image-gallery--interactive"
-      data-product-image-gallery=""
-      data-product-image-gallery-id={galleryId}
+      className="product-image-gallery product-image-gallery--static"
     >
-      <section aria-label={label} className="product-image-gallery__main">
+      <section aria-label={label} className="product-image-gallery__main" style={{ display: 'grid', gap: '12px' }}>
         {images.map((image, index) => (
-          <div className="product-image-gallery__slide-shell" data-gallery-slide-index={index} key={image?.src || index}>
+          <div className="product-image-gallery__slide-shell" key={image?.src || index}>
             <div className="product-image-gallery__image-shell">
               <img alt={image?.alt || title || ''} className="product-image-gallery__image" loading={index === 0 ? 'eager' : 'lazy'} src={image?.src} />
             </div>
           </div>
         ))}
-      </section>
-      <section aria-label={\`\${label} thumbnails\`} className="product-image-gallery__thumbs">
-        <div className="product-image-gallery__thumbs-track">
-          {images.map((image, index) => (
-            <div className={['product-image-gallery__thumb-item', index === 0 ? 'is-active' : ''].filter(Boolean).join(' ')} key={\`\${image?.src || ''}-thumb-\${index}\`}>
-              <button
-                aria-label={\`View image \${index + 1}\`}
-                className="product-image-gallery__thumb-button"
-                data-gallery-thumb-index={index}
-                type="button"
-              >
-                <img alt={image?.alt || title || ''} className="product-image-gallery__thumb-image" loading="lazy" src={image?.src} />
-              </button>
-            </div>
-          ))}
-        </div>
       </section>
     </div>
   );
@@ -2104,7 +1780,7 @@ function buildArticleListTemplate(cssText, mode) {
   return `
 import React from 'react';
 
-export const css = ${JSON.stringify(cssText)};
+export const scss = String.raw\`${cssText.replace(/`/g, '\\`')}\`;
 
 export default function Template(props) {
   const shell = props.component('spirax_shell', props);
@@ -2167,7 +1843,7 @@ function buildArticleDetailTemplate(cssText) {
   return `
 import React from 'react';
 
-export const css = ${JSON.stringify(cssText)};
+export const scss = String.raw\`${cssText.replace(/`/g, '\\`')}\`;
 
 export default function Template(props) {
   const shell = props.component('spirax_shell', props);
@@ -2232,7 +1908,7 @@ function buildServiceDetailTemplate(cssText) {
   return `
 import React from 'react';
 
-export const css = ${JSON.stringify(cssText)};
+export const scss = String.raw\`${cssText.replace(/`/g, '\\`')}\`;
 
 export default function Template(props) {
   const shell = props.component('spirax_shell', props);
@@ -2300,6 +1976,10 @@ export default function Template(props) {
   const calloutCards = Array.isArray(pageData.calloutCards) ? pageData.calloutCards : [];
   const promoCards = Array.isArray(pageData.promoCards) ? pageData.promoCards : [];
   const goalItems = Array.isArray(pageData?.goals?.items) ? pageData.goals.items : [];
+  const slides = Array.isArray(pageData?.slides) ? pageData.slides : [];
+  const relatedCards = Array.isArray(pageData?.related?.cards) ? pageData.related.cards : [];
+  const caseStudyItems = Array.isArray(pageData?.caseStudy?.items) ? pageData.caseStudy.items : [];
+  const proofItems = Array.isArray(pageData?.proof?.items) ? pageData.proof.items : [];
   const sectionGroups = Array.isArray(pageData.sections) ? pageData.sections : [];
   const jobs = Array.isArray(pageData.jobs) ? pageData.jobs : [];
   const filterGroups = Array.isArray(pageData.filterGroups) ? pageData.filterGroups : [];
@@ -2309,6 +1989,16 @@ export default function Template(props) {
   const heroTitle = pageData?.hero?.title || props.title;
   const heroImage = pageData?.hero?.image || pageData.heroImage || pageData.mastheadImage || props.currentCategoryHeroImage || '';
   const summary = pageData?.hero?.summary || pageData.summary || props.newsDescription || '';
+  const featureImage = pageData?.featureImage || '';
+  const isGoalLanding = goalItems.length > 0;
+  const isGoalDetail = !isGoalLanding && (
+    Boolean(pageData?.secondary?.title)
+    || Boolean(pageData?.focus?.title)
+    || Boolean(pageData?.closing?.title)
+    || Boolean(pageData?.caseStudy?.title)
+    || slides.length > 0
+    || relatedCards.length > 0
+  );
   const brandPathSection = pageData?.brandPathSection && Array.isArray(pageData?.brandPathSection?.cards) && pageData.brandPathSection.cards.length > 0
     ? props.component('spirax_brand_path_section', pageData.brandPathSection)
     : null;
@@ -2513,10 +2203,140 @@ export default function Template(props) {
     })),
     wrapperClassName: 'wrapper wrapper--pad-l'
   }) : null;
+  const proofSection = proofItems.length > 0 ? (
+    <section className="bg--white">
+      <div className="wrapper wrapper--pad-l">
+        <div className="section-header">
+          {pageData?.proof?.title ? <h2 className="section-header__title">{pageData.proof.title}</h2> : null}
+        </div>
+        <div className="content-card-grid__grid">
+          {proofItems.map((item, index) => (
+            <article className="content-card-grid__item content-card-grid__item--grey" key={item?.title || index}>
+              <div className="content-card-grid__content">
+                {item?.title ? <h3 className="content-card-grid__title">{item.title}</h3> : null}
+                {item?.description ? <div className="content-card-grid__desc"><p>{item.description}</p></div> : null}
+              </div>
+            </article>
+          ))}
+        </div>
+      </div>
+    </section>
+  ) : null;
+  const featureImageSection = featureImage ? (
+    <section className="bg--light-blue">
+      <div className="wrapper wrapper--pad-l">
+        <div className="copy">
+          <p><img alt={heroTitle || props.title || ''} src={featureImage} /></p>
+        </div>
+      </div>
+    </section>
+  ) : null;
+  const secondarySection = pageData?.secondary ? (
+    <section className="bg--light-blue intro-text-section">
+      <div className="wrapper wrapper--sml wrapper--pad-l">
+        {pageData.secondary.title ? <h2 className="display-heading">{pageData.secondary.title}</h2> : null}
+        <div className="intro__copy copy intro__copy--left copy--2-col">
+          {(Array.isArray(pageData.secondary.paragraphs) ? pageData.secondary.paragraphs : []).map((paragraph, index) => (
+            <p key={index}>{paragraph}</p>
+          ))}
+        </div>
+      </div>
+    </section>
+  ) : null;
+  const caseStudySection = pageData?.caseStudy?.title && caseStudyItems.length > 0 ? (
+    <section className="bg--white">
+      <div className="wrapper wrapper--pad-l">
+        <div className="section-header">
+          <h2 className="section-header__title">{pageData.caseStudy.title}</h2>
+        </div>
+        {pageData?.caseStudy?.image ? <p><img alt={pageData.caseStudy.title || ''} src={pageData.caseStudy.image} /></p> : null}
+        <div className="content-card-grid__grid">
+          {caseStudyItems.map((item, index) => (
+            <article className="content-card-grid__item content-card-grid__item--grey" key={item?.label || index}>
+              <div className="content-card-grid__content">
+                {item?.label ? <h3 className="content-card-grid__title">{item.label}</h3> : null}
+                {item?.value ? <div className="content-card-grid__desc"><p>{item.value}</p></div> : null}
+              </div>
+            </article>
+          ))}
+        </div>
+        {pageData?.caseStudy?.href && pageData?.caseStudy?.cta ? (
+          <p style={{ marginTop: '1.5rem' }}>
+            {props.component('spirax_button', {
+              href: pageData.caseStudy.href,
+              children: pageData.caseStudy.cta
+            })}
+          </p>
+        ) : null}
+      </div>
+    </section>
+  ) : null;
+  const slidesSection = slides.length > 0 ? props.component('spirax_content_card_grid', {
+    cards: slides.map((slide) => ({
+      title: slide?.title || '',
+      description: slide?.description || '',
+      href: slide?.href || '',
+      image: slide?.image || '',
+      imageAlt: slide?.title || '',
+      cta: slide?.cta || ''
+    })),
+    wrapperClassName: 'wrapper wrapper--pad-l'
+  }) : null;
+  const focusSection = pageData?.focus ? (
+    <section className="bg--white intro-text-section">
+      <div className="wrapper wrapper--sml wrapper--pad-l">
+        {pageData.focus.title ? <h2 className="display-heading">{pageData.focus.title}</h2> : null}
+        <div className="intro__copy copy intro__copy--left">
+          {(Array.isArray(pageData.focus.paragraphs) ? pageData.focus.paragraphs : []).map((paragraph, index) => (
+            <p key={index}>{paragraph}</p>
+          ))}
+        </div>
+      </div>
+    </section>
+  ) : null;
+  const closingSection = pageData?.closing ? (
+    <section className="bg--blue intro-text-section">
+      <div className="wrapper wrapper--sml wrapper--pad-m">
+        <div className="intro intro--white intro--large">
+          {pageData.closing.title ? <h2 className="display-heading">{pageData.closing.title}</h2> : null}
+          <div className="intro__copy copy intro__copy--full-width">
+            {(Array.isArray(pageData.closing.paragraphs) ? pageData.closing.paragraphs : []).map((paragraph, index) => (
+              <p key={index}>{paragraph}</p>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  ) : null;
+  const relatedSection = relatedCards.length > 0 ? (
+    <section className="content-card-grid content-card-grid--compact bg--white clip-outside__wrap--small">
+      <div className="wrapper wrapper--pad-l wrapper--flush-b">
+        {pageData?.related?.title ? <h2 className="display-heading">{pageData.related.title}</h2> : null}
+      </div>
+      {props.component('spirax_content_card_grid', {
+        cards: relatedCards.map((card) => ({
+          title: card?.title || '',
+          description: card?.description || '',
+          href: card?.href || '',
+          image: card?.image || '',
+          imageAlt: card?.title || '',
+          cta: card?.cta || ''
+        })),
+        itemClassName: 'content-card-grid__item content-card-grid__item--grey',
+        wrapperClassName: 'wrapper wrapper--pad-l'
+      })}
+    </section>
+  ) : null;
   const content = (
     <main className="sg-page-shell sg-content-shell">
       {masthead}
       {introSection}
+      {isGoalDetail ? featureImageSection : null}
+      {isGoalDetail ? secondarySection : null}
+      {isGoalDetail ? proofSection : null}
+      {isGoalDetail ? caseStudySection : null}
+      {isGoalDetail ? slidesSection : null}
+      {isGoalDetail ? focusSection : null}
       {featureHeadingSection}
       {featureGrid}
       {adviceSection}
@@ -2525,6 +2345,8 @@ export default function Template(props) {
       {supportSection}
       {goalsSection}
       {brandPathSection}
+      {isGoalDetail ? closingSection : null}
+      {isGoalDetail ? relatedSection : null}
       {linkSections}
       {simpleItems}
       {jobsSection}
@@ -2567,36 +2389,6 @@ export default function Template(props) {
             {props.site?.company_phone ? <p>电话：{props.site.company_phone}</p> : null}
             {props.site?.company_email ? <p>邮箱：{props.site.company_email}</p> : null}
             {props.site?.company_address ? <p>地址：{props.site.company_address}</p> : null}
-          </div>
-        </div>
-      </section>
-    </main>
-  );
-  return shell ? React.cloneElement(shell, {}, content) : content;
-}
-`;
-}
-
-function buildMessagePageTemplate() {
-  return `
-import React from 'react';
-
-export default function Template(props) {
-  const shell = props.component('spirax_shell', props);
-  const content = (
-    <main className="sg-page-shell sg-content-shell sg-contact-page">
-      <section className="short-masthead">
-        <div className="wrapper wrapper--pad-l">
-          <div className="short-masthead__content">
-            <h1 className="short-masthead__title">在线留言</h1>
-          </div>
-        </div>
-      </section>
-      <section className="bg--white">
-        <div className="wrapper wrapper--sml wrapper--pad-l">
-          <div className="copy">
-            <p>当前静态页不直接提交表单，请前往后台接口或保留现有留言入口。</p>
-            <p><a className="btn btn--primary" href="/contact.html">联系页面</a></p>
           </div>
         </div>
       </section>

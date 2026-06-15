@@ -1213,7 +1213,7 @@ function normalizeImageArray(coverImages) {
 }
 
 function normalizePrimaryPicture(coverImages, fallback) {
-  return normalizeImageArray(coverImages)[0] || toNullableString(fallback) || '/UploadFile/nopicture.gif';
+  return normalizeImageArray(coverImages)[0] || toNullableString(fallback) || '';
 }
 
 function copyReferencedAssets(parsed) {
@@ -1372,6 +1372,18 @@ function extractSerializableManualPageData(pageData, frontmatter, routePath) {
     partnerHeading: normalizeManualContentBlock(raw.partnerHeading),
     advice: normalizeManualContentBlock(raw.advice),
     supportList: normalizeManualListBlock(raw.supportList),
+    secondary: normalizeManualContentBlock(raw.secondary),
+    focus: normalizeManualContentBlock(raw.focus),
+    closing: normalizeManualContentBlock(raw.closing),
+    caseStudy: normalizeManualCaseStudy(raw.caseStudy),
+    related: normalizeManualRelatedSection(raw.related),
+    slides: normalizeObjectArray(raw.slides, ['title', 'description', 'href', 'cta', 'image']),
+    proof: normalizeManualProofSection(raw.proof),
+    actions: normalizeManualActions(raw.actions),
+    faq: normalizeManualFaq(raw.faq),
+    answerSummary: normalizePlainObject(raw.answerSummary, ['label', 'title', 'answer']),
+    technicalReview: normalizePlainObject(raw.technicalReview, ['title', 'reviewedBy']),
+    featureImage: toNullableString(raw.featureImage),
     calloutCards: normalizeObjectArray(mergedCalloutCards, ['title', 'description', 'href', 'label', 'image']),
     promoCards: normalizeObjectArray(raw.promoCards, ['title', 'description', 'href', 'label', 'image']),
     filterGroups: normalizeManualFilterGroups(raw.filterGroups),
@@ -1392,6 +1404,65 @@ function extractSerializableManualPageData(pageData, frontmatter, routePath) {
   };
 
   return pruneEmptyValues(clean);
+}
+
+function normalizeManualCaseStudy(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  return pruneEmptyValues({
+    title: toNullableString(value.title),
+    href: toNullableString(value.href),
+    cta: toNullableString(value.cta),
+    image: toNullableString(value.image),
+    items: normalizeObjectArray(value.items, ['label', 'value'])
+  });
+}
+
+function normalizeManualRelatedSection(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  return pruneEmptyValues({
+    title: toNullableString(value.title),
+    cards: normalizeObjectArray(value.cards, ['title', 'description', 'href', 'cta', 'image'])
+  });
+}
+
+function normalizeManualProofSection(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  return pruneEmptyValues({
+    title: toNullableString(value.title),
+    items: normalizeObjectArray(value.items, ['title', 'description'])
+  });
+}
+
+function normalizeManualActions(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  return pruneEmptyValues({
+    title: toNullableString(value.title),
+    items: normalizeObjectArray(value.items, ['title', 'description', 'href', 'cta'])
+  });
+}
+
+function normalizeManualFaq(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  return pruneEmptyValues({
+    title: toNullableString(value.title),
+    intro: toNullableString(value.intro),
+    items: normalizeObjectArray(value.items, ['question', 'answer'])
+  });
 }
 
 function normalizeStringArray(value) {

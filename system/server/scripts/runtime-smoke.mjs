@@ -1,10 +1,8 @@
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import { Readable, Writable } from 'node:stream';
 import { queryOne } from '../src/db.mjs';
 import { handleRequest } from '../src/server.mjs';
 import { createAdminSession, deleteAdminSession } from '../src/services/sessions.mjs';
-import { deleteUploadedFile } from '../src/services/uploads.mjs';
 
 class MockRequest extends Readable {
   constructor({ method = 'GET', url = '/', headers = {}, body = '' }) {
@@ -95,43 +93,15 @@ async function performRequest(options) {
   return response;
 }
 
-function createMultipartPayload({ boundary, fields = {}, file }) {
-  const chunks = [];
-  for (const [name, value] of Object.entries(fields)) {
-    chunks.push(Buffer.from(`--${boundary}\r\n`));
-    chunks.push(Buffer.from(`Content-Disposition: form-data; name="${name}"\r\n\r\n`));
-    chunks.push(Buffer.from(String(value)));
-    chunks.push(Buffer.from('\r\n'));
-  }
-
-  if (file) {
-    chunks.push(Buffer.from(`--${boundary}\r\n`));
-    chunks.push(
-      Buffer.from(
-        `Content-Disposition: form-data; name="${file.fieldName}"; filename="${file.filename}"\r\n` +
-        `Content-Type: ${file.contentType}\r\n\r\n`
-      )
-    );
-    chunks.push(file.data);
-    chunks.push(Buffer.from('\r\n'));
-  }
-
-  chunks.push(Buffer.from(`--${boundary}--\r\n`));
-  return Buffer.concat(chunks);
-}
-
-function extractUploadedPath(bodyText) {
-  const match = bodyText.match(/\/UploadFile\/[A-Za-z0-9/_-]+\.(?:jpg|jpeg|png|gif)/i);
-  return match ? match[0] : null;
-}
-
 async function main() {
   const admin = queryOne('SELECT id FROM admins ORDER BY id LIMIT 1');
   assert(admin?.id, '缺少管理员账号，无法执行上传兼容回归。');
   const product = queryOne(`
     SELECT id, name
-    FROM products
+    FROM columns
     WHERE is_visible = 1
+      AND model_code = 'product'
+      AND node_type = 'content'
       AND trim(coalesce(name, '')) <> ''
     ORDER BY id
     LIMIT 1
@@ -140,8 +110,6 @@ async function main() {
   const searchKeyword = String(product.name).trim();
 
   const session = createAdminSession(admin.id);
-  const adminCookie = `admin_token=${session.token}`;
-  const uploadedPaths = [];
 
   try {
     const emptySearch = await performRequest({
@@ -198,61 +166,8 @@ async function main() {
     assert.equal(adminRedirect.statusCode, 302);
     assert.equal(adminRedirect.getHeader('location'), '/admin/login');
 
-    const uploadUnauthorized = await performRequest({
-      method: 'GET',
-      url: '/admin/uploads/frame?tMode=3&utype=prod',
-      headers: { host: 'localhost' }
-    });
-    assert.equal(uploadUnauthorized.statusCode, 302);
-    assert.equal(uploadUnauthorized.getHeader('location'), '/admin/login');
-
-    const uploadForm = await performRequest({
-      method: 'GET',
-      url: '/admin/uploads/frame-image?type=image&tMode=3&utype=prod',
-      headers: {
-        host: 'localhost',
-        cookie: adminCookie
-      }
-    });
-    assert.equal(uploadForm.statusCode, 200);
-    assert.match(uploadForm.bodyText, /CheckUploadForm\(\)/);
-    assert.match(uploadForm.bodyText, /name="uploadfile"/);
-
-    const boundary = `----CodexSmoke${Date.now()}`;
-    const uploadBody = createMultipartPayload({
-      boundary,
-      file: {
-        fieldName: 'uploadfile',
-        filename: 'smoke.gif',
-        contentType: 'image/gif',
-        data: Buffer.from('GIF89a', 'ascii')
-      }
-    });
-    const uploadResult = await performRequest({
-      method: 'POST',
-      url: '/admin/uploads/frame-image?type=image&tMode=3&utype=prod',
-      headers: {
-        host: 'localhost',
-        cookie: adminCookie,
-        'content-type': `multipart/form-data; boundary=${boundary}`,
-        'content-length': String(uploadBody.length)
-      },
-      body: uploadBody
-    });
-    assert.equal(uploadResult.statusCode, 200);
-    assert.match(uploadResult.bodyText, /上传成功!/);
-    assert.match(uploadResult.bodyText, /UploadSaved\('/);
-    assert.match(uploadResult.bodyText, /addUploadFile\('/);
-
-    const uploadedPath = extractUploadedPath(uploadResult.bodyText);
-    assert(uploadedPath, '上传成功后未返回旧编辑器所需图片路径。');
-    uploadedPaths.push(uploadedPath);
-
     console.log('runtime smoke passed');
   } finally {
-    for (const relativePath of uploadedPaths) {
-      deleteUploadedFile(relativePath);
-    }
     deleteAdminSession(session.token);
   }
 }

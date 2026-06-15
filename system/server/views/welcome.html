@@ -69,10 +69,6 @@
         <h3 id="news-count">-</h3>
         <p>新闻数量</p>
       </div>
-      <div class="stat-item">
-        <h3 id="message-count">-</h3>
-        <p>留言数量</p>
-      </div>
     </div>
   </div>
 
@@ -85,9 +81,6 @@
     fetch('/api/news?limit=1').then(r => r.json()).then(data => {
       document.getElementById('news-count').textContent = data.data.length > 0 ? '20+' : '0';
     });
-
-    // 留言需要认证，先显示占位符
-    document.getElementById('message-count').textContent = '-';
   </script>
 </body>
 </html>

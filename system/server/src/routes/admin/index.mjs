@@ -48,17 +48,6 @@ export default async function adminIndexRoutes(app) {
     return reply.type('text/html; charset=utf-8').send(html);
   });
 
-  // 留言管理页面
-  app.get('/messages', {
-    onRequest: [requireAuth]
-  }, async (request, reply) => {
-    const html = await fs.promises.readFile(
-      path.join(SERVER_ROOT, 'views/admin/messages-list.html'),
-      'utf-8'
-    );
-    return reply.type('text/html; charset=utf-8').send(html);
-  });
-
   // 站点配置页面
   app.get('/config', {
     onRequest: [requireAuth]
@@ -116,14 +105,4 @@ export default async function adminIndexRoutes(app) {
     return reply.type('text/html; charset=utf-8').send(html);
   });
 
-  // 留言详情页面
-  app.get('/messages/view', {
-    onRequest: [requireAuth]
-  }, async (request, reply) => {
-    const html = await fs.promises.readFile(
-      path.join(SERVER_ROOT, 'views/admin/messages-detail.html'),
-      'utf-8'
-    );
-    return reply.type('text/html; charset=utf-8').send(html);
-  });
 }

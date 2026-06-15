@@ -68,7 +68,6 @@ export default function DashboardLayout() {
 
   const mainMenuItems = [
     { path: '/columns', label: '栏目' },
-    { path: '/messages', label: '留言管理' },
   ]
 
   const menuGroups = [

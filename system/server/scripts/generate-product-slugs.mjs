@@ -43,13 +43,19 @@ try {
   // 获取所有产品
   const products = db.prepare(`
     SELECT id, name, code, slug
-    FROM products
+    FROM columns
+    WHERE model_code = 'product'
+      AND node_type = 'content'
     ORDER BY id
   `).all();
 
   console.log(`📊 找到 ${products.length} 个产品`);
 
-  const updateStmt = db.prepare('UPDATE products SET slug = ? WHERE id = ?');
+  const updateStmt = db.prepare(`
+    UPDATE columns
+    SET slug = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ?
+  `);
 
   let updated = 0;
   let skipped = 0;

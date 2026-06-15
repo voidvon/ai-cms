@@ -3,7 +3,6 @@ import { CONTENT_ROOT } from '../../config.mjs';
 import {
   buildIndexPage,
   buildContactPage,
-  buildMessagePage,
   buildCorporationPages,
   buildNewsCategoryPages,
   buildNewsDetailPages,
@@ -38,9 +37,6 @@ export default async function staticGenRoutes(app) {
           break;
         case 'contact':
           result = buildContactPage({ outputRoot: CONTENT_ROOT, languageCode });
-          break;
-        case 'message':
-          result = buildMessagePage({ outputRoot: CONTENT_ROOT, languageCode });
           break;
         case 'corporation':
           result = buildCorporationPages({ outputRoot: CONTENT_ROOT, languageCode });

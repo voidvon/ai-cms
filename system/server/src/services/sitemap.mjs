@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { queryAll } from '../db.mjs';
 import { getSiteConfig } from './site.mjs';
 import { listColumns } from './columns.mjs';
 import { listColumnCategories } from './column-categories.mjs';
@@ -9,15 +8,17 @@ import {
   getDescendantColumnIds,
   isColumnUnderRoot
 } from './column-tree.mjs';
+import {
+  resolveLegacyCategoryPublicId,
+  resolvePublicSectionContext
+} from './public-sections.mjs';
 import { ensureCorporationCategoriesSchema } from './corporation-categories.mjs';
-import { ensureProductsSchema } from './products.mjs';
+import { ensureProductsSchema, listProducts } from './products.mjs';
+import { ensureNewsSchema, listNews } from './news.mjs';
 import { escapeHtml } from '../utils/html.mjs';
 
 const PRODUCT_LIST_PAGE_SIZE = 14;
 const NEWS_LIST_PAGE_SIZE = 6;
-const CORPORATION_ROOT_ID = 32;
-const NEWS_ROOT_ID = 4;
-const SERVICE_ROOT_ID = 12;
 const SITEMAP_CHUNK_SIZE = 1000;
 
 export function buildSitemap({ outputRoot, generatedAt = new Date().toISOString(), languageCode = null } = {}) {
@@ -69,18 +70,9 @@ export function getSitemapDiagnostics({ generatedAt = new Date().toISOString(), 
   const siteUrl = normalizeSiteUrl(site.web_url);
   const urls = siteUrl ? collectSitemapEntries({ siteUrl, generatedAt, languageCode }) : [];
   const chunks = chunkEntries(urls, SITEMAP_CHUNK_SIZE);
-  const products = queryAll(`
-    SELECT id, updated_at
-    FROM products
-    WHERE is_visible = 1
-    ORDER BY id ASC
-  `);
-  const corporationCategories = queryAll(`
-    SELECT id, name, updated_at
-    FROM corporation_categories
-    WHERE coalesce(is_external, 0) = 0
-    ORDER BY id ASC
-  `);
+  const products = listProducts({ visibleOnly: true, limit: 10000, languageCode });
+  const corporationCategories = listColumnCategories('corporation', { languageCode })
+    .filter((item) => toInteger(item.is_external, 0) === 0);
 
   return {
     generated_at: generatedAt,
@@ -107,46 +99,30 @@ export function getSitemapDiagnostics({ generatedAt = new Date().toISOString(), 
 
 function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   ensureProductsSchema();
+  ensureNewsSchema();
   ensureCorporationCategoriesSchema();
 
   const entries = new Map();
   const columns = listColumns({ languageCode });
+  const publicSections = resolvePublicSectionContext(columns);
   const productCategories = listColumnCategories('product', { languageCode });
   const newsCategories = listColumnCategories('news', { languageCode });
-  const newsColumns = columns.filter((item) => String(item.model_code || '') === 'news' && String(item.column_kind || '') === 'category');
-  const newsColumnById = new Map(newsColumns.map((item) => [toInteger(item.id, 0), item]));
-  const newsRootColumnId = resolveColumnIdBySource(columns, 'news_category', NEWS_ROOT_ID);
-  const serviceRootColumnId = resolveColumnIdBySource(columns, 'news_category', SERVICE_ROOT_ID);
-  const products = queryAll(`
-    SELECT id, column_id, is_visible, updated_at
-    FROM products
-    WHERE is_visible = 1
-    ORDER BY sort_order ASC, id DESC
-  `);
-  const newsItems = queryAll(`
-    SELECT id, column_id, created_at
-    FROM news
-    ORDER BY coalesce(created_at, '') DESC, id DESC
-  `);
-  const corporationCategories = queryAll(`
-    SELECT id, parent_id, is_external, updated_at
-    FROM corporation_categories
-    WHERE coalesce(is_external, 0) = 0
-    ORDER BY parent_id ASC, sort_order ASC, id ASC
-  `);
+  const products = listProducts({ visibleOnly: true, limit: 10000, languageCode });
+  const newsItems = listNews({ limit: 10000, languageCode });
+  const corporationCategories = listColumnCategories('corporation', { languageCode })
+    .filter((item) => toInteger(item.is_external, 0) === 0);
   const productCountByCategory = buildDescendantProductCountMap(productCategories, products);
   const latestProductDateByCategory = buildDescendantLatestDateMap(productCategories, products, generatedAt);
   const newsCountByCategory = buildCountMap(newsItems, (item) => toInteger(item.column_id, 0));
   const latestNewsDateByCategory = buildLatestDateMap(newsItems, (item) => toInteger(item.column_id, 0), 'created_at', generatedAt);
   const corporationLatestDateById = buildCorporationLatestDateMap(corporationCategories, generatedAt);
-  const corporationIndexId = corporationCategories.find((item) => toInteger(item.parent_id, 0) === CORPORATION_ROOT_ID)?.id
+  const corporationIndexId = corporationCategories.find((item) => toInteger(item.parent_id, 0) === 0)?.id
     ?? corporationCategories[0]?.id
     ?? null;
 
   addEntry(entries, siteUrl, '/', generatedAt);
   addEntry(entries, siteUrl, '/index.html', generatedAt);
   addEntry(entries, siteUrl, '/contact.html', generatedAt);
-  addEntry(entries, siteUrl, '/msg.html', generatedAt);
 
   for (const column of columns) {
     const routePath = String(column.route_path || '').trim();
@@ -169,33 +145,24 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
     }
   }
 
-  addSectionEntries({
-    entries,
-    siteUrl,
-    categories: newsCategories.filter((item) => toInteger(item.parent_id, 0) === newsRootColumnId),
-    itemsPerPage: NEWS_LIST_PAGE_SIZE,
-    sectionDir: 'news',
-    getItemCount: (categoryId) => newsCountByCategory.get(categoryId) || 0,
-    getLastmod: (categoryId) => latestNewsDateByCategory.get(categoryId) || generatedAt
-  });
-
-  addSectionEntries({
-    entries,
-    siteUrl,
-    categories: newsCategories.filter((item) => toInteger(item.parent_id, 0) === serviceRootColumnId),
-    itemsPerPage: NEWS_LIST_PAGE_SIZE,
-    sectionDir: 'service',
-    getItemCount: (categoryId) => newsCountByCategory.get(categoryId) || 0,
-    getLastmod: (categoryId) => latestNewsDateByCategory.get(categoryId) || generatedAt
-  });
+  for (const section of publicSections.newsSections) {
+    addSectionEntries({
+      entries,
+      siteUrl,
+      categories: newsCategories.filter((item) => toInteger(item.parent_id, 0) === section.rootColumnId),
+      itemsPerPage: NEWS_LIST_PAGE_SIZE,
+      sectionDir: section.dirName,
+      getCategoryPublicId: (category) => resolveLegacyCategoryPublicId(category),
+      getItemCount: (categoryId) => newsCountByCategory.get(categoryId) || 0,
+      getLastmod: (categoryId) => latestNewsDateByCategory.get(categoryId) || generatedAt
+    });
+  }
 
   for (const item of newsItems) {
     const columnId = toInteger(item.column_id, 0);
-    if (newsRootColumnId > 0 && isColumnUnderRoot(newsColumnById, columnId, newsRootColumnId)) {
-      addEntry(entries, siteUrl, `/news/detail/${item.id}.html`, item.created_at || generatedAt);
-    }
-    if (serviceRootColumnId > 0 && isColumnUnderRoot(newsColumnById, columnId, serviceRootColumnId)) {
-      addEntry(entries, siteUrl, `/service/detail/${item.id}.html`, item.created_at || generatedAt);
+    const section = publicSections.getNewsSectionByColumnId(columnId);
+    if (section) {
+      addEntry(entries, siteUrl, `/${section.dirName}/detail/${item.id}.html`, item.created_at || generatedAt);
     }
   }
 
@@ -228,6 +195,7 @@ function addSectionEntries({
   categories,
   itemsPerPage,
   sectionDir,
+  getCategoryPublicId = (category) => toInteger(category.id, 0),
   getItemCount,
   getLastmod
 }) {
@@ -237,18 +205,19 @@ function addSectionEntries({
 
   for (const [index, category] of categories.entries()) {
     const categoryId = toInteger(category.id, 0);
+    const publicCategoryId = getCategoryPublicId(category);
     const total = getItemCount(categoryId);
     const pageCount = Math.max(Math.ceil(total / itemsPerPage), 1);
     const lastmod = getLastmod(categoryId);
 
-    addEntry(entries, siteUrl, `/${sectionDir}/${categoryId}.html`, lastmod);
-    addEntry(entries, siteUrl, `/${sectionDir}/${categoryId}-1.html`, lastmod);
+    addEntry(entries, siteUrl, `/${sectionDir}/${publicCategoryId}.html`, lastmod);
+    addEntry(entries, siteUrl, `/${sectionDir}/${publicCategoryId}-1.html`, lastmod);
     if (index === 0) {
       addEntry(entries, siteUrl, `/${sectionDir}/`, lastmod);
     }
 
     for (let pageNumber = 2; pageNumber <= pageCount; pageNumber += 1) {
-      addEntry(entries, siteUrl, `/${sectionDir}/${categoryId}-${pageNumber}.html`, lastmod);
+      addEntry(entries, siteUrl, `/${sectionDir}/${publicCategoryId}-${pageNumber}.html`, lastmod);
     }
   }
 }
@@ -444,16 +413,6 @@ function buildCorporationLatestDateMap(categories, fallbackDate) {
   return result;
 }
 
-function resolveColumnIdBySource(columns, sourceType, sourceId) {
-  return toInteger(
-    columns.find((item) => (
-      String(item.source_type || '') === String(sourceType || '')
-      && toInteger(item.source_id, 0) === toInteger(sourceId, 0)
-    ))?.id,
-    0
-  );
-}
-
 function renderSitemapXml(entries) {
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries.map((entry) => (
     `  <url>\n    <loc>${escapeHtml(entry.loc)}</loc>\n    <lastmod>${escapeHtml(entry.lastmod)}</lastmod>\n  </url>`
@@ -504,7 +463,6 @@ function buildPageTypeCounts(urls) {
   const counts = {
     home: 0,
     contact: 0,
-    message: 0,
     corporation: 0,
     news_list: 0,
     news_detail: 0,
@@ -535,8 +493,6 @@ function buildPageTypeCounts(urls) {
 
     if (url.includes('/contact.html')) {
       counts.contact += 1;
-    } else if (url.includes('/msg.html')) {
-      counts.message += 1;
     } else if (url.includes('/about/about-')) {
       counts.corporation += 1;
     } else if (url.includes('/news/detail/')) {

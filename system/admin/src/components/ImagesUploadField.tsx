@@ -15,8 +15,7 @@ interface ImagesUploadFieldProps {
 
 const PLACEHOLDER_IMAGES = new Set([
   '/skin/dfpic.gif',
-  '/UploadFile/nopicture.gif',
-  '/UploadFile/Newsuppic/nopicture.gif',
+  '',
 ])
 
 export default function ImagesUploadField({

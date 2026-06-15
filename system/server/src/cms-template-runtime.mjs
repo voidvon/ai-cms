@@ -1,7 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
-import { SERVER_ROOT } from './config.mjs';
 import { listSelectedThemePublishedComponents } from './services/template-variants.mjs';
 import { resolvePublishedTemplate } from './services/templates.mjs';
 import { createTsxTemplateElement, renderTsxTemplate } from './tsx-template-renderer.mjs';
@@ -14,8 +12,6 @@ export function createCmsTemplateRuntime({
   templateClientAssetDir,
   expandLegacyCommonPlaceholders
 }) {
-  const registeredClientTemplates = new Map();
-  const pageTemplateClientUsage = new Map();
   const registeredStyleTemplates = new Map();
   const pageTemplateStyleUsage = new Map();
 
@@ -33,29 +29,24 @@ export function createCmsTemplateRuntime({
       throw new Error(`Published CMS template is missing: ${templateCode || pageName}`);
     }
 
-    const clientTemplates = new Map();
     const styleTemplates = new Map();
     let html = '';
 
     if (template.engine === 'tsx') {
-      registerTsxTemplateAssets(template, { clientTemplates, styleTemplates });
+      registerTsxTemplateAssets(template, { styleTemplates });
       html = renderCmsTsxTemplate(template.content, props, templateContext, {
-        clientTemplates,
         styleTemplates,
         templateCode: template.code
       });
     } else {
       html = renderCmsTemplate(template.content, props, templateContext, {
-        clientTemplates,
         styleTemplates
       });
     }
 
     return injectPageAssets(html, {
       templateCode: template.code,
-      clientTemplates,
-      styleTemplates,
-      props
+      styleTemplates
     });
   }
 
@@ -78,33 +69,7 @@ export function createCmsTemplateRuntime({
   }
 
   function registerTsxTemplateAssets(template, registries = {}) {
-    registerTsxClientTemplate(template, registries.clientTemplates);
     registerTemplateStyleAsset(template, registries.styleTemplates);
-  }
-
-  function registerTsxClientTemplate(template, clientTemplates = null) {
-    if (!hasTsxClientRuntime(template.content)) {
-      return;
-    }
-    const code = sanitizeTemplateCode(template.code);
-    if (!code) {
-      return;
-    }
-    const runtimeTemplate = {
-      code,
-      source: template.content || '',
-      needsProps: templateClientNeedsProps(template.content)
-    };
-    registeredClientTemplates.set(code, {
-      kind: 'tsx-client',
-      ...runtimeTemplate
-    });
-    if (clientTemplates) {
-      clientTemplates.set(code, {
-        kind: 'tsx-client',
-        ...runtimeTemplate
-      });
-    }
   }
 
   function registerTemplateStyleAsset(template, styleTemplates = null) {
@@ -120,10 +85,8 @@ export function createCmsTemplateRuntime({
     }
   }
 
-  function injectPageAssets(html, { templateCode, clientTemplates, styleTemplates, props }) {
-    let nextHtml = injectStylesheetLinks(html, templateCode, styleTemplates);
-    nextHtml = injectClientRuntimes(nextHtml, templateCode, clientTemplates, props);
-    return nextHtml;
+  function injectPageAssets(html, { templateCode, styleTemplates }) {
+    return injectStylesheetLinks(html, templateCode, styleTemplates);
   }
 
   function injectStylesheetLinks(html, templateCode, styleTemplates) {
@@ -147,41 +110,6 @@ export function createCmsTemplateRuntime({
     }
     return `${linkHtml}\n${html}`;
   }
-
-  function injectClientRuntimes(html, templateCode, clientTemplates, props) {
-    if (!clientTemplates || clientTemplates.size === 0) {
-      return html;
-    }
-
-    const normalizedTemplateCode = sanitizeTemplateCode(templateCode);
-    if (!normalizedTemplateCode) {
-      return html;
-    }
-
-    registerPageTemplateClientUsage(normalizedTemplateCode, clientTemplates);
-
-    const runtimeParts = [];
-    const needsProps = Array.from(clientTemplates.values()).some((template) => {
-      return template.kind === 'tsx-client' && hasImperativeTsxClientRuntime(template.source) && template.needsProps !== false;
-    });
-    if (needsProps) {
-      runtimeParts.push(`<script type="application/json" id="cms-tsx-page-props">${safeJsonForScript(props)}</script>`);
-    }
-    runtimeParts.push(`<!--cms-tsx-runtime:${encodeRuntimePlaceholder({
-      pageTemplateCode: normalizedTemplateCode,
-      clientTemplateCodes: Array.from(clientTemplates.keys()).map((code) => sanitizeTemplateCode(code)).filter(Boolean)
-    })}-->`);
-    if (runtimeParts.length === 0) {
-      return html;
-    }
-    const runtimeHtml = runtimeParts.join('\n');
-
-    if (/<\/body>/i.test(html)) {
-      return html.replace(/<\/body>/i, `${runtimeHtml}\n</body>`);
-    }
-    return `${html}\n${runtimeHtml}`;
-  }
-
   function renderCmsTemplate(content, props, templateContext, options = {}) {
     const components = buildCmsComponentMap(templateContext);
     return renderCmsTemplateContent(content, props, templateContext, components, 0, options);
@@ -239,7 +167,6 @@ export function createCmsTemplateRuntime({
 
     if (component.engine === 'tsx') {
       registerTsxTemplateAssets(component, {
-        clientTemplates: options.clientTemplates,
         styleTemplates: options.styleTemplates
       });
       return createTsxTemplateElement(component.content, props, {
@@ -273,7 +200,6 @@ export function createCmsTemplateRuntime({
 
     if (component.engine === 'tsx') {
       registerTsxTemplateAssets(component, {
-        clientTemplates: options.clientTemplates,
         styleTemplates: options.styleTemplates
       });
       return expandLegacyCommonPlaceholders(renderTsxTemplate(component.content, props, {
@@ -317,7 +243,6 @@ export function createCmsTemplateRuntime({
 
   function buildRegisteredTsxAssets(outputRoot) {
     buildRegisteredTsxStyleAssets(outputRoot);
-    buildRegisteredTsxClientBundles(outputRoot);
   }
 
   function buildRegisteredTsxStyleAssets(outputRoot) {
@@ -342,52 +267,6 @@ export function createCmsTemplateRuntime({
     }
   }
 
-  function buildRegisteredTsxClientBundles(outputRoot) {
-    if (registeredClientTemplates.size === 0 || pageTemplateClientUsage.size === 0) {
-      return;
-    }
-
-    const bundlePlan = buildClientBundlePlan({
-      pageTemplateClientUsage,
-      registeredClientTemplates
-    });
-    const manifestPath = path.join(outputRoot, '.cms-template-client-manifest.json');
-    const manifest = {
-      bundles: buildClientBundleManifest(bundlePlan)
-    };
-
-    try {
-      fs.writeFileSync(manifestPath, JSON.stringify(manifest), 'utf8');
-      execFileSync(process.execPath, [
-        path.join(SERVER_ROOT, 'scripts', 'build-template-client-bundles.mjs'),
-        manifestPath,
-        outputRoot
-      ], {
-        stdio: 'inherit'
-      });
-      replaceClientRuntimePlaceholders(outputRoot, bundlePlan, templateClientAssetDir);
-    } finally {
-      registeredClientTemplates.clear();
-      pageTemplateClientUsage.clear();
-      if (fs.existsSync(manifestPath)) {
-        fs.unlinkSync(manifestPath);
-      }
-    }
-  }
-
-  function registerPageTemplateClientUsage(templateCode, clientTemplates) {
-    if (!pageTemplateClientUsage.has(templateCode)) {
-      pageTemplateClientUsage.set(templateCode, new Set());
-    }
-    const usage = pageTemplateClientUsage.get(templateCode);
-    for (const code of clientTemplates.keys()) {
-      const normalizedCode = sanitizeTemplateCode(code);
-      if (normalizedCode) {
-        usage.add(normalizedCode);
-      }
-    }
-  }
-
   function registerPageTemplateStyleUsage(templateCode, styleTemplates) {
     if (!pageTemplateStyleUsage.has(templateCode)) {
       pageTemplateStyleUsage.set(templateCode, new Set());
@@ -406,49 +285,6 @@ export function createCmsTemplateRuntime({
     cleanupTemplateClientBundles,
     buildRegisteredTsxAssets
   };
-}
-
-function hasTsxClientRuntime(source) {
-  return hasImperativeTsxClientRuntime(source);
-}
-
-function hasImperativeTsxClientRuntime(source) {
-  return /\bexport\s+(?:function|const|let|var)\s+client\b/.test(String(source || ''));
-}
-
-function templateClientNeedsProps(source) {
-  return !/\bexport\s+const\s+clientProps\s*=\s*false\b/.test(String(source || ''));
-}
-
-function safeJsonForScript(value) {
-  return JSON.stringify(stripNonSerializableTemplateValues(value) ?? {})
-    .replace(/</g, '\\u003c')
-    .replace(/>/g, '\\u003e')
-    .replace(/&/g, '\\u0026')
-    .replace(/\u2028/g, '\\u2028')
-    .replace(/\u2029/g, '\\u2029');
-}
-
-function stripNonSerializableTemplateValues(value) {
-  if (value == null) {
-    return value;
-  }
-  if (Array.isArray(value)) {
-    return value.map((item) => stripNonSerializableTemplateValues(item));
-  }
-  if (typeof value === 'object') {
-    const output = {};
-    for (const [key, item] of Object.entries(value)) {
-      if (typeof item !== 'function' && item !== undefined) {
-        output[key] = stripNonSerializableTemplateValues(item);
-      }
-    }
-    return output;
-  }
-  if (typeof value === 'function' || value === undefined) {
-    return undefined;
-  }
-  return value;
 }
 
 function resolveTemplateValue(source, pathName) {
@@ -504,47 +340,6 @@ function decodeRuntimePlaceholder(serialized) {
   }
 }
 
-function buildClientBundlePlan({ pageTemplateClientUsage, registeredClientTemplates }) {
-  const usageCounts = new Map();
-
-  for (const clientCodes of pageTemplateClientUsage.values()) {
-    for (const clientCode of clientCodes) {
-      usageCounts.set(clientCode, (usageCounts.get(clientCode) || 0) + 1);
-    }
-  }
-
-  const sharedClientCodes = new Set(
-    Array.from(usageCounts.entries())
-      .filter(([, count]) => count > 2)
-      .map(([code]) => code)
-  );
-
-  const sharedBundle = buildBundleRuntimeTemplates(
-    'shared',
-    Array.from(sharedClientCodes.values()),
-    registeredClientTemplates
-  );
-
-  const pageBundles = new Map();
-  for (const [pageTemplateCode, clientCodes] of pageTemplateClientUsage.entries()) {
-    const pageSpecificCodes = Array.from(clientCodes.values()).filter((code) => !sharedClientCodes.has(code));
-    const bundle = buildBundleRuntimeTemplates(
-      `page-${pageTemplateCode}`,
-      pageSpecificCodes,
-      registeredClientTemplates
-    );
-    if (bundle) {
-      pageBundles.set(pageTemplateCode, bundle);
-    }
-  }
-
-  return {
-    sharedBundle,
-    pageBundles,
-    sharedClientCodes
-  };
-}
-
 function buildStyleBundlePlan({ pageTemplateStyleUsage, registeredStyleTemplates }) {
   const usageCounts = new Map();
 
@@ -586,27 +381,6 @@ function buildStyleBundlePlan({ pageTemplateStyleUsage, registeredStyleTemplates
   };
 }
 
-function buildBundleRuntimeTemplates(bundleCode, clientCodes, registeredClientTemplates) {
-  const modules = clientCodes
-    .map((code) => registeredClientTemplates.get(code))
-    .filter(Boolean)
-    .map((template) => ({
-      code: template.code,
-      source: template.source,
-      needsProps: template.needsProps !== false
-    }));
-
-  if (modules.length === 0) {
-    return null;
-  }
-
-  return {
-    code: sanitizeTemplateCode(bundleCode),
-    modules,
-    needsProps: modules.some((module) => module.needsProps)
-  };
-}
-
 function buildBundleStyleAssets(bundleCode, styleCodes, registeredStyleTemplates) {
   const assets = styleCodes
     .map((code) => registeredStyleTemplates.get(code))
@@ -624,47 +398,6 @@ function buildBundleStyleAssets(bundleCode, styleCodes, registeredStyleTemplates
     code: sanitizeTemplateCode(bundleCode),
     assets
   };
-}
-
-function buildClientBundleManifest(bundlePlan) {
-  const bundles = [];
-  if (bundlePlan.sharedBundle) {
-    bundles.push(bundlePlan.sharedBundle);
-  }
-  for (const bundle of bundlePlan.pageBundles.values()) {
-    bundles.push(bundle);
-  }
-  return bundles;
-}
-
-function replaceClientRuntimePlaceholders(outputRoot, bundlePlan, templateClientAssetDir) {
-  for (const filePath of listHtmlFiles(outputRoot)) {
-    const source = fs.readFileSync(filePath, 'utf8');
-    const next = source.replace(/<!--cms-tsx-runtime:([\s\S]*?)-->/g, (_, encodedPayload) => {
-      const payload = decodeRuntimePlaceholder(encodedPayload);
-      if (!payload?.pageTemplateCode) {
-        return '';
-      }
-
-      const runtimeParts = [];
-      const clientCodes = new Set(Array.isArray(payload.clientTemplateCodes) ? payload.clientTemplateCodes : []);
-      const pageBundle = bundlePlan.pageBundles.get(payload.pageTemplateCode) || null;
-      const usesSharedBundle = Array.from(clientCodes.values()).some((code) => bundlePlan.sharedClientCodes.has(code));
-
-      if (pageBundle) {
-        runtimeParts.push(`<script type="module" src="/${templateClientAssetDir}/${pageBundle.code}.js"></script>`);
-      }
-      if (usesSharedBundle && bundlePlan.sharedBundle) {
-        runtimeParts.push(`<script type="module" src="/${templateClientAssetDir}/${bundlePlan.sharedBundle.code}.js"></script>`);
-      }
-
-      return runtimeParts.join('\n');
-    });
-
-    if (next !== source) {
-      fs.writeFileSync(filePath, next, 'utf8');
-    }
-  }
 }
 
 function writeBundledStyleAssets(dirPath, bundlePlan) {

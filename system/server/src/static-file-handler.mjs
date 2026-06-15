@@ -37,6 +37,7 @@ export async function serveStatic(request, reply) {
   if (contentHandled) {
     return true;
   }
+
   return false;
 }
 
@@ -160,7 +161,7 @@ function getStaticCandidates(pathname) {
 function getSharedAssetCandidates(pathname) {
   const normalized = String(pathname || '').replace(/\/{2,}/g, '/');
   const match = normalized.match(
-    /^\/([^/]+)\/(css|js|images|img|skin|uploadfile|upload|uploads|assets)(\/.*)?$/i
+    /^\/([^/]+)\/(css|js|images|img|skin|upload|uploads|assets)(\/.*)?$/i
   );
 
   if (!match) {
@@ -201,13 +202,6 @@ function rewriteLegacyStaticPath(pathname) {
   }
   if (/^\/js$/i.test(normalized)) {
     return '/js';
-  }
-  if (/^\/uploadfile\/(.+)$/i.test(normalized)) {
-    const suffix = normalized.replace(/^\/uploadfile\//i, '');
-    return `/uploadfile/${suffix}`;
-  }
-  if (/^\/uploadfile$/i.test(normalized)) {
-    return '/uploadfile';
   }
   if (/^\/skin\/blue\/images\/(.+)$/i.test(normalized)) {
     return normalized.replace(/^\/skin\/blue\/images\//i, '/skin/blue/images/');

@@ -102,18 +102,6 @@ export interface NewsTranslationStatus {
   has_content: boolean;
 }
 
-export interface Message {
-  id: number;
-  name?: string;
-  email?: string;
-  phone?: string;
-  company?: string;
-  content?: string;
-  status: number;
-  created_at: string;
-  updated_at?: string;
-}
-
 export interface ProductCategory {
   id: number;
   column_id?: number;
@@ -268,7 +256,7 @@ export interface Column {
   name: string;
   parent_id?: number | null;
   model_code: 'product' | 'news' | 'corporation' | 'page' | 'link' | string;
-  source_type: 'product_root' | 'product_category' | 'news_category' | 'corporation_root' | 'corporation_category' | 'contact_page' | 'message_page' | 'custom_link' | 'single_page' | string;
+  source_type: 'product_root' | 'product_category' | 'news_category' | 'corporation_root' | 'corporation_category' | 'contact_page' | 'custom_link' | 'single_page' | string;
   source_id: number;
   column_kind: 'category' | 'link' | 'single' | string;
   custom_url?: string | null;

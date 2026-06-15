@@ -3,17 +3,17 @@ import { detachTemplateFromAllThemeVariants, getSelectedTemplateVariant, listTem
 import { createTsxTemplateElement, renderTsxTemplate } from '../tsx-template-renderer.mjs';
 import { getTsxTemplateStyleAsset } from '../tsx-template-styles.mjs';
 import { escapeHtml } from '../utils/html.mjs';
+import { listProducts } from './products.mjs';
+import { listNews } from './news.mjs';
+import { listColumnCategories } from './column-categories.mjs';
+import { buildColumnPublicUrl, resolvePublicSectionContext } from './public-sections.mjs';
 
 export const TEMPLATE_TYPES = ['home', 'list', 'content', 'component'];
 export const TEMPLATE_ENGINES = ['tsx'];
 const MAX_TEMPLATE_VERSIONS = 10;
-const CORPORATION_ROOT_ID = 32;
-const NEWS_ROOT_ID = 4;
-const SERVICE_ROOT_ID = 12;
 const CONTENT_TYPE_PRODUCT_ID = 1;
 const CONTENT_TYPE_ARTICLE_ID = 2;
 const CONTENT_TYPE_CONTACT_ID = 4;
-const CONTENT_TYPE_MESSAGE_ID = 5;
 const CONTENT_TYPE_CORPORATION_ID = 6;
 
 let schemaEnsured = false;
@@ -781,23 +781,6 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
     };
   }
 
-  if (effectiveMode === 'message') {
-    return {
-      ...props,
-      ...buildPreviewPageContext({
-        pageType: 'message',
-        title: '在线留言',
-        url: '/msg.html',
-        section: { type: 'content', name: '在线留言', url: '/msg.html' },
-        category: null,
-        content: null,
-        breadcrumbItems: [{ label: '在线留言', url: '' }]
-      }),
-      primaryMenuItems: buildPreviewPrimaryMenuItems('message'),
-      messageSidebarProductsHtml: buildPreviewProductLinksHtml(4)
-    };
-  }
-
   return props;
 }
 
@@ -820,9 +803,6 @@ function inferPreviewMode(template) {
   }
   if (template.code === 'content_contact' || code.includes('contact')) {
     return 'contact';
-  }
-  if (template.code === 'content_message' || code.includes('message')) {
-    return 'message';
   }
   if (template.type === 'content') {
     return 'content';
@@ -880,14 +860,7 @@ function buildPreviewPageContext({ pageType, title, url, section, category, cont
 }
 
 function getPreviewProduct() {
-  return queryOne(
-    `
-      SELECT id, column_id, name, code, summary, content_html, images, keywords
-      FROM products
-      ORDER BY is_featured_home DESC, sort_order ASC, id DESC
-      LIMIT 1
-    `
-  ) || {
+  return listProducts({ visibleOnly: false, limit: 1 })[0] || {
     id: 1,
     column_id: 1,
     name: '示例产品',
@@ -901,15 +874,7 @@ function getPreviewProduct() {
 }
 
 function getPreviewProducts(limit = 8) {
-  const rows = queryAll(
-    `
-      SELECT id, column_id, name, code, summary, content_html, images, keywords
-      FROM products
-      ORDER BY is_featured_home DESC, sort_order ASC, id DESC
-      LIMIT ?
-    `,
-    [limit]
-  );
+  const rows = listProducts({ visibleOnly: false, limit });
   return rows.length > 0 ? rows : [getPreviewProduct()];
 }
 
@@ -938,14 +903,7 @@ function getPreviewProductCategory(id = null) {
 }
 
 function getPreviewArticle() {
-  return queryOne(
-    `
-      SELECT id, column_id, title, summary, content_html, keywords, created_at
-      FROM news
-      ORDER BY coalesce(created_at, '') DESC, id DESC
-      LIMIT 1
-    `
-  ) || {
+  return listNews({ limit: 1 })[0] || {
     id: 1,
     column_id: 1,
     title: '示例文章',
@@ -957,15 +915,7 @@ function getPreviewArticle() {
 }
 
 function getPreviewArticles(limit = 6) {
-  const rows = queryAll(
-    `
-      SELECT id, column_id, title, summary, content_html, keywords, created_at
-      FROM news
-      ORDER BY coalesce(created_at, '') DESC, id DESC
-      LIMIT ?
-    `,
-    [limit]
-  );
+  const rows = listNews({ limit });
   return rows.length > 0 ? rows : [getPreviewArticle()];
 }
 
@@ -992,22 +942,13 @@ function getPreviewNewsCategory(id = null) {
 }
 
 function getPreviewCorporationCategory() {
-  const row = queryOne(
-    `
-      SELECT id, name, parent_id, legacy_extra
-      FROM corporation_categories
-      WHERE coalesce(is_external, 0) = 0
-      ORDER BY parent_id ASC, sort_order ASC, id ASC
-      LIMIT 1
-    `
-  );
+  const row = listColumnCategories('corporation').find((item) => toInteger(item.is_external, 0) === 0);
   if (!row) {
     return { id: 1, name: '关于我们', parent_id: 0, content_html: '公司栏目内容预览' };
   }
-  const legacyExtra = parsePreviewLegacyExtra(row.legacy_extra);
   return {
     ...row,
-    content_html: String(legacyExtra.Centern ?? legacyExtra.content_html ?? '公司栏目内容预览')
+    content_html: String(row.content_html ?? '公司栏目内容预览')
   };
 }
 
@@ -1015,38 +956,35 @@ function buildPreviewArticleSectionConfig(mode, template) {
   const isService = mode === 'service-list'
     || mode === 'service-detail'
     || String(template?.code || '').toLowerCase().includes('service');
+  const sections = resolvePreviewSections();
+  const resolved = isService
+    ? sections.getNewsSectionByDirName('service') || sections.getNewsSectionByType('service')
+    : sections.getNewsSectionByDirName('news') || sections.getNewsSectionByType('news');
 
-  return isService
+  return resolved
     ? {
-        rootId: SERVICE_ROOT_ID,
-        sectionType: 'service',
-        sectionDir: 'service',
-        sectionLabel: '阀门知识',
-        pageType: 'service-list',
-        detailPageType: 'service-detail',
-        contentType: 'service-article'
+        rootId: resolved.rootColumnId,
+        sectionType: resolved.sectionType,
+        sectionDir: resolved.dirName,
+        sectionLabel: resolved.sectionLabel,
+        pageType: isService ? 'service-list' : 'article-list',
+        detailPageType: isService ? 'service-detail' : 'article-detail',
+        contentType: isService ? 'service-article' : 'news-article'
       }
     : {
-        rootId: NEWS_ROOT_ID,
-        sectionType: 'news',
-        sectionDir: 'news',
-        sectionLabel: '公司新闻',
-        pageType: 'article-list',
-        detailPageType: 'article-detail',
-        contentType: 'news-article'
+        rootId: 0,
+        sectionType: isService ? 'service' : 'news',
+        sectionDir: isService ? 'service' : 'news',
+        sectionLabel: isService ? '服务' : '公司新闻',
+        pageType: isService ? 'service-list' : 'article-list',
+        detailPageType: isService ? 'service-detail' : 'article-detail',
+        contentType: isService ? 'service-article' : 'news-article'
       };
 }
 
 function buildPreviewCorporationMenuItems(activeId = 0) {
-  const rows = queryAll(
-    `
-      SELECT id, name, is_external, external_url
-      FROM corporation_categories
-      WHERE parent_id = ? AND coalesce(is_external, 0) = 0
-      ORDER BY sort_order ASC, id ASC
-    `,
-    [CORPORATION_ROOT_ID]
-  );
+  const rows = listColumnCategories('corporation')
+    .filter((item) => toInteger(item.parent_id, 0) === 0 && toInteger(item.is_external, 0) === 0);
   const items = rows.length > 0
     ? rows
     : [{ id: activeId || 1, name: '关于我们', is_external: 0, external_url: '' }];
@@ -1078,13 +1016,13 @@ function buildPreviewSiteColumns() {
   if (rows.length === 0) {
     return [
       { id: 1, name: '产品', parentId: 0, modelCode: 'product', sourceType: 'product_root', sourceId: 0, url: '/valve/', children: [] },
-      { id: 2, name: '公司新闻', parentId: 0, modelCode: 'news', sourceType: 'news_category', sourceId: NEWS_ROOT_ID, url: '/news/', children: [] },
-      { id: 3, name: '阀门知识', parentId: 0, modelCode: 'news', sourceType: 'news_category', sourceId: SERVICE_ROOT_ID, url: '/service/', children: [] },
+      { id: 2, name: '公司新闻', parentId: 0, modelCode: 'news', sourceType: 'news_category', sourceId: 0, url: '/news/', children: [] },
+      { id: 3, name: '服务', parentId: 0, modelCode: 'news', sourceType: 'news_category', sourceId: 0, url: '/service/', children: [] },
       { id: 4, name: '公司信息', parentId: 0, modelCode: 'corporation', sourceType: 'corporation_root', sourceId: 0, url: '/about/', children: [] }
     ];
   }
 
-  const rowsById = new Map(rows.map((item) => [toInteger(item?.id, 0), item]));
+  const publicSections = resolvePublicSectionContext(rows);
   const normalizedRows = rows.map((item) => ({
     id: toInteger(item.id, 0),
     name: item.name || '',
@@ -1093,7 +1031,7 @@ function buildPreviewSiteColumns() {
     sourceType: item.source_type || '',
     sourceId: toInteger(item.source_id, 0),
     openInNewTab: toInteger(item.open_in_new_tab, 0),
-    url: buildPreviewColumnUrl(item, rowsById)
+    url: buildPreviewColumnUrl(item, publicSections)
   })).filter((item) => item.id !== 0);
 
   const childrenByParentId = new Map();
@@ -1118,7 +1056,7 @@ function buildPreviewSiteColumns() {
 
   return normalizedRows
     .filter((item) => item.parentId === 0)
-    .filter((item) => !['contact_page', 'message_page'].includes(String(item?.sourceType || '')))
+    .filter((item) => String(item?.sourceType || '') !== 'contact_page')
     .map((item) => ({
       ...item,
       children: childrenByParentId.get(item.id) || []
@@ -1133,8 +1071,7 @@ function buildPreviewPrimaryMenuItems(activeKey = '') {
     { key: 'product', label: '产品', url: '/valve/' },
     { key: 'news', label: '公司新闻', url: '/news/' },
     { key: 'service', label: '阀门知识', url: '/service/' },
-    { key: 'contact', label: '联系我们', url: '/contact.html' },
-    { key: 'message', label: '在线留言', url: '/msg.html' }
+    { key: 'contact', label: '联系我们', url: '/contact.html' }
   ];
 
   return items.map((item) => ({
@@ -1145,64 +1082,14 @@ function buildPreviewPrimaryMenuItems(activeKey = '') {
 }
 
 function buildPreviewColumnUrl(column, rowsById = new Map()) {
-  const sourceType = String(column?.source_type || '');
-  const sourceId = toInteger(column?.source_id, 0);
-  const parentColumn = rowsById.get(toInteger(column?.parent_id, 0)) || null;
-
-  if (sourceType === 'product_root') {
-    return '/valve/';
-  }
-  if (sourceType === 'product_category') {
-    return sourceId > 0 ? `/valve/${sourceId}.html` : '';
-  }
-  if (sourceType === 'news_category') {
-    if (sourceId === NEWS_ROOT_ID) {
-      return '/news/';
-    }
-    if (sourceId === SERVICE_ROOT_ID) {
-      return '/service/';
-    }
-    if (parentColumn && String(parentColumn?.source_type || '') === 'news_category') {
-      return toInteger(parentColumn?.source_id, 0) === SERVICE_ROOT_ID
-        ? `/service/${sourceId}.html`
-        : `/news/${sourceId}.html`;
-    }
-  }
-  if (sourceType === 'corporation_root') {
-    return '/about/';
-  }
-  if (sourceType === 'corporation_category') {
-    return sourceId > 0 ? `/about/about-${sourceId}.html` : '';
-  }
-  if (sourceType === 'contact_page') {
-    return '/contact.html';
-  }
-  if (sourceType === 'message_page') {
-    return '/msg.html';
-  }
-  if (sourceType === 'custom_link') {
-    return String(column?.custom_url || '').trim();
-  }
-  if (sourceType === 'single_page') {
-    return String(column?.route_path || '').trim();
-  }
-
-  return '';
+  return buildColumnPublicUrl(column, rowsById)
+    .replace(/^\/products\//, '/valve/')
+    .replace(/\/products\/(\d+)\.html$/, '/valve/$1.html');
 }
 
 function buildPreviewNewsMenuItems(rootId, dirName, activeId = 0) {
-  const rootColumn = queryOne(
-    `
-      SELECT id
-      FROM columns
-      WHERE model_code = 'news'
-        AND source_type = 'news_category'
-        AND source_id = ?
-      LIMIT 1
-    `,
-    [rootId]
-  );
-  const rows = rootColumn ? queryAll(
+  const section = resolvePreviewSections().getNewsSectionByDirName(dirName);
+  const rows = section ? queryAll(
     `
       SELECT id, name
       FROM columns
@@ -1211,7 +1098,7 @@ function buildPreviewNewsMenuItems(rootId, dirName, activeId = 0) {
         AND source_type = 'news_category'
       ORDER BY sort_order ASC, id ASC
     `,
-    [rootColumn.id]
+    [section.rootColumnId]
   ) : [];
   const items = rows.length > 0
     ? rows
@@ -1222,6 +1109,17 @@ function buildPreviewNewsMenuItems(rootId, dirName, activeId = 0) {
     url: `/${dirName}/${toInteger(item.id, 0)}.html`,
     active: toInteger(item.id, 0) === toInteger(activeId, 0)
   }));
+}
+
+function resolvePreviewSections() {
+  const rows = queryAll(
+    `
+      SELECT id, name, parent_id, model_code, source_type, source_id, sort_order, route_path, slug, legacy_extra
+      FROM columns
+      ORDER BY coalesce(parent_id, 0) ASC, sort_order ASC, id ASC
+    `
+  );
+  return resolvePublicSectionContext(rows);
 }
 
 function buildPreviewProductMenuItems(category) {
@@ -1519,7 +1417,6 @@ function buildTemplateValidationProps(template) {
     bodyHtml: '',
     contentHtml: '',
     contactTableHtml: '',
-    messageSidebarProductsHtml: '',
     relatedProductsHtml: '',
     previousHtml: '',
     nextHtml: '',
@@ -1751,7 +1648,6 @@ function migrateDefaultThemeAssets() {
   ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_ARTICLE_ID, 'content', 'default_article_detail_tsx');
   ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_CORPORATION_ID, 'content', 'default_content_tsx');
   ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_CONTACT_ID, 'content', 'default_contact_tsx');
-  ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_MESSAGE_ID, 'content', 'default_message_tsx');
 }
 
 function migrateThemeSuffixedAssets() {

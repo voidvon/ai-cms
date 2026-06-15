@@ -89,7 +89,7 @@
           <td align="left" class="forumRow">
             &nbsp;${escapeHtml(item.title || '')}
             ${item.is_featured_home ? ' <img src="/spck/images/thanx.gif" width="19" height="19" align="absmiddle">' : ''}
-            ${item.picture && item.picture !== '/UploadFile/nopicture.gif' ? ' <img src="/spck/images/haveimg.gif" width="12" height="12" border="0">' : ''}
+            ${item.picture ? ' <img src="/spck/images/haveimg.gif" width="12" height="12" border="0">' : ''}
           </td>
           <td class="forumRow" align="center">${escapeHtml(item.category_name || '')}</td>
           <td align="center" class="forumRow">${escapeHtml(item.created_at || '')}</td>

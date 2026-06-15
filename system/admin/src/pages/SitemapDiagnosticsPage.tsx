@@ -251,7 +251,6 @@ function renderTypeLabel(value: string) {
   const labels: Record<string, string> = {
     home: '首页',
     contact: '联系页',
-    message: '留言页',
     corporation: '公司栏目',
     news_list: '新闻列表',
     news_detail: '新闻详情',

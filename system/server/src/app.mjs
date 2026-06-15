@@ -70,7 +70,6 @@ export async function createApp(options = {}) {
   await app.register(import('./routes/api/news-categories.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/news.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/corporation-categories.mjs'), { prefix: '/api' });
-  await app.register(import('./routes/api/messages.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/template-variants.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/templates.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/content-models.mjs'), { prefix: '/api' });
@@ -78,7 +77,6 @@ export async function createApp(options = {}) {
   await app.register(import('./routes/api/columns.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/languages.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/media.mjs'), { prefix: '/api' });
-  await app.register(import('./routes/api/uploads.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/admin.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/site-config.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/sitemap.mjs'), { prefix: '/api' });

@@ -1,10 +1,15 @@
 import {
+  createManualColumn,
+  deleteManualColumn,
   ensureColumnsSchema,
+  getCategoryRootColumn,
   getColumnById,
+  listCategoryColumns,
   listColumns,
+  updateManualColumn,
   updateColumnRecord
 } from './columns.mjs';
-import { execute, queryOne } from '../db.mjs';
+import { queryOne } from '../db.mjs';
 import { getDefaultLanguage } from './languages.mjs';
 
 function toInteger(value, fallback = 0) {
@@ -27,30 +32,15 @@ function getCategoryConfig(model) {
   if (model === 'news') {
     return { modelCode: 'news', sourceType: 'news_category', rootSourceType: null };
   }
+  if (model === 'corporation') {
+    return { modelCode: 'corporation', sourceType: 'corporation_category', rootSourceType: 'corporation_root' };
+  }
   throw new Error(`unsupported model: ${model}`);
-}
-
-function listCategoryColumns(model, languageCode = null) {
-  ensureColumnsSchema();
-  const config = getCategoryConfig(model);
-  return listColumns({ languageCode, includeTranslations: true }).filter((item) => (
-    String(item.model_code || '') === config.modelCode
-    && String(item.source_type || '') === config.sourceType
-    && String(item.column_kind || '') === 'category'
-  ));
-}
-
-function getCategoryRootColumn(model, languageCode = null) {
-  const config = getCategoryConfig(model);
-  return listColumns({ languageCode, includeTranslations: true }).find((item) => (
-    String(item.model_code || '') === config.modelCode
-    && String(item.source_type || '') === config.rootSourceType
-  )) || null;
 }
 
 function mapColumnToCategory(column, rootColumn = null) {
   const parentId = toInteger(column.parent_id, 0);
-  return {
+  const mapped = {
     id: toInteger(column.id, 0),
     column_id: toInteger(column.id, 0),
     source_id: toInteger(column.source_id, 0),
@@ -69,23 +59,15 @@ function mapColumnToCategory(column, rootColumn = null) {
     current_language_code: column.current_language_code,
     translations: column.translations || {}
   };
-}
 
-function resolveCategorySourceIdByColumnId(columnId) {
-  if (!columnId) {
-    return 0;
+  if (String(column.model_code || '') === 'corporation') {
+    mapped.is_external = toInteger(column.open_in_new_tab, 0);
+    mapped.external_url = column.custom_url || null;
+    mapped.sitepath = mapped.is_external;
+    mapped.siteurl = mapped.external_url || '';
   }
-  const column = getColumnById(columnId, { includeTranslations: true });
-  return column ? toInteger(column.source_id, 0) : 0;
-}
 
-function resolveCategoryColumnBySourceId(model, sourceId, languageCode = null) {
-  const config = getCategoryConfig(model);
-  return listColumns({ languageCode, includeTranslations: true }).find((item) => (
-    String(item.model_code || '') === config.modelCode
-    && String(item.source_type || '') === config.sourceType
-    && toInteger(item.source_id, 0) === toInteger(sourceId, 0)
-  )) || null;
+  return mapped;
 }
 
 function resolveCategoryColumnById(model, id, languageCode = null) {
@@ -100,7 +82,7 @@ function resolveCategoryColumnById(model, id, languageCode = null) {
 function resolveParentColumnId(model, parentCategoryId, languageCode = null) {
   const safeParentId = toInteger(parentCategoryId, 0);
   if (safeParentId <= 0) {
-    return toInteger(getCategoryRootColumn(model, languageCode)?.id, 0) || null;
+    return toInteger(getCategoryRootColumn(model, { languageCode })?.id, 0) || null;
   }
   return toInteger(resolveCategoryColumnById(model, safeParentId, languageCode)?.id, 0) || null;
 }
@@ -127,8 +109,9 @@ function buildCategoryOptions(items) {
 }
 
 export function listColumnCategories(model, { languageCode = null } = {}) {
-  const rootColumn = getCategoryRootColumn(model, languageCode);
-  return listCategoryColumns(model, languageCode).map((item) => mapColumnToCategory(item, rootColumn));
+  ensureColumnsSchema();
+  const rootColumn = getCategoryRootColumn(model, { languageCode });
+  return listCategoryColumns(model, { languageCode }).map((item) => mapColumnToCategory(item, rootColumn));
 }
 
 export function listColumnCategoriesAdmin(model, { parentId = 0, page = 1, limit = 50, languageCode = null } = {}) {
@@ -152,7 +135,7 @@ export function listColumnCategoryOptions(model, { languageCode = null } = {}) {
 }
 
 export function getColumnCategoryById(model, id, { languageCode = null, includeTranslations = false } = {}) {
-  const rootColumn = getCategoryRootColumn(model, languageCode);
+  const rootColumn = getCategoryRootColumn(model, { languageCode });
   const column = resolveCategoryColumnById(model, id, languageCode);
   if (!column) {
     return null;
@@ -183,56 +166,49 @@ export function createColumnCategory(model, input) {
     'SELECT COALESCE(MAX(source_id), 0) + 1 AS value FROM columns WHERE source_type = ?',
     [config.sourceType]
   )?.value;
-  const now = new Date().toISOString();
 
-  const result = execute(
-    `
-      INSERT INTO columns (
-        name,
-        parent_id,
-        model_code,
-        source_type,
-        source_id,
-        column_kind,
-        content_html,
-        seo_title,
-        seo_keywords,
-        seo_description,
-        slug,
-        legacy_extra,
-        sort_order,
-        show_in_nav,
-        is_system,
-        created_at,
-        updated_at
-      ) VALUES (?, ?, ?, ?, ?, 'category', ?, ?, ?, ?, ?, ?, ?, 1, 0, ?, ?)
-    `,
-    [
-      String(defaultTranslation?.name || '').trim(),
-      parentColumnId,
-      config.modelCode,
-      config.sourceType,
-      toInteger(sourceId, 1),
-      String(defaultTranslation?.content_html || ''),
-      toNullableString(defaultTranslation?.seo_title),
-      toNullableString(defaultTranslation?.seo_keywords),
-      toNullableString(defaultTranslation?.seo_description),
-      toNullableString(input?.base?.slug ?? input?.slug),
-      input?.base?.legacy_extra ?? input?.legacy_extra ?? null,
-      toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
-      now,
-      now
-    ]
-  );
-
-  updateColumnRecord(result.lastInsertRowid, {
-    parent_id: parentColumnId,
-    sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
-    show_in_nav: 1,
+  const column = createManualColumn({
+    base: {
+      name: String(defaultTranslation?.name || '').trim(),
+      parent_id: parentColumnId,
+      model_code: config.modelCode,
+      source_type: config.sourceType,
+      node_type: 'category',
+      column_kind: 'single',
+      content_type: config.modelCode,
+      route_path: model === 'corporation' ? `/about/about-${toInteger(sourceId, 1)}.html` : `/__internal/${config.modelCode}/${toInteger(sourceId, 1)}/`,
+      sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
+      show_in_nav: 1,
+      slug: toNullableString(input?.base?.slug ?? input?.slug),
+      legacy_extra: input?.base?.legacy_extra ?? input?.legacy_extra ?? null
+    },
     translations
   });
 
-  return getColumnCategoryById(model, toInteger(result.lastInsertRowid, 0), { includeTranslations: true });
+  if (model !== 'corporation') {
+    updateColumnRecord(column.id, {
+      parent_id: parentColumnId,
+      sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
+      show_in_nav: 1,
+      translations
+    });
+  } else {
+    updateManualColumn(column.id, {
+      base: {
+        parent_id: parentColumnId,
+        sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
+        route_path: `/about/about-${column.id}.html`,
+        show_in_nav: 1,
+        custom_url: toBooleanInt(input?.is_external ?? input?.sitepath, 0) === 1
+          ? toNullableString(input?.external_url ?? input?.siteurl)
+          : null,
+        open_in_new_tab: toBooleanInt(input?.is_external ?? input?.sitepath, 0)
+      },
+      translations
+    });
+  }
+
+  return getColumnCategoryById(model, column.id, { includeTranslations: true });
 }
 
 export function updateColumnCategory(model, id, input) {
@@ -244,31 +220,30 @@ export function updateColumnCategory(model, id, input) {
   const existingTranslations = column.translations || {};
   const translations = input?.translations || existingTranslations;
 
-  execute(
-    `
-      UPDATE columns
-      SET
-        parent_id = ?,
-        slug = ?,
-        legacy_extra = ?,
-        updated_at = ?
-      WHERE id = ?
-    `,
-    [
-      parentColumnId,
-      toNullableString(input?.base?.slug ?? input?.slug ?? column.slug),
-      input?.base?.legacy_extra ?? input?.legacy_extra ?? column.legacy_extra ?? null,
-      new Date().toISOString(),
-      column.id
-    ]
-  );
-
-  updateColumnRecord(column.id, {
-    parent_id: parentColumnId,
-    sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order ?? column.sort_order, 0),
-    show_in_nav: toInteger(input?.base?.show_in_nav ?? column.show_in_nav, 1),
-    translations
-  });
+  if (model === 'corporation') {
+    updateManualColumn(column.id, {
+      base: {
+        parent_id: parentColumnId,
+        route_path: `/about/about-${column.id}.html`,
+        slug: toNullableString(input?.base?.slug ?? input?.slug ?? column.slug),
+        legacy_extra: input?.base?.legacy_extra ?? input?.legacy_extra ?? column.legacy_extra ?? null,
+        sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order ?? column.sort_order, 0),
+        show_in_nav: 1,
+        custom_url: toBooleanInt(input?.is_external ?? input?.sitepath, column.is_external ?? 0) === 1
+          ? toNullableString(input?.external_url ?? input?.siteurl ?? column.external_url)
+          : null,
+        open_in_new_tab: toBooleanInt(input?.is_external ?? input?.sitepath, column.is_external ?? 0)
+      },
+      translations
+    });
+  } else {
+    updateColumnRecord(column.id, {
+      parent_id: parentColumnId,
+      sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order ?? column.sort_order, 0),
+      show_in_nav: toInteger(input?.base?.show_in_nav ?? column.show_in_nav, 1),
+      translations
+    });
+  }
 
   return getColumnCategoryById(model, id, { includeTranslations: true });
 }
@@ -284,6 +259,20 @@ export function deleteColumnCategory(model, id) {
     throw new Error('请先删除或移动子分类');
   }
 
-  execute('DELETE FROM columns WHERE id = ?', [column.id]);
+  deleteManualColumn(column.id);
   return mapColumnToCategory(column, getCategoryRootColumn(model));
+}
+
+function toBooleanInt(value, fallback = 0) {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return fallback;
+  }
+  const normalized = String(value).trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on', '-1'].includes(normalized)) {
+    return 1;
+  }
+  if (['0', 'false', 'no', 'off'].includes(normalized)) {
+    return 0;
+  }
+  return toInteger(value, fallback) === 0 ? 0 : 1;
 }

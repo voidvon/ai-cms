@@ -6,7 +6,6 @@ import {
   LegacyContactPage,
   LegacyContentPage,
   LegacyHomePage,
-  LegacyMessagePage,
   LegacyProductDetailPage,
   LegacyProductListPage,
 } from './pages/LegacyPages'
@@ -16,7 +15,6 @@ import type {
   LegacyContactPageProps,
   LegacyContentPageProps,
   LegacyHomePageProps,
-  LegacyMessagePageProps,
   LegacyProductDetailPageProps,
   LegacyProductListPageProps,
 } from './types'
@@ -24,7 +22,6 @@ import type {
 type PageName =
   | 'legacy-home'
   | 'legacy-contact'
-  | 'legacy-message'
   | 'legacy-content'
   | 'legacy-product-list'
   | 'legacy-product-detail'
@@ -34,7 +31,6 @@ type PageName =
 type PageProps =
   | LegacyHomePageProps
   | LegacyContactPageProps
-  | LegacyMessagePageProps
   | LegacyContentPageProps
   | LegacyProductListPageProps
   | LegacyProductDetailPageProps
@@ -52,8 +48,6 @@ function resolveLegacyPage(pageName: PageName, props: PageProps): React.ReactEle
       return <LegacyHomePage {...props as LegacyHomePageProps} />
     case 'legacy-contact':
       return <LegacyContactPage {...props as LegacyContactPageProps} />
-    case 'legacy-message':
-      return <LegacyMessagePage {...props as LegacyMessagePageProps} />
     case 'legacy-content':
       return <LegacyContentPage {...props as LegacyContentPageProps} />
     case 'legacy-product-list':

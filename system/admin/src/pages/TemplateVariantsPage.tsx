@@ -45,7 +45,6 @@ const previewModes = [
   { value: 'service-detail', label: '服务详情' },
   { value: 'content', label: '公司栏目' },
   { value: 'contact', label: '联系我们' },
-  { value: 'message', label: '在线留言' },
 ]
 
 const templateTypeLabelMap: Record<Template['type'], string> = {

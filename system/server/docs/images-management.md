@@ -61,7 +61,7 @@ public/
 ## 上传方式
 
 - 后台上传接口会按当前月份写入 `html/uploads/images/YYYYMM/`。
-- API 路径包括 `/media/upload` 和旧的 `/api/uploads`。
+- API 路径为 `/media/upload`。
 - 静态生成会同步并保留 `uploads/`，不会把上传文件清掉。
 
 ## 迁移与检查

@@ -105,10 +105,6 @@ export type ContactPageProps = {
   site: SiteConfig
 }
 
-export type MessagePageProps = {
-  site: SiteConfig
-}
-
 export type RawHtmlPageProps = {
   html: string
 }
@@ -140,10 +136,6 @@ export type LegacyHomePageProps = LegacyPageBaseProps & {
 
 export type LegacyContactPageProps = LegacyPageBaseProps & {
   contactTableHtml: string
-}
-
-export type LegacyMessagePageProps = LegacyPageBaseProps & {
-  messageSidebarProductsHtml: string
 }
 
 export type LegacyContentPageProps = LegacyPageBaseProps & {
