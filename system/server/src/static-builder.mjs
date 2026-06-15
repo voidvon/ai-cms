@@ -798,6 +798,126 @@ function buildLegacyRootColumnMenuItems(columns) {
   })).filter((item) => item.url);
 }
 
+function buildHeaderNavItem(base, overrides = {}) {
+  if (!base?.url) {
+    return null;
+  }
+  const children = Array.isArray(overrides.children)
+    ? overrides.children.filter((item) => item?.url && item?.showInNav !== 0)
+    : Array.isArray(base.children)
+      ? base.children.filter((item) => item?.url && item?.showInNav !== 0)
+      : [];
+  return {
+    id: normalizeInteger(overrides.id ?? base.id, 0),
+    name: overrides.name ?? base.name ?? '',
+    parentId: normalizeInteger(overrides.parentId ?? base.parentId, 0),
+    modelCode: overrides.modelCode ?? base.modelCode ?? '',
+    sourceType: overrides.sourceType ?? base.sourceType ?? '',
+    sourceId: normalizeInteger(overrides.sourceId ?? base.sourceId, 0),
+    active: Boolean(overrides.active ?? base.active),
+    openInNewTab: normalizeInteger(overrides.openInNewTab ?? base.openInNewTab, 0),
+    showInNav: normalizeInteger(overrides.showInNav ?? base.showInNav, 1),
+    url: overrides.url ?? base.url ?? '',
+    children
+  };
+}
+
+function normalizePathSegments(pathname) {
+  return String(pathname || '')
+    .trim()
+    .replace(/^\/+|\/+$/g, '')
+    .split('/')
+    .filter(Boolean);
+}
+
+function isImmediateChildPath(parentPath, candidatePath) {
+  const parentSegments = normalizePathSegments(parentPath);
+  const candidateSegments = normalizePathSegments(candidatePath);
+  if (parentSegments.length === 0 || candidateSegments.length !== parentSegments.length + 1) {
+    return false;
+  }
+  return parentSegments.every((segment, index) => candidateSegments[index] === segment);
+}
+
+function compareHeaderNavEntries(a, b) {
+  const sortOrderDiff = normalizeInteger(a?.sortOrder, 0) - normalizeInteger(b?.sortOrder, 0);
+  if (sortOrderDiff !== 0) {
+    return sortOrderDiff;
+  }
+  return normalizeInteger(a?.id, 0) - normalizeInteger(b?.id, 0);
+}
+
+function buildHeaderPrefixChildren(rows, rootPath, activeColumnId) {
+  return rows
+    .filter((item) => item.showInNav !== 0)
+    .filter((item) => item.sourceType === 'single_page')
+    .filter((item) => item.url && item.url !== rootPath)
+    .filter((item) => isImmediateChildPath(rootPath, item.url))
+    .sort(compareHeaderNavEntries)
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      parentId: item.parentId,
+      modelCode: item.modelCode,
+      sourceType: item.sourceType,
+      sourceId: item.sourceId,
+      active: activeColumnId !== 0 && item.id === activeColumnId,
+      openInNewTab: item.openInNewTab,
+      showInNav: item.showInNav,
+      url: item.url
+    }));
+}
+
+function buildHeaderSectionChildren(rows, section, activeColumnId) {
+  if (!section) {
+    return [];
+  }
+
+  const serviceRootId = normalizeInteger(section.rootColumnId, 0);
+  const visibleRows = section.sectionType === 'service'
+    ? rows
+    : rows.filter((item) => item.showInNav !== 0 && item.url);
+
+  const categoryChildren = rows
+    .filter((item) => item.showInNav !== 0)
+    .filter((item) => item.parentId === serviceRootId)
+    .filter((item) => item.sourceType === 'news_category')
+    .sort(compareHeaderNavEntries)
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      parentId: item.parentId,
+      modelCode: item.modelCode,
+      sourceType: item.sourceType,
+      sourceId: item.sourceId,
+      active: activeColumnId !== 0 && item.id === activeColumnId,
+      openInNewTab: item.openInNewTab,
+      showInNav: item.showInNav,
+      url: item.url
+    }));
+
+  if (categoryChildren.length > 0) {
+    return categoryChildren;
+  }
+
+  return visibleRows
+    .filter((item) => item.parentId === serviceRootId)
+    .filter((item) => item.sourceType === 'news_item')
+    .sort(compareHeaderNavEntries)
+    .map((item) => ({
+      id: item.id,
+      name: item.name,
+      parentId: item.parentId,
+      modelCode: item.modelCode,
+      sourceType: item.sourceType,
+      sourceId: item.sourceId,
+      active: activeColumnId !== 0 && item.id === activeColumnId,
+      openInNewTab: item.openInNewTab,
+      showInNav: 1,
+      url: `/${section.dirName}/detail/${item.id}.html`
+    }));
+}
+
 function buildLegacySiteColumns(columns, options = {}) {
   const rows = Array.isArray(columns) ? columns : [];
   const publicSections = resolvePublicSectionContext(rows);
@@ -811,67 +931,82 @@ function buildLegacySiteColumns(columns, options = {}) {
     sourceId: normalizeInteger(item?.source_id, 0),
     openInNewTab: normalizeInteger(item?.open_in_new_tab, 0),
     showInNav: normalizeInteger(item?.show_in_nav, 1),
+    sortOrder: normalizeInteger(item?.sort_order, 0),
     url: buildLegacyColumnUrl(item, publicSections)
   })).filter((item) => item.id !== 0);
 
-  const childrenByParentId = new Map();
-  for (const item of normalizedRows) {
-    if (item.parentId === 0 || !item.url) {
-      continue;
-    }
-    if (!childrenByParentId.has(item.parentId)) {
-      childrenByParentId.set(item.parentId, []);
-    }
-    childrenByParentId.get(item.parentId).push({
-      id: item.id,
-      name: item.name,
-      parentId: item.parentId,
-      modelCode: item.modelCode,
-      sourceType: item.sourceType,
-      sourceId: item.sourceId,
-      active: activeColumnId !== 0 && item.id === activeColumnId,
-      openInNewTab: item.openInNewTab,
-      showInNav: item.showInNav,
-      url: item.url
-    });
-  }
+  const visibleRows = normalizedRows
+    .filter((item) => item.showInNav !== 0)
+    .filter((item) => item.url);
 
-  const result = normalizedRows
-    .filter((item) => item.parentId === 0)
-    .filter((item) => String(item?.sourceType || '') !== 'contact_page');
+  const findByUrl = (url) => visibleRows.find((item) => item.url === url) || null;
+  const findBySourceType = (sourceType) => visibleRows.find((item) => item.sourceType === sourceType) || null;
+  const newsSection = publicSections.getNewsSectionByDirName('news');
+  const serviceSection = publicSections.getNewsSectionByDirName('service');
+  const newsRoot = newsSection
+    ? visibleRows.find((item) => item.id === normalizeInteger(newsSection.rootColumnId, 0)) || null
+    : null;
+  const serviceRoot = serviceSection
+    ? visibleRows.find((item) => item.id === normalizeInteger(serviceSection.rootColumnId, 0)) || null
+    : null;
 
-  const finalResult = result
-    .map((item) => ({
-      ...item,
-      active: activeColumnId !== 0 && item.id === activeColumnId,
-      children: childrenByParentId.get(item.id) || [],
-      showInNav: item.showInNav  // 明确传递 showInNav
-    }))
-    .map((item) => ({
-      ...item,
-      active: Boolean(item.active) || item.children.some((child) => child.active),
-      showInNav: item.showInNav  // 再次明确传递
-    }))
-    .filter((item) => item.url)
-    .map((item) => {
-      // 特殊处理：如果是产品栏目（product_root），用真实的产品分类替换其children
-      if (item.sourceType === 'product_root' && options.productCategories) {
-        const topCategories = options.productCategories
-          .filter(cat => normalizeInteger(cat.parent_id, 0) === 0 && normalizeInteger(cat.id, 0) !== 0)
-          .slice(0, 11)
-          .map(cat => ({
-            id: cat.id,
-            name: cat.name,
-            url: cat.slug ? `/products/${cat.slug}/` : `/products/${cat.id}.html`,
-            active: false,
-            showInNav: 1
-          }));
-        return { ...item, children: topCategories };
-      }
-      return item;
-    });
+  const productChildren = Array.isArray(options.productCategories)
+    ? options.productCategories
+      .filter((cat) => normalizeInteger(cat.parent_id, 0) === 0 && normalizeInteger(cat.id, 0) !== 0)
+      .slice(0, 11)
+      .map((cat) => ({
+        id: cat.id,
+        name: cat.name,
+        parentId: normalizeInteger(cat.parent_id, 0),
+        modelCode: 'product',
+        sourceType: 'product_category',
+        sourceId: normalizeInteger(cat.source_id, 0),
+        active: false,
+        openInNewTab: 0,
+        showInNav: 1,
+        url: cat.slug ? `/products/${cat.slug}/` : `/products/${cat.id}.html`
+      }))
+    : [];
 
-  return finalResult;
+  return [
+    buildHeaderNavItem({
+      id: 117,
+      name: '首页',
+      parentId: 0,
+      modelCode: 'link',
+      sourceType: 'custom_link',
+      sourceId: 1,
+      active: false,
+      openInNewTab: 0,
+      showInNav: 1,
+      url: '/',
+      children: []
+    }),
+    buildHeaderNavItem(findByUrl('/your-goals/'), {
+      name: '您的目标',
+      children: buildHeaderPrefixChildren(normalizedRows, '/your-goals/', activeColumnId)
+    }),
+    buildHeaderNavItem(findBySourceType('product_root'), {
+      name: '产品',
+      children: productChildren
+    }),
+    buildHeaderNavItem(findByUrl('/industries/'), {
+      name: '行业',
+      children: buildHeaderPrefixChildren(normalizedRows, '/industries/', activeColumnId)
+    }),
+    buildHeaderNavItem(serviceRoot, {
+      name: '服务',
+      children: buildHeaderSectionChildren(normalizedRows, serviceSection, activeColumnId)
+    }),
+    buildHeaderNavItem(findByUrl('/training/'), {
+      name: '培训',
+      children: buildHeaderPrefixChildren(normalizedRows, '/training/', activeColumnId)
+    }),
+    buildHeaderNavItem(newsRoot, {
+      name: '公司新闻',
+      children: buildHeaderSectionChildren(normalizedRows, newsSection, activeColumnId)
+    })
+  ].filter(Boolean);
 }
 
 function buildLegacyColumnUrl(column, rowsById = new Map()) {

@@ -1,5 +1,5 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
-import { ensureLanguagesSchema, getDefaultLanguage, hasMultipleEnabledLanguages, listLanguages } from './languages.mjs';
+import { ensureLanguagesSchema, getDefaultLanguage, listLanguages } from './languages.mjs';
 import { ensureTemplatesSchema } from './templates.mjs';
 import { normalizeUploadedRelativePath } from './uploads.mjs';
 
@@ -62,7 +62,6 @@ export function ensureColumnsSchema() {
   getDb().exec(`
     CREATE TABLE IF NOT EXISTS columns (
       id INTEGER PRIMARY KEY,
-      name TEXT NOT NULL,
       parent_id INTEGER,
       model_code TEXT NOT NULL,
       source_type TEXT NOT NULL,
@@ -162,6 +161,7 @@ export function ensureColumnsSchema() {
   migrateLegacyColumnsSchema();
   migrateLegacyContentIntoColumns();
   ensureDefaultColumnTranslations();
+  migrateColumnsDropLegacyName();
 
   schemaEnsured = true;
 }
@@ -172,7 +172,6 @@ export function listColumns({ languageCode = null, includeTranslations = true } 
     `
       SELECT
         id,
-        name,
         parent_id,
         model_code,
         source_type,
@@ -224,7 +223,6 @@ export function getColumnBySource(sourceType, sourceId, { languageCode = null, i
     `
       SELECT
         id,
-        name,
         parent_id,
         model_code,
         source_type,
@@ -315,7 +313,6 @@ export function createManualColumn(input) {
   const result = execute(
     `
       INSERT INTO columns (
-        name,
         parent_id,
         model_code,
         source_type,
@@ -346,10 +343,9 @@ export function createManualColumn(input) {
         is_system,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
     `,
     [
-      defaultTranslation.name,
       payload.base.parent_id,
       payload.base.model_code,
       sourceType,
@@ -402,7 +398,6 @@ export function updateManualColumn(id, input) {
     `
       UPDATE columns
       SET
-        name = ?,
         parent_id = ?,
         model_code = ?,
         source_type = ?,
@@ -433,7 +428,6 @@ export function updateManualColumn(id, input) {
       WHERE id = ?
     `,
     [
-      defaultTranslation.name,
       payload.base.parent_id,
       payload.base.model_code,
       payload.base.source_type,
@@ -484,7 +478,6 @@ export function updateColumnRecord(id, input) {
     `
       UPDATE columns
       SET
-        name = ?,
         parent_id = ?,
         show_in_nav = ?,
         content_html = ?,
@@ -502,7 +495,6 @@ export function updateColumnRecord(id, input) {
       WHERE id = ?
     `,
     [
-      defaultTranslation.name,
       payload.base.parent_id,
       payload.base.show_in_nav,
       defaultTranslation.content_html,
@@ -536,7 +528,6 @@ export function createContentColumn(model, input) {
   const result = execute(
     `
       INSERT INTO columns (
-        name,
         parent_id,
         model_code,
         source_type,
@@ -567,10 +558,9 @@ export function createContentColumn(model, input) {
         is_system,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, 'content', 'content', ?, NULL, NULL, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+      ) VALUES (?, ?, ?, ?, 'content', 'content', ?, NULL, NULL, 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
     `,
     [
-      defaultTranslation.name,
       payload.base.parent_id,
       model,
       sourceType,
@@ -619,7 +609,6 @@ export function updateContentColumn(model, id, input) {
     `
       UPDATE columns
       SET
-        name = ?,
         parent_id = ?,
         content_html = ?,
         summary = ?,
@@ -642,7 +631,6 @@ export function updateContentColumn(model, id, input) {
       WHERE id = ?
     `,
     [
-      defaultTranslation.name,
       payload.base.parent_id,
       defaultTranslation.content_html,
       defaultTranslation.summary,
@@ -699,6 +687,8 @@ export function listContentColumnsPaged(model, {
   const hasColumnFilter = safeColumnId > 0;
   const offset = (safePage - 1) * safeLimit;
   const sourceType = CONTENT_SOURCE_TYPE_BY_MODEL[model];
+  const columnNameJoin = buildColumnNameJoin('c', selectedLanguage.id, selectedLanguage.default_id);
+  const parentNameJoin = buildColumnNameJoin('p', selectedLanguage.id, selectedLanguage.default_id);
   const baseParams = [model, sourceType];
   const treeSql = hasColumnFilter && includeDescendants
     ? `
@@ -736,7 +726,7 @@ export function listContentColumnsPaged(model, {
       ${treeSql}
       SELECT
         c.id,
-        c.name,
+        ${columnNameJoin.nameExpr} AS name,
         c.parent_id,
         c.model_code,
         c.source_type,
@@ -767,9 +757,11 @@ export function listContentColumnsPaged(model, {
         c.is_system,
         c.created_at,
         c.updated_at,
-        p.name AS category_name
+        ${parentNameJoin.nameExpr} AS category_name
       FROM columns c
       LEFT JOIN columns p ON p.id = c.parent_id
+      ${columnNameJoin.joinSql}
+      ${parentNameJoin.joinSql}
       ${where}
       ORDER BY c.sort_order ASC, c.id DESC
       LIMIT ?
@@ -810,11 +802,13 @@ export function getContentColumnById(model, id, {
 } = {}) {
   ensureColumnsSchema();
   const sourceType = CONTENT_SOURCE_TYPE_BY_MODEL[model];
+  const selectedLanguage = resolveLanguageForContent(languageCode);
+  const columnNameJoin = buildColumnNameJoin('c', selectedLanguage.id, selectedLanguage.default_id);
   const row = queryOne(
     `
       SELECT
         id,
-        name,
+        ${columnNameJoin.nameExpr} AS name,
         parent_id,
         model_code,
         source_type,
@@ -845,11 +839,12 @@ export function getContentColumnById(model, id, {
         is_system,
         created_at,
         updated_at
-      FROM columns
+      FROM columns c
+      ${columnNameJoin.joinSql}
       WHERE id = ?
-        AND model_code = ?
-        AND source_type = ?
-        AND node_type = 'content'
+        AND c.model_code = ?
+        AND c.source_type = ?
+        AND c.node_type = 'content'
     `,
     [id, model, sourceType]
   );
@@ -876,11 +871,12 @@ export function searchContentColumns(model, rawQuery, {
   const safePage = Math.max(Number.parseInt(String(page), 10) || 1, 1);
   const offset = (safePage - 1) * safeLimit;
   const sourceType = CONTENT_SOURCE_TYPE_BY_MODEL[model];
+  const columnNameJoin = buildColumnNameJoin('c', selectedLanguage.id, selectedLanguage.default_id);
   const params = [model, sourceType];
   const whereParts = [
-    'model_code = ?',
-    'source_type = ?',
-    "node_type = 'content'"
+    'c.model_code = ?',
+    'c.source_type = ?',
+    "c.node_type = 'content'"
   ];
   if (visibleOnly) {
     whereParts.push('is_visible = 1');
@@ -888,7 +884,7 @@ export function searchContentColumns(model, rawQuery, {
 
   if (normalizedQuery !== '') {
     const likeQuery = `%${normalizedQuery}%`;
-    whereParts.push('(name LIKE ? OR coalesce(summary, \'\') LIKE ? OR coalesce(keywords, \'\') LIKE ?)');
+    whereParts.push(`(${columnNameJoin.nameExpr} LIKE ? OR coalesce(c.summary, '') LIKE ? OR coalesce(c.keywords, '') LIKE ?)`);
     params.push(likeQuery, likeQuery, likeQuery);
   }
   const where = `WHERE ${whereParts.join(' AND ')}`;
@@ -896,7 +892,7 @@ export function searchContentColumns(model, rawQuery, {
     `
       SELECT
         id,
-        name,
+        ${columnNameJoin.nameExpr} AS name,
         parent_id,
         model_code,
         source_type,
@@ -927,7 +923,8 @@ export function searchContentColumns(model, rawQuery, {
         is_system,
         created_at,
         updated_at
-      FROM columns
+      FROM columns c
+      ${columnNameJoin.joinSql}
       ${where}
       ORDER BY sort_order ASC, id DESC
       LIMIT ?
@@ -938,7 +935,8 @@ export function searchContentColumns(model, rawQuery, {
   const total = queryOne(
     `
       SELECT COUNT(*) AS count
-      FROM columns
+      FROM columns c
+      ${columnNameJoin.joinSql}
       ${where}
     `,
     params
@@ -994,16 +992,12 @@ function hydrateColumns(rows, {
   const columnIds = rows.map((row) => Number(row.id)).filter((id) => Number.isInteger(id) && id > 0);
   const translationsById = loadColumnTranslations(columnIds);
   const selectedLanguage = resolveLanguageForContent(languageCode);
-  const translationEnabled = hasMultipleEnabledLanguages();
-
   return rows.map((row) => {
     const translations = translationsById.get(Number(row.id)) || [];
     const translationMap = Object.fromEntries(translations.map((translation) => [translation.language_code, translation]));
     const selectedTranslation = translationMap[selectedLanguage.code];
     const defaultTranslation = translationMap[selectedLanguage.default_code];
-    const fallbackTranslation = translationEnabled
-      ? (selectedTranslation || defaultTranslation || translations[0] || null)
-      : null;
+    const fallbackTranslation = selectedTranslation || defaultTranslation || translations[0] || null;
     const displayName = fallbackTranslation?.name || row.name;
     const resolvedSummary = fallbackTranslation?.summary ?? row.summary ?? '';
     const resolvedContentHtml = fallbackTranslation?.content_html ?? row.content_html ?? '';
@@ -1223,6 +1217,10 @@ function ensureDefaultColumnTranslations() {
     return;
   }
 
+  if (!hasColumn('columns', 'name')) {
+    return;
+  }
+
   execute(
     `
       INSERT INTO column_translations (
@@ -1272,7 +1270,6 @@ function getColumnByIdRaw(id) {
     `
       SELECT
         id,
-        name,
         parent_id,
         model_code,
         source_type,
@@ -1315,7 +1312,7 @@ function normalizeManualColumnInput(input, options = {}) {
   const existing = currentId ? getColumnByIdRaw(currentId) : null;
   const columnKind = normalizeColumnKind(input.column_kind ?? existing?.column_kind);
   const sourceType = normalizeManualSourceType(input.source_type ?? existing?.source_type, columnKind);
-  const name = String(input.name ?? existing?.name ?? '').trim();
+  const name = String(input.name ?? options.existingColumn?.name ?? existing?.name ?? '').trim();
   if (!name) {
     throw new Error('栏目名称不能为空');
   }
@@ -1624,12 +1621,34 @@ function resolveDefaultColumnTranslation(translations, defaultLanguageCode) {
 }
 
 function resolveLanguageForContent(languageCode) {
+  const languages = listLanguages();
   const defaultLanguage = getDefaultLanguage();
-  const fallbackCode = defaultLanguage?.code || 'zh-CN';
-  const code = String(languageCode || '').trim() || fallbackCode;
+  const fallbackLanguage = defaultLanguage || languages[0] || null;
+  const fallbackCode = fallbackLanguage?.code || 'zh-CN';
+  const requestedCode = String(languageCode || '').trim();
+  const selectedLanguage = languages.find((language) => language.code === requestedCode) || fallbackLanguage;
+  const code = selectedLanguage?.code || requestedCode || fallbackCode;
   return {
     code,
-    default_code: fallbackCode
+    id: toInteger(selectedLanguage?.id, 0) || null,
+    default_code: fallbackCode,
+    default_id: toInteger(fallbackLanguage?.id, 0) || null
+  };
+}
+
+function buildColumnNameJoin(tableAlias, languageId, defaultLanguageId) {
+  const selectedAlias = `${tableAlias}_selected_translation`;
+  const defaultAlias = `${tableAlias}_default_translation`;
+  return {
+    joinSql: `
+      LEFT JOIN column_translations ${selectedAlias}
+        ON ${selectedAlias}.column_id = ${tableAlias}.id
+       AND ${selectedAlias}.language_id = ${languageId ? Number(languageId) : 0}
+      LEFT JOIN column_translations ${defaultAlias}
+        ON ${defaultAlias}.column_id = ${tableAlias}.id
+       AND ${defaultAlias}.language_id = ${defaultLanguageId ? Number(defaultLanguageId) : 0}
+    `,
+    nameExpr: `COALESCE(${selectedAlias}.name, ${defaultAlias}.name, '')`
   };
 }
 
@@ -1782,6 +1801,122 @@ function migrateLegacyColumnsSchema() {
   `);
 }
 
+function migrateColumnsDropLegacyName() {
+  if (!hasColumn('columns', 'name')) {
+    return;
+  }
+
+  getDb().exec(`
+    BEGIN;
+    CREATE TABLE IF NOT EXISTS columns__new (
+      id INTEGER PRIMARY KEY,
+      parent_id INTEGER,
+      model_code TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      source_id INTEGER NOT NULL DEFAULT 0,
+      node_type TEXT NOT NULL DEFAULT 'category',
+      column_kind TEXT NOT NULL DEFAULT 'category',
+      content_type TEXT,
+      custom_url TEXT,
+      route_path TEXT,
+      open_in_new_tab INTEGER NOT NULL DEFAULT 0,
+      show_in_nav INTEGER NOT NULL DEFAULT 1,
+      content_html TEXT NOT NULL DEFAULT '',
+      summary TEXT,
+      code TEXT,
+      images TEXT NOT NULL DEFAULT '[]',
+      primary_image TEXT,
+      keywords TEXT,
+      seo_title TEXT,
+      seo_keywords TEXT,
+      seo_description TEXT,
+      slug TEXT,
+      publish_status TEXT NOT NULL DEFAULT 'published',
+      published_at TEXT,
+      is_visible INTEGER NOT NULL DEFAULT 1,
+      is_featured_home INTEGER NOT NULL DEFAULT 0,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      legacy_extra TEXT,
+      is_system INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (source_type, source_id),
+      FOREIGN KEY (parent_id) REFERENCES columns(id) ON DELETE SET NULL
+    );
+
+    INSERT INTO columns__new (
+      id,
+      parent_id,
+      model_code,
+      source_type,
+      source_id,
+      node_type,
+      column_kind,
+      content_type,
+      custom_url,
+      route_path,
+      open_in_new_tab,
+      show_in_nav,
+      content_html,
+      summary,
+      code,
+      images,
+      primary_image,
+      keywords,
+      seo_title,
+      seo_keywords,
+      seo_description,
+      slug,
+      publish_status,
+      published_at,
+      is_visible,
+      is_featured_home,
+      sort_order,
+      legacy_extra,
+      is_system,
+      created_at,
+      updated_at
+    )
+    SELECT
+      id,
+      parent_id,
+      model_code,
+      source_type,
+      source_id,
+      node_type,
+      column_kind,
+      content_type,
+      custom_url,
+      route_path,
+      open_in_new_tab,
+      show_in_nav,
+      content_html,
+      summary,
+      code,
+      images,
+      primary_image,
+      keywords,
+      seo_title,
+      seo_keywords,
+      seo_description,
+      slug,
+      publish_status,
+      published_at,
+      is_visible,
+      is_featured_home,
+      sort_order,
+      legacy_extra,
+      is_system,
+      created_at,
+      updated_at
+    FROM columns;
+
+    DROP TABLE columns;
+    ALTER TABLE columns__new RENAME TO columns;
+    COMMIT;
+  `);
+}
+
 function migrateLegacyContentIntoColumns() {
   ensureLegacyColumnRoots();
   migrateLegacyProductContent();
@@ -1798,13 +1933,28 @@ function ensureLegacyColumnRoots() {
     execute(
       `
         INSERT INTO columns (
-          name, parent_id, model_code, source_type, source_id, node_type, column_kind, content_type,
+          parent_id, model_code, source_type, source_id, node_type, column_kind, content_type,
           show_in_nav, content_html, summary, code, images, primary_image, publish_status,
           is_visible, is_featured_home, sort_order, is_system, created_at, updated_at
-        ) VALUES ('产品', NULL, 'product', 'product_root', 0, 'category', 'category', 'product', 1, '', '', '', ?, '', 'published', 1, 0, 0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ) VALUES (NULL, 'product', 'product_root', 0, 'category', 'category', 'product', 1, '', '', '', ?, '', 'published', 1, 0, 0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `,
       [EMPTY_IMAGE_LIST]
     );
+    const rootId = queryOne(`SELECT id FROM columns WHERE model_code = 'product' AND source_type = 'product_root' LIMIT 1`)?.id;
+    if (rootId && getDefaultLanguage()?.id) {
+      execute(
+        `
+          INSERT INTO column_translations (
+            column_id, language_id, name, summary, content_html, keywords,
+            seo_title, seo_keywords, seo_description, publish_status, published_at, created_at, updated_at
+          ) VALUES (?, ?, ?, '', '', NULL, NULL, NULL, NULL, 'published', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ON CONFLICT(column_id, language_id) DO UPDATE SET
+            name = excluded.name,
+            updated_at = excluded.updated_at
+        `,
+        [rootId, getDefaultLanguage().id, '产品']
+      );
+    }
   }
   const corporationRoot = queryOne(
     `SELECT id FROM columns WHERE model_code = 'corporation' AND source_type = 'corporation_root' LIMIT 1`
@@ -1813,13 +1963,28 @@ function ensureLegacyColumnRoots() {
     execute(
       `
         INSERT INTO columns (
-          name, parent_id, model_code, source_type, source_id, node_type, column_kind, content_type,
+          parent_id, model_code, source_type, source_id, node_type, column_kind, content_type,
           show_in_nav, content_html, summary, code, images, primary_image, publish_status,
           is_visible, is_featured_home, sort_order, is_system, created_at, updated_at
-        ) VALUES ('公司信息', NULL, 'corporation', 'corporation_root', 0, 'category', 'category', 'corporation', 1, '', '', '', ?, '', 'published', 1, 0, 0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ) VALUES (NULL, 'corporation', 'corporation_root', 0, 'category', 'category', 'corporation', 1, '', '', '', ?, '', 'published', 1, 0, 0, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `,
       [EMPTY_IMAGE_LIST]
     );
+    const rootId = queryOne(`SELECT id FROM columns WHERE model_code = 'corporation' AND source_type = 'corporation_root' LIMIT 1`)?.id;
+    if (rootId && getDefaultLanguage()?.id) {
+      execute(
+        `
+          INSERT INTO column_translations (
+            column_id, language_id, name, summary, content_html, keywords,
+            seo_title, seo_keywords, seo_description, publish_status, published_at, created_at, updated_at
+          ) VALUES (?, ?, ?, '', '', NULL, NULL, NULL, NULL, 'published', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ON CONFLICT(column_id, language_id) DO UPDATE SET
+            name = excluded.name,
+            updated_at = excluded.updated_at
+        `,
+        [rootId, getDefaultLanguage().id, '公司信息']
+      );
+    }
   }
 }
 
@@ -1867,7 +2032,6 @@ function migrateLegacyProductContent() {
     const primaryImage = images[0] || normalizeSingleImage(row.small_image) || DEFAULT_PRODUCT_IMAGE;
     const createdAt = toNullableString(row.updated_at) || new Date().toISOString();
     const payload = [
-      row.name || '',
       toNullableInteger(row.column_id),
       row.id,
       row.summary || '',
@@ -1888,7 +2052,6 @@ function migrateLegacyProductContent() {
         `
           UPDATE columns
           SET
-            name = ?,
             parent_id = ?,
             summary = ?,
             code = ?,
@@ -1904,7 +2067,6 @@ function migrateLegacyProductContent() {
           WHERE id = ?
         `,
         [
-          row.name || '',
           toNullableInteger(row.column_id),
           row.summary || '',
           row.code || '',
@@ -1924,14 +2086,13 @@ function migrateLegacyProductContent() {
       execute(
         `
           INSERT INTO columns (
-            name, parent_id, model_code, source_type, source_id, node_type, column_kind, content_type,
+            parent_id, model_code, source_type, source_id, node_type, column_kind, content_type,
             show_in_nav, content_html, summary, code, images, primary_image, keywords,
             seo_title, seo_keywords, seo_description, slug, publish_status, published_at,
             is_visible, is_featured_home, sort_order, legacy_extra, is_system, created_at, updated_at
-          ) VALUES (?, ?, 'product', 'product_item', ?, 'content', 'content', 'product', 0, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, 'published', NULL, ?, ?, ?, ?, 0, ?, ?)
+          ) VALUES (?, 'product', 'product_item', ?, 'content', 'content', 'product', 0, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, 'published', NULL, ?, ?, ?, ?, 0, ?, ?)
         `,
         [
-          row.name || '',
           toNullableInteger(row.column_id),
           row.id,
           row.content_html || '',
@@ -2089,7 +2250,6 @@ function migrateLegacyNewsContent() {
         `
           UPDATE columns
           SET
-            name = ?,
             parent_id = ?,
             summary = ?,
             primary_image = ?,
@@ -2103,7 +2263,6 @@ function migrateLegacyNewsContent() {
           WHERE id = ?
         `,
         [
-          row.title || '',
           toNullableInteger(row.column_id),
           row.summary || '',
           picture,
@@ -2120,14 +2279,13 @@ function migrateLegacyNewsContent() {
       execute(
         `
           INSERT INTO columns (
-            name, parent_id, model_code, source_type, source_id, node_type, column_kind, content_type,
+            parent_id, model_code, source_type, source_id, node_type, column_kind, content_type,
             show_in_nav, content_html, summary, code, images, primary_image, keywords,
             seo_title, seo_keywords, seo_description, slug, publish_status, published_at,
             is_visible, is_featured_home, sort_order, legacy_extra, is_system, created_at, updated_at
-          ) VALUES (?, ?, 'news', 'news_item', ?, 'content', 'content', 'news', 0, ?, ?, '', ?, ?, ?, NULL, NULL, NULL, NULL, 'published', NULL, 1, ?, 0, ?, 0, ?, ?)
+          ) VALUES (?, 'news', 'news_item', ?, 'content', 'content', 'news', 0, ?, ?, '', ?, ?, ?, NULL, NULL, NULL, NULL, 'published', NULL, 1, ?, 0, ?, 0, ?, ?)
         `,
         [
-          row.title || '',
           toNullableInteger(row.column_id),
           row.id,
           row.content_html || '',
@@ -2282,7 +2440,6 @@ function migrateLegacyCorporationContent() {
         `
           UPDATE columns
           SET
-            name = ?,
             parent_id = ?,
             custom_url = ?,
             open_in_new_tab = ?,
@@ -2293,7 +2450,6 @@ function migrateLegacyCorporationContent() {
           WHERE id = ?
         `,
         [
-          row.name || '',
           parentId,
           toBooleanInt(row.is_external, 0) === 1 ? row.external_url || null : null,
           toBooleanInt(row.is_external, 0),
@@ -2307,14 +2463,13 @@ function migrateLegacyCorporationContent() {
       execute(
         `
           INSERT INTO columns (
-            name, parent_id, model_code, source_type, source_id, node_type, column_kind, content_type,
+            parent_id, model_code, source_type, source_id, node_type, column_kind, content_type,
             custom_url, route_path, open_in_new_tab, show_in_nav, content_html, summary, code, images, primary_image,
             keywords, seo_title, seo_keywords, seo_description, slug, publish_status, published_at,
             is_visible, is_featured_home, legacy_extra, sort_order, is_system, created_at, updated_at
-          ) VALUES (?, ?, 'corporation', 'corporation_category', ?, 'category', 'category', 'corporation', ?, NULL, ?, 1, ?, '', '', ?, '', NULL, NULL, NULL, NULL, NULL, 'published', NULL, 1, 0, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ) VALUES (?, 'corporation', 'corporation_category', ?, 'category', 'category', 'corporation', ?, NULL, ?, 1, ?, '', '', ?, '', NULL, NULL, NULL, NULL, NULL, 'published', NULL, 1, 0, ?, ?, 0, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         `,
         [
-          row.name || '',
           parentId,
           row.id,
           toBooleanInt(row.is_external, 0) === 1 ? row.external_url || null : null,
@@ -2324,6 +2479,24 @@ function migrateLegacyCorporationContent() {
           row.legacy_extra || null,
           toInteger(row.sort_order, 0)
         ]
+      );
+    }
+
+    const categoryColumn = queryOne(`SELECT id FROM columns WHERE source_type = 'corporation_category' AND source_id = ?`, [row.id]);
+    const defaultLanguage = getDefaultLanguage();
+    if (categoryColumn && defaultLanguage?.id) {
+      execute(
+        `
+          INSERT INTO column_translations (
+            column_id, language_id, name, summary, content_html, keywords,
+            seo_title, seo_keywords, seo_description, publish_status, published_at, created_at, updated_at
+          ) VALUES (?, ?, ?, '', ?, NULL, NULL, NULL, NULL, 'published', NULL, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          ON CONFLICT(column_id, language_id) DO UPDATE SET
+            name = excluded.name,
+            content_html = excluded.content_html,
+            updated_at = excluded.updated_at
+        `,
+        [categoryColumn.id, defaultLanguage.id, row.name || '', contentHtml]
       );
     }
   }
@@ -2370,12 +2543,15 @@ function hasTable(name) {
   ));
 }
 
-function addColumnIfMissing(tableName, columnName, definition) {
+function hasColumn(tableName, columnName) {
   if (!hasTable(tableName)) {
-    return;
+    return false;
   }
-  const columns = queryAll(`PRAGMA table_info(${tableName})`);
-  if (columns.some((column) => column.name === columnName)) {
+  return queryAll(`PRAGMA table_info(${tableName})`).some((column) => column.name === columnName);
+}
+
+function addColumnIfMissing(tableName, columnName, definition) {
+  if (hasColumn(tableName, columnName)) {
     return;
   }
   getDb().exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);

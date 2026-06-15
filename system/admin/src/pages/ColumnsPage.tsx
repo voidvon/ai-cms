@@ -83,6 +83,25 @@ interface RootCategoryForm {
 }
 
 type ManualColumnKind = 'link' | 'single'
+type ColumnDisplayKind = 'category' | ManualColumnKind
+
+const COLUMN_KIND_META: Record<ColumnDisplayKind, { label: string; createLabel: string; showTreeBadge: boolean }> = {
+  category: {
+    label: '栏目',
+    createLabel: '新增栏目',
+    showTreeBadge: false,
+  },
+  link: {
+    label: '链接',
+    createLabel: '新增链接',
+    showTreeBadge: true,
+  },
+  single: {
+    label: '单页',
+    createLabel: '新增单页',
+    showTreeBadge: true,
+  },
+}
 
 export default function ColumnsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -732,15 +751,15 @@ export default function ColumnsPage() {
               <DropdownMenuContent align="end">
                 <DropdownMenuItem onSelect={() => setRootCategoryDialogOpen(true)}>
                   <Plus className="size-4" />
-                  新增分类栏目
+                  {COLUMN_KIND_META.category.createLabel}
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => handleCreateManualColumn('link')}>
                   <Plus className="size-4" />
-                  新增链接栏目
+                  {COLUMN_KIND_META.link.createLabel}
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => handleCreateManualColumn('single')}>
                   <Plus className="size-4" />
-                  新增单页栏目
+                  {COLUMN_KIND_META.single.createLabel}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -1385,10 +1404,11 @@ function buildPaginationItems(currentPage: number, totalPages: number): Array<nu
 }
 
 function buildColumnTree(columns: Column[]) {
+  const visibleColumns = columns.filter((column) => shouldShowInColumnTree(column))
   const nodes = new Map<number, ColumnTreeNode>()
   const roots: ColumnTreeNode[] = []
 
-  for (const column of columns) {
+  for (const column of visibleColumns) {
     nodes.set(column.id, { ...column, children: [] })
   }
 
@@ -1404,6 +1424,25 @@ function buildColumnTree(columns: Column[]) {
   sortColumnTree(roots)
 
   return roots
+}
+
+function shouldShowInColumnTree(column: Column) {
+  if (Number(column.is_visible || 0) === 0) {
+    return false
+  }
+
+  const sourceType = String(column.source_type || '')
+  const displayKind = getColumnDisplayKind(column)
+
+  if (displayKind === 'link' || displayKind === 'single') {
+    return true
+  }
+
+  return sourceType === 'product_root'
+    || sourceType === 'product_category'
+    || sourceType === 'news_category'
+    || sourceType === 'corporation_root'
+    || sourceType === 'corporation_category'
 }
 
 function sortColumnTree(nodes: ColumnTreeNode[]) {
@@ -1428,25 +1467,17 @@ function compareColumnTreeNodes(a: ColumnTreeNode, b: ColumnTreeNode) {
 }
 
 function getColumnKindLabel(column: Column) {
+  return COLUMN_KIND_META[getColumnDisplayKind(column)].label
+}
+
+function getColumnDisplayKind(column: Column): ColumnDisplayKind {
   if (column.column_kind === 'single') {
-    return '单页'
+    return 'single'
   }
   if (column.column_kind === 'link' || column.source_type === 'custom_link') {
-    return Number(column.open_in_new_tab || 0) === 1 ? '链接/新窗' : '链接'
+    return 'link'
   }
-  if (column.source_type === 'product_root' || column.source_type === 'product_category') {
-    return '产品'
-  }
-  if (column.source_type === 'news_category') {
-    return '新闻'
-  }
-  if (column.source_type === 'corporation_root' || column.source_type === 'corporation_category') {
-    return '公司'
-  }
-  if (column.source_type === 'contact_page') {
-    return '联系'
-  }
-  return '栏目'
+  return 'category'
 }
 
 async function saveOptionalTemplateBinding(
@@ -1559,13 +1590,7 @@ function getCategoryTreeTarget(column: Column): CategoryTreeTarget {
 }
 
 function toTreeItem(column: ColumnTreeNode): TreeItemData<Column> {
-  const isManual = isEditableManualColumn(column)
-  const detailText = column.column_kind === 'single'
-    ? (column.route_path || '-')
-    : column.source_type === 'custom_link'
-      ? (column.custom_url || '-')
-      : `栏目ID ${column.id || '-'}`
-  const seoSummary = column.seo_description?.trim() || column.seo_keywords?.trim() || ''
+  const displayKind = getColumnDisplayKind(column)
 
   return {
     id: column.id,
@@ -1573,21 +1598,15 @@ function toTreeItem(column: ColumnTreeNode): TreeItemData<Column> {
       <div className="min-w-0 py-1">
         <div className="flex items-center gap-2">
           <span className="truncate font-medium">{column.name}</span>
-          <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px]">
-            {getColumnKindLabel(column)}
-          </Badge>
+          {COLUMN_KIND_META[displayKind].showTreeBadge ? (
+            <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px]">
+              {COLUMN_KIND_META[displayKind].label}
+            </Badge>
+          ) : null}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
           <span>ID {column.id}</span>
-          {!isManual ? <span>{detailText}</span> : null}
-          <span>排序 {column.sort_order}</span>
-          {isManual ? <span className="truncate">{detailText}</span> : null}
         </div>
-        {seoSummary ? (
-          <div className="mt-1 line-clamp-1 text-xs text-muted-foreground">
-            SEO: {seoSummary}
-          </div>
-        ) : null}
       </div>
     ),
     data: column,
