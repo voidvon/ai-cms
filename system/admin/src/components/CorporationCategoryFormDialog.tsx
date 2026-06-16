@@ -31,8 +31,6 @@ export default function CorporationCategoryFormDialog({
     name: '',
     parent_id: 0,
     sort_order: 0,
-    is_external: 0,
-    external_url: '',
   })
   const [contentTemplateId, setContentTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
 
@@ -66,8 +64,6 @@ export default function CorporationCategoryFormDialog({
         name: category.name || '',
         parent_id: category.parent_id || 0,
         sort_order: category.sort_order || 0,
-        is_external: category.is_external || 0,
-        external_url: category.external_url || '',
       })
       const contentBinding = (bindingsData?.data || []).find((item) => item.target_type === 'column' && item.target_id === category.id && item.template_type === 'content')
       setContentTemplateId(contentBinding?.template_id ? String(contentBinding.template_id) : DEFAULT_TEMPLATE_VALUE)
@@ -76,8 +72,6 @@ export default function CorporationCategoryFormDialog({
         name: '',
         parent_id: currentParentId,
         sort_order: 0,
-        is_external: 0,
-        external_url: '',
       })
       setContentTemplateId(DEFAULT_TEMPLATE_VALUE)
     }
@@ -161,32 +155,6 @@ export default function CorporationCategoryFormDialog({
               </SelectContent>
             </Select>
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="is_external">链接类型</Label>
-            <Select
-              value={formData.is_external.toString()}
-              onValueChange={(value) => setFormData({ ...formData, is_external: parseInt(value) })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">内部页面</SelectItem>
-                <SelectItem value="1">外部链接</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {formData.is_external === 1 && (
-            <div className="space-y-2">
-              <Label htmlFor="external_url">外部链接地址</Label>
-              <Input
-                id="external_url"
-                value={formData.external_url}
-                onChange={(e) => setFormData({ ...formData, external_url: e.target.value })}
-                placeholder="https://"
-              />
-            </div>
-          )}
           <div className="space-y-2">
             <Label htmlFor="sort_order">排序</Label>
             <Input

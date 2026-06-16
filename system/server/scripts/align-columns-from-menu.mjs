@@ -25,10 +25,8 @@ function nextManualSourceId(sourceType) {
 function getColumn(id) {
   return queryOne(
     `
-      SELECT id, parent_id, model_code, source_type, source_id, node_type, column_kind, content_type,
-             custom_url, route_path, open_in_new_tab, show_in_nav, content_html, summary, code, images,
-             primary_image, keywords, seo_title, seo_keywords, seo_description, slug, publish_status,
-             published_at, is_visible, is_featured_home, legacy_extra, sort_order, is_system
+      SELECT id, parent_id, source_type, source_id, custom_url, route_path,
+             content_model_id, slug, is_visible, legacy_extra, sort_order
       FROM columns
       WHERE id = ?
     `,
@@ -69,38 +67,26 @@ function setBase(columnId, fields) {
 function createManualNode({
   name,
   parentId = null,
-  modelCode = 'page',
   sourceType = 'single_page',
   sourceId = null,
-  nodeType = 'page',
-  columnKind = 'single',
-  contentType = 'page',
   routePath = null,
   customUrl = null,
   showInNav = 1,
-  openInNewTab = 0,
   sortOrder = 0
 }) {
   run(
     `
       INSERT INTO columns (
-        parent_id, model_code, source_type, source_id, node_type, column_kind, content_type,
-        custom_url, route_path, open_in_new_tab, show_in_nav, content_html, summary, code, images,
-        primary_image, keywords, seo_title, seo_keywords, seo_description, slug, publish_status,
-        published_at, is_visible, is_featured_home, legacy_extra, sort_order, is_system
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '', '[]', '', '', '', '', '', NULL, 'published', NULL, 1, 0, NULL, ?, 0)
+        parent_id, source_type, source_id, custom_url, route_path,
+        content_model_id, slug, is_visible, legacy_extra, sort_order
+      ) VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, NULL, ?)
     `,
     [
       parentId,
-      modelCode,
       sourceType,
       sourceId ?? nextManualSourceId(sourceType),
-      nodeType,
-      columnKind,
-      contentType,
       customUrl,
       routePath,
-      openInNewTab,
       showInNav,
       sortOrder
     ]
@@ -130,14 +116,9 @@ function ensureSinglePageNode({ name, routePath, parentId = null, showInNav = 1,
   if (existingId) {
     setBase(existingId, {
       parent_id: parentId,
-      show_in_nav: showInNav,
+      is_visible: showInNav,
       sort_order: sortOrder,
-      model_code: 'page',
-      source_type: 'single_page',
-      node_type: 'page',
-      column_kind: 'single',
-      content_type: 'page',
-      open_in_new_tab: 0
+      source_type: 'single_page'
     });
     setName(existingId, name);
     return existingId;
@@ -145,12 +126,8 @@ function ensureSinglePageNode({ name, routePath, parentId = null, showInNav = 1,
   return createManualNode({
     name,
     parentId,
-    modelCode: 'page',
     sourceType: 'single_page',
     sourceId: nextManualSourceId('single_page'),
-    nodeType: 'page',
-    columnKind: 'single',
-    contentType: 'page',
     routePath,
     showInNav,
     sortOrder
@@ -162,14 +139,9 @@ function ensureLinkNode({ name, customUrl, parentId = null, showInNav = 1, sortO
   if (existingId) {
     setBase(existingId, {
       parent_id: parentId,
-      show_in_nav: showInNav,
+      is_visible: showInNav,
       sort_order: sortOrder,
-      model_code: 'link',
-      source_type: 'custom_link',
-      node_type: 'link',
-      column_kind: 'link',
-      content_type: 'link',
-      open_in_new_tab: 0
+      source_type: 'custom_link'
     });
     setName(existingId, name);
     return existingId;
@@ -177,12 +149,8 @@ function ensureLinkNode({ name, customUrl, parentId = null, showInNav = 1, sortO
   return createManualNode({
     name,
     parentId,
-    modelCode: 'link',
     sourceType: 'custom_link',
     sourceId: nextManualSourceId('custom_link'),
-    nodeType: 'link',
-    columnKind: 'link',
-    contentType: 'link',
     customUrl,
     showInNav,
     sortOrder
@@ -196,7 +164,7 @@ function ensureContactChild(name, parentId, sortOrder) {
   }
   setBase(existingId, {
     parent_id: parentId,
-    show_in_nav: 1,
+    is_visible: 1,
     sort_order: sortOrder
   });
   setName(existingId, name);
@@ -206,7 +174,7 @@ function ensureContactChild(name, parentId, sortOrder) {
 function moveAndRename(id, { parentId = null, name = null, showInNav = undefined, sortOrder = undefined }) {
   const payload = {};
   if (parentId !== undefined) payload.parent_id = parentId;
-  if (showInNav !== undefined) payload.show_in_nav = showInNav;
+  if (showInNav !== undefined) payload.is_visible = showInNav;
   if (sortOrder !== undefined) payload.sort_order = sortOrder;
   setBase(id, payload);
   if (name) {
@@ -230,15 +198,10 @@ function ensureTopMenuParent() {
   if (existingId) {
     setBase(existingId, {
       parent_id: null,
-      model_code: 'link',
       source_type: 'custom_link',
-      node_type: 'link',
-      column_kind: 'link',
-      content_type: 'link',
       custom_url: '#top-menu',
       route_path: null,
-      open_in_new_tab: 0,
-      show_in_nav: 0,
+      is_visible: 0,
       sort_order: 400
     });
     setName(existingId, '顶部菜单');
@@ -269,15 +232,10 @@ function ensureOtherParent() {
   if (existingId) {
     setBase(existingId, {
       parent_id: null,
-      model_code: 'link',
       source_type: 'custom_link',
-      node_type: 'link',
-      column_kind: 'link',
-      content_type: 'link',
       custom_url: '#misc-links',
       route_path: null,
-      open_in_new_tab: 0,
-      show_in_nav: 0,
+      is_visible: 0,
       sort_order: 410
     });
     setName(existingId, '其他');
@@ -306,15 +264,10 @@ function ensureAboutGroupParent() {
   if (existingId) {
     setBase(existingId, {
       parent_id: null,
-      model_code: 'link',
       source_type: 'custom_link',
-      node_type: 'link',
-      column_kind: 'link',
-      content_type: 'link',
       custom_url: '/about-us/',
       route_path: null,
-      open_in_new_tab: 0,
-      show_in_nav: 0,
+      is_visible: 0,
       sort_order: 420
     });
     setName(existingId, '关于我们');
@@ -336,13 +289,9 @@ function convertHv3CategoryToProductContent() {
   }
 
   setBase(49, {
-    model_code: 'product',
-    source_type: 'product_item',
-    node_type: 'content',
-    column_kind: 'content',
-    content_type: 'product',
+    source_type: 'product_category',
     parent_id: 10,
-    show_in_nav: 0,
+    is_visible: 0,
     sort_order: 999,
     slug: 'hv3-stop-valve'
   });
@@ -420,7 +369,7 @@ function main() {
       showInNav: 0,
       sortOrder: 10
     });
-    setBase(topAbout, { show_in_nav: 0 });
+    setBase(topAbout, { is_visible: 0 });
 
     moveAndRename(103, { parentId: otherParent, name: '网站隐私政策', showInNav: 0, sortOrder: 10 });
     ensureLinkNode({

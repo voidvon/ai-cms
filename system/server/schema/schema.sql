@@ -72,8 +72,6 @@ CREATE TABLE IF NOT EXISTS corporation_categories (
   name TEXT NOT NULL,
   parent_id INTEGER NOT NULL DEFAULT 0,
   sort_order INTEGER NOT NULL DEFAULT 0,
-  is_external INTEGER NOT NULL DEFAULT 0,
-  external_url TEXT,
   legacy_extra TEXT
 );
 

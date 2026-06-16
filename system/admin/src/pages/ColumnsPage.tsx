@@ -397,13 +397,13 @@ export default function ColumnsPage() {
     },
   })
 
-  const updateSystemColumnMutation = useMutation({
+  const updateColumnMutation = useMutation({
     mutationFn: async ({ id, value, templateIds }: { id: number; value: ManualColumnFormValue; templateIds: { listTemplateId: string; contentTemplateId: string } }) => {
-      const response = await columnsApi.update(id, value.base.show_in_nav !== undefined ? {
+      const response = await columnsApi.update(id, value.base.is_visible !== undefined ? {
         parent_id: value.base.parent_id,
         content_model_id: value.base.content_model_id,
         sort_order: value.base.sort_order,
-        show_in_nav: value.base.show_in_nav,
+        is_visible: value.base.is_visible,
         translations: value.translations,
       } : value)
       if (value.base.source_type !== 'single_page' && value.base.source_type !== 'contact_page') {
@@ -513,7 +513,7 @@ export default function ColumnsPage() {
 
   const handleSubmitManualColumn = (value: ManualColumnFormValue, templateIds: { listTemplateId: string; contentTemplateId: string }) => {
     if (editingColumnTarget) {
-      updateSystemColumnMutation.mutate({ id: editingColumnTarget.id, value, templateIds })
+      updateColumnMutation.mutate({ id: editingColumnTarget.id, value, templateIds })
       return
     }
     if (manualColumnDialogMode === 'edit' && editingManualColumn) {
@@ -1036,7 +1036,7 @@ export default function ColumnsPage() {
         contentTemplates={contentTemplates}
         initialListTemplateId={selectedManualListBinding?.template_id ? String(selectedManualListBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
         initialContentTemplateId={selectedManualContentBinding?.template_id ? String(selectedManualContentBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
-        submitting={createManualColumnMutation.isPending || updateManualColumnMutation.isPending || updateSystemColumnMutation.isPending}
+        submitting={createManualColumnMutation.isPending || updateManualColumnMutation.isPending || updateColumnMutation.isPending}
         onSubmit={handleSubmitManualColumn}
       />
 
@@ -1341,10 +1341,6 @@ function ManualColumnPanel({
               <div className="text-muted-foreground">跳转地址</div>
               <div className="mt-1 break-all font-medium">{column.custom_url || '-'}</div>
             </div>
-            <div>
-              <div className="text-muted-foreground">打开方式</div>
-              <div className="mt-1">{Number(column.open_in_new_tab || 0) === 1 ? '新窗口' : '当前窗口'}</div>
-            </div>
           </>
         )}
       </div>
@@ -1462,10 +1458,6 @@ function buildColumnTree(columns: Column[]) {
 }
 
 function shouldShowInColumnTree(column: Column) {
-  if (Number(column.is_visible || 0) === 0) {
-    return false
-  }
-
   const sourceType = String(column.source_type || '')
   const displayKind = getColumnDisplayKind(column)
 
@@ -1551,7 +1543,7 @@ function createCategoryByModel(model: CategoryModel, data: { name: string; paren
   if (model === 'news') {
     return newsCategoriesApi.create(data)
   }
-  return corporationCategoriesApi.create({ ...data, is_external: 0 })
+  return corporationCategoriesApi.create(data)
 }
 
 function getCategoryTreeTarget(column: Column): CategoryTreeTarget {

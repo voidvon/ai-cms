@@ -465,9 +465,7 @@ function collectCorporationCategories() {
         continue;
       }
       seen.add(id);
-      if (toInteger(item.is_external, 0) === 0) {
-        collected.push(item);
-      }
+      collected.push(item);
       queue.push(id);
     }
   }

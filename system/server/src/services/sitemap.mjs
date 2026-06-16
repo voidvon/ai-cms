@@ -71,8 +71,7 @@ export function getSitemapDiagnostics({ generatedAt = new Date().toISOString(), 
   const urls = siteUrl ? collectSitemapEntries({ siteUrl, generatedAt, languageCode }) : [];
   const chunks = chunkEntries(urls, SITEMAP_CHUNK_SIZE);
   const products = listProducts({ visibleOnly: true, limit: 10000, languageCode });
-  const corporationCategories = listColumnCategories('corporation', { languageCode })
-    .filter((item) => toInteger(item.is_external, 0) === 0);
+  const corporationCategories = listColumnCategories('corporation', { languageCode });
 
   return {
     generated_at: generatedAt,
@@ -109,8 +108,7 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   const newsCategories = listColumnCategories('news', { languageCode });
   const products = listProducts({ visibleOnly: true, limit: 10000, languageCode });
   const newsItems = listNews({ limit: 10000, languageCode });
-  const corporationCategories = listColumnCategories('corporation', { languageCode })
-    .filter((item) => toInteger(item.is_external, 0) === 0);
+  const corporationCategories = listColumnCategories('corporation', { languageCode });
   const productCountByCategory = buildDescendantProductCountMap(productCategories, products);
   const latestProductDateByCategory = buildDescendantLatestDateMap(productCategories, products, generatedAt);
   const newsCountByCategory = buildCountMap(newsItems, (item) => toInteger(item.column_id, 0));

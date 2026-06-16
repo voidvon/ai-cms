@@ -68,13 +68,6 @@ function mapColumnToCategory(column, rootColumn = null) {
     translations
   };
 
-  if (String(column.source_type || '') === 'corporation_category' || String(column.source_type || '') === 'corporation_root') {
-    mapped.is_external = toInteger(column.open_in_new_tab, 0);
-    mapped.external_url = column.custom_url || null;
-    mapped.sitepath = mapped.is_external;
-    mapped.siteurl = mapped.external_url || '';
-  }
-
   return mapped;
 }
 
@@ -189,7 +182,7 @@ export function createColumnCategory(model, input) {
       content_model_id: contentModelId,
       route_path: model === 'corporation' ? `/about/about-${toInteger(sourceId, 1)}.html` : `/__internal/${model}/${toInteger(sourceId, 1)}/`,
       sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
-      show_in_nav: 1,
+      is_visible: 1,
       slug: toNullableString(input?.base?.slug ?? input?.slug),
       legacy_extra: input?.base?.legacy_extra ?? input?.legacy_extra ?? null
     },
@@ -201,7 +194,7 @@ export function createColumnCategory(model, input) {
       parent_id: parentColumnId,
       content_model_id: contentModelId,
       sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
-      show_in_nav: 1,
+      is_visible: 1,
       translations
     });
   } else {
@@ -211,11 +204,8 @@ export function createColumnCategory(model, input) {
         content_model_id: contentModelId,
         sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
         route_path: `/about/about-${column.id}.html`,
-        show_in_nav: 1,
-        custom_url: toBooleanInt(input?.is_external ?? input?.sitepath, 0) === 1
-          ? toNullableString(input?.external_url ?? input?.siteurl)
-          : null,
-        open_in_new_tab: toBooleanInt(input?.is_external ?? input?.sitepath, 0)
+        is_visible: 1,
+        custom_url: null
       },
       translations
     });
@@ -246,22 +236,19 @@ export function updateColumnCategory(model, id, input) {
         slug: toNullableString(input?.base?.slug ?? input?.slug ?? column.slug),
         legacy_extra: input?.base?.legacy_extra ?? input?.legacy_extra ?? column.legacy_extra ?? null,
         sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order ?? column.sort_order, 0),
-        show_in_nav: 1,
-        custom_url: toBooleanInt(input?.is_external ?? input?.sitepath, column.is_external ?? 0) === 1
-          ? toNullableString(input?.external_url ?? input?.siteurl ?? column.external_url)
-          : null,
-        open_in_new_tab: toBooleanInt(input?.is_external ?? input?.sitepath, column.is_external ?? 0)
+        is_visible: 1,
+        custom_url: null
       },
       translations
     });
   } else {
-    updateColumnRecord(column.id, {
-      parent_id: parentColumnId,
-      content_model_id: contentModelId,
-      sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order ?? column.sort_order, 0),
-      show_in_nav: toInteger(input?.base?.show_in_nav ?? column.show_in_nav, 1),
-      translations
-    });
+      updateColumnRecord(column.id, {
+        parent_id: parentColumnId,
+        content_model_id: contentModelId,
+        sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order ?? column.sort_order, 0),
+        is_visible: toInteger(input?.base?.is_visible ?? column.is_visible, 1),
+        translations
+      });
   }
 
   return getColumnCategoryById(model, id, { includeTranslations: true });
@@ -280,20 +267,6 @@ export function deleteColumnCategory(model, id) {
 
   deleteManualColumn(column.id);
   return mapColumnToCategory(column, getCategoryRootColumn(model));
-}
-
-function toBooleanInt(value, fallback = 0) {
-  if (value === undefined || value === null || String(value).trim() === '') {
-    return fallback;
-  }
-  const normalized = String(value).trim().toLowerCase();
-  if (['1', 'true', 'yes', 'on', '-1'].includes(normalized)) {
-    return 1;
-  }
-  if (['0', 'false', 'no', 'off'].includes(normalized)) {
-    return 0;
-  }
-  return toInteger(value, fallback) === 0 ? 0 : 1;
 }
 
 function normalizeCategoryTranslations(input, existingTranslations, column) {

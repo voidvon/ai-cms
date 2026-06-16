@@ -18,9 +18,8 @@ export interface ManualColumnFormValue {
     content_model_id: number
     custom_url: string
     route_path: string
-    open_in_new_tab: number
     sort_order: number
-    show_in_nav: number
+    is_visible: number
   }
   translations: Record<string, ColumnTranslation>
 }
@@ -67,9 +66,8 @@ export default function ManualColumnFormDialog({
     content_model_id: 0,
     custom_url: '',
     route_path: '',
-    open_in_new_tab: 0,
     sort_order: 0,
-    show_in_nav: 1
+    is_visible: 1
   })
   const [translations, setTranslations] = useState<Record<string, ColumnTranslation>>({})
   const [listTemplateId, setListTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
@@ -98,9 +96,8 @@ export default function ManualColumnFormDialog({
         content_model_id: Number(column.content_model_id || 0),
         custom_url: column.custom_url || '',
         route_path: column.route_path || '',
-        open_in_new_tab: Number(column.open_in_new_tab || 0),
         sort_order: Number(column.sort_order || 0),
-        show_in_nav: Number(column.show_in_nav ?? 1)
+        is_visible: Number(column.is_visible ?? 1)
       })
       setTranslations(buildInitialTranslations(column, defaultLanguageCode, availableLanguageCodes))
       setActiveLanguage(column.current_language_code || defaultLanguageCode)
@@ -115,9 +112,8 @@ export default function ManualColumnFormDialog({
       content_model_id: 0,
       custom_url: '',
       route_path: '',
-      open_in_new_tab: 0,
       sort_order: 0,
-      show_in_nav: 1
+      is_visible: 1
     })
     setTranslations({
       [defaultLanguageCode]: createEmptyTranslation()
@@ -341,11 +337,11 @@ export default function ManualColumnFormDialog({
                 <div className="flex items-center space-x-2 h-10">
                   <Switch
                     id="manual-column-show-nav"
-                    checked={baseData.show_in_nav === 1}
-                    onCheckedChange={(checked) => setBaseData({ ...baseData, show_in_nav: checked ? 1 : 0 })}
+                    checked={baseData.is_visible === 1}
+                    onCheckedChange={(checked) => setBaseData({ ...baseData, is_visible: checked ? 1 : 0 })}
                   />
                   <Label htmlFor="manual-column-show-nav" className="cursor-pointer">
-                    {baseData.show_in_nav === 1 ? '显示' : '隐藏'}
+                    {baseData.is_visible === 1 ? '显示' : '隐藏'}
                   </Label>
                 </div>
               </div>
@@ -398,21 +394,6 @@ export default function ManualColumnFormDialog({
                     onChange={(event) => setBaseData({ ...baseData, custom_url: event.target.value })}
                     placeholder="/ 或 https://example.com"
                   />
-                </div>
-                <div className="space-y-2">
-                  <Label>打开方式</Label>
-                  <Select
-                    value={String(baseData.open_in_new_tab)}
-                    onValueChange={(value) => setBaseData({ ...baseData, open_in_new_tab: Number(value) })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0">当前窗口</SelectItem>
-                      <SelectItem value="1">新窗口</SelectItem>
-                    </SelectContent>
-                  </Select>
                 </div>
               </>
             ) : !basicOnly ? (

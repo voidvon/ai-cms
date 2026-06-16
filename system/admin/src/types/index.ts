@@ -141,8 +141,6 @@ export interface CorporationCategory {
   name: string;
   parent_id: number;
   sort_order: number;
-  is_external: number;
-  external_url?: string;
 }
 
 export interface TemplateVariant {
@@ -268,7 +266,7 @@ export interface Column {
   source_id: number;
   custom_url?: string | null;
   route_path?: string | null;
-  open_in_new_tab?: number;
+  is_visible?: number;
   content_html?: string;
   seo_title?: string | null;
   seo_keywords?: string | null;

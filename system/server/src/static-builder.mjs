@@ -276,7 +276,7 @@ export function buildManualSinglePageColumns({ outputRoot = DEFAULT_OUTPUT_ROOT,
 export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null } = {}) {
   const templateContext = getLegacyTemplateContext(languageCode);
   const items = templateContext.corporationCategories
-    .filter((item) => normalizeInteger(item.id, 0) !== 0 && normalizeInteger(item.is_external, 0) === 0);
+    .filter((item) => normalizeInteger(item.id, 0) !== 0);
   const indexItemId = items.find((item) => normalizeInteger(item.parent_id, 0) === 0)?.id ?? items[0]?.id;
 
   let filesWritten = 0;
@@ -818,7 +818,6 @@ function buildHeaderNavItem(base, overrides = {}) {
     sourceType: overrides.sourceType ?? base.sourceType ?? '',
     sourceId: normalizeInteger(overrides.sourceId ?? base.sourceId, 0),
     active: Boolean(overrides.active ?? base.active),
-    openInNewTab: normalizeInteger(overrides.openInNewTab ?? base.openInNewTab, 0),
     showInNav: normalizeInteger(overrides.showInNav ?? base.showInNav, 1),
     url: overrides.url ?? base.url ?? '',
     children
@@ -865,7 +864,6 @@ function buildHeaderPrefixChildren(rows, rootPath, activeColumnId) {
       sourceType: item.sourceType,
       sourceId: item.sourceId,
       active: activeColumnId !== 0 && item.id === activeColumnId,
-      openInNewTab: item.openInNewTab,
       showInNav: item.showInNav,
       url: item.url
     }));
@@ -894,7 +892,6 @@ function buildHeaderSectionChildren(rows, section, activeColumnId, { newsEntries
       sourceType: item.sourceType,
       sourceId: item.sourceId,
       active: activeColumnId !== 0 && item.id === activeColumnId,
-      openInNewTab: item.openInNewTab,
       showInNav: item.showInNav,
       url: item.url
     }));
@@ -914,7 +911,6 @@ function buildHeaderSectionChildren(rows, section, activeColumnId, { newsEntries
       sourceType: 'news_item',
       sourceId: item.id,
       active: false,
-      openInNewTab: 0,
       showInNav: 1,
       sortOrder: normalizeInteger(item.sort_order, 0),
       url: `/${section.dirName}/detail/${item.id}.html`
@@ -931,8 +927,7 @@ function buildLegacySiteColumns(columns, options = {}) {
     parentId: normalizeInteger(item?.parent_id, 0),
     sourceType: item?.source_type || '',
     sourceId: normalizeInteger(item?.source_id, 0),
-    openInNewTab: normalizeInteger(item?.open_in_new_tab, 0),
-    showInNav: normalizeInteger(item?.show_in_nav, 1),
+    showInNav: normalizeInteger(item?.is_visible, 1),
     sortOrder: normalizeInteger(item?.sort_order, 0),
     url: buildLegacyColumnUrl(item, publicSections)
   })).filter((item) => item.id !== 0);
@@ -964,7 +959,6 @@ function buildLegacySiteColumns(columns, options = {}) {
         sourceType: 'product_category',
         sourceId: normalizeInteger(cat.source_id, 0),
         active: false,
-        openInNewTab: 0,
         showInNav: 1,
         url: cat.slug ? `/products/${cat.slug}/` : `/products/${cat.id}.html`
       }))
@@ -979,7 +973,6 @@ function buildLegacySiteColumns(columns, options = {}) {
       sourceType: 'custom_link',
       sourceId: 1,
       active: false,
-      openInNewTab: 0,
       showInNav: 1,
       url: '/',
       children: []
@@ -1279,7 +1272,7 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
     prodKeywords: categoryPageContent?.seo_keywords || category.name || '',
     seoMeta: buildSeoMeta({
       title: categoryPageContent?.seo_title || buildSectionSeoTitle(category.name || '产品', templateContext.site),
-      description: categoryPageContent?.seo_description || categoryPageContent?.summary || categoryPageData?.summary || templateContext.site.seo_default_description || category.name || '',
+      description: categoryPageContent?.seo_description || categoryPageContent?.summary || templateContext.site.seo_default_description || category.name || '',
       url: categoryUrl,
       image: categoryPageData?.mastheadImage || categoryPageData?.heroImage || category.primary_image || '',
       site: templateContext.site
@@ -1817,9 +1810,7 @@ function buildLegacyAboutCategoryList(categories) {
   let html = '<table width="80%" border="0" align="center" cellpadding="0" cellspacing="0">';
   items.forEach((item, index) => {
     const isLast = index === items.length - 1;
-    const href = normalizeInteger(item.is_external, 0) === 1 && item.external_url
-      ? item.external_url
-      : `about-${item.id}.html`;
+    const href = `about-${item.id}.html`;
     html += '<tr>';
     html += `<td width="15%" height="25" align="center"${isLast ? '' : ' class="p1"'}></td>`;
     html += `<td width="85%"${isLast ? '' : ' class="p1"'}>&nbsp;<a href="${escapeHtml(href)}" class="0a">${escapeHtml(item.name || '')}</a></td>`;
@@ -1834,9 +1825,7 @@ function buildLegacyCorporationMenuItems(categories, activeId = 0) {
     .filter((item) => normalizeInteger(item.parent_id, 0) === 0)
     .map((item) => ({
       label: item.name || '',
-      url: normalizeInteger(item.is_external, 0) === 1 && item.external_url
-        ? item.external_url
-        : `/about/about-${normalizeInteger(item.id, 0)}.html`,
+      url: `/about/about-${normalizeInteger(item.id, 0)}.html`,
       active: normalizeInteger(item.id, 0) === normalizeInteger(activeId, 0)
     }));
 }

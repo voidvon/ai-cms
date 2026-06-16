@@ -73,8 +73,6 @@ export function ensureColumnsSchema() {
       source_id INTEGER NOT NULL DEFAULT 0,
       custom_url TEXT,
       route_path TEXT,
-      open_in_new_tab INTEGER NOT NULL DEFAULT 0,
-      show_in_nav INTEGER NOT NULL DEFAULT 1,
       content_model_id INTEGER,
       slug TEXT,
       is_visible INTEGER NOT NULL DEFAULT 1,
@@ -112,8 +110,6 @@ export function ensureColumnsSchema() {
 
   addColumnIfMissing('columns', 'custom_url', 'TEXT');
   addColumnIfMissing('columns', 'route_path', 'TEXT');
-  addColumnIfMissing('columns', 'open_in_new_tab', 'INTEGER NOT NULL DEFAULT 0');
-  addColumnIfMissing('columns', 'show_in_nav', 'INTEGER NOT NULL DEFAULT 1');
   addColumnIfMissing('columns', 'content_model_id', 'INTEGER');
   addColumnIfMissing('columns', 'slug', 'TEXT');
   addColumnIfMissing('columns', 'legacy_extra', 'TEXT');
@@ -138,7 +134,10 @@ export function ensureColumnsSchema() {
   `);
 
   ensureColumnContentModelBindings();
+  migrateColumnVisibilityToSingleField();
   migrateColumnsToLeanSchema();
+  migrateColumnsDropOpenInNewTab();
+  migrateColumnPageDataSummaryToTranslations();
 
   schemaEnsured = true;
 }
@@ -154,8 +153,6 @@ export function listColumns({ languageCode = null, includeTranslations = true } 
         source_id,
         custom_url,
         route_path,
-        open_in_new_tab,
-        show_in_nav,
         content_model_id,
         slug,
         is_visible,
@@ -213,8 +210,6 @@ export function createManualColumn(input) {
         source_id,
         custom_url,
         route_path,
-        open_in_new_tab,
-        show_in_nav,
         content_model_id,
         slug,
         is_visible,
@@ -222,7 +217,7 @@ export function createManualColumn(input) {
         sort_order,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       payload.base.parent_id,
@@ -230,8 +225,6 @@ export function createManualColumn(input) {
       sourceId,
       payload.base.custom_url,
       payload.base.route_path,
-      payload.base.open_in_new_tab,
-      payload.base.show_in_nav,
       payload.base.content_model_id,
       payload.base.slug,
       payload.base.is_visible,
@@ -264,8 +257,6 @@ export function updateManualColumn(id, input) {
         source_type = ?,
         custom_url = ?,
         route_path = ?,
-        open_in_new_tab = ?,
-        show_in_nav = ?,
         content_model_id = ?,
         slug = ?,
         is_visible = ?,
@@ -279,8 +270,6 @@ export function updateManualColumn(id, input) {
       payload.base.source_type,
       payload.base.custom_url,
       payload.base.route_path,
-      payload.base.open_in_new_tab,
-      payload.base.show_in_nav,
       payload.base.content_model_id,
       payload.base.slug,
       payload.base.is_visible,
@@ -310,7 +299,6 @@ export function updateColumnRecord(id, input) {
       SET
         parent_id = ?,
         content_model_id = ?,
-        show_in_nav = ?,
         is_visible = ?,
         sort_order = ?,
         updated_at = ?
@@ -319,7 +307,6 @@ export function updateColumnRecord(id, input) {
     [
       payload.base.parent_id,
       payload.base.content_model_id,
-      payload.base.show_in_nav,
       payload.base.is_visible,
       payload.base.sort_order,
       new Date().toISOString(),
@@ -402,9 +389,7 @@ function hydrateColumns(rows, {
       current_language_code: fallbackTranslation?.language_code || selectedLanguage.code,
       source_id: toInteger(row.source_id, 0),
       sort_order: toInteger(row.sort_order, 0),
-      is_visible: toBooleanInt(row.is_visible, 1),
-      open_in_new_tab: toBooleanInt(row.open_in_new_tab, 0),
-      show_in_nav: toBooleanInt(row.show_in_nav, 1)
+      is_visible: toBooleanInt(row.is_visible, 1)
     };
 
     return {
@@ -566,8 +551,6 @@ function getColumnByIdRaw(id) {
         source_id,
         custom_url,
         route_path,
-        open_in_new_tab,
-        show_in_nav,
         content_model_id,
         slug,
         is_visible,
@@ -609,7 +592,7 @@ function normalizeManualColumnInput(input, options = {}) {
   }
 
   const sortOrder = toInteger(input.sort_order ?? existing?.sort_order, 0);
-  const showInNav = toBooleanInt(input.show_in_nav ?? existing?.show_in_nav, 1);
+  const isVisible = toBooleanInt(input.is_visible ?? existing?.is_visible, 1);
   const seoTitle = toNullableString(input.seo_title ?? existingView.seo_title);
   const seoKeywords = toNullableString(input.seo_keywords ?? existingView.seo_keywords);
   const seoDescription = toNullableString(input.seo_description ?? existingView.seo_description);
@@ -625,8 +608,6 @@ function normalizeManualColumnInput(input, options = {}) {
       source_type: sourceType,
       custom_url: toNullableString(input.custom_url ?? existing?.custom_url),
       route_path: routePath,
-      open_in_new_tab: toBooleanInt(input.open_in_new_tab ?? existing?.open_in_new_tab, 0),
-      show_in_nav: showInNav,
       content_html: String(input.content_html ?? existingView.content_html ?? ''),
       summary,
       keywords,
@@ -637,7 +618,7 @@ function normalizeManualColumnInput(input, options = {}) {
       slug: toNullableString(input.slug ?? existing?.slug),
       publish_status: normalizePublishStatus(input.publish_status ?? existing?.publish_status),
       published_at: toNullableString(input.published_at ?? existing?.published_at),
-      is_visible: toBooleanInt(input.is_visible ?? existing?.is_visible, 1),
+      is_visible: isVisible,
       legacy_extra: existing?.legacy_extra ?? null,
       sort_order: sortOrder
     };
@@ -651,8 +632,6 @@ function normalizeManualColumnInput(input, options = {}) {
       source_type: sourceType,
       custom_url: customUrl,
       route_path: null,
-      open_in_new_tab: toBooleanInt(input.open_in_new_tab ?? existing?.open_in_new_tab, 0),
-      show_in_nav: showInNav,
       content_html: '',
       summary,
       keywords,
@@ -663,7 +642,7 @@ function normalizeManualColumnInput(input, options = {}) {
       slug: null,
       publish_status: 'published',
       published_at: null,
-      is_visible: 1,
+      is_visible: isVisible,
       legacy_extra: existing?.legacy_extra ?? null,
       sort_order: sortOrder
     };
@@ -679,8 +658,6 @@ function normalizeManualColumnInput(input, options = {}) {
     source_type: sourceType,
     custom_url: null,
     route_path: routePath,
-    open_in_new_tab: 0,
-    show_in_nav: showInNav,
     content_html: String(input.content_html ?? existingView.content_html ?? ''),
     summary,
     keywords,
@@ -691,7 +668,7 @@ function normalizeManualColumnInput(input, options = {}) {
     slug: toNullableString(input.slug ?? existing?.slug),
     publish_status: normalizePublishStatus(input.publish_status ?? existing?.publish_status),
     published_at: toNullableString(input.published_at ?? existing?.published_at),
-    is_visible: toBooleanInt(input.is_visible ?? existing?.is_visible, 1),
+    is_visible: isVisible,
     legacy_extra: existing?.legacy_extra ?? null,
     sort_order: sortOrder
   };
@@ -735,7 +712,6 @@ function normalizeExistingColumnMutationInput(input, existingColumn = null) {
   const defaultLanguageCode = getDefaultLanguage()?.code || 'zh-CN';
   const parentId = toInteger(input?.parent_id ?? existing.parent_id, 0);
   const sortOrder = toInteger(input?.sort_order ?? existing.sort_order, 0);
-  const showInNav = toBooleanInt(input?.show_in_nav ?? existing.show_in_nav, 1);
   const isVisible = toBooleanInt(input?.is_visible ?? existing.is_visible, 1);
   const contentModelId = normalizeContentModelId(input?.content_model_id ?? existing.content_model_id);
 
@@ -760,7 +736,6 @@ function normalizeExistingColumnMutationInput(input, existingColumn = null) {
       parent_id: parentId || null,
       content_model_id: contentModelId,
       sort_order: sortOrder,
-      show_in_nav: showInNav,
       is_visible: isVisible
     },
     translations
@@ -934,7 +909,7 @@ function validateSinglePageRoutePath(routePath, currentId = null) {
 
   const normalized = routePath.toLowerCase();
   if (RESERVED_SINGLE_PAGE_PREFIXES.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`))) {
-    throw new Error('该访问路径与系统栏目冲突');
+    throw new Error('该访问路径与保留栏目路径冲突');
   }
 
   const params = currentId
@@ -1187,6 +1162,49 @@ function ensureColumnContentModelBindings() {
   }
 }
 
+function migrateColumnPageDataSummaryToTranslations() {
+  const defaultLanguage = getDefaultLanguage() || listLanguages()[0] || null;
+  const languageId = toInteger(defaultLanguage?.id, 0);
+  if (languageId <= 0) {
+    return;
+  }
+
+  execute(
+    `
+      UPDATE column_translations
+      SET
+        summary = (
+          SELECT json_extract(columns.legacy_extra, '$.page_data.summary')
+          FROM columns
+          WHERE columns.id = column_translations.column_id
+        ),
+        updated_at = CURRENT_TIMESTAMP
+      WHERE column_translations.language_id = ?
+        AND trim(COALESCE(column_translations.summary, '')) = ''
+        AND EXISTS (
+          SELECT 1
+          FROM columns
+          WHERE columns.id = column_translations.column_id
+            AND json_type(columns.legacy_extra, '$.page_data.summary') = 'text'
+            AND trim(COALESCE(json_extract(columns.legacy_extra, '$.page_data.summary'), '')) <> ''
+        )
+    `,
+    [languageId]
+  );
+
+  execute(`
+    UPDATE columns
+    SET
+      legacy_extra = CASE
+        WHEN json_type(legacy_extra, '$.page_data') = 'object'
+          THEN json_remove(legacy_extra, '$.page_data.summary')
+        ELSE legacy_extra
+      END,
+      updated_at = CURRENT_TIMESTAMP
+    WHERE json_type(legacy_extra, '$.page_data.summary') IS NOT NULL
+  `);
+}
+
 function migrateColumnsToLeanSchema() {
   const currentColumns = new Set(queryAll('PRAGMA table_info(columns)').map((column) => String(column.name || '')));
   const contentRows = queryOne(
@@ -1218,8 +1236,6 @@ function migrateColumnsToLeanSchema() {
         source_id INTEGER NOT NULL DEFAULT 0,
         custom_url TEXT,
         route_path TEXT,
-        open_in_new_tab INTEGER NOT NULL DEFAULT 0,
-        show_in_nav INTEGER NOT NULL DEFAULT 1,
         content_model_id INTEGER,
         slug TEXT,
         is_visible INTEGER NOT NULL DEFAULT 1,
@@ -1238,8 +1254,6 @@ function migrateColumnsToLeanSchema() {
         source_id,
         custom_url,
         route_path,
-        open_in_new_tab,
-        show_in_nav,
         content_model_id,
         slug,
         is_visible,
@@ -1255,11 +1269,12 @@ function migrateColumnsToLeanSchema() {
         source_id,
         custom_url,
         route_path,
-        open_in_new_tab,
-        show_in_nav,
         content_model_id,
         slug,
-        is_visible,
+        CASE
+          WHEN show_in_nav IS NULL THEN coalesce(is_visible, 1)
+          ELSE show_in_nav
+        END,
         sort_order,
         CASE
           WHEN trim(coalesce(primary_image, '')) <> '' THEN json_set(
@@ -1288,6 +1303,168 @@ function migrateColumnsToLeanSchema() {
       WHERE route_path IS NOT NULL;
     `);
   }
+}
+
+function migrateColumnVisibilityToSingleField() {
+  const currentColumns = new Set(queryAll('PRAGMA table_info(columns)').map((column) => String(column.name || '')));
+  if (!currentColumns.has('show_in_nav')) {
+    return;
+  }
+
+  execute(`
+    UPDATE columns
+    SET
+      is_visible = CASE
+        WHEN show_in_nav IS NULL THEN coalesce(is_visible, 1)
+        ELSE show_in_nav
+      END,
+      updated_at = CURRENT_TIMESTAMP
+  `);
+
+  getDb().exec(`
+    DROP INDEX IF EXISTS idx_columns_parent_sort;
+    DROP INDEX IF EXISTS idx_columns_source;
+    DROP INDEX IF EXISTS idx_columns_visible_sort;
+    DROP INDEX IF EXISTS idx_columns_slug;
+    DROP INDEX IF EXISTS idx_columns_route_path_unique;
+
+    ALTER TABLE columns RENAME TO columns_visibility_merge_rebuild;
+
+    CREATE TABLE columns (
+      id INTEGER PRIMARY KEY,
+      parent_id INTEGER,
+      source_type TEXT NOT NULL,
+      source_id INTEGER NOT NULL DEFAULT 0,
+      custom_url TEXT,
+      route_path TEXT,
+      content_model_id INTEGER,
+      slug TEXT,
+      is_visible INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      legacy_extra TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (source_type, source_id),
+      FOREIGN KEY (parent_id) REFERENCES columns(id) ON DELETE SET NULL
+    );
+
+    INSERT INTO columns (
+      id,
+      parent_id,
+      source_type,
+      source_id,
+      custom_url,
+      route_path,
+      content_model_id,
+      slug,
+      is_visible,
+      sort_order,
+      legacy_extra,
+      created_at,
+      updated_at
+    )
+    SELECT
+      id,
+      parent_id,
+      source_type,
+      source_id,
+      custom_url,
+      route_path,
+      content_model_id,
+      slug,
+      coalesce(is_visible, 1),
+      sort_order,
+      legacy_extra,
+      created_at,
+      updated_at
+    FROM columns_visibility_merge_rebuild;
+
+    DROP TABLE columns_visibility_merge_rebuild;
+
+    CREATE INDEX idx_columns_parent_sort ON columns(parent_id, sort_order, id);
+    CREATE INDEX idx_columns_source ON columns(source_type, source_id);
+    CREATE INDEX idx_columns_visible_sort ON columns(is_visible, sort_order, id);
+    CREATE INDEX idx_columns_slug ON columns(slug);
+    CREATE UNIQUE INDEX idx_columns_route_path_unique
+    ON columns(route_path)
+    WHERE route_path IS NOT NULL;
+  `);
+}
+
+function migrateColumnsDropOpenInNewTab() {
+  const currentColumns = new Set(queryAll('PRAGMA table_info(columns)').map((column) => String(column.name || '')));
+  if (!currentColumns.has('open_in_new_tab')) {
+    return;
+  }
+
+  getDb().exec(`
+    DROP INDEX IF EXISTS idx_columns_parent_sort;
+    DROP INDEX IF EXISTS idx_columns_source;
+    DROP INDEX IF EXISTS idx_columns_visible_sort;
+    DROP INDEX IF EXISTS idx_columns_slug;
+    DROP INDEX IF EXISTS idx_columns_route_path_unique;
+
+    ALTER TABLE columns RENAME TO columns_open_in_new_tab_rebuild;
+
+    CREATE TABLE columns (
+      id INTEGER PRIMARY KEY,
+      parent_id INTEGER,
+      source_type TEXT NOT NULL,
+      source_id INTEGER NOT NULL DEFAULT 0,
+      custom_url TEXT,
+      route_path TEXT,
+      content_model_id INTEGER,
+      slug TEXT,
+      is_visible INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      legacy_extra TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (source_type, source_id),
+      FOREIGN KEY (parent_id) REFERENCES columns(id) ON DELETE SET NULL
+    );
+
+    INSERT INTO columns (
+      id,
+      parent_id,
+      source_type,
+      source_id,
+      custom_url,
+      route_path,
+      content_model_id,
+      slug,
+      is_visible,
+      sort_order,
+      legacy_extra,
+      created_at,
+      updated_at
+    )
+    SELECT
+      id,
+      parent_id,
+      source_type,
+      source_id,
+      custom_url,
+      route_path,
+      content_model_id,
+      slug,
+      coalesce(is_visible, 1),
+      sort_order,
+      legacy_extra,
+      created_at,
+      updated_at
+    FROM columns_open_in_new_tab_rebuild;
+
+    DROP TABLE columns_open_in_new_tab_rebuild;
+
+    CREATE INDEX idx_columns_parent_sort ON columns(parent_id, sort_order, id);
+    CREATE INDEX idx_columns_source ON columns(source_type, source_id);
+    CREATE INDEX idx_columns_visible_sort ON columns(is_visible, sort_order, id);
+    CREATE INDEX idx_columns_slug ON columns(slug);
+    CREATE UNIQUE INDEX idx_columns_route_path_unique
+    ON columns(route_path)
+    WHERE route_path IS NOT NULL;
+  `);
 }
 
 function rebuildColumnTranslationsIfNeeded() {

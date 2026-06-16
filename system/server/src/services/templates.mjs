@@ -940,7 +940,7 @@ function getPreviewNewsCategory(id = null) {
 }
 
 function getPreviewCorporationCategory() {
-  const row = listColumnCategories('corporation').find((item) => toInteger(item.is_external, 0) === 0);
+  const row = listColumnCategories('corporation')[0];
   if (!row) {
     return { id: 1, name: '关于我们', parent_id: 0, content_html: '公司栏目内容预览' };
   }
@@ -982,14 +982,14 @@ function buildPreviewArticleSectionConfig(mode, template) {
 
 function buildPreviewCorporationMenuItems(activeId = 0) {
   const rows = listColumnCategories('corporation')
-    .filter((item) => toInteger(item.parent_id, 0) === 0 && toInteger(item.is_external, 0) === 0);
+    .filter((item) => toInteger(item.parent_id, 0) === 0);
   const items = rows.length > 0
     ? rows
-    : [{ id: activeId || 1, name: '关于我们', is_external: 0, external_url: '' }];
+    : [{ id: activeId || 1, name: '关于我们' }];
 
   return items.map((item) => ({
     label: item.name || '',
-    url: item.external_url || `/about/about-${toInteger(item.id, 0)}.html`,
+    url: `/about/about-${toInteger(item.id, 0)}.html`,
     active: toInteger(item.id, 0) === toInteger(activeId, 0)
   }));
 }
@@ -1005,7 +1005,7 @@ function buildPreviewRootColumnMenuItems() {
 function buildPreviewSiteColumns() {
   const rows = queryAll(
     `
-      SELECT id, name, parent_id, source_type, source_id, custom_url, route_path, open_in_new_tab
+      SELECT id, name, parent_id, source_type, source_id, custom_url, route_path
       FROM columns
       ORDER BY coalesce(parent_id, 0) ASC, sort_order ASC, id ASC
     `
@@ -1027,7 +1027,6 @@ function buildPreviewSiteColumns() {
     parentId: toInteger(item.parent_id, 0),
     sourceType: item.source_type || '',
     sourceId: toInteger(item.source_id, 0),
-    openInNewTab: toInteger(item.open_in_new_tab, 0),
     url: buildPreviewColumnUrl(item, publicSections)
   })).filter((item) => item.id !== 0);
 
@@ -1045,7 +1044,6 @@ function buildPreviewSiteColumns() {
       parentId: item.parentId,
       sourceType: item.sourceType,
       sourceId: item.sourceId,
-      openInNewTab: item.openInNewTab,
       url: item.url
     });
   }
