@@ -1,24 +1,37 @@
 import {
-  createContentColumn,
-  deleteContentColumn,
-  getContentColumnById,
-  listContentColumns,
-  listContentColumnsPaged,
-  searchContentColumns,
-  ensureColumnsSchema,
-  updateContentColumn
+  ensureColumnsSchema
 } from './columns.mjs';
+import {
+  createContentEntry,
+  deleteContentEntry,
+  getContentEntryById,
+  listContentEntries,
+  listContentEntriesPaged,
+  migrateLegacyContentNodesToModelTables,
+  updateContentEntry
+} from './content-entries.mjs';
+import { ensureContentModelStorageSchema } from './content-model-storage.mjs';
+
+let schemaEnsured = false;
 
 export function ensureProductsSchema() {
+  if (schemaEnsured) {
+    return;
+  }
   ensureColumnsSchema();
+  ensureContentModelStorageSchema();
+  migrateLegacyContentNodesToModelTables('product');
+  schemaEnsured = true;
 }
 
 export function listProducts({ featured = false, visibleOnly = true, limit = 20, languageCode = null } = {}) {
   ensureProductsSchema();
-  return listContentColumns('product', { languageCode, visibleOnly })
-    .filter((item) => (!featured || Number(item.is_featured_home || 0) === 1))
-    .sort(compareBySortAndId)
-    .slice(0, clampLimit(limit));
+  return listContentEntries('product', {
+    featured,
+    visibleOnly,
+    limit,
+    languageCode
+  }).sort(compareBySortAndId);
 }
 
 export function listProductsAdmin({
@@ -30,7 +43,7 @@ export function listProductsAdmin({
   languageCode = null
 } = {}) {
   ensureProductsSchema();
-  return listContentColumnsPaged('product', {
+  return listContentEntriesPaged('product', {
     page,
     limit,
     columnId: columnId ?? categoryId,
@@ -42,7 +55,7 @@ export function listProductsAdmin({
 
 export function getProductById(id, { languageCode = null, includeTranslations = false, includeTranslationStatuses = false } = {}) {
   ensureProductsSchema();
-  return getContentColumnById('product', id, {
+  return getContentEntryById('product', id, {
     languageCode,
     includeTranslations,
     includeTranslationStatuses
@@ -51,44 +64,60 @@ export function getProductById(id, { languageCode = null, includeTranslations = 
 
 export function searchProducts(rawQuery, limit = 20, { languageCode = null } = {}) {
   ensureProductsSchema();
-  return searchContentColumns('product', rawQuery, {
-    page: 1,
-    limit,
-    visibleOnly: true,
-    languageCode
-  }).items;
+  return searchProductsPaged(rawQuery, { page: 1, limit, languageCode }).items;
 }
 
 export function searchProductsPaged(rawQuery, { page = 1, limit = 20, languageCode = null } = {}) {
   ensureProductsSchema();
-  return searchContentColumns('product', rawQuery, {
+  const normalizedQuery = String(rawQuery ?? '').trim().toLowerCase();
+  const result = listContentEntriesPaged('product', {
     page,
-    limit,
+    limit: 10000,
     visibleOnly: true,
     languageCode
   });
+  const items = normalizedQuery
+    ? result.items.filter((item) => (
+      String(item.name || '').toLowerCase().includes(normalizedQuery)
+      || String(item.summary || '').toLowerCase().includes(normalizedQuery)
+      || String(item.keywords || '').toLowerCase().includes(normalizedQuery)
+      || String(item.code || '').toLowerCase().includes(normalizedQuery)
+    ))
+    : result.items;
+  const safeLimit = clampLimit(limit);
+  const safePage = Math.max(Number.parseInt(String(page), 10) || 1, 1);
+  const offset = (safePage - 1) * safeLimit;
+  return {
+    items: items.slice(offset, offset + safeLimit),
+    pagination: {
+      page: safePage,
+      limit: safeLimit,
+      total: items.length,
+      totalPages: Math.max(Math.ceil(items.length / safeLimit), 1)
+    }
+  };
 }
 
 export function createProduct(input) {
   ensureProductsSchema();
-  return createContentColumn('product', input);
+  return createContentEntry('product', input);
 }
 
 export function getNextProductSortOrder() {
   ensureProductsSchema();
-  const products = listContentColumns('product', { visibleOnly: false });
+  const products = listContentEntries('product', { visibleOnly: false, limit: 10000 });
   const maxValue = products.reduce((max, item) => Math.max(max, Number(item.sort_order || 0)), 0);
   return maxValue + 1;
 }
 
 export function updateProduct(id, input) {
   ensureProductsSchema();
-  return updateContentColumn('product', id, input);
+  return updateContentEntry('product', id, input);
 }
 
 export function deleteProduct(id) {
   ensureProductsSchema();
-  return deleteContentColumn('product', id);
+  return deleteContentEntry('product', id);
 }
 
 function clampLimit(limit) {

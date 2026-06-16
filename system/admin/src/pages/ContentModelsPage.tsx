@@ -68,7 +68,7 @@ export default function ContentModelsPage() {
                     <div className="mt-1 truncate text-xs text-muted-foreground">{model.code}</div>
                   </div>
                   <div className="mt-2 text-xs text-muted-foreground">
-                    表：{model.source_table || '未绑定'} · 字段 {model.fields.length} 个
+                    表：{model.source_table || '未绑定'} · 字段 {model.fields.length} 个 · 栏目 {model.bound_column_count || 0} 个
                   </div>
                 </button>
               ))}
@@ -87,107 +87,126 @@ export default function ContentModelsPage() {
                 <div className="flex gap-2">
                   <Badge variant="outline">{selectedModel.code}</Badge>
                   <Badge variant="outline">{selectedModel.fields.length} 字段</Badge>
+                  <Badge variant="outline">{selectedModel.bound_column_count || 0} 栏目</Badge>
                 </div>
               )}
             </div>
           </CardHeader>
           <CardContent>
             {selectedModel ? (
-              <div className="rounded border">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>字段</TableHead>
-                      <TableHead>显示名</TableHead>
-                      <TableHead>字段类型</TableHead>
-                      <TableHead>数据库类型</TableHead>
-                      <TableHead>翻译</TableHead>
-                      <TableHead>列表</TableHead>
-                      <TableHead>编辑</TableHead>
-                      <TableHead>属性</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {selectedModel.fields.map((field) => (
-                      <TableRow key={field.id}>
-                        <TableCell className="font-mono text-xs">{field.field_name}</TableCell>
-                        <TableCell>{field.field_label}</TableCell>
-                        <TableCell><Badge variant="outline">{formatFieldType(field.field_type)}</Badge></TableCell>
-                        <TableCell className="font-mono text-xs text-muted-foreground">{field.db_type || '-'}</TableCell>
-                        <TableCell>
-                          <Select
-                            value={String(field.is_translatable ?? 0)}
-                            disabled={field.is_primary === 1 || isProtectedField(field.field_name) || updateFieldMutation.isPending}
-                            onValueChange={(value) => {
-                              updateFieldMutation.mutate({
-                                modelId: selectedModel.id,
-                                fieldName: field.field_name,
-                                patch: buildFieldPatch(field, { is_translatable: Number.parseInt(value, 10) }),
-                              })
-                            }}
-                          >
-                            <SelectTrigger className="w-20">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="1">是</SelectItem>
-                              <SelectItem value="0">否</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <Select
-                            value={String(field.is_listed ?? 1)}
-                            disabled={updateFieldMutation.isPending}
-                            onValueChange={(value) => {
-                              updateFieldMutation.mutate({
-                                modelId: selectedModel.id,
-                                fieldName: field.field_name,
-                                patch: buildFieldPatch(field, { is_listed: Number.parseInt(value, 10) }),
-                              })
-                            }}
-                          >
-                            <SelectTrigger className="w-20">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="1">显示</SelectItem>
-                              <SelectItem value="0">隐藏</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <Select
-                            value={String(field.is_editable ?? 1)}
-                            disabled={field.is_primary === 1 || updateFieldMutation.isPending}
-                            onValueChange={(value) => {
-                              updateFieldMutation.mutate({
-                                modelId: selectedModel.id,
-                                fieldName: field.field_name,
-                                patch: buildFieldPatch(field, { is_editable: Number.parseInt(value, 10) }),
-                              })
-                            }}
-                          >
-                            <SelectTrigger className="w-20">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="1">可编辑</SelectItem>
-                              <SelectItem value="0">只读</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1 items-center">
-                            {field.is_primary ? <Badge>主键</Badge> : null}
-                            {field.is_required ? <Badge variant="outline">必填</Badge> : null}
-                            {isProtectedField(field.field_name) ? <Badge variant="outline">结构字段</Badge> : null}
-                          </div>
-                        </TableCell>
+              <div className="space-y-4">
+                <div className="rounded border p-4">
+                  <div className="mb-3 font-medium">已绑定栏目</div>
+                  {selectedModel.bound_columns && selectedModel.bound_columns.length > 0 ? (
+                    <div className="flex flex-wrap gap-2">
+                      {selectedModel.bound_columns.map((column) => (
+                        <Badge key={column.id} variant="secondary" className="gap-1">
+                          <span>#{column.id}</span>
+                          <span>{column.source_type}</span>
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-muted-foreground">当前还没有栏目绑定这个模型。</div>
+                  )}
+                </div>
+
+                <div className="rounded border">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>字段</TableHead>
+                        <TableHead>显示名</TableHead>
+                        <TableHead>字段类型</TableHead>
+                        <TableHead>数据库类型</TableHead>
+                        <TableHead>翻译</TableHead>
+                        <TableHead>列表</TableHead>
+                        <TableHead>编辑</TableHead>
+                        <TableHead>属性</TableHead>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                    </TableHeader>
+                    <TableBody>
+                      {selectedModel.fields.map((field) => (
+                        <TableRow key={field.id}>
+                          <TableCell className="font-mono text-xs">{field.field_name}</TableCell>
+                          <TableCell>{field.field_label}</TableCell>
+                          <TableCell><Badge variant="outline">{formatFieldType(field.field_type)}</Badge></TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground">{field.db_type || '-'}</TableCell>
+                          <TableCell>
+                            <Select
+                              value={String(field.is_translatable ?? 0)}
+                              disabled={field.is_primary === 1 || isProtectedField(field.field_name) || updateFieldMutation.isPending}
+                              onValueChange={(value) => {
+                                updateFieldMutation.mutate({
+                                  modelId: selectedModel.id,
+                                  fieldName: field.field_name,
+                                  patch: buildFieldPatch(field, { is_translatable: Number.parseInt(value, 10) }),
+                                })
+                              }}
+                            >
+                              <SelectTrigger className="w-20">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="1">是</SelectItem>
+                                <SelectItem value="0">否</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={String(field.is_listed ?? 1)}
+                              disabled={updateFieldMutation.isPending}
+                              onValueChange={(value) => {
+                                updateFieldMutation.mutate({
+                                  modelId: selectedModel.id,
+                                  fieldName: field.field_name,
+                                  patch: buildFieldPatch(field, { is_listed: Number.parseInt(value, 10) }),
+                                })
+                              }}
+                            >
+                              <SelectTrigger className="w-20">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="1">显示</SelectItem>
+                                <SelectItem value="0">隐藏</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={String(field.is_editable ?? 1)}
+                              disabled={field.is_primary === 1 || updateFieldMutation.isPending}
+                              onValueChange={(value) => {
+                                updateFieldMutation.mutate({
+                                  modelId: selectedModel.id,
+                                  fieldName: field.field_name,
+                                  patch: buildFieldPatch(field, { is_editable: Number.parseInt(value, 10) }),
+                                })
+                              }}
+                            >
+                              <SelectTrigger className="w-20">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="1">可编辑</SelectItem>
+                                <SelectItem value="0">只读</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex flex-wrap gap-1 items-center">
+                              {field.is_primary ? <Badge>主键</Badge> : null}
+                              {field.is_required ? <Badge variant="outline">必填</Badge> : null}
+                              {isProtectedField(field.field_name) ? <Badge variant="outline">结构字段</Badge> : null}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
               </div>
             ) : (
               <div className="rounded border p-8 text-center text-muted-foreground">暂无模型</div>

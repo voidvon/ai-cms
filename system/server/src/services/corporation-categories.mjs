@@ -43,11 +43,6 @@ export function updateCorporationCategory(id, input) {
   return updateColumnCategory('corporation', id, input);
 }
 
-export function updateCorporationCategoryContent(id, contentHtml) {
-  ensureCorporationCategoriesSchema();
-  return updateColumnCategory('corporation', id, { content_html: contentHtml });
-}
-
 export function deleteCorporationCategory(id) {
   ensureCorporationCategoriesSchema();
   return deleteColumnCategory('corporation', id);

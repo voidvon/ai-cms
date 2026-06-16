@@ -11,6 +11,7 @@ import {
 } from './columns.mjs';
 import { queryOne } from '../db.mjs';
 import { getDefaultLanguage } from './languages.mjs';
+import { getContentModelByCode } from './content-models.mjs';
 
 function toInteger(value, fallback = 0) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
@@ -27,19 +28,20 @@ function toNullableString(value) {
 
 function getCategoryConfig(model) {
   if (model === 'product') {
-    return { modelCode: 'product', sourceType: 'product_category', rootSourceType: 'product_root' };
+    return { modelCode: 'product', sourceType: 'product_category', rootSourceType: 'product_root', contentModelCode: 'product' };
   }
   if (model === 'news') {
-    return { modelCode: 'news', sourceType: 'news_category', rootSourceType: null };
+    return { modelCode: 'news', sourceType: 'news_category', rootSourceType: null, contentModelCode: 'news' };
   }
   if (model === 'corporation') {
-    return { modelCode: 'corporation', sourceType: 'corporation_category', rootSourceType: 'corporation_root' };
+    return { modelCode: 'corporation', sourceType: 'corporation_category', rootSourceType: 'corporation_root', contentModelCode: null };
   }
   throw new Error(`unsupported model: ${model}`);
 }
 
 function mapColumnToCategory(column, rootColumn = null) {
   const parentId = toInteger(column.parent_id, 0);
+  const translations = column.translations || {};
   const mapped = {
     id: toInteger(column.id, 0),
     column_id: toInteger(column.id, 0),
@@ -50,14 +52,20 @@ function mapColumnToCategory(column, rootColumn = null) {
       : parentId,
     sort_order: toInteger(column.sort_order, 0),
     slug: column.slug || null,
-    content_html: column.content_html || '',
-    seo_title: column.seo_title || null,
-    seo_keywords: column.seo_keywords || null,
-    seo_description: column.seo_description || null,
+    summary: column.summary ?? '',
+    content_html: column.content_html ?? '',
+    keywords: column.keywords ?? null,
+    seo_title: column.seo_title ?? null,
+    seo_keywords: column.seo_keywords ?? null,
+    seo_description: column.seo_description ?? null,
+    publish_status: column.publish_status ?? 'published',
+    published_at: column.published_at ?? null,
+    is_visible: toInteger(column.is_visible, 1),
+    is_featured_home: toInteger(column.is_featured_home, 0),
     legacy_extra: column.legacy_extra || null,
     page_data: column.page_data || null,
     current_language_code: column.current_language_code,
-    translations: column.translations || {}
+    translations
   };
 
   if (String(column.model_code || '') === 'corporation') {
@@ -155,10 +163,14 @@ export function createColumnCategory(model, input) {
   const translations = input?.translations || {
     [defaultLanguageCode]: {
       name: String(input?.name || '').trim(),
+      summary: String(input?.summary || ''),
+      keywords: toNullableString(input?.keywords),
       seo_title: toNullableString(input?.seo_title),
       seo_keywords: toNullableString(input?.seo_keywords),
       seo_description: toNullableString(input?.seo_description),
-      content_html: String(input?.content_html || '')
+      content_html: String(input?.content_html || ''),
+      publish_status: String(input?.publish_status || 'published') === 'draft' ? 'draft' : 'published',
+      published_at: toNullableString(input?.published_at)
     }
   };
   const defaultTranslation = translations[defaultLanguageCode] || Object.values(translations)[0];
@@ -166,6 +178,9 @@ export function createColumnCategory(model, input) {
     'SELECT COALESCE(MAX(source_id), 0) + 1 AS value FROM columns WHERE source_type = ?',
     [config.sourceType]
   )?.value;
+  const contentModelId = config.contentModelCode
+    ? Number(getContentModelByCode(config.contentModelCode)?.id || 0) || null
+    : null;
 
   const column = createManualColumn({
     base: {
@@ -176,6 +191,7 @@ export function createColumnCategory(model, input) {
       node_type: 'category',
       column_kind: 'single',
       content_type: config.modelCode,
+      content_model_id: contentModelId,
       route_path: model === 'corporation' ? `/about/about-${toInteger(sourceId, 1)}.html` : `/__internal/${config.modelCode}/${toInteger(sourceId, 1)}/`,
       sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
       show_in_nav: 1,
@@ -188,6 +204,7 @@ export function createColumnCategory(model, input) {
   if (model !== 'corporation') {
     updateColumnRecord(column.id, {
       parent_id: parentColumnId,
+      content_model_id: contentModelId,
       sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
       show_in_nav: 1,
       translations
@@ -196,6 +213,7 @@ export function createColumnCategory(model, input) {
     updateManualColumn(column.id, {
       base: {
         parent_id: parentColumnId,
+        content_model_id: contentModelId,
         sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
         route_path: `/about/about-${column.id}.html`,
         show_in_nav: 1,
@@ -218,12 +236,17 @@ export function updateColumnCategory(model, id, input) {
   }
   const parentColumnId = resolveParentColumnId(model, input?.base?.parent_id ?? input?.parent_id);
   const existingTranslations = column.translations || {};
-  const translations = input?.translations || existingTranslations;
+  const translations = normalizeCategoryTranslations(input, existingTranslations, column);
+  const config = getCategoryConfig(model);
+  const contentModelId = config.contentModelCode
+    ? Number(getContentModelByCode(config.contentModelCode)?.id || 0) || null
+    : null;
 
   if (model === 'corporation') {
     updateManualColumn(column.id, {
       base: {
         parent_id: parentColumnId,
+        content_model_id: contentModelId,
         route_path: `/about/about-${column.id}.html`,
         slug: toNullableString(input?.base?.slug ?? input?.slug ?? column.slug),
         legacy_extra: input?.base?.legacy_extra ?? input?.legacy_extra ?? column.legacy_extra ?? null,
@@ -239,6 +262,7 @@ export function updateColumnCategory(model, id, input) {
   } else {
     updateColumnRecord(column.id, {
       parent_id: parentColumnId,
+      content_model_id: contentModelId,
       sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order ?? column.sort_order, 0),
       show_in_nav: toInteger(input?.base?.show_in_nav ?? column.show_in_nav, 1),
       translations
@@ -275,4 +299,30 @@ function toBooleanInt(value, fallback = 0) {
     return 0;
   }
   return toInteger(value, fallback) === 0 ? 0 : 1;
+}
+
+function normalizeCategoryTranslations(input, existingTranslations, column) {
+  if (input?.translations) {
+    return input.translations;
+  }
+
+  const defaultLanguageCode = getDefaultLanguage()?.code || 'zh-CN';
+  const fallbackTranslation = existingTranslations?.[defaultLanguageCode] || Object.values(existingTranslations || {})[0] || {};
+  return {
+    ...existingTranslations,
+    [defaultLanguageCode]: {
+      ...fallbackTranslation,
+      name: String(input?.name ?? fallbackTranslation.name ?? column?.name ?? '').trim(),
+      summary: String(input?.summary ?? fallbackTranslation.summary ?? column?.summary ?? ''),
+      content_html: String(input?.content_html ?? fallbackTranslation.content_html ?? column?.content_html ?? ''),
+      keywords: toNullableString(input?.keywords ?? fallbackTranslation.keywords ?? column?.keywords),
+      seo_title: toNullableString(input?.seo_title ?? fallbackTranslation.seo_title ?? column?.seo_title),
+      seo_keywords: toNullableString(input?.seo_keywords ?? fallbackTranslation.seo_keywords ?? column?.seo_keywords),
+      seo_description: toNullableString(input?.seo_description ?? fallbackTranslation.seo_description ?? column?.seo_description),
+      publish_status: String(input?.publish_status ?? fallbackTranslation.publish_status ?? column?.publish_status ?? 'published') === 'draft'
+        ? 'draft'
+        : 'published',
+      published_at: toNullableString(input?.published_at ?? fallbackTranslation.published_at ?? column?.published_at)
+    }
+  };
 }

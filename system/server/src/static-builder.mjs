@@ -594,6 +594,7 @@ function getLegacyTemplateContext(languageCode = null) {
     languageCode,
     columns,
     publicSections,
+    newsEntries: listNews({ limit: 10000, languageCode }),
     corporationCategories: listColumnCategories('corporation', { languageCode }).slice().sort(compareCategoryOrder),
     productCategories,
     newsCategories
@@ -631,7 +632,10 @@ function buildLegacyCommonProps(templateContext) {
   });
 
   // 构建siteColumns用于header导航（保留原始的顶级栏目结构）
-  const siteColumns = buildLegacySiteColumns(templateContext.columns, { productCategories: templateContext.productCategories });
+  const siteColumns = buildLegacySiteColumns(templateContext.columns, {
+    productCategories: templateContext.productCategories,
+    newsEntries: templateContext.newsEntries
+  });
   
   // 构建footer专用的栏目结构（展开产品分类）
   const footerColumns = [];
@@ -868,7 +872,7 @@ function buildHeaderPrefixChildren(rows, rootPath, activeColumnId) {
     }));
 }
 
-function buildHeaderSectionChildren(rows, section, activeColumnId) {
+function buildHeaderSectionChildren(rows, section, activeColumnId, { newsEntries = [] } = {}) {
   if (!section) {
     return [];
   }
@@ -900,20 +904,20 @@ function buildHeaderSectionChildren(rows, section, activeColumnId) {
     return categoryChildren;
   }
 
-  return visibleRows
-    .filter((item) => item.parentId === serviceRootId)
-    .filter((item) => item.sourceType === 'news_item')
+  return newsEntries
+    .filter((item) => normalizeInteger(item?.column_id, 0) === serviceRootId)
     .sort(compareHeaderNavEntries)
     .map((item) => ({
       id: item.id,
-      name: item.name,
-      parentId: item.parentId,
-      modelCode: item.modelCode,
-      sourceType: item.sourceType,
-      sourceId: item.sourceId,
-      active: activeColumnId !== 0 && item.id === activeColumnId,
-      openInNewTab: item.openInNewTab,
+      name: item.title || item.name || '',
+      parentId: normalizeInteger(item.column_id, 0),
+      modelCode: 'news',
+      sourceType: 'news_item',
+      sourceId: item.id,
+      active: false,
+      openInNewTab: 0,
       showInNav: 1,
+      sortOrder: normalizeInteger(item.sort_order, 0),
       url: `/${section.dirName}/detail/${item.id}.html`
     }));
 }
@@ -996,7 +1000,9 @@ function buildLegacySiteColumns(columns, options = {}) {
     }),
     buildHeaderNavItem(serviceRoot, {
       name: '服务',
-      children: buildHeaderSectionChildren(normalizedRows, serviceSection, activeColumnId)
+      children: buildHeaderSectionChildren(normalizedRows, serviceSection, activeColumnId, {
+        newsEntries: options.newsEntries
+      })
     }),
     buildHeaderNavItem(findByUrl('/training/'), {
       name: '培训',
@@ -1004,7 +1010,9 @@ function buildLegacySiteColumns(columns, options = {}) {
     }),
     buildHeaderNavItem(newsRoot, {
       name: '公司新闻',
-      children: buildHeaderSectionChildren(normalizedRows, newsSection, activeColumnId)
+      children: buildHeaderSectionChildren(normalizedRows, newsSection, activeColumnId, {
+        newsEntries: options.newsEntries
+      })
     })
   ].filter(Boolean);
 }
@@ -1014,6 +1022,10 @@ function buildLegacyColumnUrl(column, rowsById = new Map()) {
 }
 
 function buildLegacyContactPageProps(templateContext) {
+  const contactColumn = templateContext.columns.find((item) => String(item.source_type || '') === 'contact_page') || null;
+  const contactPage = contactColumn
+    ? resolveDedicatedColumnPageContent(contactColumn, templateContext.languageCode)
+    : null;
   const pageTitleBase = templateContext.site.seo_organization_name || templateContext.site.company_name || templateContext.site.web_name || '';
   return {
     ...buildLegacyCommonProps(templateContext),
@@ -1025,10 +1037,10 @@ function buildLegacyContactPageProps(templateContext) {
       breadcrumbItems: [{ label: '联系我们' }],
       breadcrumbOptions: { separatorHtml: ' &gt;&gt; ' }
     }),
-    contactTableHtml: '',
+    contactTableHtml: normalizeLegacyRichTextHtml(contactPage?.content_html, templateContext.site) || '',
     seoMeta: buildSeoMeta({
-      title: pageTitleBase ? `联系我们 | ${pageTitleBase}` : '联系我们',
-      description: templateContext.site.seo_default_description || templateContext.site.company_address || templateContext.site.company_phone || pageTitleBase || '联系我们',
+      title: contactPage?.seo_title || (pageTitleBase ? `联系我们 | ${pageTitleBase}` : '联系我们'),
+      description: contactPage?.seo_description || contactPage?.summary || templateContext.site.seo_default_description || templateContext.site.company_address || templateContext.site.company_phone || pageTitleBase || '联系我们',
       url: '/contact.html',
       site: templateContext.site
     }),
@@ -1043,6 +1055,7 @@ function buildLegacyContentPageProps(templateContext, item) {
   const parentCategory = templateContext.corporationCategories.find((entry) => normalizeInteger(entry.id, 0) === normalizeInteger(item.parent_id, 0)) || null;
   const pageUrl = `/about/about-${normalizeInteger(item.id, 0)}.html`;
   const pageTitleBase = templateContext.site.seo_organization_name || templateContext.site.company_name || templateContext.site.web_name || '';
+  const pageContent = resolveDedicatedColumnPageContent(item, templateContext.languageCode);
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
@@ -1065,11 +1078,11 @@ function buildLegacyContentPageProps(templateContext, item) {
       breadcrumbOptions: { separatorHtml: ' &gt;&gt; ' }
     }),
     title: item.name || '',
-    contentHtml: normalizeLegacyRichTextHtml(item.content_html, templateContext.site) || '',
+    contentHtml: normalizeLegacyRichTextHtml(pageContent?.content_html, templateContext.site) || '',
     secondaryMenuItems: buildLegacyCorporationMenuItems(templateContext.corporationCategories, normalizeInteger(item.id, 0)),
     seoMeta: buildSeoMeta({
-      title: item.seo_title || (item.name && pageTitleBase ? `${item.name} | ${pageTitleBase}` : item.name || pageTitleBase),
-      description: item.seo_description || item.summary || templateContext.site.seo_default_description || item.name || '',
+      title: pageContent?.seo_title || (item.name && pageTitleBase ? `${item.name} | ${pageTitleBase}` : item.name || pageTitleBase),
+      description: pageContent?.seo_description || pageContent?.summary || templateContext.site.seo_default_description || item.name || '',
       url: pageUrl,
       site: templateContext.site
     }),
@@ -1083,6 +1096,7 @@ function buildLegacyContentPageProps(templateContext, item) {
 function buildLegacySingleColumnPageProps(templateContext, column) {
   const url = buildLegacyColumnUrl(column, templateContext.publicSections);
   const columnPageData = normalizeLegacyCategoryPageData(column?.page_data);
+  const pageContent = resolveDedicatedColumnPageContent(column, templateContext.languageCode);
   const categoryChain = buildTemplateCategoryChain({
     category: column,
     categories: templateContext.columns.filter((item) => String(item.source_type || '') === 'single_page'),
@@ -1103,21 +1117,22 @@ function buildLegacySingleColumnPageProps(templateContext, column) {
       breadcrumbOptions: { separatorHtml: ' &gt;&gt; ' }
     }),
     siteColumns: buildLegacySiteColumns(templateContext.columns, {
-      activeColumnId: normalizeInteger(column.id, 0)
+      activeColumnId: normalizeInteger(column.id, 0),
+      newsEntries: templateContext.newsEntries
     }),
     title: column.name || '',
     pageData: columnPageData,
     currentCategoryPageData: columnPageData,
     currentCategoryHeroImage: columnPageData?.mastheadImage || '',
-    contentHtml: normalizeLegacyRichTextHtml(column.content_html, templateContext.site) || '',
-    bodyHtml: normalizeLegacyRichTextHtml(column.content_html, templateContext.site) || '',
-    newsDescription: column.seo_description || '',
-    newsKeywords: column.seo_keywords || '',
-    keywords: column.seo_keywords || '',
-    description: column.seo_description || '',
+    contentHtml: normalizeLegacyRichTextHtml(pageContent?.content_html, templateContext.site) || '',
+    bodyHtml: normalizeLegacyRichTextHtml(pageContent?.content_html, templateContext.site) || '',
+    newsDescription: pageContent?.seo_description || '',
+    newsKeywords: pageContent?.seo_keywords || '',
+    keywords: pageContent?.seo_keywords || '',
+    description: pageContent?.seo_description || '',
     seoMeta: buildSeoMeta({
-      title: column.seo_title || buildSectionSeoTitle(column.name, templateContext.site),
-      description: column.seo_description || columnPageData?.summary || templateContext.site.seo_default_description || column.name || '',
+      title: pageContent?.seo_title || buildSectionSeoTitle(column.name, templateContext.site),
+      description: pageContent?.seo_description || pageContent?.summary || columnPageData?.summary || templateContext.site.seo_default_description || column.name || '',
       url,
       image: columnPageData?.mastheadImage || columnPageData?.heroImage || '',
       site: templateContext.site
@@ -1130,6 +1145,7 @@ function buildLegacySingleColumnPageProps(templateContext, column) {
 }
 
 function buildLegacyProductListPageProps({ templateContext, category, parent, children, pageItems, pageNumber, pageCount, totalRecords, categoryMap = null }) {
+  const categoryPageContent = resolveDedicatedColumnPageContent(category, templateContext.languageCode);
   const rootLevelCategories = templateContext.productCategories.filter((item) => normalizeInteger(item.parent_id, 0) === 0);
   const fileStem = normalizeInteger(category.id, 0) === 0 ? 'index' : String(category.id);
   const categoryUrl = normalizeInteger(category?.id, 0) === 0
@@ -1206,7 +1222,7 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
     }
   }
 
-  const normalizedCategoryBodyHtml = normalizeLegacyRichTextHtml(category?.content_html, templateContext.site) || '';
+  const normalizedCategoryBodyHtml = normalizeLegacyRichTextHtml(categoryPageContent?.content_html, templateContext.site) || '';
   const enrichedCategoryBody = buildLegacyProductSectionNavigation(normalizedCategoryBodyHtml);
 
   return {
@@ -1236,7 +1252,7 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
     secondaryMenuItems: productNavigation.items,
     secondaryMenuTitle: productNavigation.title,
     secondaryMenuParentUrl: productNavigation.parentUrl,
-    currentCategoryDescription: normalizeRenderableLegacyText(category.seo_description),
+    currentCategoryDescription: normalizeRenderableLegacyText(categoryPageContent?.seo_description),
     currentCategoryPageData: categoryPageData,
     currentCategoryHeroImage: categoryPageData?.mastheadImage || '',
     pageData: categoryPageData,
@@ -1262,10 +1278,10 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
           summary: child.seo_description || ''
         })),
     pagerHtml: buildLegacyProductPager(fileStem, pageNumber, pageCount, totalRecords),
-    prodKeywords: category.seo_keywords || category.name || '',
+    prodKeywords: categoryPageContent?.seo_keywords || category.name || '',
     seoMeta: buildSeoMeta({
-      title: category.seo_title || buildSectionSeoTitle(category.name || '产品', templateContext.site),
-      description: category.seo_description || categoryPageData?.summary || templateContext.site.seo_default_description || category.name || '',
+      title: categoryPageContent?.seo_title || buildSectionSeoTitle(category.name || '产品', templateContext.site),
+      description: categoryPageContent?.seo_description || categoryPageContent?.summary || categoryPageData?.summary || templateContext.site.seo_default_description || category.name || '',
       url: categoryUrl,
       image: categoryPageData?.mastheadImage || categoryPageData?.heroImage || category.primary_image || '',
       site: templateContext.site
@@ -2050,6 +2066,13 @@ function normalizeLegacyCategoryPageData(value) {
     promo: value.promo && typeof value.promo === 'object' ? value.promo : null,
     spotlight: value.spotlight && typeof value.spotlight === 'object' ? value.spotlight : null
   };
+}
+
+function resolveDedicatedColumnPageContent(column, languageCode = null) {
+  if (!column) {
+    return null;
+  }
+  return column;
 }
 
 function normalizeLegacyLooseParagraphs(value) {

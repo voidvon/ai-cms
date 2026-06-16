@@ -246,6 +246,16 @@ export interface ContentModel {
   description?: string;
   is_system: number;
   sort_order: number;
+  bound_column_count?: number;
+  bound_columns?: Array<{
+    id: number;
+    parent_id?: number | null;
+    model_code: string;
+    source_type: string;
+    column_kind: string;
+    route_path?: string | null;
+    sort_order: number;
+  }>;
   fields: ContentModelField[];
   created_at?: string;
   updated_at?: string;
@@ -256,6 +266,7 @@ export interface Column {
   name: string;
   parent_id?: number | null;
   model_code: 'product' | 'news' | 'corporation' | 'page' | 'link' | string;
+  content_model_id?: number | null;
   source_type: 'product_root' | 'product_category' | 'news_category' | 'corporation_root' | 'corporation_category' | 'contact_page' | 'custom_link' | 'single_page' | string;
   source_id: number;
   column_kind: 'category' | 'link' | 'single' | string;

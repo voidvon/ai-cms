@@ -1,23 +1,37 @@
 import {
-  createContentColumn,
-  deleteContentColumn,
-  getContentColumnById,
-  listContentColumns,
-  listContentColumnsPaged,
-  ensureColumnsSchema,
-  updateContentColumn
+  ensureColumnsSchema
 } from './columns.mjs';
+import {
+  createContentEntry,
+  deleteContentEntry,
+  getContentEntryById,
+  listContentEntries,
+  listContentEntriesPaged,
+  migrateLegacyContentNodesToModelTables,
+  updateContentEntry
+} from './content-entries.mjs';
+import { ensureContentModelStorageSchema } from './content-model-storage.mjs';
+
+let schemaEnsured = false;
 
 export function ensureNewsSchema() {
+  if (schemaEnsured) {
+    return;
+  }
   ensureColumnsSchema();
+  ensureContentModelStorageSchema();
+  migrateLegacyContentNodesToModelTables('news');
+  schemaEnsured = true;
 }
 
 export function listNews({ featured = false, limit = 20, languageCode = null } = {}) {
   ensureNewsSchema();
-  return listContentColumns('news', { languageCode, visibleOnly: true })
-    .filter((item) => (!featured || Number(item.is_featured_home || 0) === 1))
-    .sort(compareByCreatedDesc)
-    .slice(0, clampLimit(limit));
+  return listContentEntries('news', {
+    featured,
+    visibleOnly: true,
+    limit,
+    languageCode
+  }).sort(compareByCreatedDesc);
 }
 
 export function listNewsAdmin({
@@ -29,7 +43,7 @@ export function listNewsAdmin({
   languageCode = null
 } = {}) {
   ensureNewsSchema();
-  const result = listContentColumnsPaged('news', {
+  const result = listContentEntriesPaged('news', {
     page,
     limit,
     columnId: columnId ?? categoryId,
@@ -43,7 +57,7 @@ export function listNewsAdmin({
 
 export function getNewsById(id, { languageCode = null, includeTranslations = false, includeTranslationStatuses = false } = {}) {
   ensureNewsSchema();
-  return getContentColumnById('news', id, {
+  return getContentEntryById('news', id, {
     languageCode,
     includeTranslations,
     includeTranslationStatuses
@@ -52,17 +66,17 @@ export function getNewsById(id, { languageCode = null, includeTranslations = fal
 
 export function createNews(input) {
   ensureNewsSchema();
-  return createContentColumn('news', input);
+  return createContentEntry('news', input);
 }
 
 export function updateNews(id, input) {
   ensureNewsSchema();
-  return updateContentColumn('news', id, input);
+  return updateContentEntry('news', id, input);
 }
 
 export function deleteNews(id) {
   ensureNewsSchema();
-  return deleteContentColumn('news', id);
+  return deleteContentEntry('news', id);
 }
 
 function clampLimit(limit) {

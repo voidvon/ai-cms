@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { corporationCategoriesApi, templateVariantsApi, templatesApi } from '@/api/advanced'
+import { contentModelsApi, corporationCategoriesApi, templateVariantsApi, templatesApi } from '@/api/advanced'
 import { columnsApi } from '@/api/columns'
 import { languagesApi } from '@/api/languages'
 import { newsApi } from '@/api/news'
@@ -44,7 +44,7 @@ import NewsFormDialog from '@/components/NewsFormDialog'
 import ProductCategoryFormDialog from '@/components/ProductCategoryFormDialog'
 import ProductFormDialog from '@/components/ProductFormDialog'
 import { toast } from 'sonner'
-import type { Column, News, Product, Template, TemplateBinding } from '@/types'
+import type { Column, ContentModel, News, Product, Template, TemplateBinding } from '@/types'
 
 const DEFAULT_TEMPLATE_VALUE = '__default__'
 
@@ -181,6 +181,11 @@ export default function ColumnsPage() {
     queryKey: ['template-bindings', selectedThemeId ?? 0],
     queryFn: () => templatesApi.listBindings(selectedThemeId),
     enabled: (manualColumnDialogOpen || Boolean(bindingCategoryTarget)) && Boolean(selectedThemeId),
+  })
+  const { data: contentModelsData } = useQuery({
+    queryKey: ['content-models'],
+    queryFn: () => contentModelsApi.list(),
+    enabled: true,
   })
 
   const columns = columnsData?.data || []
@@ -389,6 +394,7 @@ export default function ColumnsPage() {
   const updateSystemColumnMutation = useMutation({
     mutationFn: ({ id, value }: { id: number; value: ManualColumnFormValue }) => columnsApi.update(id, value.base.show_in_nav !== undefined ? {
       parent_id: value.base.parent_id,
+      content_model_id: value.base.content_model_id,
       sort_order: value.base.sort_order,
       show_in_nav: value.base.show_in_nav,
       translations: value.translations,
@@ -428,6 +434,7 @@ export default function ColumnsPage() {
   const pageTitle = selectedColumn?.name || '栏目'
   const templates = templatesData?.data || []
   const bindings = bindingsData?.data || []
+  const contentModels = contentModelsData?.data || []
   const listTemplates = templates.filter((template: Template) => template.type === 'list')
   const contentTemplates = templates.filter((template: Template) => template.type === 'content')
   const selectedCategoryBindings = selectedColumn
@@ -800,6 +807,7 @@ export default function ColumnsPage() {
             <CategoryDetailPanel
               column={selectedColumn}
               bindings={selectedCategoryBindings}
+              contentModels={contentModels}
               selectedThemeId={selectedThemeId}
             />
           ) : null}
@@ -1005,6 +1013,7 @@ export default function ColumnsPage() {
         initialKind={manualColumnDialogKind}
         forceBasicOnly={Boolean(editingColumnTarget)}
         columns={columns}
+        contentModels={contentModels}
         templates={contentTemplates}
         initialTemplateId={selectedManualColumnBinding?.template_id ? String(selectedManualColumnBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
         submitting={createManualColumnMutation.isPending || updateManualColumnMutation.isPending || updateSystemColumnMutation.isPending}
@@ -1326,10 +1335,12 @@ function ManualColumnPanel({
 function CategoryDetailPanel({
   column,
   bindings,
+  contentModels,
   selectedThemeId,
 }: {
   column: Column
   bindings: TemplateBinding[]
+  contentModels: ContentModel[]
   selectedThemeId?: number
 }) {
   const target = getCategoryTreeTarget(column)
@@ -1342,6 +1353,10 @@ function CategoryDetailPanel({
       : `栏目ID ${column.id || '-'}`
   const seoSummary = column.seo_description?.trim() || '-'
   const seoKeywords = column.seo_keywords?.trim() || '-'
+  const boundModel = contentModels.find((item) => item.id === column.content_model_id)
+  const modelBindingText = boundModel
+    ? `${boundModel.name} (#${boundModel.id})`
+    : (column.content_model_id ? `#${column.content_model_id}` : '未绑定')
 
   return (
     <Card className="mb-4">
@@ -1358,6 +1373,7 @@ function CategoryDetailPanel({
           <div className="text-muted-foreground">路径与来源</div>
           <div className="break-all">{detailText}</div>
           <div>模型：{column.model_code || '-'}</div>
+          <div>模型绑定：{modelBindingText}</div>
           <div>来源类型：{column.source_type || '-'}</div>
           {target ? <div>栏目ID：{target.id}</div> : null}
         </div>
@@ -1453,11 +1469,6 @@ function sortColumnTree(nodes: ColumnTreeNode[]) {
 }
 
 function compareColumnTreeNodes(a: ColumnTreeNode, b: ColumnTreeNode) {
-  const childPriority = Number(b.children.length > 0) - Number(a.children.length > 0)
-  if (childPriority !== 0) {
-    return childPriority
-  }
-
   const sortPriority = (a.sort_order || 0) - (b.sort_order || 0)
   if (sortPriority !== 0) {
     return sortPriority

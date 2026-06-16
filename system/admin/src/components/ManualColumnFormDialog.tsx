@@ -9,12 +9,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
-import type { Column, ColumnTranslation, Template } from '@/types'
+import type { Column, ColumnTranslation, ContentModel, Template } from '@/types'
 
 export interface ManualColumnFormValue {
   base: {
     parent_id: number
     column_kind: 'link' | 'single'
+    content_model_id: number
     custom_url: string
     route_path: string
     open_in_new_tab: number
@@ -32,6 +33,7 @@ interface ManualColumnFormDialogProps {
   initialKind?: 'link' | 'single'
   forceBasicOnly?: boolean
   columns: Column[]
+  contentModels: ContentModel[]
   templates: Template[]
   initialTemplateId: string
   submitting: boolean
@@ -48,6 +50,7 @@ export default function ManualColumnFormDialog({
   initialKind = 'link',
   forceBasicOnly = false,
   columns,
+  contentModels,
   templates,
   initialTemplateId,
   submitting,
@@ -57,6 +60,7 @@ export default function ManualColumnFormDialog({
   const [baseData, setBaseData] = useState<ManualColumnFormValue['base']>({
     parent_id: 0,
     column_kind: initialKind,
+    content_model_id: 0,
     custom_url: '',
     route_path: '',
     open_in_new_tab: 0,
@@ -86,6 +90,7 @@ export default function ManualColumnFormDialog({
       setBaseData({
         parent_id: Number(column.parent_id || 0),
         column_kind: column.column_kind === 'single' ? 'single' : 'link',
+        content_model_id: Number(column.content_model_id || 0),
         custom_url: column.custom_url || '',
         route_path: column.route_path || '',
         open_in_new_tab: Number(column.open_in_new_tab || 0),
@@ -101,6 +106,7 @@ export default function ManualColumnFormDialog({
     setBaseData({
       parent_id: 0,
       column_kind: initialKind,
+      content_model_id: 0,
       custom_url: '',
       route_path: '',
       open_in_new_tab: 0,
@@ -285,6 +291,28 @@ export default function ManualColumnFormDialog({
                     {parentOptions.map((item) => (
                       <SelectItem key={item.id} value={String(item.id)}>
                         {item.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>内容模型</Label>
+                <Select
+                  value={String(baseData.content_model_id)}
+                  onValueChange={(value) => setBaseData({ ...baseData, content_model_id: Number(value) })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">不绑定</SelectItem>
+                    {contentModels.map((model) => (
+                      <SelectItem key={model.id} value={String(model.id)}>
+                        {model.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
