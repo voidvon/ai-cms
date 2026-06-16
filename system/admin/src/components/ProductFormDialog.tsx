@@ -31,6 +31,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
   const [baseData, setBaseData] = useState({
     code: '',
     column_id: undefined as number | undefined,
+    custom_url: '',
     images: [] as string[],
     is_featured_home: 0,
     is_visible: 1,
@@ -76,6 +77,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
       setBaseData({
         code: source.code || '',
         column_id: source.column_id || undefined,
+        custom_url: source.custom_url || '',
         images: Array.isArray(source.images) ? source.images : [],
         is_featured_home: source.is_featured_home || 0,
         is_visible: source.is_visible || 1,
@@ -90,6 +92,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
       setBaseData({
         code: '',
         column_id: defaultColumnId,
+        custom_url: '',
         images: [],
         is_featured_home: 0,
         is_visible: 1,
@@ -299,6 +302,15 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
                 </Select>
               </div>
             ) : null}
+            <div className="space-y-2">
+              <Label htmlFor="custom_url">自定义文件名</Label>
+              <Input
+                id="custom_url"
+                value={baseData.custom_url}
+                onChange={(e) => setBaseData({ ...baseData, custom_url: e.target.value })}
+                placeholder="留空则按栏目规则生成，例如 abcd/index.html"
+              />
+            </div>
             {isFieldVisible(fieldMap, 'images') ? (
               <div className="space-y-2">
                 <Label htmlFor="images">{getFieldLabel(fieldMap, 'images', '产品图片')}</Label>

@@ -676,6 +676,9 @@ function buildMarkdownPath(publicPath) {
   if (publicPath === '/' || publicPath === '/index.html') {
     return '/index.md';
   }
+  if (String(publicPath || '').endsWith('/')) {
+    return `${publicPath}index.md`;
+  }
   return publicPath.replace(/\.html?$/i, '.md');
 }
 

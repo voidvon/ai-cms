@@ -280,14 +280,14 @@ export default function ProductCategoryFormDialog({
             <div className="space-y-2">
               <Label>内容页命名规则</Label>
               <Select
-                value={baseData.detail_rule || '{slug}/index.html'}
+                value={baseData.detail_rule || '{id}/index.html'}
                 onValueChange={(value) => setBaseData({ ...baseData, detail_rule: value })}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="{slug}/index.html">{'{slug}/index.html'}</SelectItem>
+                  <SelectItem value="{id}/index.html">{'{id}/index.html'}</SelectItem>
                   <SelectItem value="{id}.html">{'{id}.html'}</SelectItem>
                 </SelectContent>
               </Select>

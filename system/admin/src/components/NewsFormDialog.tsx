@@ -30,6 +30,7 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
   const [activeLanguage, setActiveLanguage] = useState('zh-CN')
   const [baseData, setBaseData] = useState({
     column_id: undefined as number | undefined,
+    custom_url: '',
     picture: '',
     is_featured_home: 0,
     created_at: '',
@@ -73,6 +74,7 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
     if (source && mode === 'edit') {
       setBaseData({
         column_id: source.column_id || undefined,
+        custom_url: source.custom_url || '',
         picture: source.picture || source.image || '',
         is_featured_home: source.is_featured_home || source.is_featured || 0,
         created_at: source.created_at || '',
@@ -85,6 +87,7 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
     if (mode === 'create') {
       setBaseData({
         column_id: defaultColumnId,
+        custom_url: '',
         picture: '',
         is_featured_home: 0,
         created_at: '',
@@ -281,6 +284,15 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
                 </Select>
               </div>
             ) : null}
+            <div className="space-y-2">
+              <Label htmlFor="custom_url">自定义文件名</Label>
+              <Input
+                id="custom_url"
+                value={baseData.custom_url}
+                onChange={(e) => setBaseData({ ...baseData, custom_url: e.target.value })}
+                placeholder="留空则按栏目规则生成，例如 abcd/index.html"
+              />
+            </div>
             {isFieldVisible(fieldMap, 'picture') ? (
               <div className="space-y-2">
                 <Label htmlFor="picture">{getFieldLabel(fieldMap, 'picture', '封面图片')}</Label>

@@ -1,4 +1,5 @@
 import { buildColumnTreeIndex } from './column-tree.mjs';
+import { resolveRelativePublicPath } from './column-paths.mjs';
 
 const SERVICE_SECTION_PATTERN = /(service|services|support|knowledge|learn|training|服务|知识|学习|培训)/i;
 const NEWS_SECTION_PATTERN = /(news|article|articles|insight|updates|新闻|资讯|动态)/i;
@@ -77,6 +78,7 @@ export function buildColumnPublicUrl(column, publicSections) {
   }
 
   const explicitRoutePath = String(column.route_path || '').trim();
+  const relativeCustomUrl = String(column.custom_url || '').trim();
   const sourceType = String(column.source_type || '');
   if (sourceType !== 'custom_link' && explicitRoutePath) {
     return explicitRoutePath;
@@ -107,9 +109,22 @@ export function buildColumnPublicUrl(column, publicSections) {
     return '/contact.html';
   }
   if (sourceType === 'custom_link') {
-    return String(column.custom_url || '').trim();
+    return resolveRelativePublicPath(relativeCustomUrl, resolveColumnParentPublicUrl(column, publicSections));
   }
   return '';
+}
+
+function resolveColumnParentPublicUrl(column, publicSections) {
+  const parentId = toInteger(column?.parent_id, 0);
+  if (parentId <= 0) {
+    return '/';
+  }
+  const parent = publicSections?.allById?.get(parentId) || null;
+  if (!parent) {
+    return '/';
+  }
+  const parentUrl = buildColumnPublicUrl(parent, publicSections);
+  return parentUrl || '/';
 }
 
 function findRootColumnId(columns, sourceType) {

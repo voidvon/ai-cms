@@ -10,7 +10,7 @@ export function getDb() {
     fs.mkdirSync(path.dirname(DATABASE_PATH), { recursive: true });
     database = new DatabaseSync(DATABASE_PATH);
     database.exec(`
-      PRAGMA foreign_keys = ON;
+      PRAGMA foreign_keys = OFF;
       PRAGMA journal_mode = WAL;
       PRAGMA synchronous = NORMAL;
     `);

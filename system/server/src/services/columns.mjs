@@ -3,6 +3,7 @@ import { ensureLanguagesSchema, getDefaultLanguage, listLanguages } from './lang
 import { ensureTemplatesSchema } from './templates.mjs';
 import { normalizeUploadedRelativePath } from './uploads.mjs';
 import { ensureContentModelsSchema, getContentModelById } from './content-models.mjs';
+import { resolveRelativePublicPath } from './column-paths.mjs';
 
 let schemaEnsured = false;
 
@@ -81,8 +82,7 @@ export function ensureColumnsSchema() {
       legacy_extra TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (source_type, source_id),
-      FOREIGN KEY (parent_id) REFERENCES columns(id) ON DELETE SET NULL
+      UNIQUE (source_type, source_id)
     );
 
     CREATE TABLE IF NOT EXISTS column_translations (
@@ -100,9 +100,7 @@ export function ensureColumnsSchema() {
       published_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (column_id, language_id),
-      FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE,
-      FOREIGN KEY (language_id) REFERENCES languages(id) ON DELETE CASCADE
+      UNIQUE (column_id, language_id)
     );
 
     CREATE INDEX IF NOT EXISTS idx_column_translations_column_id
@@ -130,7 +128,8 @@ export function ensureColumnsSchema() {
     CREATE INDEX IF NOT EXISTS idx_columns_source ON columns(source_type, source_id);
     CREATE INDEX IF NOT EXISTS idx_columns_visible_sort ON columns(is_visible, sort_order, id);
     CREATE INDEX IF NOT EXISTS idx_columns_dir_name ON columns(dir_name);
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_columns_route_path_unique
+    DROP INDEX IF EXISTS idx_columns_route_path_unique;
+    CREATE INDEX IF NOT EXISTS idx_columns_route_path
     ON columns(route_path)
     WHERE route_path IS NOT NULL;
   `);
@@ -204,6 +203,7 @@ export function getCategoryRootColumn(model, { languageCode = null } = {}) {
 
 export function createManualColumn(input) {
   const payload = normalizeManualColumnMutationInput(input);
+  validateColumnResolvedPathConflict(payload.base);
   const now = new Date().toISOString();
   const sourceType = payload.base.source_type || 'single_page';
   const sourceId = getNextSourceId(sourceType);
@@ -256,6 +256,7 @@ export function updateManualColumn(id, input) {
 
   const existingHydrated = getColumnById(id, { includeTranslations: true });
   const payload = normalizeManualColumnMutationInput(input, { currentId: id, existingColumn: existingHydrated });
+  validateColumnResolvedPathConflict(payload.base, id);
 
   execute(
     `
@@ -303,6 +304,7 @@ export function updateColumnRecord(id, input) {
 
   const existingHydrated = getColumnById(id, { includeTranslations: true });
   const payload = normalizeExistingColumnMutationInput(input, existingHydrated);
+  validateColumnResolvedPathConflict({ ...existingHydrated, ...payload.base, source_type: existing.source_type }, id);
 
   execute(
     `
@@ -944,26 +946,14 @@ function wouldCreateColumnCycle(currentId, parentId) {
 }
 
 function validateSinglePageRoutePath(routePath, currentId = null) {
-  if (RESERVED_SINGLE_PAGE_PATHS.has(routePath.toLowerCase())) {
+  const normalizedRoutePath = resolveColumnResolvedRoutePath({ route_path: routePath, parent_id: null, source_type: 'single_page' });
+  if (RESERVED_SINGLE_PAGE_PATHS.has(normalizedRoutePath.toLowerCase())) {
     throw new Error('该访问路径已被系统保留');
   }
 
-  const normalized = routePath.toLowerCase();
+  const normalized = normalizedRoutePath.toLowerCase();
   if (RESERVED_SINGLE_PAGE_PREFIXES.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`))) {
     throw new Error('该访问路径与保留栏目路径冲突');
-  }
-
-  const params = currentId
-    ? [routePath, currentId]
-    : [routePath];
-  const existing = queryOne(
-    currentId
-      ? 'SELECT id FROM columns WHERE route_path = ? AND id <> ? LIMIT 1'
-      : 'SELECT id FROM columns WHERE route_path = ? LIMIT 1',
-    params
-  );
-  if (existing) {
-    throw new Error('访问路径已存在');
   }
 }
 
@@ -1045,7 +1035,8 @@ function normalizeRoutePath(value) {
     throw new Error('单页栏目访问路径不能是完整网址');
   }
 
-  let routePath = normalized.startsWith('/') ? normalized : `/${normalized}`;
+  let routePath = normalized.startsWith('/') ? normalized : normalized;
+  routePath = routePath.startsWith('/') ? routePath : routePath.replace(/^\/{2,}/g, '/');
   routePath = routePath.replace(/\/{2,}/g, '/');
 
   if (routePath !== '/' && routePath.endsWith('/')) {
@@ -1073,7 +1064,7 @@ function normalizeColumnDirName(value) {
 
 function normalizeColumnDetailRule(value, sourceType) {
   const normalizedSourceType = String(sourceType || '').trim().toLowerCase();
-  const normalizedValue = toNullableString(value);
+  const normalizedValue = migrateLegacyDetailRule(toNullableString(value), normalizedSourceType);
 
   if (!supportsColumnDetailRule(normalizedSourceType)) {
     return null;
@@ -1098,7 +1089,7 @@ function supportsColumnDetailRule(sourceType) {
 
 function getDefaultColumnDetailRule(sourceType) {
   if (sourceType === 'product_root' || sourceType === 'product_category') {
-    return '{slug}/index.html';
+    return '{id}/index.html';
   }
   if (sourceType === 'news_category') {
     return 'detail/{id}.html';
@@ -1108,12 +1099,26 @@ function getDefaultColumnDetailRule(sourceType) {
 
 function getAllowedDetailRules(sourceType) {
   if (sourceType === 'product_root' || sourceType === 'product_category') {
-    return new Set(['{slug}/index.html', '{id}.html']);
+    return new Set(['{id}/index.html', '{id}.html']);
   }
   if (sourceType === 'news_category') {
-    return new Set(['detail/{id}.html', '{id}.html', '{slug}.html']);
+    return new Set(['detail/{id}.html', '{id}.html']);
   }
   return new Set();
+}
+
+function migrateLegacyDetailRule(value, sourceType) {
+  const normalized = toNullableString(value);
+  if (!normalized) {
+    return normalized;
+  }
+  if ((sourceType === 'product_root' || sourceType === 'product_category') && normalized === '{slug}/index.html') {
+    return '{id}/index.html';
+  }
+  if (sourceType === 'news_category' && normalized === '{slug}.html') {
+    return '{id}.html';
+  }
+  return normalized;
 }
 
 function pathLooksLikeFile(value) {
@@ -1344,8 +1349,7 @@ function migrateColumnsToLeanSchema() {
         legacy_extra TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE (source_type, source_id),
-        FOREIGN KEY (parent_id) REFERENCES columns(id) ON DELETE SET NULL
+        UNIQUE (source_type, source_id)
       );
 
       INSERT INTO columns (
@@ -1404,7 +1408,7 @@ function migrateColumnsToLeanSchema() {
       CREATE INDEX idx_columns_source ON columns(source_type, source_id);
       CREATE INDEX idx_columns_visible_sort ON columns(is_visible, sort_order, id);
       CREATE INDEX idx_columns_dir_name ON columns(dir_name);
-      CREATE UNIQUE INDEX idx_columns_route_path_unique
+      CREATE INDEX idx_columns_route_path
       ON columns(route_path)
       WHERE route_path IS NOT NULL;
     `);
@@ -1451,8 +1455,7 @@ function migrateColumnVisibilityToSingleField() {
       legacy_extra TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (source_type, source_id),
-      FOREIGN KEY (parent_id) REFERENCES columns(id) ON DELETE SET NULL
+      UNIQUE (source_type, source_id)
     );
 
     INSERT INTO columns (
@@ -1498,7 +1501,7 @@ function migrateColumnVisibilityToSingleField() {
     CREATE INDEX idx_columns_source ON columns(source_type, source_id);
     CREATE INDEX idx_columns_visible_sort ON columns(is_visible, sort_order, id);
     CREATE INDEX idx_columns_dir_name ON columns(dir_name);
-    CREATE UNIQUE INDEX idx_columns_route_path_unique
+    CREATE INDEX idx_columns_route_path
     ON columns(route_path)
     WHERE route_path IS NOT NULL;
   `);
@@ -1534,8 +1537,7 @@ function migrateColumnsDropOpenInNewTab() {
       legacy_extra TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (source_type, source_id),
-      FOREIGN KEY (parent_id) REFERENCES columns(id) ON DELETE SET NULL
+      UNIQUE (source_type, source_id)
     );
 
     INSERT INTO columns (
@@ -1581,7 +1583,7 @@ function migrateColumnsDropOpenInNewTab() {
     CREATE INDEX idx_columns_source ON columns(source_type, source_id);
     CREATE INDEX idx_columns_visible_sort ON columns(is_visible, sort_order, id);
     CREATE INDEX idx_columns_dir_name ON columns(dir_name);
-    CREATE UNIQUE INDEX idx_columns_route_path_unique
+    CREATE INDEX idx_columns_route_path
     ON columns(route_path)
     WHERE route_path IS NOT NULL;
   `);
@@ -1720,8 +1722,7 @@ function migrateColumnsReplaceSlugWithDirName() {
       legacy_extra TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (source_type, source_id),
-      FOREIGN KEY (parent_id) REFERENCES columns(id) ON DELETE SET NULL
+      UNIQUE (source_type, source_id)
     );
 
     INSERT INTO columns (
@@ -1767,10 +1768,83 @@ function migrateColumnsReplaceSlugWithDirName() {
     CREATE INDEX idx_columns_source ON columns(source_type, source_id);
     CREATE INDEX idx_columns_visible_sort ON columns(is_visible, sort_order, id);
     CREATE INDEX idx_columns_dir_name ON columns(dir_name);
-    CREATE UNIQUE INDEX idx_columns_route_path_unique
+    CREATE INDEX idx_columns_route_path
     ON columns(route_path)
     WHERE route_path IS NOT NULL;
   `);
+}
+
+function validateColumnResolvedPathConflict(base, currentId = null) {
+  const sourceType = String(base?.source_type || '').trim().toLowerCase();
+  if (sourceType === 'custom_link') {
+    return;
+  }
+
+  const resolvedRoutePath = resolveColumnResolvedRoutePath(base, currentId);
+  if (!resolvedRoutePath) {
+    return;
+  }
+
+  const rows = queryAll(
+    `
+      SELECT id, parent_id, source_type, route_path
+      FROM columns
+      WHERE route_path IS NOT NULL
+    `
+  );
+
+  for (const row of rows) {
+    const rowId = toInteger(row.id, 0);
+    if (currentId && rowId === toInteger(currentId, 0)) {
+      continue;
+    }
+    const existingResolvedPath = resolveColumnResolvedRoutePath(row);
+    if (existingResolvedPath && existingResolvedPath === resolvedRoutePath) {
+      throw new Error('访问路径已存在');
+    }
+  }
+}
+
+function resolveColumnResolvedRoutePath(column, currentId = null) {
+  const sourceType = String(column?.source_type || '').trim().toLowerCase();
+  const routePath = toNullableString(column?.route_path);
+  if (!routePath) {
+    return '';
+  }
+
+  const parentPublicPath = resolveColumnParentRoutePath(column, currentId);
+  const resolved = resolveRelativePublicPath(routePath, parentPublicPath);
+  if (!resolved) {
+    return '';
+  }
+  if (resolved !== '/' && !pathLooksLikeFile(resolved) && !resolved.endsWith('/')) {
+    return `${resolved}/`;
+  }
+  return resolved;
+}
+
+function resolveColumnParentRoutePath(column, currentId = null) {
+  const parentId = toInteger(column?.parent_id, 0);
+  if (parentId <= 0) {
+    return '/';
+  }
+  const parent = getColumnByIdRaw(parentId);
+  if (!parent) {
+    return '/';
+  }
+  if (currentId && toInteger(parent.id, 0) === toInteger(currentId, 0)) {
+    return '/';
+  }
+
+  const sourceType = String(parent.source_type || '').trim().toLowerCase();
+  if (sourceType === 'product_root') {
+    return '/products/';
+  }
+  if (sourceType === 'corporation_root') {
+    return '/about/';
+  }
+
+  return resolveColumnResolvedRoutePath(parent, currentId) || '/';
 }
 
 function syncManagedColumnRoutePaths() {
@@ -1926,9 +2000,7 @@ function rebuildColumnTranslationsIfNeeded() {
       published_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (column_id, language_id),
-      FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE,
-      FOREIGN KEY (language_id) REFERENCES languages(id) ON DELETE CASCADE
+      UNIQUE (column_id, language_id)
     );
 
     INSERT INTO column_translations (

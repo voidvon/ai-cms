@@ -29,6 +29,7 @@ export interface Language {
 export interface Product {
   id: number;
   column_id?: number | null;
+  custom_url?: string | null;
   name: string;
   code?: string;
   summary?: string;
@@ -67,6 +68,7 @@ export interface ProductTranslationStatus {
 export interface News {
   id: number;
   column_id?: number | null;
+  custom_url?: string | null;
   title: string;
   summary?: string;
   content_html?: string;

@@ -21,6 +21,7 @@ import {
   resolvePublicSectionContext
 } from './services/public-sections.mjs';
 import {
+  buildRelativeCategoryPathFromRoutePath,
   buildCategorySlugPath,
   buildNewsDetailOutputPath,
   buildNewsDetailPublicUrl,
@@ -414,14 +415,8 @@ export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
       ]
     });
 
-    const categorySlug = category?.dir_name;
-    let outputPath;
-    if (product.slug && categorySlug) {
-      const categorySlugPath = buildCategorySlugPath(category, categoryMap);
-      outputPath = buildProductDetailOutputPath(product, categorySlugPath);
-    } else {
-      outputPath = buildProductDetailOutputPath(product);
-    }
+    const categorySlugPath = category ? buildCategorySlugPath(category, categoryMap) : null;
+    const outputPath = buildProductDetailOutputPath(product, categorySlugPath);
 
     writeTextFile(outputRoot, outputPath, html, templateContext.site);
     filesWritten += 1;
@@ -571,7 +566,9 @@ function buildLegacyNewsSectionDetailPagesByDir({
       ]
     });
 
+    const categoryPath = buildRelativeCategoryPathFromRoutePath(category?.route_path, `/${dirName}/`);
     const outputPath = buildNewsDetailOutputPath(item, {
+      categoryPath,
       sectionDir: dirName,
       detail_rule: section.rootColumn?.detail_rule
     });

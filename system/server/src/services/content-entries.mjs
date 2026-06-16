@@ -29,7 +29,7 @@ export function listContentEntries(modelCode, {
       SELECT
         e.id,
         e.column_id,
-        e.slug,
+        e.custom_url,
         e.code,
         e.images,
         e.primary_image,
@@ -132,7 +132,7 @@ export function listContentEntriesPaged(modelCode, {
       SELECT
         e.id,
         e.column_id,
-        e.slug,
+        e.custom_url,
         e.code,
         e.images,
         e.primary_image,
@@ -206,7 +206,7 @@ export function getContentEntryById(modelCode, id, {
       SELECT
         e.id,
         e.column_id,
-        e.slug,
+        e.custom_url,
         e.code,
         e.images,
         e.primary_image,
@@ -305,7 +305,7 @@ export function createContentEntry(modelCode, input) {
     `
       INSERT INTO ${quoteIdentifier(tableName)} (
         column_id,
-        slug,
+        custom_url,
         code,
         images,
         primary_image,
@@ -321,7 +321,7 @@ export function createContentEntry(modelCode, input) {
     `,
     [
       payload.base.column_id,
-      payload.base.slug,
+      payload.base.custom_url,
       payload.base.code,
       payload.base.images,
       payload.base.primary_image,
@@ -365,7 +365,7 @@ export function updateContentEntry(modelCode, id, input) {
       UPDATE ${quoteIdentifier(tableName)}
       SET
         column_id = ?,
-        slug = ?,
+        custom_url = ?,
         code = ?,
         images = ?,
         primary_image = ?,
@@ -381,7 +381,7 @@ export function updateContentEntry(modelCode, id, input) {
     `,
     [
       payload.base.column_id,
-      payload.base.slug,
+      payload.base.custom_url,
       payload.base.code,
       payload.base.images,
       payload.base.primary_image,
@@ -425,8 +425,8 @@ export function migrateLegacyContentNodesToModelTables(modelCode) {
       SELECT
         c.id,
         c.parent_id AS column_id,
+        NULL AS custom_url,
         c.source_id,
-        c.slug,
         c.code,
         c.images,
         c.primary_image,
@@ -474,7 +474,7 @@ export function migrateLegacyContentNodesToModelTables(modelCode) {
     });
     const payload = [
       resolvedColumnId,
-      toNullableString(row.slug),
+      null,
       String(row.code || ''),
       normalizeImagesJson(row.images),
       resolvePrimaryImage(modelCode, row.primary_image, row.images),
@@ -494,7 +494,7 @@ export function migrateLegacyContentNodesToModelTables(modelCode) {
           UPDATE ${quoteIdentifier(tableName)}
           SET
             column_id = ?,
-            slug = ?,
+            custom_url = ?,
             code = ?,
             images = ?,
             primary_image = ?,
@@ -515,7 +515,7 @@ export function migrateLegacyContentNodesToModelTables(modelCode) {
         `
           INSERT INTO ${quoteIdentifier(tableName)} (
             column_id,
-            slug,
+            custom_url,
             code,
             images,
             primary_image,
@@ -622,7 +622,7 @@ function resolveLegacyEntryColumnId(row, modelCode, { categoryColumnIdBySourceId
     return bySourceId;
   }
 
-  const legacyKeys = extractLegacyEntryKeys(row.legacy_extra, modelCode, row.slug);
+  const legacyKeys = extractLegacyEntryKeys(row.legacy_extra, modelCode);
   for (const key of legacyKeys) {
     const normalized = normalizeLegacyKey(key);
     if (!normalized) {
@@ -655,7 +655,7 @@ function buildCategoryColumnIdByLegacyKey(modelCode) {
   const sourceType = modelCode === 'news' ? 'news_category' : 'product_category';
   const rows = queryAll(
     `
-      SELECT id, slug, legacy_extra
+      SELECT id, legacy_extra
       FROM columns
       WHERE source_type = ?
     `,
@@ -665,7 +665,6 @@ function buildCategoryColumnIdByLegacyKey(modelCode) {
   for (const row of rows) {
     const columnId = toInteger(row.id, 0);
     const candidates = [
-      row.slug,
       parseLegacyExtra(row.legacy_extra).key
     ];
     for (const candidate of candidates) {
@@ -679,7 +678,7 @@ function buildCategoryColumnIdByLegacyKey(modelCode) {
   return map;
 }
 
-function extractLegacyEntryKeys(legacyExtra, modelCode, slug) {
+function extractLegacyEntryKeys(legacyExtra, modelCode) {
   const parsed = parseLegacyExtra(legacyExtra);
   const rawKey = String(parsed.key || '').trim();
   const keys = [];
@@ -728,10 +727,6 @@ function extractLegacyEntryKeys(legacyExtra, modelCode, slug) {
         }
       }
     }
-  }
-
-  if (modelCode === 'product' && slug) {
-    keys.push(String(slug));
   }
 
   return keys;
@@ -869,6 +864,7 @@ function normalizeContentEntryInput(modelCode, input, { existingEntry = null } =
   const primaryImage = modelCode === 'product'
     ? (normalizeSingleImage(baseInput.primary_image ?? existing.primary_image) || images[0] || DEFAULT_PRODUCT_IMAGE)
     : picture;
+  const customUrl = normalizeEntryCustomUrl(baseInput.custom_url ?? existing.custom_url);
 
   const fallbackBase = {
     name: modelCode === 'news' ? String(existing.title || existing.name || '') : String(existing.name || ''),
@@ -893,7 +889,7 @@ function normalizeContentEntryInput(modelCode, input, { existingEntry = null } =
   return {
     base: {
       column_id: column.id,
-      slug: toNullableString(baseInput.slug ?? existing.slug),
+      custom_url: customUrl,
       code: toNullableString(baseInput.code ?? existing.code) || '',
       images: modelCode === 'product' ? JSON.stringify(images) : EMPTY_IMAGE_LIST,
       primary_image: modelCode === 'product' ? primaryImage : picture,
@@ -990,7 +986,7 @@ function mapEntryRow(modelCode, row) {
     seo_title: row.seo_title ?? null,
     seo_keywords: row.seo_keywords ?? null,
     seo_description: row.seo_description ?? null,
-    slug: row.slug || null,
+    custom_url: row.custom_url || null,
     publish_status: normalizePublishStatus(row.translation_publish_status || row.publish_status),
     published_at: toNullableString(row.translation_published_at ?? row.published_at),
     legacy_extra: row.legacy_extra || null,
@@ -1067,6 +1063,36 @@ function normalizeSingleImage(value) {
     return String(value[0] || '').trim();
   }
   return String(value || '').trim();
+}
+
+function normalizeEntryCustomUrl(value) {
+  const normalized = toNullableString(value);
+  if (!normalized) {
+    return null;
+  }
+  if (/^https?:\/\//i.test(normalized)) {
+    throw new Error('内容自定义文件名不能是完整网址');
+  }
+
+  let routePath = normalized.startsWith('/') ? normalized : `/${normalized}`;
+  routePath = routePath.replace(/\/{2,}/g, '/');
+  routePath = routePath.replace(/\/+$/g, '');
+
+  if (routePath === '/') {
+    throw new Error('内容自定义文件名不能为空');
+  }
+
+  const segments = routePath.split('/').filter(Boolean);
+  if (segments.length === 0) {
+    throw new Error('内容自定义文件名不能为空');
+  }
+
+  const lastSegment = segments[segments.length - 1] || '';
+  if (!lastSegment.includes('.')) {
+    throw new Error('内容自定义文件名必须包含文件名，例如 abcd/index.html');
+  }
+
+  return routePath;
 }
 
 function resolvePrimaryImage(modelCode, primaryImage, imagesValue) {

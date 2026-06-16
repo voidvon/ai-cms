@@ -1,6 +1,6 @@
 /**
  * 产品 URL 重定向中间件
- * 将旧的 /product/{id}.html 重定向到新的 /products/{category-dir}/{product-slug}/
+ * 将旧的 /product/{id}.html 重定向到新的内容详情地址
  */
 
 import { queryAll, queryOne } from '../db.mjs';
@@ -20,12 +20,12 @@ export async function redirectLegacyProductUrls(request, reply) {
 
   const productId = parseInt(match[1], 10);
 
-  // 从新内容表查询产品 slug 和所属栏目
+  // 从新内容表查询产品自定义路径和所属栏目
   const product = queryOne(
     `
       SELECT
         p.id,
-        p.slug,
+        p.custom_url,
         p.column_id
       FROM content_product p
       WHERE p.id = ?
@@ -38,15 +38,9 @@ export async function redirectLegacyProductUrls(request, reply) {
     return;
   }
 
-  // 如果有 slug，重定向到新 URL
-  if (product.slug) {
-    const categorySlugPath = buildCategorySlugPath(product.column_id);
-    const newUrl = buildProductDetailPublicUrl(product, categorySlugPath);
-    reply.redirect(newUrl, 301);
-    return;
-  }
-
-  // 没有 slug，继续处理（可能返回 404）
+  const categorySlugPath = buildCategorySlugPath(product.column_id);
+  const newUrl = buildProductDetailPublicUrl(product, categorySlugPath);
+  reply.redirect(newUrl, 301);
 }
 
 function buildCategorySlugPath(columnId) {

@@ -263,7 +263,6 @@ export default function NewsCategoryFormDialog({
                 <SelectContent>
                   <SelectItem value="detail/{id}.html">{'detail/{id}.html'}</SelectItem>
                   <SelectItem value="{id}.html">{'{id}.html'}</SelectItem>
-                  <SelectItem value="{slug}.html">{'{slug}.html'}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

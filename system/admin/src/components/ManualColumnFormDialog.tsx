@@ -93,11 +93,10 @@ export default function ManualColumnFormDialog({
         ? [
             { value: 'detail/{id}.html', label: 'detail/{id}.html' },
             { value: '{id}.html', label: '{id}.html' },
-            { value: '{slug}.html', label: '{slug}.html' },
           ]
         : column?.source_type === 'product_root' || column?.source_type === 'product_category'
           ? [
-              { value: '{slug}/index.html', label: '{slug}/index.html' },
+              { value: '{id}/index.html', label: '{id}/index.html' },
               { value: '{id}.html', label: '{id}.html' },
             ]
           : []
