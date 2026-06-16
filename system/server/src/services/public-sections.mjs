@@ -16,8 +16,7 @@ export function resolvePublicSectionContext(columns) {
   const allById = new Map(rows.map((item) => [toInteger(item?.id, 0), item]));
   const newsRows = rows
     .filter((item) => (
-      String(item?.model_code || '') === 'news'
-      && String(item?.source_type || '') === 'news_category'
+      String(item?.source_type || '') === 'news_category'
     ))
     .slice()
     .sort(compareBySortAndId);
@@ -55,8 +54,8 @@ export function resolvePublicSectionContext(columns) {
 
   return {
     allById,
-    productRootColumnId: findRootColumnId(rows, 'product', 'product_root'),
-    corporationRootColumnId: findRootColumnId(rows, 'corporation', 'corporation_root'),
+    productRootColumnId: findRootColumnId(rows, 'product_root'),
+    corporationRootColumnId: findRootColumnId(rows, 'corporation_root'),
     newsTree,
     newsSections: rootSections,
     newsSectionsByRootId: sectionsByRootId,
@@ -113,12 +112,9 @@ export function buildColumnPublicUrl(column, publicSections) {
   return '';
 }
 
-function findRootColumnId(columns, modelCode, sourceType) {
+function findRootColumnId(columns, sourceType) {
   return toInteger(
-    columns.find((item) => (
-      String(item?.model_code || '') === modelCode
-      && String(item?.source_type || '') === sourceType
-    ))?.id,
+    columns.find((item) => String(item?.source_type || '') === sourceType)?.id,
     0
   );
 }

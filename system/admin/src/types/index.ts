@@ -250,9 +250,7 @@ export interface ContentModel {
   bound_columns?: Array<{
     id: number;
     parent_id?: number | null;
-    model_code: string;
     source_type: string;
-    column_kind: string;
     route_path?: string | null;
     sort_order: number;
   }>;
@@ -265,11 +263,9 @@ export interface Column {
   id: number;
   name: string;
   parent_id?: number | null;
-  model_code: 'product' | 'news' | 'corporation' | 'page' | 'link' | string;
   content_model_id?: number | null;
   source_type: 'product_root' | 'product_category' | 'news_category' | 'corporation_root' | 'corporation_category' | 'contact_page' | 'custom_link' | 'single_page' | string;
   source_id: number;
-  column_kind: 'category' | 'link' | 'single' | string;
   custom_url?: string | null;
   route_path?: string | null;
   open_in_new_tab?: number;
@@ -278,7 +274,6 @@ export interface Column {
   seo_keywords?: string | null;
   seo_description?: string | null;
   sort_order: number;
-  is_system: number;
   current_language_code?: string;
   translations?: Record<string, ColumnTranslation>;
   created_at?: string;

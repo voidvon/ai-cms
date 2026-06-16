@@ -24,6 +24,16 @@ const ROOT_SOURCE_ID_BY_MODEL = {
   news: null,
   corporation: 0
 };
+const COLUMN_SOURCE_TYPES = new Set([
+  'product_root',
+  'product_category',
+  'news_category',
+  'corporation_root',
+  'corporation_category',
+  'contact_page',
+  'single_page',
+  'custom_link'
+]);
 const RESERVED_SINGLE_PAGE_PREFIXES = [
   '/about',
   '/news',
@@ -59,10 +69,8 @@ export function ensureColumnsSchema() {
     CREATE TABLE IF NOT EXISTS columns (
       id INTEGER PRIMARY KEY,
       parent_id INTEGER,
-      model_code TEXT NOT NULL,
       source_type TEXT NOT NULL,
       source_id INTEGER NOT NULL DEFAULT 0,
-      column_kind TEXT NOT NULL DEFAULT 'category',
       custom_url TEXT,
       route_path TEXT,
       open_in_new_tab INTEGER NOT NULL DEFAULT 0,
@@ -72,7 +80,6 @@ export function ensureColumnsSchema() {
       is_visible INTEGER NOT NULL DEFAULT 1,
       sort_order INTEGER NOT NULL DEFAULT 0,
       legacy_extra TEXT,
-      is_system INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE (source_type, source_id),
@@ -103,7 +110,6 @@ export function ensureColumnsSchema() {
     ON column_translations(column_id, language_id);
   `);
 
-  addColumnIfMissing('columns', 'column_kind', "TEXT NOT NULL DEFAULT 'category'");
   addColumnIfMissing('columns', 'custom_url', 'TEXT');
   addColumnIfMissing('columns', 'route_path', 'TEXT');
   addColumnIfMissing('columns', 'open_in_new_tab', 'INTEGER NOT NULL DEFAULT 0');
@@ -124,7 +130,7 @@ export function ensureColumnsSchema() {
   getDb().exec(`
     CREATE INDEX IF NOT EXISTS idx_columns_parent_sort ON columns(parent_id, sort_order, id);
     CREATE INDEX IF NOT EXISTS idx_columns_source ON columns(source_type, source_id);
-    CREATE INDEX IF NOT EXISTS idx_columns_kind_visible ON columns(column_kind, is_visible, sort_order, id);
+    CREATE INDEX IF NOT EXISTS idx_columns_visible_sort ON columns(is_visible, sort_order, id);
     CREATE INDEX IF NOT EXISTS idx_columns_slug ON columns(slug);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_columns_route_path_unique
     ON columns(route_path)
@@ -144,10 +150,8 @@ export function listColumns({ languageCode = null, includeTranslations = true } 
       SELECT
         id,
         parent_id,
-        model_code,
         source_type,
         source_id,
-        column_kind,
         custom_url,
         route_path,
         open_in_new_tab,
@@ -157,7 +161,6 @@ export function listColumns({ languageCode = null, includeTranslations = true } 
         is_visible,
         legacy_extra,
         sort_order,
-        is_system,
         created_at,
         updated_at
       FROM columns
@@ -182,8 +185,7 @@ export function listCategoryColumns(model, { languageCode = null } = {}) {
     return [];
   }
   return listColumns({ languageCode, includeTranslations: true }).filter((item) => (
-    String(item.model_code || '') === model
-    && String(item.source_type || '') === sourceType
+    String(item.source_type || '') === sourceType
   ));
 }
 
@@ -194,24 +196,21 @@ export function getCategoryRootColumn(model, { languageCode = null } = {}) {
     return null;
   }
   return listColumns({ languageCode, includeTranslations: true }).find((item) => (
-    String(item.model_code || '') === model
-    && String(item.source_type || '') === sourceType
+    String(item.source_type || '') === sourceType
   )) || null;
 }
 
 export function createManualColumn(input) {
   const payload = normalizeManualColumnMutationInput(input);
   const now = new Date().toISOString();
-  const sourceType = payload.base.source_type || (payload.base.column_kind === 'link' ? 'custom_link' : 'single_page');
+  const sourceType = payload.base.source_type || 'single_page';
   const sourceId = getNextSourceId(sourceType);
   const result = execute(
     `
       INSERT INTO columns (
         parent_id,
-        model_code,
         source_type,
         source_id,
-        column_kind,
         custom_url,
         route_path,
         open_in_new_tab,
@@ -221,17 +220,14 @@ export function createManualColumn(input) {
         is_visible,
         legacy_extra,
         sort_order,
-        is_system,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       payload.base.parent_id,
-      payload.base.model_code,
       sourceType,
       sourceId,
-      payload.base.column_kind,
       payload.base.custom_url,
       payload.base.route_path,
       payload.base.open_in_new_tab,
@@ -265,9 +261,7 @@ export function updateManualColumn(id, input) {
       UPDATE columns
       SET
         parent_id = ?,
-        model_code = ?,
         source_type = ?,
-        column_kind = ?,
         custom_url = ?,
         route_path = ?,
         open_in_new_tab = ?,
@@ -282,9 +276,7 @@ export function updateManualColumn(id, input) {
     `,
     [
       payload.base.parent_id,
-      payload.base.model_code,
       payload.base.source_type,
-      payload.base.column_kind,
       payload.base.custom_url,
       payload.base.route_path,
       payload.base.open_in_new_tab,
@@ -392,6 +384,8 @@ function hydrateColumns(rows, {
     const resolvedPublishedAt = fallbackTranslation?.published_at ?? null;
     const base = {
       ...row,
+      model_code: inferModelCodeBySourceType(row.source_type),
+      column_kind: inferColumnKindBySourceType(row.source_type),
       name: displayName,
       content_html: resolvedContentHtml,
       summary: resolvedSummary,
@@ -408,7 +402,6 @@ function hydrateColumns(rows, {
       current_language_code: fallbackTranslation?.language_code || selectedLanguage.code,
       source_id: toInteger(row.source_id, 0),
       sort_order: toInteger(row.sort_order, 0),
-      is_system: toBooleanInt(row.is_system, 0),
       is_visible: toBooleanInt(row.is_visible, 1),
       open_in_new_tab: toBooleanInt(row.open_in_new_tab, 0),
       show_in_nav: toBooleanInt(row.show_in_nav, 1)
@@ -569,10 +562,8 @@ function getColumnByIdRaw(id) {
       SELECT
         id,
         parent_id,
-        model_code,
         source_type,
         source_id,
-        column_kind,
         custom_url,
         route_path,
         open_in_new_tab,
@@ -582,7 +573,6 @@ function getColumnByIdRaw(id) {
         is_visible,
         legacy_extra,
         sort_order,
-        is_system,
         created_at,
         updated_at
       FROM columns
@@ -596,8 +586,10 @@ function normalizeManualColumnInput(input, options = {}) {
   const currentId = toInteger(options.currentId, 0);
   const existing = currentId ? getColumnByIdRaw(currentId) : null;
   const existingView = options.existingColumn || existing || {};
-  const columnKind = normalizeColumnKind(input.column_kind ?? existing?.column_kind);
-  const sourceType = normalizeManualSourceType(input.source_type ?? existing?.source_type, columnKind);
+  const currentSourceType = String(existing?.source_type || '').trim().toLowerCase();
+  const requestedKind = normalizeColumnKind(input.column_kind ?? inferColumnKindBySourceType(currentSourceType));
+  const sourceType = normalizeManualSourceType(input.source_type ?? existing?.source_type, requestedKind);
+  const columnKind = inferColumnKindBySourceType(sourceType);
   const name = String(input.name ?? existingView.name ?? '').trim();
   if (!name) {
     throw new Error('栏目名称不能为空');
@@ -630,9 +622,7 @@ function normalizeManualColumnInput(input, options = {}) {
     return {
       name,
       parent_id: parentId || null,
-      model_code: String(input.model_code ?? existing?.model_code ?? inferModelCodeBySourceType(sourceType)).trim() || inferModelCodeBySourceType(sourceType),
       source_type: sourceType,
-      column_kind: 'category',
       custom_url: toNullableString(input.custom_url ?? existing?.custom_url),
       route_path: routePath,
       open_in_new_tab: toBooleanInt(input.open_in_new_tab ?? existing?.open_in_new_tab, 0),
@@ -658,9 +648,7 @@ function normalizeManualColumnInput(input, options = {}) {
     return {
       name,
       parent_id: parentId || null,
-      model_code: 'link',
       source_type: sourceType,
-      column_kind: columnKind,
       custom_url: customUrl,
       route_path: null,
       open_in_new_tab: toBooleanInt(input.open_in_new_tab ?? existing?.open_in_new_tab, 0),
@@ -688,9 +676,7 @@ function normalizeManualColumnInput(input, options = {}) {
   return {
     name,
     parent_id: parentId || null,
-    model_code: 'page',
     source_type: sourceType,
-    column_kind: columnKind,
     custom_url: null,
     route_path: routePath,
     open_in_new_tab: 0,
@@ -910,7 +896,7 @@ function buildColumnNameJoin(tableAlias, languageId, defaultLanguageId) {
 }
 
 function assertEditableManualColumn(column) {
-  if (!column || Number(column.is_system || 0) === 1 || !EDITABLE_MANUAL_SOURCE_TYPES.has(String(column.source_type || ''))) {
+  if (!column || !EDITABLE_MANUAL_SOURCE_TYPES.has(String(column.source_type || ''))) {
     throw new Error('当前栏目不支持直接编辑');
   }
 }
@@ -1011,6 +997,19 @@ function inferModelCodeBySourceType(sourceType) {
     return 'corporation';
   }
   return '';
+}
+
+function inferColumnKindBySourceType(sourceType) {
+  if (CATEGORY_SOURCE_TYPES.has(sourceType) || sourceType === 'product_root' || sourceType === 'corporation_root') {
+    return 'category';
+  }
+  if (sourceType === 'custom_link') {
+    return 'link';
+  }
+  if (sourceType === 'single_page' || sourceType === 'contact_page') {
+    return 'single';
+  }
+  return 'category';
 }
 
 function normalizeColumnUrl(value) {
@@ -1181,10 +1180,9 @@ function ensureColumnContentModelBindings() {
         UPDATE columns
         SET content_model_id = ?
         WHERE content_model_id IS NULL
-          AND model_code = ?
           AND source_type IN (${placeholders})
       `,
-      [modelId, binding.code, ...binding.sourceTypes]
+      [modelId, ...binding.sourceTypes]
     );
   }
 }
@@ -1216,10 +1214,8 @@ function migrateColumnsToLeanSchema() {
       CREATE TABLE columns (
         id INTEGER PRIMARY KEY,
         parent_id INTEGER,
-        model_code TEXT NOT NULL,
         source_type TEXT NOT NULL,
         source_id INTEGER NOT NULL DEFAULT 0,
-        column_kind TEXT NOT NULL DEFAULT 'category',
         custom_url TEXT,
         route_path TEXT,
         open_in_new_tab INTEGER NOT NULL DEFAULT 0,
@@ -1229,7 +1225,6 @@ function migrateColumnsToLeanSchema() {
         is_visible INTEGER NOT NULL DEFAULT 1,
         sort_order INTEGER NOT NULL DEFAULT 0,
         legacy_extra TEXT,
-        is_system INTEGER NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         UNIQUE (source_type, source_id),
@@ -1239,10 +1234,8 @@ function migrateColumnsToLeanSchema() {
       INSERT INTO columns (
         id,
         parent_id,
-        model_code,
         source_type,
         source_id,
-        column_kind,
         custom_url,
         route_path,
         open_in_new_tab,
@@ -1252,17 +1245,14 @@ function migrateColumnsToLeanSchema() {
         is_visible,
         sort_order,
         legacy_extra,
-        is_system,
         created_at,
         updated_at
       )
       SELECT
         id,
         parent_id,
-        model_code,
         source_type,
         source_id,
-        column_kind,
         custom_url,
         route_path,
         open_in_new_tab,
@@ -1282,7 +1272,6 @@ function migrateColumnsToLeanSchema() {
           )
           ELSE legacy_extra
         END,
-        is_system,
         created_at,
         updated_at
       FROM columns_legacy_rebuild
@@ -1292,7 +1281,7 @@ function migrateColumnsToLeanSchema() {
 
       CREATE INDEX idx_columns_parent_sort ON columns(parent_id, sort_order, id);
       CREATE INDEX idx_columns_source ON columns(source_type, source_id);
-      CREATE INDEX idx_columns_kind_visible ON columns(column_kind, is_visible, sort_order, id);
+      CREATE INDEX idx_columns_visible_sort ON columns(is_visible, sort_order, id);
       CREATE INDEX idx_columns_slug ON columns(slug);
       CREATE UNIQUE INDEX idx_columns_route_path_unique
       ON columns(route_path)

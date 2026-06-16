@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
+import { templateVariantsApi, templatesApi } from '@/api/advanced'
 import { languagesApi } from '@/api/languages'
 import { productCategoriesApi } from '@/api/product-categories'
 import { Button } from '@/components/ui/button'
@@ -10,7 +11,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import type { ProductCategory, ProductCategoryTranslation } from '@/types'
+import type { ProductCategory, ProductCategoryTranslation, TemplateBinding } from '@/types'
+
+const DEFAULT_TEMPLATE_VALUE = '__default__'
 
 interface ProductCategoryFormDialogProps {
   open: boolean
@@ -34,6 +37,8 @@ export default function ProductCategoryFormDialog({
     sort_order: 0,
   })
   const [translations, setTranslations] = useState<Record<string, ProductCategoryTranslation>>({})
+  const [listTemplateId, setListTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
+  const [contentTemplateId, setContentTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
 
   const { data: languagesData } = useQuery({
     queryKey: ['languages'],
@@ -51,6 +56,25 @@ export default function ProductCategoryFormDialog({
     enabled: open && mode === 'edit' && Boolean(category?.id),
   })
 
+  const { data: selectedThemeData } = useQuery({
+    queryKey: ['selected-theme'],
+    queryFn: () => templateVariantsApi.getSelected(),
+    enabled: open,
+  })
+  const selectedThemeId = selectedThemeData?.data?.id
+
+  const { data: templatesData } = useQuery({
+    queryKey: ['templates', selectedThemeId ?? 0],
+    queryFn: () => templatesApi.list(undefined, selectedThemeId),
+    enabled: open && Boolean(selectedThemeId),
+  })
+
+  const { data: bindingsData } = useQuery({
+    queryKey: ['template-bindings', selectedThemeId ?? 0],
+    queryFn: () => templatesApi.listBindings(selectedThemeId),
+    enabled: open && Boolean(selectedThemeId) && mode === 'edit' && Boolean(category?.id),
+  })
+
   const languages = languagesData?.data || []
   const defaultLanguageCode = languages.find((item) => item.is_default === 1)?.code || 'zh-CN'
   const availableLanguageCodes = languages.map((item) => item.code)
@@ -65,6 +89,11 @@ export default function ProductCategoryFormDialog({
       })
       setTranslations(buildInitialTranslations(source, defaultLanguageCode, availableLanguageCodes))
       setActiveLanguage(source.current_language_code || defaultLanguageCode)
+      const bindings = bindingsData?.data || []
+      const listBinding = bindings.find((item) => item.target_type === 'column' && item.target_id === source.id && item.template_type === 'list')
+      const contentBinding = bindings.find((item) => item.target_type === 'column' && item.target_id === source.id && item.template_type === 'content')
+      setListTemplateId(listBinding?.template_id ? String(listBinding.template_id) : DEFAULT_TEMPLATE_VALUE)
+      setContentTemplateId(contentBinding?.template_id ? String(contentBinding.template_id) : DEFAULT_TEMPLATE_VALUE)
       return
     }
 
@@ -77,8 +106,10 @@ export default function ProductCategoryFormDialog({
         [defaultLanguageCode]: createEmptyTranslation(),
       })
       setActiveLanguage(defaultLanguageCode)
+      setListTemplateId(DEFAULT_TEMPLATE_VALUE)
+      setContentTemplateId(DEFAULT_TEMPLATE_VALUE)
     }
-  }, [category, categoryDetailData, mode, currentParentId, defaultLanguageCode])
+  }, [category, categoryDetailData, mode, currentParentId, defaultLanguageCode, availableLanguageCodes, bindingsData])
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -87,14 +118,23 @@ export default function ProductCategoryFormDialog({
         translations,
       }
       if (mode === 'create') {
-        return productCategoriesApi.create(payload)
+        const response = await productCategoriesApi.create(payload)
+        const categoryId = response.data?.id
+        if (!categoryId) {
+          throw new Error('分类创建失败')
+        }
+        await saveTemplateBindings(selectedThemeId, categoryId, listTemplateId, contentTemplateId, [])
+        return response
       }
-      return productCategoriesApi.update(category!.id, payload)
+      const response = await productCategoriesApi.update(category!.id, payload)
+      await saveTemplateBindings(selectedThemeId, category!.id, listTemplateId, contentTemplateId, bindingsData?.data || [])
+      return response
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['product-categories'] })
       queryClient.invalidateQueries({ queryKey: ['product-categories-options'] })
       queryClient.invalidateQueries({ queryKey: ['columns'] })
+      queryClient.invalidateQueries({ queryKey: ['template-bindings'] })
       toast.success(mode === 'create' ? '创建成功' : '更新成功')
       onOpenChange(false)
     },
@@ -124,6 +164,9 @@ export default function ProductCategoryFormDialog({
   }
 
   const categoryOptions = categoriesData?.data || []
+  const templates = templatesData?.data || []
+  const listTemplates = templates.filter((item) => item.type === 'list')
+  const contentTemplates = templates.filter((item) => item.type === 'content')
   const isEditingWithoutCategory = mode === 'edit' && !category
 
   return (
@@ -228,6 +271,38 @@ export default function ProductCategoryFormDialog({
                 onChange={(e) => setBaseData({ ...baseData, sort_order: parseInt(e.target.value) || 0 })}
               />
             </div>
+            <div className="space-y-2">
+              <Label>列表模板</Label>
+              <Select value={listTemplateId} onValueChange={setListTemplateId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={DEFAULT_TEMPLATE_VALUE}>不单独绑定</SelectItem>
+                  {listTemplates.map((template) => (
+                    <SelectItem key={template.id} value={String(template.id)}>
+                      {template.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>内容模板</Label>
+              <Select value={contentTemplateId} onValueChange={setContentTemplateId}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={DEFAULT_TEMPLATE_VALUE}>不单独绑定</SelectItem>
+                  {contentTemplates.map((template) => (
+                    <SelectItem key={template.id} value={String(template.id)}>
+                      {template.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <DialogFooter>
@@ -242,6 +317,43 @@ export default function ProductCategoryFormDialog({
       </DialogContent>
     </Dialog>
   )
+}
+
+async function saveTemplateBindings(
+  themeId: number | undefined,
+  targetId: number,
+  listTemplateId: string,
+  contentTemplateId: string,
+  bindings: TemplateBinding[]
+) {
+  if (!themeId) {
+    return
+  }
+  await saveTemplateBinding(themeId, targetId, 'list', listTemplateId, bindings)
+  await saveTemplateBinding(themeId, targetId, 'content', contentTemplateId, bindings)
+}
+
+async function saveTemplateBinding(
+  themeId: number,
+  targetId: number,
+  templateType: 'list' | 'content',
+  templateId: string,
+  bindings: TemplateBinding[]
+) {
+  const existing = bindings.find((item) => item.target_type === 'column' && item.target_id === targetId && item.template_type === templateType)
+  if (templateId === DEFAULT_TEMPLATE_VALUE) {
+    if (existing?.id) {
+      await templatesApi.deleteBinding(existing.id)
+    }
+    return
+  }
+  await templatesApi.saveBinding({
+    theme_id: themeId,
+    target_type: 'column',
+    target_id: targetId,
+    template_type: templateType,
+    template_id: Number(templateId),
+  })
 }
 
 function createEmptyTranslation(patch: Partial<ProductCategoryTranslation> = {}): ProductCategoryTranslation {

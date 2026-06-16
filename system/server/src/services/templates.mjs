@@ -883,8 +883,7 @@ function getPreviewProductCategory(id = null) {
     `
       SELECT id, parent_id, name, seo_keywords, seo_description
       FROM columns
-      WHERE model_code = 'product'
-        AND source_type = 'product_category'
+      WHERE source_type = 'product_category'
       ORDER BY parent_id ASC, sort_order ASC, id ASC
     `
   );
@@ -924,8 +923,7 @@ function getPreviewNewsCategory(id = null) {
     `
       SELECT id, parent_id, name
       FROM columns
-      WHERE model_code = 'news'
-        AND source_type = 'news_category'
+      WHERE source_type = 'news_category'
       ORDER BY parent_id ASC, sort_order ASC, id ASC
     `
   );
@@ -1007,7 +1005,7 @@ function buildPreviewRootColumnMenuItems() {
 function buildPreviewSiteColumns() {
   const rows = queryAll(
     `
-      SELECT id, name, parent_id, model_code, source_type, source_id, column_kind, custom_url, route_path, open_in_new_tab
+      SELECT id, name, parent_id, source_type, source_id, custom_url, route_path, open_in_new_tab
       FROM columns
       ORDER BY coalesce(parent_id, 0) ASC, sort_order ASC, id ASC
     `
@@ -1015,10 +1013,10 @@ function buildPreviewSiteColumns() {
 
   if (rows.length === 0) {
     return [
-      { id: 1, name: '产品', parentId: 0, modelCode: 'product', sourceType: 'product_root', sourceId: 0, url: '/valve/', children: [] },
-      { id: 2, name: '公司新闻', parentId: 0, modelCode: 'news', sourceType: 'news_category', sourceId: 0, url: '/news/', children: [] },
-      { id: 3, name: '服务', parentId: 0, modelCode: 'news', sourceType: 'news_category', sourceId: 0, url: '/service/', children: [] },
-      { id: 4, name: '公司信息', parentId: 0, modelCode: 'corporation', sourceType: 'corporation_root', sourceId: 0, url: '/about/', children: [] }
+      { id: 1, name: '产品', parentId: 0, sourceType: 'product_root', sourceId: 0, url: '/valve/', children: [] },
+      { id: 2, name: '公司新闻', parentId: 0, sourceType: 'news_category', sourceId: 0, url: '/news/', children: [] },
+      { id: 3, name: '服务', parentId: 0, sourceType: 'news_category', sourceId: 0, url: '/service/', children: [] },
+      { id: 4, name: '公司信息', parentId: 0, sourceType: 'corporation_root', sourceId: 0, url: '/about/', children: [] }
     ];
   }
 
@@ -1027,7 +1025,6 @@ function buildPreviewSiteColumns() {
     id: toInteger(item.id, 0),
     name: item.name || '',
     parentId: toInteger(item.parent_id, 0),
-    modelCode: item.model_code || '',
     sourceType: item.source_type || '',
     sourceId: toInteger(item.source_id, 0),
     openInNewTab: toInteger(item.open_in_new_tab, 0),
@@ -1046,7 +1043,6 @@ function buildPreviewSiteColumns() {
       id: item.id,
       name: item.name,
       parentId: item.parentId,
-      modelCode: item.modelCode,
       sourceType: item.sourceType,
       sourceId: item.sourceId,
       openInNewTab: item.openInNewTab,
@@ -1094,7 +1090,6 @@ function buildPreviewNewsMenuItems(rootId, dirName, activeId = 0) {
       SELECT id, name
       FROM columns
       WHERE parent_id = ?
-        AND model_code = 'news'
         AND source_type = 'news_category'
       ORDER BY sort_order ASC, id ASC
     `,
@@ -1114,7 +1109,7 @@ function buildPreviewNewsMenuItems(rootId, dirName, activeId = 0) {
 function resolvePreviewSections() {
   const rows = queryAll(
     `
-      SELECT id, name, parent_id, model_code, source_type, source_id, sort_order, route_path, slug, legacy_extra
+      SELECT id, name, parent_id, source_type, source_id, sort_order, route_path, slug, legacy_extra
       FROM columns
       ORDER BY coalesce(parent_id, 0) ASC, sort_order ASC, id ASC
     `
@@ -1128,8 +1123,7 @@ function buildPreviewProductMenuItems(category) {
     `
       SELECT id
       FROM columns
-      WHERE model_code = 'product'
-        AND source_type = 'product_root'
+      WHERE source_type = 'product_root'
       LIMIT 1
     `
   );
@@ -1138,7 +1132,6 @@ function buildPreviewProductMenuItems(category) {
       SELECT id, name, 0 AS parent_id
       FROM columns
       WHERE parent_id = ?
-        AND model_code = 'product'
         AND source_type = 'product_category'
       ORDER BY sort_order ASC, id ASC
     `,

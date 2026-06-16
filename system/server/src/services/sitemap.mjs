@@ -128,7 +128,6 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
     const routePath = String(column.route_path || '').trim();
     if (
       String(column.source_type || '') === 'single_page'
-      && String(column.column_kind || '') === 'single'
       && routePath
     ) {
       addEntry(entries, siteUrl, normalizeRoutePathForPublic(routePath), column.updated_at || generatedAt);

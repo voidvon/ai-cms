@@ -259,9 +259,7 @@ function listBoundColumnsForModel(modelId) {
       SELECT
         id,
         parent_id,
-        model_code,
         source_type,
-        column_kind,
         route_path,
         sort_order
       FROM columns
@@ -272,9 +270,7 @@ function listBoundColumnsForModel(modelId) {
   ).map((row) => ({
     id: Number(row.id || 0),
     parent_id: row.parent_id === null || row.parent_id === undefined ? null : Number(row.parent_id),
-    model_code: String(row.model_code || ''),
     source_type: String(row.source_type || ''),
-    column_kind: String(row.column_kind || ''),
     route_path: row.route_path || null,
     sort_order: Number(row.sort_order || 0)
   }));

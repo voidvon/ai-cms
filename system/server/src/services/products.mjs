@@ -7,7 +7,6 @@ import {
   getContentEntryById,
   listContentEntries,
   listContentEntriesPaged,
-  migrateLegacyContentNodesToModelTables,
   updateContentEntry
 } from './content-entries.mjs';
 import { ensureContentModelStorageSchema } from './content-model-storage.mjs';
@@ -20,7 +19,6 @@ export function ensureProductsSchema() {
   }
   ensureColumnsSchema();
   ensureContentModelStorageSchema();
-  migrateLegacyContentNodesToModelTables('product');
   schemaEnsured = true;
 }
 

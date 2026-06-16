@@ -442,11 +442,10 @@ export function migrateLegacyContentNodesToModelTables(modelCode) {
       LEFT JOIN column_translations dct
         ON dct.column_id = c.id
        AND dct.language_id = ?
-      WHERE c.model_code = ?
-        AND c.source_type = ?
+      WHERE c.source_type = ?
       ORDER BY c.id ASC
     `,
-    [defaultLanguageId, modelCode, getLegacySourceType(modelCode)]
+    [defaultLanguageId, getLegacySourceType(modelCode)]
   );
 
   if (!legacyRows.length) {

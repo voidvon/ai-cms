@@ -72,7 +72,7 @@ type CategoryTreeTarget = {
   id: number
   columnId: number
   name: string
-  targetType: Extract<TemplateBinding['target_type'], 'product_category' | 'news_category' | 'corporation_category'>
+  targetType: 'column'
 } | null
 
 interface RootCategoryForm {
@@ -199,14 +199,13 @@ export default function ColumnsPage() {
     || columns[0]
     || null
 
-  const selectedModel = selectedColumn?.model_code || ''
-  const isProductColumn = selectedModel === 'product'
-  const isNewsColumn = selectedModel === 'news'
-  const isCorporationColumn = selectedModel === 'corporation'
-  const isManualLinkColumn = selectedColumn?.column_kind === 'link'
-  const isManualSingleColumn = selectedColumn?.column_kind === 'single' && selectedColumn?.source_type === 'single_page'
-  const isManualColumn = isManualLinkColumn || isManualSingleColumn
   const selectedSourceType = selectedColumn?.source_type || ''
+  const isProductColumn = selectedSourceType === 'product_root' || selectedSourceType === 'product_category'
+  const isNewsColumn = selectedSourceType === 'news_category'
+  const isCorporationColumn = selectedSourceType === 'corporation_root' || selectedSourceType === 'corporation_category'
+  const isManualLinkColumn = selectedSourceType === 'custom_link'
+  const isManualSingleColumn = selectedSourceType === 'single_page'
+  const isManualColumn = isManualLinkColumn || isManualSingleColumn
   const categoryFormTargetType = editingCategoryTarget?.type || creatingCategoryTarget?.type
 
   const { data: productsData, isLoading: productsLoading } = useQuery({
@@ -328,11 +327,10 @@ export default function ColumnsPage() {
         throw new Error('栏目创建失败')
       }
 
-      const targetType = getTemplateTargetType(rootCategoryForm.model)
       if (rootCategoryForm.model !== 'corporation') {
-        await saveOptionalTemplateBinding(selectedThemeId || 0, targetType, categoryId, 'list', rootCategoryForm.listTemplateId)
+        await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', categoryId, 'list', rootCategoryForm.listTemplateId)
       }
-      await saveOptionalTemplateBinding(selectedThemeId || 0, targetType, categoryId, 'content', rootCategoryForm.contentTemplateId)
+      await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', categoryId, 'content', rootCategoryForm.contentTemplateId)
 
       return response
     },
@@ -352,13 +350,16 @@ export default function ColumnsPage() {
   })
 
   const createManualColumnMutation = useMutation({
-    mutationFn: async ({ value, templateId }: { value: ManualColumnFormValue; templateId: string }) => {
+    mutationFn: async ({ value, templateIds }: { value: ManualColumnFormValue; templateIds: { listTemplateId: string; contentTemplateId: string } }) => {
       const response = await columnsApi.create(value)
       const columnId = response.data?.id
       if (!columnId) {
         throw new Error('栏目创建失败')
       }
-      await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', columnId, 'content', templateId)
+      if (value.base.source_type !== 'single_page' && value.base.source_type !== 'contact_page') {
+        await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', columnId, 'list', templateIds.listTemplateId)
+      }
+      await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', columnId, 'content', templateIds.contentTemplateId)
       return response
     },
     onSuccess: () => {
@@ -374,9 +375,14 @@ export default function ColumnsPage() {
   })
 
   const updateManualColumnMutation = useMutation({
-    mutationFn: async ({ id, value, templateId }: { id: number; value: ManualColumnFormValue; templateId: string }) => {
+    mutationFn: async ({ id, value, templateIds }: { id: number; value: ManualColumnFormValue; templateIds: { listTemplateId: string; contentTemplateId: string } }) => {
       const response = await columnsApi.update(id, value)
-      await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'content', templateId, bindings)
+      if (value.base.source_type !== 'single_page' && value.base.source_type !== 'contact_page') {
+        await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'list', templateIds.listTemplateId, bindings)
+      } else {
+        await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'list', DEFAULT_TEMPLATE_VALUE, bindings)
+      }
+      await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'content', templateIds.contentTemplateId, bindings)
       return response
     },
     onSuccess: () => {
@@ -392,15 +398,25 @@ export default function ColumnsPage() {
   })
 
   const updateSystemColumnMutation = useMutation({
-    mutationFn: ({ id, value }: { id: number; value: ManualColumnFormValue }) => columnsApi.update(id, value.base.show_in_nav !== undefined ? {
-      parent_id: value.base.parent_id,
-      content_model_id: value.base.content_model_id,
-      sort_order: value.base.sort_order,
-      show_in_nav: value.base.show_in_nav,
-      translations: value.translations,
-    } : value),
+    mutationFn: async ({ id, value, templateIds }: { id: number; value: ManualColumnFormValue; templateIds: { listTemplateId: string; contentTemplateId: string } }) => {
+      const response = await columnsApi.update(id, value.base.show_in_nav !== undefined ? {
+        parent_id: value.base.parent_id,
+        content_model_id: value.base.content_model_id,
+        sort_order: value.base.sort_order,
+        show_in_nav: value.base.show_in_nav,
+        translations: value.translations,
+      } : value)
+      if (value.base.source_type !== 'single_page' && value.base.source_type !== 'contact_page') {
+        await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'list', templateIds.listTemplateId, bindings)
+      } else {
+        await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'list', DEFAULT_TEMPLATE_VALUE, bindings)
+      }
+      await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'content', templateIds.contentTemplateId, bindings)
+      return response
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['columns'] })
+      queryClient.invalidateQueries({ queryKey: ['template-bindings'] })
       toast.success('栏目已更新')
       setManualColumnDialogOpen(false)
       setEditingManualColumn(null)
@@ -438,13 +454,7 @@ export default function ColumnsPage() {
   const listTemplates = templates.filter((template: Template) => template.type === 'list')
   const contentTemplates = templates.filter((template: Template) => template.type === 'content')
   const selectedCategoryBindings = selectedColumn
-    ? bindings.filter((binding) => {
-      const target = getCategoryTreeTarget(selectedColumn)
-      if (!target) {
-        return false
-      }
-      return binding.target_type === target.targetType && binding.target_id === target.id
-    })
+    ? bindings.filter((binding) => binding.target_type === 'column' && binding.target_id === selectedColumn.id)
     : []
 
   const handleSelectColumn = (column: TreeItemData<Column>) => {
@@ -501,21 +511,21 @@ export default function ColumnsPage() {
     setManualColumnDialogOpen(true)
   }
 
-  const handleSubmitManualColumn = (value: ManualColumnFormValue, templateId: string) => {
+  const handleSubmitManualColumn = (value: ManualColumnFormValue, templateIds: { listTemplateId: string; contentTemplateId: string }) => {
     if (editingColumnTarget) {
-      updateSystemColumnMutation.mutate({ id: editingColumnTarget.id, value })
+      updateSystemColumnMutation.mutate({ id: editingColumnTarget.id, value, templateIds })
       return
     }
     if (manualColumnDialogMode === 'edit' && editingManualColumn) {
-      updateManualColumnMutation.mutate({ id: editingManualColumn.id, value, templateId })
+      updateManualColumnMutation.mutate({ id: editingManualColumn.id, value, templateIds })
       return
     }
-    createManualColumnMutation.mutate({ value, templateId })
+    createManualColumnMutation.mutate({ value, templateIds })
   }
 
   const handleEditManualColumn = (column: Column) => {
     setManualColumnDialogMode('edit')
-    setManualColumnDialogKind(column.column_kind === 'single' ? 'single' : 'link')
+    setManualColumnDialogKind(column.source_type === 'single_page' || column.source_type === 'contact_page' ? 'single' : 'link')
     setEditingManualColumn(column)
     setManualColumnDialogOpen(true)
   }
@@ -732,10 +742,18 @@ export default function ColumnsPage() {
     deleteNewsMutation.mutate(deleteTarget.id)
   }
 
-  const selectedManualColumnBinding = editingManualColumn
+  const selectedEditingColumnId = editingColumnTarget?.id || editingManualColumn?.id || 0
+  const selectedManualListBinding = selectedEditingColumnId
     ? bindings.find((binding) => (
       binding.target_type === 'column'
-      && binding.target_id === editingManualColumn.id
+      && binding.target_id === selectedEditingColumnId
+      && binding.template_type === 'list'
+    ))
+    : null
+  const selectedManualContentBinding = selectedEditingColumnId
+    ? bindings.find((binding) => (
+      binding.target_type === 'column'
+      && binding.target_id === selectedEditingColumnId
       && binding.template_type === 'content'
     ))
     : null
@@ -1014,8 +1032,10 @@ export default function ColumnsPage() {
         forceBasicOnly={Boolean(editingColumnTarget)}
         columns={columns}
         contentModels={contentModels}
-        templates={contentTemplates}
-        initialTemplateId={selectedManualColumnBinding?.template_id ? String(selectedManualColumnBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
+        listTemplates={listTemplates}
+        contentTemplates={contentTemplates}
+        initialListTemplateId={selectedManualListBinding?.template_id ? String(selectedManualListBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
+        initialContentTemplateId={selectedManualContentBinding?.template_id ? String(selectedManualContentBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
         submitting={createManualColumnMutation.isPending || updateManualColumnMutation.isPending || updateSystemColumnMutation.isPending}
         onSubmit={handleSubmitManualColumn}
       />
@@ -1051,7 +1071,7 @@ export default function ColumnsPage() {
             setBindingCategoryTarget(null)
           }
         }}
-        targetType={bindingCategoryTarget?.targetType || 'product_category'}
+        targetType={bindingCategoryTarget?.targetType || 'column'}
         targetId={bindingCategoryTarget?.id}
         targetName={bindingCategoryTarget?.name}
         templateTypes={bindingCategoryTarget?.type === 'corporation' ? ['content'] : ['list', 'content']}
@@ -1286,7 +1306,7 @@ function ManualColumnPanel({
     return <div className="flex h-full items-center justify-center rounded border p-8 text-center text-muted-foreground">请选择左侧栏目</div>
   }
 
-  const isSingle = column.column_kind === 'single'
+  const isSingle = column.source_type === 'single_page' || column.source_type === 'contact_page'
   return (
     <div className="flex h-full flex-col rounded border">
       <div className="border-b px-5 py-4">
@@ -1346,7 +1366,7 @@ function CategoryDetailPanel({
   const target = getCategoryTreeTarget(column)
   const listBinding = bindings.find((item) => item.template_type === 'list')
   const contentBinding = bindings.find((item) => item.template_type === 'content')
-  const detailText = column.column_kind === 'single'
+  const detailText = (column.source_type === 'single_page' || column.source_type === 'contact_page')
     ? (column.route_path || '-')
     : column.source_type === 'custom_link'
       ? (column.custom_url || '-')
@@ -1372,9 +1392,8 @@ function CategoryDetailPanel({
         <div className="space-y-1 text-sm">
           <div className="text-muted-foreground">路径与来源</div>
           <div className="break-all">{detailText}</div>
-          <div>模型：{column.model_code || '-'}</div>
-          <div>模型绑定：{modelBindingText}</div>
           <div>来源类型：{column.source_type || '-'}</div>
+          <div>模型绑定：{modelBindingText}</div>
           {target ? <div>栏目ID：{target.id}</div> : null}
         </div>
         <div className="space-y-1 text-sm">
@@ -1482,10 +1501,10 @@ function getColumnKindLabel(column: Column) {
 }
 
 function getColumnDisplayKind(column: Column): ColumnDisplayKind {
-  if (column.column_kind === 'single') {
+  if (column.source_type === 'single_page' || column.source_type === 'contact_page') {
     return 'single'
   }
-  if (column.column_kind === 'link' || column.source_type === 'custom_link') {
+  if (column.source_type === 'custom_link') {
     return 'link'
   }
   return 'category'
@@ -1493,7 +1512,7 @@ function getColumnDisplayKind(column: Column): ColumnDisplayKind {
 
 async function saveOptionalTemplateBinding(
   themeId: number,
-  targetType: Extract<TemplateBinding['target_type'], 'product_category' | 'news_category' | 'corporation_category' | 'column'>,
+  targetType: Extract<TemplateBinding['target_type'], 'column'>,
   targetId: number,
   templateType: Extract<TemplateBinding['template_type'], 'list' | 'content'>,
   templateId: string,
@@ -1522,8 +1541,7 @@ async function saveOptionalTemplateBinding(
 }
 
 function isEditableManualColumn(column: Column) {
-  return Number(column.is_system || 0) === 0
-    && (column.source_type === 'custom_link' || column.source_type === 'single_page')
+  return column.source_type === 'custom_link' || column.source_type === 'single_page'
 }
 
 function createCategoryByModel(model: CategoryModel, data: { name: string; parent_id: number; sort_order: number }) {
@@ -1536,16 +1554,6 @@ function createCategoryByModel(model: CategoryModel, data: { name: string; paren
   return corporationCategoriesApi.create({ ...data, is_external: 0 })
 }
 
-function getTemplateTargetType(model: CategoryModel): Extract<TemplateBinding['target_type'], 'product_category' | 'news_category' | 'corporation_category'> {
-  if (model === 'product') {
-    return 'product_category'
-  }
-  if (model === 'news') {
-    return 'news_category'
-  }
-  return 'corporation_category'
-}
-
 function getCategoryTreeTarget(column: Column): CategoryTreeTarget {
   if (column.source_type === 'product_root') {
     return {
@@ -1553,7 +1561,7 @@ function getCategoryTreeTarget(column: Column): CategoryTreeTarget {
       id: column.id,
       columnId: column.id,
       name: column.name,
-      targetType: 'product_category',
+      targetType: 'column',
     }
   }
 
@@ -1563,7 +1571,7 @@ function getCategoryTreeTarget(column: Column): CategoryTreeTarget {
       id: column.id,
       columnId: column.id,
       name: column.name,
-      targetType: 'product_category',
+      targetType: 'column',
     }
   }
 
@@ -1573,7 +1581,7 @@ function getCategoryTreeTarget(column: Column): CategoryTreeTarget {
       id: column.id,
       columnId: column.id,
       name: column.name,
-      targetType: 'news_category',
+      targetType: 'column',
     }
   }
 
@@ -1583,7 +1591,7 @@ function getCategoryTreeTarget(column: Column): CategoryTreeTarget {
       id: column.id,
       columnId: column.id,
       name: column.name,
-      targetType: 'corporation_category',
+      targetType: 'column',
     }
   }
 
@@ -1593,7 +1601,7 @@ function getCategoryTreeTarget(column: Column): CategoryTreeTarget {
       id: column.id,
       columnId: column.id,
       name: column.name,
-      targetType: 'corporation_category',
+      targetType: 'column',
     }
   }
 

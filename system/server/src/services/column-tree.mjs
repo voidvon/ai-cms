@@ -71,11 +71,8 @@ export function mergeLegacyCategoriesWithColumns({
 }) {
   const relevantRows = Array.isArray(columns)
     ? columns.filter((item) => (
-      String(item?.column_kind || 'category') === 'category'
-      && (
-        String(item?.source_type || '') === categorySourceType
-        || (rootSourceType && String(item?.source_type || '') === rootSourceType)
-      )
+      String(item?.source_type || '') === categorySourceType
+      || (rootSourceType && String(item?.source_type || '') === rootSourceType)
     ))
     : [];
   const { byId } = buildColumnTreeIndex(relevantRows);

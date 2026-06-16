@@ -28,13 +28,13 @@ function toNullableString(value) {
 
 function getCategoryConfig(model) {
   if (model === 'product') {
-    return { modelCode: 'product', sourceType: 'product_category', rootSourceType: 'product_root', contentModelCode: 'product' };
+    return { sourceType: 'product_category', rootSourceType: 'product_root', contentModelCode: 'product' };
   }
   if (model === 'news') {
-    return { modelCode: 'news', sourceType: 'news_category', rootSourceType: null, contentModelCode: 'news' };
+    return { sourceType: 'news_category', rootSourceType: null, contentModelCode: 'news' };
   }
   if (model === 'corporation') {
-    return { modelCode: 'corporation', sourceType: 'corporation_category', rootSourceType: 'corporation_root', contentModelCode: null };
+    return { sourceType: 'corporation_category', rootSourceType: 'corporation_root', contentModelCode: null };
   }
   throw new Error(`unsupported model: ${model}`);
 }
@@ -68,7 +68,7 @@ function mapColumnToCategory(column, rootColumn = null) {
     translations
   };
 
-  if (String(column.model_code || '') === 'corporation') {
+  if (String(column.source_type || '') === 'corporation_category' || String(column.source_type || '') === 'corporation_root') {
     mapped.is_external = toInteger(column.open_in_new_tab, 0);
     mapped.external_url = column.custom_url || null;
     mapped.sitepath = mapped.is_external;
@@ -81,8 +81,7 @@ function mapColumnToCategory(column, rootColumn = null) {
 function resolveCategoryColumnById(model, id, languageCode = null) {
   const config = getCategoryConfig(model);
   return listColumns({ languageCode, includeTranslations: true }).find((item) => (
-    String(item.model_code || '') === config.modelCode
-    && String(item.source_type || '') === config.sourceType
+    String(item.source_type || '') === config.sourceType
     && toInteger(item.id, 0) === toInteger(id, 0)
   )) || null;
 }
@@ -186,13 +185,9 @@ export function createColumnCategory(model, input) {
     base: {
       name: String(defaultTranslation?.name || '').trim(),
       parent_id: parentColumnId,
-      model_code: config.modelCode,
       source_type: config.sourceType,
-      node_type: 'category',
-      column_kind: 'single',
-      content_type: config.modelCode,
       content_model_id: contentModelId,
-      route_path: model === 'corporation' ? `/about/about-${toInteger(sourceId, 1)}.html` : `/__internal/${config.modelCode}/${toInteger(sourceId, 1)}/`,
+      route_path: model === 'corporation' ? `/about/about-${toInteger(sourceId, 1)}.html` : `/__internal/${model}/${toInteger(sourceId, 1)}/`,
       sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
       show_in_nav: 1,
       slug: toNullableString(input?.base?.slug ?? input?.slug),

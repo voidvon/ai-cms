@@ -34,10 +34,12 @@ interface ManualColumnFormDialogProps {
   forceBasicOnly?: boolean
   columns: Column[]
   contentModels: ContentModel[]
-  templates: Template[]
-  initialTemplateId: string
+  listTemplates: Template[]
+  contentTemplates: Template[]
+  initialListTemplateId: string
+  initialContentTemplateId: string
   submitting: boolean
-  onSubmit: (value: ManualColumnFormValue, templateId: string) => void
+  onSubmit: (value: ManualColumnFormValue, templateIds: { listTemplateId: string; contentTemplateId: string }) => void
 }
 
 const DEFAULT_TEMPLATE_VALUE = '__default__'
@@ -51,8 +53,10 @@ export default function ManualColumnFormDialog({
   forceBasicOnly = false,
   columns,
   contentModels,
-  templates,
-  initialTemplateId,
+  listTemplates,
+  contentTemplates,
+  initialListTemplateId,
+  initialContentTemplateId,
   submitting,
   onSubmit
 }: ManualColumnFormDialogProps) {
@@ -68,7 +72,8 @@ export default function ManualColumnFormDialog({
     show_in_nav: 1
   })
   const [translations, setTranslations] = useState<Record<string, ColumnTranslation>>({})
-  const [templateId, setTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
+  const [listTemplateId, setListTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
+  const [contentTemplateId, setContentTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
 
   const { data: languagesData } = useQuery({
     queryKey: ['languages'],
@@ -99,7 +104,8 @@ export default function ManualColumnFormDialog({
       })
       setTranslations(buildInitialTranslations(column, defaultLanguageCode, availableLanguageCodes))
       setActiveLanguage(column.current_language_code || defaultLanguageCode)
-      setTemplateId(initialTemplateId || DEFAULT_TEMPLATE_VALUE)
+      setListTemplateId(initialListTemplateId || DEFAULT_TEMPLATE_VALUE)
+      setContentTemplateId(initialContentTemplateId || DEFAULT_TEMPLATE_VALUE)
       return
     }
 
@@ -117,8 +123,9 @@ export default function ManualColumnFormDialog({
       [defaultLanguageCode]: createEmptyTranslation()
     })
     setActiveLanguage(defaultLanguageCode)
-    setTemplateId(DEFAULT_TEMPLATE_VALUE)
-  }, [open, mode, column, initialKind, initialTemplateId, defaultLanguageCode])
+    setListTemplateId(DEFAULT_TEMPLATE_VALUE)
+    setContentTemplateId(DEFAULT_TEMPLATE_VALUE)
+  }, [open, mode, column, initialKind, initialListTemplateId, initialContentTemplateId, defaultLanguageCode])
 
   const parentOptions = useMemo(() => {
     return columns.filter((item) => {
@@ -129,17 +136,15 @@ export default function ManualColumnFormDialog({
     })
   }, [columns, mode, column])
 
-  const contentTemplates = useMemo(
-    () => templates.filter((item) => item.type === 'content'),
-    [templates]
-  )
-
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
     onSubmit({
       base: baseData,
       translations,
-    }, templateId)
+    }, {
+      listTemplateId,
+      contentTemplateId,
+    })
   }
 
   const updateTranslation = (patch: Partial<ColumnTranslation>) => {
@@ -347,16 +352,16 @@ export default function ManualColumnFormDialog({
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              {!basicOnly && baseData.column_kind === 'single' ? (
+              {baseData.column_kind !== 'single' ? (
                 <div className="space-y-2">
-                  <Label>内容模板</Label>
-                  <Select value={templateId} onValueChange={setTemplateId}>
+                  <Label>列表模板</Label>
+                  <Select value={listTemplateId} onValueChange={setListTemplateId}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value={DEFAULT_TEMPLATE_VALUE}>不单独绑定</SelectItem>
-                      {contentTemplates.map((template) => (
+                      {listTemplates.map((template) => (
                         <SelectItem key={template.id} value={String(template.id)}>
                           {template.name}
                         </SelectItem>
@@ -365,6 +370,22 @@ export default function ManualColumnFormDialog({
                   </Select>
                 </div>
               ) : null}
+              <div className="space-y-2">
+                <Label>内容模板</Label>
+                <Select value={contentTemplateId} onValueChange={setContentTemplateId}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={DEFAULT_TEMPLATE_VALUE}>不单独绑定</SelectItem>
+                    {contentTemplates.map((template) => (
+                      <SelectItem key={template.id} value={String(template.id)}>
+                        {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             {!basicOnly && baseData.column_kind === 'link' ? (

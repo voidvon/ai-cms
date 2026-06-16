@@ -253,7 +253,6 @@ export function buildManualSinglePageColumns({ outputRoot = DEFAULT_OUTPUT_ROOT,
   const templateContext = getLegacyTemplateContext(languageCode);
   const items = templateContext.columns.filter((item) => (
     String(item.source_type || '') === 'single_page'
-    && String(item.column_kind || '') === 'single'
     && String(item.route_path || '').trim()
   ));
   let filesWritten = 0;
@@ -285,7 +284,7 @@ export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT, langua
   for (const item of items) {
     const html = renderCmsSitePage('legacy-content', buildLegacyContentPageProps(templateContext, item), templateContext, {
       targets: [
-        { target_type: 'corporation_category', target_id: item.id },
+        { target_type: 'column', target_id: item.id },
         { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.corporation }
       ]
     });
@@ -403,7 +402,7 @@ export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
       parent
     }), templateContext, {
       targets: [
-        { target_type: 'product_category', target_id: normalizeInteger(product.column_id, 0) },
+        { target_type: 'column', target_id: normalizeInteger(product.column_id, 0) },
         { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.product }
       ]
     });
@@ -500,8 +499,8 @@ function buildLegacyNewsSectionCategoryPagesByDir({
         summaryClassName
       }), templateContext, {
         targets: [
-          { target_type: 'news_category', target_id: category.id },
-          { target_type: 'news_category', target_id: section.rootColumnId },
+          { target_type: 'column', target_id: category.id },
+          { target_type: 'column', target_id: section.rootColumnId },
           { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.article }
         ]
       });
@@ -567,8 +566,8 @@ function buildLegacyNewsSectionDetailPagesByDir({
       next
     }), templateContext, {
       targets: [
-        { target_type: 'news_category', target_id: normalizeInteger(item.column_id, 0) },
-        { target_type: 'news_category', target_id: section.rootColumnId },
+        { target_type: 'column', target_id: normalizeInteger(item.column_id, 0) },
+        { target_type: 'column', target_id: section.rootColumnId },
         { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.article }
       ]
     });
@@ -740,7 +739,7 @@ function buildLegacyHomePageProps(templateContext) {
         summary: item.summary || ''
       };
     });
-  const newsColumns = templateContext.columns.filter((entry) => String(entry.model_code || '') === 'news');
+  const newsColumns = templateContext.columns.filter((entry) => String(entry.source_type || '') === 'news_category');
   const newsColumnById = new Map(newsColumns.map((entry) => [normalizeInteger(entry.id, 0), entry]));
   const newsSection = templateContext.publicSections.getNewsSectionByDirName('news');
   const serviceSection = templateContext.publicSections.getNewsSectionByDirName('service');
@@ -930,7 +929,6 @@ function buildLegacySiteColumns(columns, options = {}) {
     id: normalizeInteger(item?.id, 0),
     name: item?.name || '',
     parentId: normalizeInteger(item?.parent_id, 0),
-    modelCode: item?.model_code || '',
     sourceType: item?.source_type || '',
     sourceId: normalizeInteger(item?.source_id, 0),
     openInNewTab: normalizeInteger(item?.open_in_new_tab, 0),
@@ -2178,7 +2176,7 @@ function writeProductCategoryPageSet({
       categoryMap
     }), templateContext, {
       targets: [
-        { target_type: 'product_category', target_id: normalizeInteger(category.id, 0) },
+        { target_type: 'column', target_id: normalizeInteger(category.id, 0) },
         { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.product }
       ]
     });
