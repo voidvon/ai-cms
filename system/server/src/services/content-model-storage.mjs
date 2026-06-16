@@ -4,6 +4,53 @@ import { ensureLanguagesSchema } from './languages.mjs';
 
 let schemaEnsured = false;
 
+/**
+ * 获取模型的字段配置
+ */
+function getModelFields(modelCode) {
+  const fields = queryAll(
+    `SELECT field_name, is_translatable, field_type
+     FROM content_model_fields
+     WHERE model_code = ?
+     ORDER BY sort_order`,
+    [modelCode]
+  );
+
+  return {
+    mainTableFields: fields.filter(f => f.is_translatable === 0).map(f => f.field_name),
+    translationTableFields: fields.filter(f => f.is_translatable === 1).map(f => f.field_name)
+  };
+}
+
+/**
+ * 获取字段的 SQL 定义
+ */
+function getFieldDefinition(fieldName) {
+  const fieldDefinitions = {
+    // 主表字段
+    'custom_url': 'TEXT',
+    'code': 'TEXT',
+    'images': `TEXT NOT NULL DEFAULT '[]'`,
+    'primary_image': 'TEXT',
+    'is_visible': 'INTEGER NOT NULL DEFAULT 1',
+    'is_featured_home': 'INTEGER NOT NULL DEFAULT 0',
+    'sort_order': 'INTEGER NOT NULL DEFAULT 0',
+    'legacy_extra': 'TEXT',
+
+    // 翻译表字段
+    'name': `TEXT NOT NULL DEFAULT ''`,
+    'summary': `TEXT NOT NULL DEFAULT ''`,
+    'content_html': `TEXT NOT NULL DEFAULT ''`,
+    'keywords': 'TEXT',
+    'seo_title': 'TEXT',
+    'seo_keywords': 'TEXT',
+    'seo_description': 'TEXT',
+    'publish_status': `TEXT NOT NULL DEFAULT 'published'`
+  };
+
+  return fieldDefinitions[fieldName];
+}
+
 export function ensureContentModelStorageSchema() {
   if (schemaEnsured) {
     return;
@@ -45,47 +92,43 @@ export function ensureModelTables(modelCode) {
   }
 
   migrateLegacySlugUrlsToCustomUrl(tableName);
-  rebuildContentTableIfNeeded(tableName);
-  rebuildContentTranslationTableIfNeeded(tableName, translationTableName);
+  rebuildContentTableIfNeeded(tableName, modelCode);
+  rebuildContentTranslationTableIfNeeded(tableName, translationTableName, modelCode);
 
   getDb().exec(`
-    ${buildContentTableSql(tableName)}
+    ${buildContentTableSql(tableName, modelCode)}
 
     CREATE INDEX IF NOT EXISTS ${quoteIdentifier(`idx_${tableName}_column_sort`)}
-    ON ${quoteIdentifier(tableName)}(column_id, sort_order, id);
+    ON ${quoteIdentifier(tableName)}(column_id, created_at DESC, id);
 
-    CREATE INDEX IF NOT EXISTS ${quoteIdentifier(`idx_${tableName}_visible`)}
-    ON ${quoteIdentifier(tableName)}(is_visible, is_featured_home, sort_order, id);
-
-    ${buildContentTranslationTableSql(tableName, translationTableName)}
+    ${buildContentTranslationTableSql(tableName, translationTableName, modelCode)}
 
     CREATE INDEX IF NOT EXISTS ${quoteIdentifier(`idx_${translationTableName}_entry_language`)}
     ON ${quoteIdentifier(translationTableName)}(entry_id, language_id);
   `);
 
-  addColumnIfMissing(tableName, 'custom_url', 'TEXT');
-  addColumnIfMissing(tableName, 'code', 'TEXT');
-  addColumnIfMissing(tableName, 'images', `TEXT NOT NULL DEFAULT '[]'`);
-  addColumnIfMissing(tableName, 'primary_image', 'TEXT');
-  addColumnIfMissing(tableName, 'is_visible', 'INTEGER NOT NULL DEFAULT 1');
-  addColumnIfMissing(tableName, 'is_featured_home', 'INTEGER NOT NULL DEFAULT 0');
-  addColumnIfMissing(tableName, 'sort_order', 'INTEGER NOT NULL DEFAULT 0');
-  addColumnIfMissing(tableName, 'publish_status', `TEXT NOT NULL DEFAULT 'published'`);
-  addColumnIfMissing(tableName, 'published_at', 'TEXT');
-  addColumnIfMissing(tableName, 'legacy_extra', 'TEXT');
-  addColumnIfMissing(tableName, 'created_at', 'TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP');
-  addColumnIfMissing(tableName, 'updated_at', 'TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP');
+  // 根据字段配置动态添加列
+  const { mainTableFields, translationTableFields } = getModelFields(modelCode);
 
-  migrateLegacyExtraKeysToCustomUrl(tableName);
+  // 主表字段
+  mainTableFields.forEach(fieldName => {
+    const def = getFieldDefinition(fieldName);
+    if (def) {
+      addColumnIfMissing(tableName, fieldName, def);
+    }
+  });
 
-  addColumnIfMissing(translationTableName, 'summary', `TEXT NOT NULL DEFAULT ''`);
-  addColumnIfMissing(translationTableName, 'content_html', `TEXT NOT NULL DEFAULT ''`);
-  addColumnIfMissing(translationTableName, 'keywords', 'TEXT');
-  addColumnIfMissing(translationTableName, 'seo_title', 'TEXT');
-  addColumnIfMissing(translationTableName, 'seo_keywords', 'TEXT');
-  addColumnIfMissing(translationTableName, 'seo_description', 'TEXT');
-  addColumnIfMissing(translationTableName, 'publish_status', `TEXT NOT NULL DEFAULT 'published'`);
-  addColumnIfMissing(translationTableName, 'published_at', 'TEXT');
+  // 翻译表字段
+  translationTableFields.forEach(fieldName => {
+    const def = getFieldDefinition(fieldName);
+    if (def) {
+      addColumnIfMissing(translationTableName, fieldName, def);
+    }
+  });
+
+  if (mainTableFields.includes('legacy_extra')) {
+    migrateLegacyExtraKeysToCustomUrl(tableName);
+  }
 }
 
 export function getTranslationTableName(modelCode) {
@@ -169,7 +212,7 @@ function rebuildContentTableIfNeeded(tableName) {
   `);
 }
 
-function rebuildContentTranslationTableIfNeeded(tableName, translationTableName) {
+function rebuildContentTranslationTableIfNeeded(tableName, translationTableName, modelCode) {
   const createSql = getCreateTableSql(translationTableName);
 
   if (!tableNeedsForeignKeylessRebuild(translationTableName, createSql, [tableName, `${tableName}__rebuild`])) {
@@ -177,66 +220,90 @@ function rebuildContentTranslationTableIfNeeded(tableName, translationTableName)
   }
 
   const tempTableName = createTempTableName(translationTableName);
-  getDb().exec(`
-    ALTER TABLE ${quoteIdentifier(translationTableName)} RENAME TO ${quoteIdentifier(tempTableName)};
 
-    ${buildContentTranslationTableSql(tableName, translationTableName)}
+  // 获取旧表的列信息
+  const oldColumns = getDb().prepare(`PRAGMA table_info(${quoteIdentifier(translationTableName)})`).all();
+  const oldColumnNames = oldColumns.map(col => col.name);
 
-    INSERT INTO ${quoteIdentifier(translationTableName)} (
-      id,
-      entry_id,
-      language_id,
-      name,
-      summary,
-      content_html,
-      keywords,
-      seo_title,
-      seo_keywords,
-      seo_description,
-      publish_status,
-      published_at,
-      created_at,
-      updated_at
-    )
-    SELECT
-      id,
-      entry_id,
-      language_id,
-      name,
-      summary,
-      content_html,
-      keywords,
-      seo_title,
-      seo_keywords,
-      seo_description,
-      publish_status,
-      published_at,
-      created_at,
-      updated_at
-    FROM ${quoteIdentifier(tempTableName)};
+  // 定义新表应该有的列（不包含 published_at 如果是产品模型）
+  const includePublishedAt = modelCode !== 'product';
+  const newTableColumns = [
+    'id',
+    'entry_id',
+    'language_id',
+    'name',
+    'summary',
+    'content_html',
+    'keywords',
+    'seo_title',
+    'seo_keywords',
+    'seo_description',
+    'publish_status',
+    ...(includePublishedAt ? ['published_at'] : []),
+    'created_at',
+    'updated_at'
+  ];
 
-    DROP TABLE ${quoteIdentifier(tempTableName)};
+  // 计算交集：只复制新旧表都存在的列
+  const columnsToMigrate = newTableColumns.filter(col => oldColumnNames.includes(col));
 
-    CREATE INDEX IF NOT EXISTS ${quoteIdentifier(`idx_${translationTableName}_entry_language`)}
-    ON ${quoteIdentifier(translationTableName)}(entry_id, language_id);
-  `);
+  console.log(`[数据迁移] ${translationTableName}: 从 ${oldColumnNames.length} 列迁移 ${columnsToMigrate.length} 列`);
+
+  // 记录旧表的行数用于验证
+  const oldCount = getDb().prepare(`SELECT COUNT(*) as count FROM ${quoteIdentifier(translationTableName)}`).get().count;
+  console.log(`[数据迁移] ${translationTableName}: 旧表有 ${oldCount} 条记录`);
+
+  // 使用事务保护整个迁移过程
+  const db = getDb();
+
+  try {
+    db.exec('BEGIN TRANSACTION;');
+
+    // 1. 重命名旧表
+    db.exec(`ALTER TABLE ${quoteIdentifier(translationTableName)} RENAME TO ${quoteIdentifier(tempTableName)};`);
+
+    // 2. 创建新表
+    db.exec(buildContentTranslationTableSql(tableName, translationTableName, modelCode));
+
+    // 3. 复制数据（只复制共同的列）
+    const columnsList = columnsToMigrate.join(', ');
+    db.exec(`
+      INSERT INTO ${quoteIdentifier(translationTableName)} (${columnsList})
+      SELECT ${columnsList}
+      FROM ${quoteIdentifier(tempTableName)};
+    `);
+
+    // 4. 验证数据完整性
+    const newCount = db.prepare(`SELECT COUNT(*) as count FROM ${quoteIdentifier(translationTableName)}`).get().count;
+    if (newCount !== oldCount) {
+      throw new Error(`数据迁移失败: ${translationTableName} 旧表 ${oldCount} 条，新表 ${newCount} 条`);
+    }
+
+    console.log(`[数据迁移] ${translationTableName}: 成功迁移 ${newCount} 条记录`);
+
+    // 5. 删除临时表
+    db.exec(`DROP TABLE ${quoteIdentifier(tempTableName)};`);
+
+    // 6. 创建索引
+    db.exec(`
+      CREATE INDEX IF NOT EXISTS ${quoteIdentifier(`idx_${translationTableName}_entry_language`)}
+      ON ${quoteIdentifier(translationTableName)}(entry_id, language_id);
+    `);
+
+    db.exec('COMMIT;');
+  } catch (error) {
+    db.exec('ROLLBACK;');
+    console.error(`[数据迁移失败] ${translationTableName}:`, error.message);
+    throw error;
+  }
 }
 
-function buildContentTableSql(tableName) {
+function buildContentTableSql(tableName, modelCode) {
+  // 只创建基础系统字段，其他字段通过 addColumnIfMissing 动态添加
   return `
     CREATE TABLE IF NOT EXISTS ${quoteIdentifier(tableName)} (
       id INTEGER PRIMARY KEY,
       column_id INTEGER NOT NULL,
-      custom_url TEXT,
-      code TEXT,
-      images TEXT NOT NULL DEFAULT '[]',
-      primary_image TEXT,
-      is_visible INTEGER NOT NULL DEFAULT 1,
-      is_featured_home INTEGER NOT NULL DEFAULT 0,
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      publish_status TEXT NOT NULL DEFAULT 'published',
-      published_at TEXT,
-      legacy_extra TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -276,21 +343,13 @@ function migrateLegacySlugUrlsToCustomUrl(tableName) {
   }
 }
 
-function buildContentTranslationTableSql(tableName, translationTableName) {
+function buildContentTranslationTableSql(tableName, translationTableName, modelCode) {
+  // 只创建基础系统字段，其他字段通过 addColumnIfMissing 动态添加
   return `
     CREATE TABLE IF NOT EXISTS ${quoteIdentifier(translationTableName)} (
       id INTEGER PRIMARY KEY,
       entry_id INTEGER NOT NULL,
       language_id INTEGER NOT NULL,
-      name TEXT NOT NULL DEFAULT '',
-      summary TEXT NOT NULL DEFAULT '',
-      content_html TEXT NOT NULL DEFAULT '',
-      keywords TEXT,
-      seo_title TEXT,
-      seo_keywords TEXT,
-      seo_description TEXT,
-      publish_status TEXT NOT NULL DEFAULT 'published',
-      published_at TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(entry_id, language_id)

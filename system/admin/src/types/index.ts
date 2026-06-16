@@ -1,3 +1,6 @@
+// 发布状态枚举类型
+export type PublishStatus = 'draft' | 'pending_review' | 'published';
+
 export interface Admin {
   id: number;
   username: string;
@@ -54,14 +57,12 @@ export interface ProductTranslation {
   seo_title?: string;
   seo_keywords?: string;
   seo_description?: string;
-  publish_status: 'draft' | 'published';
-  published_at?: string | null;
+  publish_status: PublishStatus;
 }
 
 export interface ProductTranslationStatus {
   language_code: string;
-  publish_status: 'draft' | 'published';
-  published_at?: string | null;
+  publish_status: PublishStatus;
   has_content: boolean;
 }
 
@@ -93,14 +94,12 @@ export interface NewsTranslation {
   seo_title?: string;
   seo_keywords?: string;
   seo_description?: string;
-  publish_status: 'draft' | 'published';
-  published_at?: string | null;
+  publish_status: PublishStatus;
 }
 
 export interface NewsTranslationStatus {
   language_code: string;
-  publish_status: 'draft' | 'published';
-  published_at?: string | null;
+  publish_status: PublishStatus;
   has_content: boolean;
 }
 
