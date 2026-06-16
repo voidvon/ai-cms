@@ -108,6 +108,8 @@ export interface ProductCategory {
   source_id?: number;
   name: string;
   parent_id: number;
+  dir_name?: string | null;
+  detail_rule?: string | null;
   sort_order: number;
   seo_keywords?: string;
   seo_description?: string;
@@ -121,6 +123,8 @@ export interface NewsCategory {
   source_id?: number;
   name: string;
   parent_id: number;
+  dir_name?: string | null;
+  detail_rule?: string | null;
   sort_order: number;
   current_language_code?: string;
   translations?: Record<string, NewsCategoryTranslation>;
@@ -140,6 +144,8 @@ export interface CorporationCategory {
   id: number;
   name: string;
   parent_id: number;
+  dir_name?: string | null;
+  detail_rule?: string | null;
   sort_order: number;
 }
 
@@ -265,7 +271,9 @@ export interface Column {
   source_type: 'product_root' | 'product_category' | 'news_category' | 'corporation_root' | 'corporation_category' | 'contact_page' | 'custom_link' | 'single_page' | string;
   source_id: number;
   custom_url?: string | null;
+  dir_name?: string | null;
   route_path?: string | null;
+  detail_rule?: string | null;
   is_visible?: number;
   content_html?: string;
   seo_title?: string | null;

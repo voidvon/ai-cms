@@ -17,7 +17,9 @@ export interface ManualColumnFormValue {
     column_kind: 'link' | 'single'
     content_model_id: number
     custom_url: string
+    dir_name: string
     route_path: string
+    detail_rule: string
     sort_order: number
     is_visible: number
   }
@@ -65,7 +67,9 @@ export default function ManualColumnFormDialog({
     column_kind: initialKind,
     content_model_id: 0,
     custom_url: '',
+    dir_name: '',
     route_path: '',
+    detail_rule: '',
     sort_order: 0,
     is_visible: 1
   })
@@ -83,6 +87,22 @@ export default function ManualColumnFormDialog({
   const availableLanguageCodes = languages.map((item) => item.code)
   const currentTranslation = translations[activeLanguage] || createEmptyTranslation()
   const basicOnly = forceBasicOnly || (mode === 'edit' && column?.column_kind === 'category')
+  const detailRuleOptions = basicOnly
+    ? (
+      column?.source_type === 'news_category'
+        ? [
+            { value: 'detail/{id}.html', label: 'detail/{id}.html' },
+            { value: '{id}.html', label: '{id}.html' },
+            { value: '{slug}.html', label: '{slug}.html' },
+          ]
+        : column?.source_type === 'product_root' || column?.source_type === 'product_category'
+          ? [
+              { value: '{slug}/index.html', label: '{slug}/index.html' },
+              { value: '{id}.html', label: '{id}.html' },
+            ]
+          : []
+    )
+    : []
 
   useEffect(() => {
     if (!open) {
@@ -95,7 +115,9 @@ export default function ManualColumnFormDialog({
         column_kind: column.column_kind === 'single' ? 'single' : 'link',
         content_model_id: Number(column.content_model_id || 0),
         custom_url: column.custom_url || '',
+        dir_name: column.dir_name || '',
         route_path: column.route_path || '',
+        detail_rule: column.detail_rule || '',
         sort_order: Number(column.sort_order || 0),
         is_visible: Number(column.is_visible ?? 1)
       })
@@ -111,7 +133,9 @@ export default function ManualColumnFormDialog({
       column_kind: initialKind,
       content_model_id: 0,
       custom_url: '',
+      dir_name: '',
       route_path: '',
+      detail_rule: '',
       sort_order: 0,
       is_visible: 1
     })
@@ -397,14 +421,43 @@ export default function ManualColumnFormDialog({
                 </div>
               </>
             ) : !basicOnly ? (
-              <div className="space-y-2">
-                <Label htmlFor="manual-column-path">访问路径</Label>
-                <Input
-                  id="manual-column-path"
-                  value={baseData.route_path}
-                  onChange={(event) => setBaseData({ ...baseData, route_path: event.target.value })}
-                  placeholder="/contact/"
-                />
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="manual-column-dir-name">栏目目录名</Label>
+                  <Input
+                    id="manual-column-dir-name"
+                    value={baseData.dir_name}
+                    onChange={(event) => setBaseData({ ...baseData, dir_name: event.target.value })}
+                    placeholder="about-us"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="manual-column-path">完整访问路径</Label>
+                  <Input
+                    id="manual-column-path"
+                    value={baseData.route_path}
+                    onChange={(event) => setBaseData({ ...baseData, route_path: event.target.value })}
+                    placeholder="/about-us/"
+                  />
+                </div>
+                {detailRuleOptions.length > 0 ? (
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="manual-column-detail-rule">内容页命名规则</Label>
+                    <Select
+                      value={baseData.detail_rule || detailRuleOptions[0].value}
+                      onValueChange={(value) => setBaseData({ ...baseData, detail_rule: value })}
+                    >
+                      <SelectTrigger id="manual-column-detail-rule">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {detailRuleOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>{option.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </div>

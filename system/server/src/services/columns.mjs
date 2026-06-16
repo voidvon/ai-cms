@@ -74,7 +74,8 @@ export function ensureColumnsSchema() {
       custom_url TEXT,
       route_path TEXT,
       content_model_id INTEGER,
-      slug TEXT,
+      dir_name TEXT,
+      detail_rule TEXT,
       is_visible INTEGER NOT NULL DEFAULT 1,
       sort_order INTEGER NOT NULL DEFAULT 0,
       legacy_extra TEXT,
@@ -111,7 +112,8 @@ export function ensureColumnsSchema() {
   addColumnIfMissing('columns', 'custom_url', 'TEXT');
   addColumnIfMissing('columns', 'route_path', 'TEXT');
   addColumnIfMissing('columns', 'content_model_id', 'INTEGER');
-  addColumnIfMissing('columns', 'slug', 'TEXT');
+  addColumnIfMissing('columns', 'dir_name', 'TEXT');
+  addColumnIfMissing('columns', 'detail_rule', 'TEXT');
   addColumnIfMissing('columns', 'legacy_extra', 'TEXT');
   addColumnIfMissing('columns', 'is_visible', 'INTEGER NOT NULL DEFAULT 1');
   addColumnIfMissing('column_translations', 'summary', "TEXT NOT NULL DEFAULT ''");
@@ -127,7 +129,7 @@ export function ensureColumnsSchema() {
     CREATE INDEX IF NOT EXISTS idx_columns_parent_sort ON columns(parent_id, sort_order, id);
     CREATE INDEX IF NOT EXISTS idx_columns_source ON columns(source_type, source_id);
     CREATE INDEX IF NOT EXISTS idx_columns_visible_sort ON columns(is_visible, sort_order, id);
-    CREATE INDEX IF NOT EXISTS idx_columns_slug ON columns(slug);
+    CREATE INDEX IF NOT EXISTS idx_columns_dir_name ON columns(dir_name);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_columns_route_path_unique
     ON columns(route_path)
     WHERE route_path IS NOT NULL;
@@ -137,7 +139,9 @@ export function ensureColumnsSchema() {
   migrateColumnVisibilityToSingleField();
   migrateColumnsToLeanSchema();
   migrateColumnsDropOpenInNewTab();
+  migrateColumnsReplaceSlugWithDirName();
   migrateColumnPageDataSummaryToTranslations();
+  migrateColumnRoutePathConventions();
 
   schemaEnsured = true;
 }
@@ -154,7 +158,8 @@ export function listColumns({ languageCode = null, includeTranslations = true } 
         custom_url,
         route_path,
         content_model_id,
-        slug,
+        dir_name,
+        detail_rule,
         is_visible,
         legacy_extra,
         sort_order,
@@ -211,7 +216,8 @@ export function createManualColumn(input) {
         custom_url,
         route_path,
         content_model_id,
-        slug,
+        dir_name,
+        detail_rule,
         is_visible,
         legacy_extra,
         sort_order,
@@ -226,7 +232,8 @@ export function createManualColumn(input) {
       payload.base.custom_url,
       payload.base.route_path,
       payload.base.content_model_id,
-      payload.base.slug,
+      payload.base.dir_name,
+      payload.base.detail_rule,
       payload.base.is_visible,
       payload.base.legacy_extra,
       payload.base.sort_order,
@@ -235,6 +242,7 @@ export function createManualColumn(input) {
     ]
   );
 
+  syncManagedColumnRoutePaths();
   saveColumnTranslations(result.lastInsertRowid, payload.translations, now);
   return getColumnById(result.lastInsertRowid, { includeTranslations: true });
 }
@@ -258,7 +266,8 @@ export function updateManualColumn(id, input) {
         custom_url = ?,
         route_path = ?,
         content_model_id = ?,
-        slug = ?,
+        dir_name = ?,
+        detail_rule = ?,
         is_visible = ?,
         legacy_extra = ?,
         sort_order = ?,
@@ -271,7 +280,8 @@ export function updateManualColumn(id, input) {
       payload.base.custom_url,
       payload.base.route_path,
       payload.base.content_model_id,
-      payload.base.slug,
+      payload.base.dir_name,
+      payload.base.detail_rule,
       payload.base.is_visible,
       payload.base.legacy_extra,
       payload.base.sort_order,
@@ -280,6 +290,7 @@ export function updateManualColumn(id, input) {
     ]
   );
 
+  syncManagedColumnRoutePaths();
   saveColumnTranslations(id, payload.translations);
   return getColumnById(id, { includeTranslations: true });
 }
@@ -299,6 +310,9 @@ export function updateColumnRecord(id, input) {
       SET
         parent_id = ?,
         content_model_id = ?,
+        dir_name = ?,
+        route_path = ?,
+        detail_rule = ?,
         is_visible = ?,
         sort_order = ?,
         updated_at = ?
@@ -307,6 +321,9 @@ export function updateColumnRecord(id, input) {
     [
       payload.base.parent_id,
       payload.base.content_model_id,
+      payload.base.dir_name,
+      payload.base.route_path,
+      payload.base.detail_rule,
       payload.base.is_visible,
       payload.base.sort_order,
       new Date().toISOString(),
@@ -314,6 +331,7 @@ export function updateColumnRecord(id, input) {
     ]
   );
 
+  syncManagedColumnRoutePaths();
   saveColumnTranslations(id, payload.translations);
   return getColumnById(id, { includeTranslations: true });
 }
@@ -381,7 +399,8 @@ function hydrateColumns(rows, {
       seo_keywords: resolvedSeoKeywords ?? null,
       seo_description: resolvedSeoDescription ?? null,
       content_model_id: toNullableInteger(row.content_model_id),
-      slug: row.slug || null,
+      dir_name: row.dir_name || null,
+      detail_rule: row.detail_rule || null,
       publish_status: resolvedPublishStatus,
       published_at: resolvedPublishedAt,
       legacy_extra: row.legacy_extra || null,
@@ -552,7 +571,8 @@ function getColumnByIdRaw(id) {
         custom_url,
         route_path,
         content_model_id,
-        slug,
+        dir_name,
+        detail_rule,
         is_visible,
         legacy_extra,
         sort_order,
@@ -599,6 +619,7 @@ function normalizeManualColumnInput(input, options = {}) {
   const summary = toNullableString(input.summary ?? existingView.summary) || '';
   const keywords = toNullableString(input.keywords ?? existingView.keywords);
   const contentModelId = normalizeContentModelId(input.content_model_id ?? existing?.content_model_id);
+  const detailRule = normalizeColumnDetailRule(input.detail_rule ?? existing?.detail_rule, sourceType);
 
   if (columnKind === 'category' || CATEGORY_SOURCE_TYPES.has(sourceType)) {
     const routePath = normalizeRoutePath(input.route_path ?? existing?.route_path ?? getManualRoutePathBySourceType(sourceType));
@@ -615,7 +636,8 @@ function normalizeManualColumnInput(input, options = {}) {
       seo_keywords: seoKeywords,
       seo_description: seoDescription,
       content_model_id: contentModelId,
-      slug: toNullableString(input.slug ?? existing?.slug),
+      dir_name: normalizeColumnDirName(input.dir_name ?? existing?.dir_name),
+      detail_rule: detailRule,
       publish_status: normalizePublishStatus(input.publish_status ?? existing?.publish_status),
       published_at: toNullableString(input.published_at ?? existing?.published_at),
       is_visible: isVisible,
@@ -639,7 +661,8 @@ function normalizeManualColumnInput(input, options = {}) {
       seo_keywords: seoKeywords,
       seo_description: seoDescription,
       content_model_id: contentModelId,
-      slug: null,
+      dir_name: null,
+      detail_rule: null,
       publish_status: 'published',
       published_at: null,
       is_visible: isVisible,
@@ -665,7 +688,8 @@ function normalizeManualColumnInput(input, options = {}) {
     seo_keywords: seoKeywords,
     seo_description: seoDescription,
     content_model_id: contentModelId,
-    slug: toNullableString(input.slug ?? existing?.slug),
+    dir_name: normalizeColumnDirName(input.dir_name ?? existing?.dir_name),
+    detail_rule: detailRule,
     publish_status: normalizePublishStatus(input.publish_status ?? existing?.publish_status),
     published_at: toNullableString(input.published_at ?? existing?.published_at),
     is_visible: isVisible,
@@ -714,6 +738,12 @@ function normalizeExistingColumnMutationInput(input, existingColumn = null) {
   const sortOrder = toInteger(input?.sort_order ?? existing.sort_order, 0);
   const isVisible = toBooleanInt(input?.is_visible ?? existing.is_visible, 1);
   const contentModelId = normalizeContentModelId(input?.content_model_id ?? existing.content_model_id);
+  const sourceType = String(existing.source_type || '').trim().toLowerCase();
+  const dirName = normalizeColumnDirName(input?.dir_name ?? existing.dir_name);
+  const routePath = supportsManagedCategoryRoutePath(sourceType)
+    ? normalizeRoutePath(input?.route_path ?? existing.route_path ?? getManualRoutePathBySourceType(sourceType))
+    : toNullableString(input?.route_path ?? existing.route_path);
+  const detailRule = normalizeColumnDetailRule(input?.detail_rule ?? existing.detail_rule, sourceType);
 
   const translations = normalizeColumnTranslations(input?.translations || {}, {
     defaultLanguageCode,
@@ -735,11 +765,22 @@ function normalizeExistingColumnMutationInput(input, existingColumn = null) {
     base: {
       parent_id: parentId || null,
       content_model_id: contentModelId,
+      dir_name: dirName,
+      route_path: routePath,
+      detail_rule: detailRule,
       sort_order: sortOrder,
       is_visible: isVisible
     },
     translations
   };
+}
+
+function supportsManagedCategoryRoutePath(sourceType) {
+  return sourceType === 'product_root'
+    || sourceType === 'product_category'
+    || sourceType === 'news_category'
+    || sourceType === 'corporation_root'
+    || sourceType === 'corporation_category';
 }
 
 function normalizeContentModelId(value) {
@@ -1016,6 +1057,65 @@ function normalizeRoutePath(value) {
   return `${routePath}/`;
 }
 
+function normalizeColumnDirName(value) {
+  const normalized = toNullableString(value);
+  if (!normalized) {
+    return null;
+  }
+  return normalized
+    .toLowerCase()
+    .replace(/^\/+|\/+$/g, '')
+    .replace(/[^a-z0-9/_-]+/g, '-')
+    .replace(/\/{2,}/g, '/')
+    .replace(/-+/g, '-')
+    .replace(/^[-/]+|[-/]+$/g, '') || null;
+}
+
+function normalizeColumnDetailRule(value, sourceType) {
+  const normalizedSourceType = String(sourceType || '').trim().toLowerCase();
+  const normalizedValue = toNullableString(value);
+
+  if (!supportsColumnDetailRule(normalizedSourceType)) {
+    return null;
+  }
+
+  if (!normalizedValue) {
+    return getDefaultColumnDetailRule(normalizedSourceType);
+  }
+
+  const allowed = getAllowedDetailRules(normalizedSourceType);
+  if (!allowed.has(normalizedValue)) {
+    throw new Error('内容页命名规则不受支持');
+  }
+  return normalizedValue;
+}
+
+function supportsColumnDetailRule(sourceType) {
+  return sourceType === 'product_root'
+    || sourceType === 'product_category'
+    || sourceType === 'news_category';
+}
+
+function getDefaultColumnDetailRule(sourceType) {
+  if (sourceType === 'product_root' || sourceType === 'product_category') {
+    return '{slug}/index.html';
+  }
+  if (sourceType === 'news_category') {
+    return 'detail/{id}.html';
+  }
+  return null;
+}
+
+function getAllowedDetailRules(sourceType) {
+  if (sourceType === 'product_root' || sourceType === 'product_category') {
+    return new Set(['{slug}/index.html', '{id}.html']);
+  }
+  if (sourceType === 'news_category') {
+    return new Set(['detail/{id}.html', '{id}.html', '{slug}.html']);
+  }
+  return new Set();
+}
+
 function pathLooksLikeFile(value) {
   const lastSegment = String(value || '').split('/').filter(Boolean).pop() || '';
   return lastSegment.includes('.');
@@ -1224,7 +1324,7 @@ function migrateColumnsToLeanSchema() {
   ) {
     getDb().exec(`
       DROP INDEX IF EXISTS idx_columns_model_node;
-      DROP INDEX IF EXISTS idx_columns_slug;
+      DROP INDEX IF EXISTS idx_columns_dir_name;
       DROP INDEX IF EXISTS idx_columns_route_path_unique;
 
       ALTER TABLE columns RENAME TO columns_legacy_rebuild;
@@ -1237,7 +1337,8 @@ function migrateColumnsToLeanSchema() {
         custom_url TEXT,
         route_path TEXT,
         content_model_id INTEGER,
-        slug TEXT,
+        dir_name TEXT,
+        detail_rule TEXT,
         is_visible INTEGER NOT NULL DEFAULT 1,
         sort_order INTEGER NOT NULL DEFAULT 0,
         legacy_extra TEXT,
@@ -1255,7 +1356,8 @@ function migrateColumnsToLeanSchema() {
         custom_url,
         route_path,
         content_model_id,
-        slug,
+        dir_name,
+        detail_rule,
         is_visible,
         sort_order,
         legacy_extra,
@@ -1270,7 +1372,11 @@ function migrateColumnsToLeanSchema() {
         custom_url,
         route_path,
         content_model_id,
-        slug,
+        CASE
+          WHEN trim(coalesce(slug, '')) <> '' THEN slug
+          ELSE NULL
+        END,
+        NULL,
         CASE
           WHEN show_in_nav IS NULL THEN coalesce(is_visible, 1)
           ELSE show_in_nav
@@ -1297,7 +1403,7 @@ function migrateColumnsToLeanSchema() {
       CREATE INDEX idx_columns_parent_sort ON columns(parent_id, sort_order, id);
       CREATE INDEX idx_columns_source ON columns(source_type, source_id);
       CREATE INDEX idx_columns_visible_sort ON columns(is_visible, sort_order, id);
-      CREATE INDEX idx_columns_slug ON columns(slug);
+      CREATE INDEX idx_columns_dir_name ON columns(dir_name);
       CREATE UNIQUE INDEX idx_columns_route_path_unique
       ON columns(route_path)
       WHERE route_path IS NOT NULL;
@@ -1325,7 +1431,7 @@ function migrateColumnVisibilityToSingleField() {
     DROP INDEX IF EXISTS idx_columns_parent_sort;
     DROP INDEX IF EXISTS idx_columns_source;
     DROP INDEX IF EXISTS idx_columns_visible_sort;
-    DROP INDEX IF EXISTS idx_columns_slug;
+    DROP INDEX IF EXISTS idx_columns_dir_name;
     DROP INDEX IF EXISTS idx_columns_route_path_unique;
 
     ALTER TABLE columns RENAME TO columns_visibility_merge_rebuild;
@@ -1338,7 +1444,8 @@ function migrateColumnVisibilityToSingleField() {
       custom_url TEXT,
       route_path TEXT,
       content_model_id INTEGER,
-      slug TEXT,
+      dir_name TEXT,
+      detail_rule TEXT,
       is_visible INTEGER NOT NULL DEFAULT 1,
       sort_order INTEGER NOT NULL DEFAULT 0,
       legacy_extra TEXT,
@@ -1356,7 +1463,8 @@ function migrateColumnVisibilityToSingleField() {
       custom_url,
       route_path,
       content_model_id,
-      slug,
+      dir_name,
+      detail_rule,
       is_visible,
       sort_order,
       legacy_extra,
@@ -1371,7 +1479,12 @@ function migrateColumnVisibilityToSingleField() {
       custom_url,
       route_path,
       content_model_id,
-      slug,
+      CASE
+        WHEN trim(coalesce(dir_name, '')) <> '' THEN dir_name
+        WHEN trim(coalesce(slug, '')) <> '' THEN slug
+        ELSE NULL
+      END,
+      NULL,
       coalesce(is_visible, 1),
       sort_order,
       legacy_extra,
@@ -1384,7 +1497,7 @@ function migrateColumnVisibilityToSingleField() {
     CREATE INDEX idx_columns_parent_sort ON columns(parent_id, sort_order, id);
     CREATE INDEX idx_columns_source ON columns(source_type, source_id);
     CREATE INDEX idx_columns_visible_sort ON columns(is_visible, sort_order, id);
-    CREATE INDEX idx_columns_slug ON columns(slug);
+    CREATE INDEX idx_columns_dir_name ON columns(dir_name);
     CREATE UNIQUE INDEX idx_columns_route_path_unique
     ON columns(route_path)
     WHERE route_path IS NOT NULL;
@@ -1401,7 +1514,7 @@ function migrateColumnsDropOpenInNewTab() {
     DROP INDEX IF EXISTS idx_columns_parent_sort;
     DROP INDEX IF EXISTS idx_columns_source;
     DROP INDEX IF EXISTS idx_columns_visible_sort;
-    DROP INDEX IF EXISTS idx_columns_slug;
+    DROP INDEX IF EXISTS idx_columns_dir_name;
     DROP INDEX IF EXISTS idx_columns_route_path_unique;
 
     ALTER TABLE columns RENAME TO columns_open_in_new_tab_rebuild;
@@ -1414,7 +1527,8 @@ function migrateColumnsDropOpenInNewTab() {
       custom_url TEXT,
       route_path TEXT,
       content_model_id INTEGER,
-      slug TEXT,
+      dir_name TEXT,
+      detail_rule TEXT,
       is_visible INTEGER NOT NULL DEFAULT 1,
       sort_order INTEGER NOT NULL DEFAULT 0,
       legacy_extra TEXT,
@@ -1432,7 +1546,8 @@ function migrateColumnsDropOpenInNewTab() {
       custom_url,
       route_path,
       content_model_id,
-      slug,
+      dir_name,
+      detail_rule,
       is_visible,
       sort_order,
       legacy_extra,
@@ -1447,7 +1562,12 @@ function migrateColumnsDropOpenInNewTab() {
       custom_url,
       route_path,
       content_model_id,
-      slug,
+      CASE
+        WHEN trim(coalesce(dir_name, '')) <> '' THEN dir_name
+        WHEN trim(coalesce(slug, '')) <> '' THEN slug
+        ELSE NULL
+      END,
+      NULL,
       coalesce(is_visible, 1),
       sort_order,
       legacy_extra,
@@ -1460,11 +1580,319 @@ function migrateColumnsDropOpenInNewTab() {
     CREATE INDEX idx_columns_parent_sort ON columns(parent_id, sort_order, id);
     CREATE INDEX idx_columns_source ON columns(source_type, source_id);
     CREATE INDEX idx_columns_visible_sort ON columns(is_visible, sort_order, id);
-    CREATE INDEX idx_columns_slug ON columns(slug);
+    CREATE INDEX idx_columns_dir_name ON columns(dir_name);
     CREATE UNIQUE INDEX idx_columns_route_path_unique
     ON columns(route_path)
     WHERE route_path IS NOT NULL;
   `);
+}
+
+function migrateColumnRoutePathConventions() {
+  const rows = queryAll(`
+    SELECT id, source_type, source_id, parent_id, custom_url, route_path, dir_name, detail_rule, legacy_extra
+    FROM columns
+  `);
+
+  for (const row of rows) {
+    const sourceType = String(row.source_type || '').trim();
+    const currentRoutePath = toNullableString(row.route_path);
+    const currentCustomUrl = toNullableString(row.custom_url);
+    const currentDirName = normalizeColumnDirName(row.dir_name);
+    const currentDetailRule = toNullableString(row.detail_rule);
+
+    let nextRoutePath = currentRoutePath;
+    let nextCustomUrl = currentCustomUrl;
+    let nextDirName = currentDirName;
+    let nextDetailRule = normalizeColumnDetailRule(currentDetailRule, sourceType);
+
+    if (sourceType === 'custom_link') {
+      nextRoutePath = null;
+      nextDirName = null;
+      nextDetailRule = null;
+    } else if (sourceType === 'contact_page') {
+      nextRoutePath = '/contact.html';
+      nextCustomUrl = null;
+      nextDirName = null;
+      nextDetailRule = null;
+    } else if (sourceType === 'product_root') {
+      nextRoutePath = '/products/';
+      nextCustomUrl = null;
+    } else if (sourceType === 'product_category') {
+      nextCustomUrl = null;
+    } else if (sourceType === 'news_category') {
+      nextCustomUrl = null;
+      if (toInteger(row.parent_id, 0) === 0) {
+        const sectionDir = resolveNewsRouteDirFromColumn(row);
+        nextRoutePath = sectionDir ? `/${sectionDir}/` : currentRoutePath;
+        nextDirName = sectionDir || null;
+      }
+    } else if (sourceType === 'corporation_root') {
+      nextRoutePath = '/about/';
+      nextCustomUrl = null;
+      nextDirName = null;
+      nextDetailRule = null;
+    } else if (sourceType === 'corporation_category') {
+      nextRoutePath = `/about/about-${toInteger(row.id, 0)}.html`;
+      nextCustomUrl = null;
+      nextDetailRule = null;
+    } else if (sourceType === 'single_page') {
+      nextCustomUrl = null;
+      nextDetailRule = null;
+    }
+
+    if (
+      nextRoutePath !== currentRoutePath
+      || nextCustomUrl !== currentCustomUrl
+      || nextDirName !== currentDirName
+      || nextDetailRule !== currentDetailRule
+    ) {
+      execute(
+        `
+          UPDATE columns
+          SET
+            custom_url = ?,
+            route_path = ?,
+            dir_name = ?,
+            detail_rule = ?,
+            updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `,
+        [
+          nextCustomUrl,
+          nextRoutePath,
+          nextDirName,
+          nextDetailRule,
+          toInteger(row.id, 0)
+        ]
+      );
+    }
+  }
+
+  syncManagedColumnRoutePaths();
+}
+
+function resolveNewsRouteDirFromColumn(row) {
+  const legacy = parseJsonObject(row?.legacy_extra);
+  const hints = [
+    legacy.key,
+    legacy.import_key,
+    row?.route_path,
+    row?.dir_name
+  ].filter(Boolean).map((value) => String(value).trim().toLowerCase());
+
+  if (hints.some((value) => /(service|services|support|knowledge|learn|training|服务|知识|学习|培训)/i.test(value))) {
+    return 'service';
+  }
+  if (hints.some((value) => /(news|article|articles|insight|updates|新闻|资讯|动态)/i.test(value))) {
+    return 'news';
+  }
+  return 'news';
+}
+
+function migrateColumnsReplaceSlugWithDirName() {
+  const currentColumns = new Set(queryAll('PRAGMA table_info(columns)').map((column) => String(column.name || '')));
+  if (!currentColumns.has('slug')) {
+    return;
+  }
+
+  getDb().exec(`
+    DROP INDEX IF EXISTS idx_columns_parent_sort;
+    DROP INDEX IF EXISTS idx_columns_source;
+    DROP INDEX IF EXISTS idx_columns_visible_sort;
+    DROP INDEX IF EXISTS idx_columns_slug;
+    DROP INDEX IF EXISTS idx_columns_dir_name;
+    DROP INDEX IF EXISTS idx_columns_route_path_unique;
+
+    ALTER TABLE columns RENAME TO columns_slug_to_dir_name_rebuild;
+
+    CREATE TABLE columns (
+      id INTEGER PRIMARY KEY,
+      parent_id INTEGER,
+      source_type TEXT NOT NULL,
+      source_id INTEGER NOT NULL DEFAULT 0,
+      custom_url TEXT,
+      route_path TEXT,
+      content_model_id INTEGER,
+      dir_name TEXT,
+      detail_rule TEXT,
+      is_visible INTEGER NOT NULL DEFAULT 1,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      legacy_extra TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (source_type, source_id),
+      FOREIGN KEY (parent_id) REFERENCES columns(id) ON DELETE SET NULL
+    );
+
+    INSERT INTO columns (
+      id,
+      parent_id,
+      source_type,
+      source_id,
+      custom_url,
+      route_path,
+      content_model_id,
+      dir_name,
+      detail_rule,
+      is_visible,
+      sort_order,
+      legacy_extra,
+      created_at,
+      updated_at
+    )
+    SELECT
+      id,
+      parent_id,
+      source_type,
+      source_id,
+      custom_url,
+      route_path,
+      content_model_id,
+      CASE
+        WHEN trim(coalesce(dir_name, '')) <> '' THEN dir_name
+        WHEN trim(coalesce(slug, '')) <> '' THEN slug
+        ELSE NULL
+      END,
+      NULL,
+      coalesce(is_visible, 1),
+      sort_order,
+      legacy_extra,
+      created_at,
+      updated_at
+    FROM columns_slug_to_dir_name_rebuild;
+
+    DROP TABLE columns_slug_to_dir_name_rebuild;
+
+    CREATE INDEX idx_columns_parent_sort ON columns(parent_id, sort_order, id);
+    CREATE INDEX idx_columns_source ON columns(source_type, source_id);
+    CREATE INDEX idx_columns_visible_sort ON columns(is_visible, sort_order, id);
+    CREATE INDEX idx_columns_dir_name ON columns(dir_name);
+    CREATE UNIQUE INDEX idx_columns_route_path_unique
+    ON columns(route_path)
+    WHERE route_path IS NOT NULL;
+  `);
+}
+
+function syncManagedColumnRoutePaths() {
+  const rows = queryAll(`
+    SELECT id, parent_id, source_type, route_path, dir_name, sort_order
+    FROM columns
+    ORDER BY coalesce(parent_id, 0) ASC, sort_order ASC, id ASC
+  `);
+  if (!rows.length) {
+    return;
+  }
+
+  const rowById = new Map(rows.map((row) => [toInteger(row.id, 0), row]));
+  const computedPathById = new Map();
+
+  for (const row of rows) {
+    const id = toInteger(row.id, 0);
+    const nextRoutePath = computeManagedColumnRoutePath(row, rowById, computedPathById);
+    if (!nextRoutePath) {
+      continue;
+    }
+    computedPathById.set(id, nextRoutePath);
+    if (String(row.route_path || '').trim() !== nextRoutePath) {
+      execute(
+        `
+          UPDATE columns
+          SET route_path = ?, updated_at = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `,
+        [nextRoutePath, id]
+      );
+    }
+  }
+}
+
+function computeManagedColumnRoutePath(row, rowById, computedPathById) {
+  const sourceType = String(row?.source_type || '').trim();
+  if (sourceType === 'product_root') {
+    return '/products/';
+  }
+  if (sourceType === 'product_category') {
+    const segments = buildManagedColumnDirSegments(row, rowById, 'product_root');
+    return segments.length > 0 ? `/products/${segments.join('/')}/` : '/products/';
+  }
+  if (sourceType === 'news_category') {
+    const parentId = toInteger(row?.parent_id, 0);
+    if (parentId <= 0) {
+      return String(row?.route_path || '').trim() || '/news/';
+    }
+    const parent = rowById.get(parentId);
+    const parentRoutePath = parent ? (
+      computedPathById.get(parentId)
+      || computeManagedColumnRoutePath(parent, rowById, computedPathById)
+    ) : '';
+    const dirName = normalizeColumnDirName(row?.dir_name);
+    if (!dirName || !parentRoutePath) {
+      return String(row?.route_path || '').trim();
+    }
+    return joinManagedRoutePath(parentRoutePath, dirName);
+  }
+  if (sourceType === 'corporation_root') {
+    return '/about/';
+  }
+  return null;
+}
+
+function buildManagedColumnDirSegments(row, rowById, stopSourceType) {
+  const segments = [];
+  let current = row;
+  const visited = new Set();
+
+  while (current) {
+    const currentId = toInteger(current.id, 0);
+    if (currentId <= 0 || visited.has(currentId)) {
+      break;
+    }
+    visited.add(currentId);
+
+    const dirName = normalizeColumnDirName(current.dir_name);
+    if (dirName) {
+      segments.unshift(dirName);
+    }
+
+    const parentId = toInteger(current.parent_id, 0);
+    if (parentId <= 0) {
+      break;
+    }
+    const parent = rowById.get(parentId);
+    if (!parent) {
+      break;
+    }
+    if (String(parent.source_type || '').trim() === stopSourceType) {
+      break;
+    }
+    current = parent;
+  }
+
+  return segments;
+}
+
+function joinManagedRoutePath(parentRoutePath, dirName) {
+  const parent = String(parentRoutePath || '').trim().replace(/\/+$/, '');
+  const child = String(dirName || '').trim().replace(/^\/+|\/+$/g, '');
+  if (!parent) {
+    return child ? `/${child}/` : '/';
+  }
+  if (!child) {
+    return `${parent}/`;
+  }
+  return `${parent}/${child}/`;
+}
+
+function parseJsonObject(value) {
+  if (!value) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
 }
 
 function rebuildColumnTranslationsIfNeeded() {

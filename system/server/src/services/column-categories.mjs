@@ -51,7 +51,8 @@ function mapColumnToCategory(column, rootColumn = null) {
       ? 0
       : parentId,
     sort_order: toInteger(column.sort_order, 0),
-    slug: column.slug || null,
+    dir_name: column.dir_name || null,
+    detail_rule: column.detail_rule || null,
     summary: column.summary ?? '',
     content_html: column.content_html ?? '',
     keywords: column.keywords ?? null,
@@ -183,7 +184,8 @@ export function createColumnCategory(model, input) {
       route_path: model === 'corporation' ? `/about/about-${toInteger(sourceId, 1)}.html` : `/__internal/${model}/${toInteger(sourceId, 1)}/`,
       sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
       is_visible: 1,
-      slug: toNullableString(input?.base?.slug ?? input?.slug),
+      dir_name: toNullableString(input?.base?.dir_name ?? input?.dir_name),
+      detail_rule: toNullableString(input?.base?.detail_rule ?? input?.detail_rule),
       legacy_extra: input?.base?.legacy_extra ?? input?.legacy_extra ?? null
     },
     translations
@@ -233,7 +235,8 @@ export function updateColumnCategory(model, id, input) {
         parent_id: parentColumnId,
         content_model_id: contentModelId,
         route_path: `/about/about-${column.id}.html`,
-        slug: toNullableString(input?.base?.slug ?? input?.slug ?? column.slug),
+        dir_name: toNullableString(input?.base?.dir_name ?? input?.dir_name ?? column.dir_name),
+        detail_rule: toNullableString(input?.base?.detail_rule ?? input?.detail_rule ?? column.detail_rule),
         legacy_extra: input?.base?.legacy_extra ?? input?.legacy_extra ?? column.legacy_extra ?? null,
         sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order ?? column.sort_order, 0),
         is_visible: 1,
@@ -242,13 +245,21 @@ export function updateColumnCategory(model, id, input) {
       translations
     });
   } else {
-      updateColumnRecord(column.id, {
+    updateManualColumn(column.id, {
+      base: {
         parent_id: parentColumnId,
+        source_type: column.source_type,
         content_model_id: contentModelId,
+        route_path: column.route_path,
+        dir_name: toNullableString(input?.base?.dir_name ?? input?.dir_name ?? column.dir_name),
+        detail_rule: toNullableString(input?.base?.detail_rule ?? input?.detail_rule ?? column.detail_rule),
         sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order ?? column.sort_order, 0),
         is_visible: toInteger(input?.base?.is_visible ?? column.is_visible, 1),
-        translations
-      });
+        custom_url: null,
+        legacy_extra: input?.base?.legacy_extra ?? input?.legacy_extra ?? column.legacy_extra ?? null
+      },
+      translations
+    });
   }
 
   return getColumnCategoryById(model, id, { includeTranslations: true });

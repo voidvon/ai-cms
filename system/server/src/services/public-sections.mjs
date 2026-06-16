@@ -76,13 +76,16 @@ export function buildColumnPublicUrl(column, publicSections) {
     return '';
   }
 
+  const explicitRoutePath = String(column.route_path || '').trim();
   const sourceType = String(column.source_type || '');
+  if (sourceType !== 'custom_link' && explicitRoutePath) {
+    return explicitRoutePath;
+  }
   if (sourceType === 'product_root') {
     return '/products/';
   }
   if (sourceType === 'product_category') {
-    const publicId = resolveLegacyCategoryPublicId(column);
-    return publicId ? `/products/${publicId}.html` : '';
+    return '';
   }
   if (sourceType === 'news_category') {
     const section = publicSections?.getNewsSectionByColumnId?.(column.id);
@@ -92,7 +95,7 @@ export function buildColumnPublicUrl(column, publicSections) {
     if (toInteger(column.id, 0) === toInteger(section.rootColumnId, 0)) {
       return `/${section.dirName}/`;
     }
-    return `/${section.dirName}/${resolveLegacyCategoryPublicId(column)}.html`;
+    return '';
   }
   if (sourceType === 'corporation_root') {
     return '/about/';
@@ -105,9 +108,6 @@ export function buildColumnPublicUrl(column, publicSections) {
   }
   if (sourceType === 'custom_link') {
     return String(column.custom_url || '').trim();
-  }
-  if (sourceType === 'single_page') {
-    return String(column.route_path || '').trim();
   }
   return '';
 }
@@ -151,7 +151,7 @@ function reserveDirName(candidate, usedDirNames, root) {
 function collectNewsRootHints(root) {
   const hints = [
     root?.name,
-    root?.slug,
+    root?.dir_name,
     root?.route_path
   ].filter(Boolean);
   const legacyExtra = parseLegacyExtra(root?.legacy_extra);

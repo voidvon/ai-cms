@@ -20,6 +20,15 @@ import {
   resolveLegacyCategoryPublicId,
   resolvePublicSectionContext
 } from './services/public-sections.mjs';
+import {
+  buildCategorySlugPath,
+  buildNewsDetailOutputPath,
+  buildNewsDetailPublicUrl,
+  buildProductCategoryPublicUrl,
+  buildProductDetailOutputPath,
+  buildProductDetailPublicUrl,
+  resolveColumnRouteOutputPath
+} from './services/column-paths.mjs';
 import { getSiteConfig } from './services/site.mjs';
 import { ensureTemplatesSchema } from './services/templates.mjs';
 import { listLanguages } from './services/languages.mjs';
@@ -42,19 +51,19 @@ const DEFAULT_OUTPUT_ROOT = CONTENT_ROOT;
 const PRODUCT_LIST_PAGE_SIZE = 14;
 const NEWS_LIST_PAGE_SIZE = 6;
 
-// 全局分类slug映射，在静态生成时填充
+// 全局分类目录映射，在静态生成时填充
 let globalCategorySlugMap = new Map();
 let globalCategoryMap = new Map(); // 新增：存储完整的分类对象映射
 
 /**
- * 设置全局分类slug映射
+ * 设置全局分类目录映射
  */
 function setGlobalCategorySlugMap(categories) {
   globalCategoryMap = new Map(
     categories.map(cat => [normalizeInteger(cat.id, 0), cat])
   );
 
-  // 为每个分类构建完整的slug路径
+  // 为每个分类构建完整的目录路径
   globalCategorySlugMap = new Map(
     categories.map(cat => {
       const slugPath = buildCategorySlugPath(cat, globalCategoryMap);
@@ -63,23 +72,21 @@ function setGlobalCategorySlugMap(categories) {
   );
 }
 
-/**
- * 生成产品URL
- * 格式: /products/{parent-slug}/{category-slug}/{product-slug}/
- */
 function buildProductUrl(product, categorySlugPath = null) {
-  // 如果没有传入 categorySlugPath，尝试从全局映射查找
   if (!categorySlugPath && product.column_id) {
     categorySlugPath = globalCategorySlugMap.get(normalizeInteger(product.column_id, 0));
   }
+  return buildProductDetailPublicUrl(product, categorySlugPath);
+}
 
-  if (product.slug && categorySlugPath) {
-    return `/products/${categorySlugPath}/${product.slug}/`;
-  }
-  if (product.slug) {
-    return `/products/${product.slug}/`;
-  }
-  return `/product/${product.id}.html`;
+function buildArticleUrl(entry, templateContext, sectionOverride = null) {
+  const publicSections = templateContext?.publicSections;
+  const section = sectionOverride
+    || publicSections?.getNewsSectionByColumnId?.(normalizeInteger(entry?.column_id, 0))
+    || null;
+  const sectionDir = String(section?.dirName || 'news').trim();
+  const detailRule = section?.rootColumn?.detail_rule || null;
+  return buildNewsDetailPublicUrl(entry, { sectionDir, detail_rule: detailRule });
 }
 
 function listNewsCategories({ languageCode = null } = {}) {
@@ -154,7 +161,7 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
     const normalizedOutputRoot = resolveLanguageOutputRoot(outputRoot, language);
     const results = [];
 
-    // 初始化全局分类slug映射
+    // 初始化全局分类目录映射
     const templateContext = getLegacyTemplateContext(language.code);
     setGlobalCategorySlugMap(templateContext.productCategories);
 
@@ -407,22 +414,13 @@ export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
       ]
     });
 
-    // 根据是否有 slug 决定文件路径
+    const categorySlug = category?.dir_name;
     let outputPath;
-    const categorySlug = category?.slug;
-
     if (product.slug && categorySlug) {
-      // 构建完整的分类路径（包含所有祖先分类）
       const categorySlugPath = buildCategorySlugPath(category, categoryMap);
-
-      // 使用完整分类路径和产品 slug: /products/{parent-slug}/{category-slug}/{product-slug}/index.html
-      outputPath = path.join('products', ...categorySlugPath, product.slug, 'index.html');
-    } else if (product.slug) {
-      // 只有产品 slug: /products/{slug}/index.html
-      outputPath = path.join('products', product.slug, 'index.html');
+      outputPath = buildProductDetailOutputPath(product, categorySlugPath);
     } else {
-      // 回退到 ID: /product/{id}.html
-      outputPath = path.join('product', `${product.id}.html`);
+      outputPath = buildProductDetailOutputPath(product);
     }
 
     writeTextFile(outputRoot, outputPath, html, templateContext.site);
@@ -560,6 +558,7 @@ function buildLegacyNewsSectionDetailPagesByDir({
     const html = renderCmsSitePage('legacy-article-detail', buildLegacyArticleDetailPageProps({
       templateContext,
       section: section.sectionType,
+      sectionConfig: section,
       item,
       category,
       previous,
@@ -572,7 +571,11 @@ function buildLegacyNewsSectionDetailPagesByDir({
       ]
     });
 
-    writeTextFile(outputRoot, path.join(dirName, 'detail', `${item.id}.html`), html, templateContext.site);
+    const outputPath = buildNewsDetailOutputPath(item, {
+      sectionDir: dirName,
+      detail_rule: section.rootColumn?.detail_rule
+    });
+    writeTextFile(outputRoot, outputPath, html, templateContext.site);
     filesWritten += 1;
   }
 
@@ -617,15 +620,15 @@ function buildLegacyCommonProps(templateContext) {
       .map(subCat => ({
         id: subCat.id,
         name: subCat.name,
-        slug: subCat.slug,
+        dir_name: subCat.dir_name,
         url: buildLegacyProductCategoryUrl(subCat, categoryMap)
       }));
 
     return {
       id: cat.id,
       name: cat.name,
-      slug: cat.slug,
-      url: cat.slug ? `/products/${cat.slug}/` : `/products/${cat.id}.html`,
+      dir_name: cat.dir_name,
+      url: buildLegacyProductCategoryUrl(cat, categoryMap),
       children // 添加二级分类
     };
   });
@@ -633,7 +636,8 @@ function buildLegacyCommonProps(templateContext) {
   // 构建siteColumns用于header导航（保留原始的顶级栏目结构）
   const siteColumns = buildLegacySiteColumns(templateContext.columns, {
     productCategories: templateContext.productCategories,
-    newsEntries: templateContext.newsEntries
+    newsEntries: templateContext.newsEntries,
+    templateContext
   });
   
   // 构建footer专用的栏目结构（展开产品分类）
@@ -751,7 +755,7 @@ function buildLegacyHomePageProps(templateContext) {
     .map((item) => ({
       id: item.id,
       title: item.title || '',
-      url: `/news/detail/${item.id}.html`,
+      url: buildArticleUrl(item, templateContext, newsSection),
       image: item.picture || '',
       summary: resolveRenderableNewsSummary(item),
       date: formatLegacyDateOnly(item.created_at)
@@ -764,7 +768,7 @@ function buildLegacyHomePageProps(templateContext) {
     .map((item) => ({
       id: item.id,
       title: item.title || '',
-      url: `/service/detail/${item.id}.html`,
+      url: buildArticleUrl(item, templateContext, serviceSection),
       image: item.picture || '',
       summary: resolveRenderableNewsSummary(item),
       date: formatLegacyDateOnly(item.created_at)
@@ -869,7 +873,7 @@ function buildHeaderPrefixChildren(rows, rootPath, activeColumnId) {
     }));
 }
 
-function buildHeaderSectionChildren(rows, section, activeColumnId, { newsEntries = [] } = {}) {
+function buildHeaderSectionChildren(rows, section, activeColumnId, { newsEntries = [], templateContext = null } = {}) {
   if (!section) {
     return [];
   }
@@ -913,7 +917,7 @@ function buildHeaderSectionChildren(rows, section, activeColumnId, { newsEntries
       active: false,
       showInNav: 1,
       sortOrder: normalizeInteger(item.sort_order, 0),
-      url: `/${section.dirName}/detail/${item.id}.html`
+      url: buildArticleUrl(item, templateContext || { publicSections: { getNewsSectionByColumnId: () => section } }, section)
     }));
 }
 
@@ -921,6 +925,11 @@ function buildLegacySiteColumns(columns, options = {}) {
   const rows = Array.isArray(columns) ? columns : [];
   const publicSections = resolvePublicSectionContext(rows);
   const activeColumnId = normalizeInteger(options.activeColumnId, 0);
+  const productCategoryMap = new Map(
+    Array.isArray(options.productCategories)
+      ? options.productCategories.map((item) => [normalizeInteger(item.id, 0), item])
+      : []
+  );
   const normalizedRows = rows.map((item) => ({
     id: normalizeInteger(item?.id, 0),
     name: item?.name || '',
@@ -960,7 +969,7 @@ function buildLegacySiteColumns(columns, options = {}) {
         sourceId: normalizeInteger(cat.source_id, 0),
         active: false,
         showInNav: 1,
-        url: cat.slug ? `/products/${cat.slug}/` : `/products/${cat.id}.html`
+        url: buildLegacyProductCategoryUrl(cat, productCategoryMap)
       }))
     : [];
 
@@ -992,7 +1001,8 @@ function buildLegacySiteColumns(columns, options = {}) {
     buildHeaderNavItem(serviceRoot, {
       name: '服务',
       children: buildHeaderSectionChildren(normalizedRows, serviceSection, activeColumnId, {
-        newsEntries: options.newsEntries
+        newsEntries: options.newsEntries,
+        templateContext: options.templateContext || null
       })
     }),
     buildHeaderNavItem(findByUrl('/training/'), {
@@ -1002,7 +1012,8 @@ function buildLegacySiteColumns(columns, options = {}) {
     buildHeaderNavItem(newsRoot, {
       name: '公司新闻',
       children: buildHeaderSectionChildren(normalizedRows, newsSection, activeColumnId, {
-        newsEntries: options.newsEntries
+        newsEntries: options.newsEntries,
+        templateContext: options.templateContext || null
       })
     })
   ].filter(Boolean);
@@ -1166,7 +1177,7 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
         const matchingChild = (children || []).find((child) =>
           card.title === child.name ||
           card.link?.includes(`/${child.id}.html`) ||
-          (child.slug && card.link?.includes(`/${child.slug}`))
+          (child.dir_name && card.link?.includes(`/${child.dir_name}`))
         );
         if (matchingChild) {
           return {
@@ -1287,7 +1298,7 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
 function buildLegacyProductDetailPageProps({ templateContext, product, relatedProducts, category, parent }) {
   const rootLevelCategories = templateContext.productCategories.filter((item) => normalizeInteger(item.parent_id, 0) === 0);
 
-  // 构建 categoryMap 用于生成完整的slug URL
+  // 构建 categoryMap 用于生成完整的栏目目录 URL
   const categoryMap = new Map(templateContext.productCategories.map((item) => [normalizeInteger(item.id, 0), item]));
 
   const productNavigation = buildLegacyProductNavigation({
@@ -1318,9 +1329,9 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
             const slugPath = categoryMatch[1];
             // 查找匹配的分类
             const matchingCategory = templateContext.productCategories.find((cat) =>
-              cat.slug && (
-                card.href.endsWith(`/${cat.slug}`) ||
-                card.href.includes(`/${cat.slug}/`)
+              cat.dir_name && (
+                card.href.endsWith(`/${cat.dir_name}`) ||
+                card.href.includes(`/${cat.dir_name}/`)
               )
             );
             if (matchingCategory) {
@@ -1479,13 +1490,17 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
   };
 }
 
-function buildLegacyArticleDetailPageProps({ templateContext, section, item, category, previous, next }) {
+function buildLegacyArticleDetailPageProps({ templateContext, section, sectionConfig = null, item, category, previous, next }) {
   const isService = section === 'service';
-  const sectionConfig = templateContext.publicSections.getNewsSectionByType(isService ? 'service' : 'news')
-    || { dirName: isService ? 'service' : 'news', sectionLabel: isService ? '服务' : '公司新闻', sectionType: isService ? 'service' : 'news' };
-  const sectionDir = sectionConfig.dirName;
-  const sectionLabel = sectionConfig.sectionLabel;
-  const articleUrl = `/${sectionDir}/detail/${normalizeInteger(item.id, 0)}.html`;
+  const resolvedSectionConfig = sectionConfig
+    || templateContext.publicSections.getNewsSectionByType(isService ? 'service' : 'news')
+    || { dirName: isService ? 'service' : 'news', sectionLabel: isService ? '服务' : '公司新闻', sectionType: isService ? 'service' : 'news', rootColumn: null };
+  const sectionDir = resolvedSectionConfig.dirName;
+  const sectionLabel = resolvedSectionConfig.sectionLabel;
+  const articleUrl = buildNewsDetailPublicUrl(item, {
+    sectionDir,
+    detail_rule: resolvedSectionConfig.rootColumn?.detail_rule
+  });
   const relatedArticles = listNews({ limit: 10000, languageCode: templateContext.languageCode })
     .filter((entry) => normalizeInteger(entry.column_id, 0) === normalizeInteger(item.column_id, 0) && normalizeInteger(entry.id, 0) !== normalizeInteger(item.id, 0))
     .slice(0, 3);
@@ -1536,7 +1551,10 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, item, cat
     relatedArticleItems: relatedArticles.map((entry) => ({
       id: entry.id,
       title: entry.title || '',
-      url: `/${sectionDir}/detail/${entry.id}.html`,
+      url: buildNewsDetailPublicUrl(entry, {
+        sectionDir,
+        detail_rule: resolvedSectionConfig.rootColumn?.detail_rule
+      }),
       image: entry.picture || '',
       summary: resolveRenderableNewsSummary(entry),
       date: formatLegacyDateOnly(entry.created_at)
@@ -1750,41 +1768,7 @@ function buildLegacyProductCategoryBreadcrumbItems(category, parent, categoryMap
 }
 
 function buildLegacyProductCategoryUrl(category, categoryMap = null) {
-  const id = normalizeInteger(category?.id, 0);
-
-  // 如果有slug和categoryMap，使用完整的slug路径
-  if (category?.slug && categoryMap) {
-    const slugPath = buildCategorySlugPath(category, categoryMap);
-    if (slugPath.length > 0) {
-      return `/products/${slugPath.join('/')}/`;
-    }
-  }
-
-  // 回退到数字ID格式
-  return id === 0 ? '/products/index.html' : `/products/${id}.html`;
-}
-
-/**
- * 构建产品分类的完整slug路径（包含所有祖先分类）
- * @param {Object} category - 当前分类
- * @param {Map} categoryMap - 分类ID到分类对象的映射
- * @returns {string[]} - slug路径数组，从根到叶
- */
-function buildCategorySlugPath(category, categoryMap) {
-  const slugs = [];
-  let current = category;
-
-  // 向上遍历到根分类
-  while (current && current.slug) {
-    slugs.unshift(current.slug);
-    const parentId = normalizeInteger(current.parent_id, 0);
-    if (parentId === 0) {
-      break;
-    }
-    current = categoryMap.get(parentId);
-  }
-
-  return slugs;
+  return buildProductCategoryPublicUrl(category, categoryMap);
 }
 
 function normalizeLegacyTemplateMarkup(value, site) {
@@ -2143,9 +2127,9 @@ function writeProductCategoryPageSet({
   const pageList = pages.length > 0 ? pages : [[]];
   let filesWritten = 0;
 
-  // 计算分类的完整slug路径
+  // 计算分类的完整栏目目录路径
   const categoryId = normalizeInteger(category.id, 0);
-  const categorySlugPath = category.slug && categoryMap
+  const categorySlugPath = category.dir_name && categoryMap
     ? buildCategorySlugPath(category, categoryMap)
     : [];
   const useSlugPath = categorySlugPath.length > 0 || categoryId === 0; // 根分类也使用新路径格式
@@ -2170,11 +2154,11 @@ function writeProductCategoryPageSet({
       ]
     });
 
-    // 根据是否有slug路径决定输出路径
+    // 根据是否有栏目目录路径决定输出路径
     let outputDir, fileName;
 
     if (useSlugPath) {
-      // 使用完整slug路径: /products/{parent-slug}/{category-slug}/
+      // 使用完整目录路径: /products/{parent-dir}/{category-dir}/
       // 或根目录: /products/
       outputDir = categorySlugPath.length > 0
         ? path.join('products', ...categorySlugPath)
@@ -2189,7 +2173,7 @@ function writeProductCategoryPageSet({
     writeTextFile(outputRoot, path.join(outputDir, fileName), legacyHtml, templateContext.site);
     filesWritten += 1;
 
-    // 兼容性：如果使用slug路径，也生成旧的数字ID路径（301重定向）
+    // 兼容性：如果使用目录路径，也生成旧的数字ID路径
     if (useSlugPath && fileStem !== 'index') {
       const legacyFileName = buildLegacyListFileName(fileStem, pageNumber);
       writeTextFile(outputRoot, path.join('products', legacyFileName), legacyHtml, templateContext.site);
@@ -2304,10 +2288,11 @@ function buildLegacyIndexNews() {
   const publicSections = resolvePublicSectionContext(columns);
   const newsSection = publicSections.getNewsSectionByDirName('news');
   const newsColumnById = new Map(publicSections.newsTree.rows.map((item) => [normalizeInteger(item.id, 0), item]));
+  const templateContext = { publicSections };
   const items = listNews({ limit: 10000 })
     .filter((item) => newsSection && isColumnUnderRoot(newsColumnById, normalizeInteger(item.column_id, 0), newsSection.rootColumnId))
     .slice(0, 10);
-  return items.map((item) => `<li><a href="/news/detail/${item.id}.html" class="Ba">${escapeHtml(item.title || '')}</a></li>`).join('');
+  return items.map((item) => `<li><a href="${buildArticleUrl(item, templateContext, newsSection)}" class="Ba">${escapeHtml(item.title || '')}</a></li>`).join('');
 }
 
 function buildLegacyServiceIndex() {
@@ -2315,21 +2300,11 @@ function buildLegacyServiceIndex() {
   const publicSections = resolvePublicSectionContext(columns);
   const serviceSection = publicSections.getNewsSectionByDirName('service');
   const newsColumnById = new Map(publicSections.newsTree.rows.map((item) => [normalizeInteger(item.id, 0), item]));
+  const templateContext = { publicSections };
   const items = listNews({ limit: 10000 })
     .filter((item) => serviceSection && isColumnUnderRoot(newsColumnById, normalizeInteger(item.column_id, 0), serviceSection.rootColumnId))
     .slice(0, 16);
-  return items.map((item) => `<li><a href="/service/detail/${item.id}.html">${escapeHtml(item.title || '')}</a></li>`).join('');
-}
-
-function resolveColumnRouteOutputPath(routePath) {
-  const normalized = String(routePath || '').trim().replace(/^\/+/, '');
-  if (!normalized) {
-    return 'index.html';
-  }
-  if (String(routePath || '').trim().endsWith('/')) {
-    return path.join(normalized, 'index.html');
-  }
-  return normalized;
+  return items.map((item) => `<li><a href="${buildArticleUrl(item, templateContext, serviceSection)}">${escapeHtml(item.title || '')}</a></li>`).join('');
 }
 
 function getDescendantNewsCategoryIds(categories, rootId) {

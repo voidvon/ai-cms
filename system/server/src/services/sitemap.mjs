@@ -12,6 +12,12 @@ import {
   resolveLegacyCategoryPublicId,
   resolvePublicSectionContext
 } from './public-sections.mjs';
+import {
+  buildCategorySlugPath,
+  buildNewsDetailPublicUrl,
+  buildProductCategoryPublicUrl,
+  buildProductDetailPublicUrl
+} from './column-paths.mjs';
 import { ensureCorporationCategoriesSchema } from './corporation-categories.mjs';
 import { ensureProductsSchema, listProducts } from './products.mjs';
 import { ensureNewsSchema, listNews } from './news.mjs';
@@ -114,6 +120,7 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   const newsCountByCategory = buildCountMap(newsItems, (item) => toInteger(item.column_id, 0));
   const latestNewsDateByCategory = buildLatestDateMap(newsItems, (item) => toInteger(item.column_id, 0), 'created_at', generatedAt);
   const corporationLatestDateById = buildCorporationLatestDateMap(corporationCategories, generatedAt);
+  const productCategoryMap = new Map(productCategories.map((item) => [toInteger(item.id, 0), item]));
   const corporationIndexId = corporationCategories.find((item) => toInteger(item.parent_id, 0) === 0)?.id
     ?? corporationCategories[0]?.id
     ?? null;
@@ -159,7 +166,10 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
     const columnId = toInteger(item.column_id, 0);
     const section = publicSections.getNewsSectionByColumnId(columnId);
     if (section) {
-      addEntry(entries, siteUrl, `/${section.dirName}/detail/${item.id}.html`, item.created_at || generatedAt);
+      addEntry(entries, siteUrl, buildNewsDetailPublicUrl(item, {
+        sectionDir: section.dirName,
+        detail_rule: section.rootColumn?.detail_rule
+      }), item.created_at || generatedAt);
     }
   }
 
@@ -172,15 +182,22 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
     const total = productCountByCategory.get(categoryId) || 0;
     const pageCount = Math.max(Math.ceil(total / PRODUCT_LIST_PAGE_SIZE), 1);
     const lastmod = latestProductDateByCategory.get(categoryId) || generatedAt;
+    const publicCategoryUrl = buildProductCategoryPublicUrl(category, productCategoryMap);
     addEntry(entries, siteUrl, `/valve/${categoryId}.html`, lastmod);
     addEntry(entries, siteUrl, `/valve/${categoryId}-1.html`, lastmod);
+    addEntry(entries, siteUrl, publicCategoryUrl, lastmod);
     for (let pageNumber = 2; pageNumber <= pageCount; pageNumber += 1) {
       addEntry(entries, siteUrl, `/valve/${categoryId}-${pageNumber}.html`, lastmod);
     }
   }
 
   for (const product of products) {
-    addEntry(entries, siteUrl, `/product/${product.id}.html`, product.updated_at || generatedAt);
+    const category = productCategoryMap.get(toInteger(product.column_id, 0));
+    const categoryPath = category ? buildCategorySlugPath(category, productCategoryMap) : null;
+    addEntry(entries, siteUrl, buildProductDetailPublicUrl({
+      ...product,
+      detail_rule: category?.detail_rule
+    }, categoryPath), product.updated_at || generatedAt);
   }
 
   return Array.from(entries.values());

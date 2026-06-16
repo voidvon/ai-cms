@@ -1,9 +1,13 @@
 /**
  * 产品 URL 重定向中间件
- * 将旧的 /product/{id}.html 重定向到新的 /products/{category-slug}/{product-slug}/
+ * 将旧的 /product/{id}.html 重定向到新的 /products/{category-dir}/{product-slug}/
  */
 
 import { queryAll, queryOne } from '../db.mjs';
+import {
+  buildCategorySlugPathFromColumnIdMap,
+  buildProductDetailPublicUrl
+} from '../services/column-paths.mjs';
 
 export async function redirectLegacyProductUrls(request, reply) {
   const pathname = request.url.split('?')[0];
@@ -16,7 +20,7 @@ export async function redirectLegacyProductUrls(request, reply) {
 
   const productId = parseInt(match[1], 10);
 
-  // 从新内容表查询产品的 slug 和所属分类
+  // 从新内容表查询产品 slug 和所属栏目
   const product = queryOne(
     `
       SELECT
@@ -37,9 +41,7 @@ export async function redirectLegacyProductUrls(request, reply) {
   // 如果有 slug，重定向到新 URL
   if (product.slug) {
     const categorySlugPath = buildCategorySlugPath(product.column_id);
-    const newUrl = categorySlugPath
-      ? `/products/${categorySlugPath}/${product.slug}/`
-      : `/products/${product.slug}/`;
+    const newUrl = buildProductDetailPublicUrl(product, categorySlugPath);
     reply.redirect(newUrl, 301);
     return;
   }
@@ -56,15 +58,15 @@ function buildCategorySlugPath(columnId) {
   const rows = queryAll(
     `
       WITH RECURSIVE column_chain AS (
-        SELECT id, parent_id, slug
+        SELECT id, parent_id, dir_name
         FROM columns
         WHERE id = ?
         UNION ALL
-        SELECT c.id, c.parent_id, c.slug
+        SELECT c.id, c.parent_id, c.dir_name
         FROM columns c
         INNER JOIN column_chain chain ON c.id = chain.parent_id
       )
-      SELECT id, parent_id, slug
+      SELECT id, parent_id, dir_name
       FROM column_chain
     `,
     [safeColumnId]
@@ -75,22 +77,5 @@ function buildCategorySlugPath(columnId) {
   }
 
   const rowById = new Map(rows.map((row) => [Number(row.id), row]));
-  const segments = [];
-  const visited = new Set();
-  let currentId = safeColumnId;
-
-  while (currentId > 0 && !visited.has(currentId)) {
-    visited.add(currentId);
-    const current = rowById.get(currentId);
-    if (!current) {
-      break;
-    }
-    const slug = String(current.slug || '').trim();
-    if (slug) {
-      segments.unshift(slug);
-    }
-    currentId = Number.parseInt(String(current.parent_id || ''), 10) || 0;
-  }
-
-  return segments.join('/');
+  return buildCategorySlugPathFromColumnIdMap(safeColumnId, rowById).join('/');
 }

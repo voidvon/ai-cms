@@ -13,6 +13,11 @@ import { listProducts, ensureProductsSchema } from './products.mjs';
 import {
   resolvePublicSectionContext
 } from './public-sections.mjs';
+import {
+  buildCategorySlugPath,
+  buildNewsDetailPublicUrl,
+  buildProductDetailPublicUrl
+} from './column-paths.mjs';
 
 const MAX_FULL_TEXT_PAGES = 500;
 const MAX_LIST_SAMPLE_ITEMS = 12;
@@ -212,9 +217,13 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
 
   for (const product of products) {
     const category = productCategoriesById.get(toInteger(product.column_id, 0));
+    const categoryPath = category ? buildCategorySlugPath(category, productCategoriesById) : null;
     pages.push(createPage({
       title: product.name,
-      routePath: `/product/${product.id}.html`,
+      routePath: buildProductDetailPublicUrl({
+        ...product,
+        detail_rule: category?.detail_rule
+      }, categoryPath),
       section: '产品详情',
       summary: product.summary || `产品详情：${product.name}`,
       contentLines: [
@@ -285,7 +294,10 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
 
     pages.push(createPage({
       title: item.title,
-      routePath: `/${section.dirName}/detail/${item.id}.html`,
+      routePath: buildNewsDetailPublicUrl(item, {
+        sectionDir: section.dirName,
+        detail_rule: section.rootColumn?.detail_rule
+      }),
       section: section.dirName === 'service' ? '服务详情' : '新闻详情',
       summary: item.summary || item.title,
       contentLines: [

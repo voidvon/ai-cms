@@ -30,6 +30,8 @@ export default function CorporationCategoryFormDialog({
   const [formData, setFormData] = useState({
     name: '',
     parent_id: 0,
+    dir_name: '',
+    detail_rule: '',
     sort_order: 0,
   })
   const [contentTemplateId, setContentTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
@@ -63,6 +65,8 @@ export default function CorporationCategoryFormDialog({
       setFormData({
         name: category.name || '',
         parent_id: category.parent_id || 0,
+        dir_name: category.dir_name || '',
+        detail_rule: category.detail_rule || '',
         sort_order: category.sort_order || 0,
       })
       const contentBinding = (bindingsData?.data || []).find((item) => item.target_type === 'column' && item.target_id === category.id && item.template_type === 'content')
@@ -71,6 +75,8 @@ export default function CorporationCategoryFormDialog({
       setFormData({
         name: '',
         parent_id: currentParentId,
+        dir_name: '',
+        detail_rule: '',
         sort_order: 0,
       })
       setContentTemplateId(DEFAULT_TEMPLATE_VALUE)
@@ -154,6 +160,15 @@ export default function CorporationCategoryFormDialog({
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="dir_name">栏目目录名</Label>
+            <Input
+              id="dir_name"
+              value={formData.dir_name}
+              onChange={(e) => setFormData({ ...formData, dir_name: e.target.value })}
+              placeholder="about-us"
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="sort_order">排序</Label>

@@ -1107,7 +1107,7 @@ function buildPreviewNewsMenuItems(rootId, dirName, activeId = 0) {
 function resolvePreviewSections() {
   const rows = queryAll(
     `
-      SELECT id, name, parent_id, source_type, source_id, sort_order, route_path, slug, legacy_extra
+      SELECT id, name, parent_id, source_type, source_id, sort_order, route_path, dir_name, legacy_extra
       FROM columns
       ORDER BY coalesce(parent_id, 0) ASC, sort_order ASC, id ASC
     `

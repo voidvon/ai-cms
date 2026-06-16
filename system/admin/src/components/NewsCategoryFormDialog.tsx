@@ -33,6 +33,8 @@ export default function NewsCategoryFormDialog({
   const [activeLanguage, setActiveLanguage] = useState('zh-CN')
   const [baseData, setBaseData] = useState({
     parent_id: 0,
+    dir_name: '',
+    detail_rule: '',
     sort_order: 0,
   })
   const [translations, setTranslations] = useState<Record<string, NewsCategoryTranslation>>({})
@@ -84,6 +86,8 @@ export default function NewsCategoryFormDialog({
     if (source && mode === 'edit') {
       setBaseData({
         parent_id: source.parent_id || 0,
+        dir_name: source.dir_name || '',
+        detail_rule: source.detail_rule || '',
         sort_order: source.sort_order || 0,
       })
       setTranslations(buildInitialTranslations(source, defaultLanguageCode, availableLanguageCodes))
@@ -99,6 +103,8 @@ export default function NewsCategoryFormDialog({
     if (mode === 'create') {
       setBaseData({
         parent_id: currentParentId,
+        dir_name: '',
+        detail_rule: '',
         sort_order: 0,
       })
       setTranslations({
@@ -233,6 +239,31 @@ export default function NewsCategoryFormDialog({
                       {'　'.repeat(cat.depth || 0)}{cat.name}
                     </SelectItem>
                   ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="dir_name">栏目目录名</Label>
+              <Input
+                id="dir_name"
+                value={baseData.dir_name}
+                onChange={(e) => setBaseData({ ...baseData, dir_name: e.target.value })}
+                placeholder="industry-news"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>内容页命名规则</Label>
+              <Select
+                value={baseData.detail_rule || 'detail/{id}.html'}
+                onValueChange={(value) => setBaseData({ ...baseData, detail_rule: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="detail/{id}.html">{'detail/{id}.html'}</SelectItem>
+                  <SelectItem value="{id}.html">{'{id}.html'}</SelectItem>
+                  <SelectItem value="{slug}.html">{'{slug}.html'}</SelectItem>
                 </SelectContent>
               </Select>
             </div>

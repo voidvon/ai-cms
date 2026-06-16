@@ -402,6 +402,9 @@ export default function ColumnsPage() {
       const response = await columnsApi.update(id, value.base.is_visible !== undefined ? {
         parent_id: value.base.parent_id,
         content_model_id: value.base.content_model_id,
+        dir_name: value.base.dir_name,
+        route_path: value.base.route_path,
+        detail_rule: value.base.detail_rule,
         sort_order: value.base.sort_order,
         is_visible: value.base.is_visible,
         translations: value.translations,
@@ -1324,6 +1327,10 @@ function ManualColumnPanel({
       <div className="space-y-4 px-5 py-4 text-sm">
         {isSingle ? (
           <>
+            <div>
+              <div className="text-muted-foreground">栏目目录名</div>
+              <div className="mt-1 break-all font-medium">{column.dir_name || '-'}</div>
+            </div>
             <div>
               <div className="text-muted-foreground">访问路径</div>
               <div className="mt-1 break-all font-medium">{column.route_path || '-'}</div>
