@@ -1968,6 +1968,7 @@ import React from 'react';
 export default function Template(props) {
   const shell = props.component('spirax_shell', props);
   const pageData = props.currentCategoryPageData || props.pageData || {};
+  const pageKind = String(pageData?.pageKind || '').trim().toLowerCase();
   const cards = Array.isArray(pageData.cards) ? pageData.cards : [];
   const items = Array.isArray(pageData.items) ? pageData.items : [];
   const resources = Array.isArray(pageData.resources) ? pageData.resources : [];
@@ -1990,6 +1991,7 @@ export default function Template(props) {
   const heroImage = pageData?.hero?.image || pageData.heroImage || pageData.mastheadImage || props.currentCategoryHeroImage || '';
   const summary = pageData?.hero?.summary || pageData.summary || props.newsDescription || '';
   const featureImage = pageData?.featureImage || '';
+  const promo = pageData?.promo && typeof pageData.promo === 'object' ? pageData.promo : null;
   const isGoalLanding = goalItems.length > 0;
   const isGoalDetail = !isGoalLanding && (
     Boolean(pageData?.secondary?.title)
@@ -2129,6 +2131,47 @@ export default function Template(props) {
               ) : null}
             </section>
           ))}
+        </div>
+      </div>
+    </section>
+  ) : null;
+  const directorySections = pageKind === 'section-directory' && sectionGroups.length > 0 ? (
+    <section className="bg--white">
+      <div className="wrapper wrapper--pad-l">
+        <div className="copy">
+          {sectionGroups.map((section, index) => (
+            <section key={section?.title || index} style={{ marginBottom: '2.5rem' }}>
+              {section?.title ? <h2>{section.title}</h2> : null}
+              {section?.description ? <p>{section.description}</p> : null}
+              {Array.isArray(section?.links) && section.links.length > 0 ? (
+                <ul>
+                  {section.links.map((link, linkIndex) => (
+                    <li key={link?.href || link?.title || linkIndex}>
+                      <a href={link?.href || '#'}>{link?.title || link?.label || link?.href || ''}</a>
+                      {link?.description ? <> - {link.description}</> : null}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+            </section>
+          ))}
+        </div>
+      </div>
+    </section>
+  ) : null;
+  const promoSection = promo?.href && promo?.label ? (
+    <section className="bg--light-blue">
+      <div className="wrapper wrapper--pad-l">
+        <div className="copy">
+          {promo?.kicker ? <p><strong>{promo.kicker}</strong></p> : null}
+          {promo?.title ? <h2>{promo.title}</h2> : null}
+          {promo?.body ? <p>{promo.body}</p> : null}
+          <p>
+            {props.component('spirax_button', {
+              href: promo.href,
+              children: promo.label
+            })}
+          </p>
         </div>
       </div>
     </section>
@@ -2341,17 +2384,19 @@ export default function Template(props) {
       {featureGrid}
       {adviceSection}
       {cardGrid}
+      {directorySections}
       {partnerSection}
       {supportSection}
       {goalsSection}
       {brandPathSection}
       {isGoalDetail ? closingSection : null}
       {isGoalDetail ? relatedSection : null}
-      {linkSections}
+      {pageKind === 'section-directory' ? null : linkSections}
       {simpleItems}
       {jobsSection}
       {filtersSection}
       {spotlightSection}
+      {promoSection}
       {frameSection}
       <section className="bg--white">
         <div className="wrapper wrapper--sml wrapper--pad-l">

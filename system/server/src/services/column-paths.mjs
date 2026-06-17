@@ -228,40 +228,60 @@ function resolveEntryCustomOutputPath(customUrl, categoryPath, sectionRoot) {
 }
 
 function buildCategoryBasePublicPath(categoryPath, sectionRoot) {
+  const normalizedSectionRoot = ensureTrailingSlash(sectionRoot);
   if (Array.isArray(categoryPath)) {
     const normalizedSegments = categoryPath.map((segment) => String(segment || '').trim()).filter(Boolean);
     if (normalizedSegments.length > 0) {
-      return `${ensureTrailingSlash(sectionRoot)}${normalizedSegments.join('/')}/`;
+      const normalizedCategoryPath = normalizedSegments.join('/');
+      if (trimSlashes(normalizedSectionRoot).endsWith(normalizedCategoryPath)) {
+        return normalizedSectionRoot;
+      }
+      return `${normalizedSectionRoot}${normalizedCategoryPath}/`;
     }
   } else {
     const normalizedCategoryPath = trimSlashes(categoryPath);
     if (normalizedCategoryPath) {
-      return `${ensureTrailingSlash(sectionRoot)}${normalizedCategoryPath}/`;
+      if (trimSlashes(normalizedSectionRoot).endsWith(normalizedCategoryPath)) {
+        return normalizedSectionRoot;
+      }
+      return `${normalizedSectionRoot}${normalizedCategoryPath}/`;
     }
   }
 
-  return ensureTrailingSlash(sectionRoot);
+  return normalizedSectionRoot;
 }
 
 function buildCategoryBaseOutputPath(categoryPath, sectionRoot) {
+  const normalizedSectionRoot = trimSlashes(sectionRoot);
   if (Array.isArray(categoryPath)) {
     const normalizedSegments = categoryPath.map((segment) => String(segment || '').trim()).filter(Boolean);
     if (normalizedSegments.length > 0) {
-      return path.join(sectionRoot, ...normalizedSegments);
+      const normalizedCategoryPath = normalizedSegments.join('/');
+      if (normalizedSectionRoot.endsWith(normalizedCategoryPath)) {
+        return normalizedSectionRoot;
+      }
+      return path.join(normalizedSectionRoot, ...normalizedSegments);
     }
   } else {
     const normalizedCategoryPath = trimSlashes(categoryPath);
     if (normalizedCategoryPath) {
-      return path.join(sectionRoot, ...normalizedCategoryPath.split('/'));
+      if (normalizedSectionRoot.endsWith(normalizedCategoryPath)) {
+        return normalizedSectionRoot;
+      }
+      return path.join(normalizedSectionRoot, ...normalizedCategoryPath.split('/'));
     }
   }
 
-  return sectionRoot;
+  return normalizedSectionRoot;
 }
 
 function normalizePublicCustomUrl(value) {
   const normalized = value.startsWith('/') ? value : `/${value}`;
-  return normalized.replace(/\/{2,}/g, '/');
+  const collapsed = normalized.replace(/\/{2,}/g, '/');
+  if (/\/index\.html$/i.test(collapsed)) {
+    return collapsed.replace(/\/index\.html$/i, '/');
+  }
+  return collapsed;
 }
 
 function normalizeOutputCustomUrl(value) {

@@ -156,10 +156,15 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   }
 
   for (const section of publicSections.newsSections) {
+    const sectionRootPath = String(section.rootColumn?.route_path || '').trim();
     addSectionEntries({
       entries,
       siteUrl,
-      categories: newsCategories.filter((item) => toInteger(item.parent_id, 0) === section.rootColumnId),
+      categories: newsCategories.filter((item) => (
+        toInteger(item.parent_id, 0) === 0
+        && String(item.route_path || '').trim().startsWith(sectionRootPath)
+        && toInteger(item.id, 0) !== toInteger(section.rootColumnId, 0)
+      )),
       itemsPerPage: NEWS_LIST_PAGE_SIZE,
       sectionDir: section.dirName,
       getCategoryPublicId: (category) => resolveLegacyCategoryPublicId(category),

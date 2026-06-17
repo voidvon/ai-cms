@@ -94,8 +94,32 @@ function buildArticleUrl(entry, templateContext, sectionOverride = null) {
   return buildContentDetailUrlFromColumn(entry, section.rootColumn);
 }
 
+function filterManagedRootCategory(categories, rootColumn) {
+  const rootColumnId = normalizeInteger(rootColumn?.id, 0);
+  if (rootColumnId <= 0) {
+    return Array.isArray(categories) ? categories : [];
+  }
+  return (Array.isArray(categories) ? categories : []).filter((item) => (
+    normalizeInteger(item?.id, 0) !== rootColumnId
+  ));
+}
+
 function listNewsCategories({ languageCode = null } = {}) {
   return listColumnCategories('news', { languageCode });
+}
+
+function getSectionTopLevelCategories(templateContext, section) {
+  if (!section?.rootColumn) {
+    return [];
+  }
+  const sectionRootPath = String(section.rootColumn.route_path || '').trim();
+  return templateContext.newsCategories.filter((item) => {
+    if (normalizeInteger(item.parent_id, 0) !== 0) {
+      return false;
+    }
+    const routePath = String(item.route_path || '').trim();
+    return routePath.startsWith(sectionRootPath) && normalizeInteger(item.id, 0) !== normalizeInteger(section.rootColumnId, 0);
+  });
 }
 
 function buildLegacyNewsCategoryUrl(dirName, category) {
@@ -106,8 +130,22 @@ function buildLegacyNewsCategoryUrl(dirName, category) {
   return `/${dirName}/${resolveLegacyCategoryPublicId(category)}.html`;
 }
 
+function prefixRelativeHrefPaths(html, prefix) {
+  const normalizedPrefix = String(prefix || '').trim().replace(/^\/+|\/+$/g, '');
+  if (!normalizedPrefix) {
+    return String(html || '');
+  }
+  return String(html || '').replace(/href="(?![a-z]+:|\/|#|mailto:|tel:|javascript:)([^"]+)"/gi, (_, hrefValue) => {
+    const normalizedHref = String(hrefValue || '').trim();
+    if (!normalizedHref || normalizedHref.startsWith(`${normalizedPrefix}/`)) {
+      return `href="${normalizedHref}"`;
+    }
+    return `href="${normalizedPrefix}/${normalizedHref.replace(/^\/+/, '')}"`;
+  });
+}
+
 const MANAGED_STATIC_ROOT_FILES = ['index.html', 'contact.html', 'sitemap.xml', 'robots.txt', 'llms.txt', 'llms-full.txt', 'index.md'];
-const MANAGED_STATIC_DIRS = ['about', 'news', 'product', 'products', 'services'];
+const LEGACY_MANAGED_STATIC_DIRS = ['about', 'product'];
 const SHARED_STATIC_DIRS = ['css', 'images', 'skin', 'uploads'];
 const SHARED_STATIC_ROOT_FILES = ['logo.svg'];
 const OBSOLETE_SHARED_STATIC_DIRS = ['js', 'JS'];
@@ -120,6 +158,7 @@ const CMS_TEMPLATE_BY_PAGE = {
   'legacy-home': 'spirax_home',
   'legacy-contact': 'spirax_contact_page',
   'legacy-content': 'spirax_content_page',
+  'legacy-section-root': 'spirax_content_page',
   'legacy-product-list': 'spirax_product_list',
   'legacy-product-detail': 'spirax_product_detail',
   'legacy-article-list': 'spirax_article_list',
@@ -129,6 +168,7 @@ const CMS_TEMPLATE_TYPE_BY_PAGE = {
   'legacy-home': 'home',
   'legacy-contact': 'content',
   'legacy-content': 'content',
+  'legacy-section-root': 'content',
   'legacy-product-list': 'list',
   'legacy-product-detail': 'content',
   'legacy-article-list': 'list',
@@ -183,7 +223,7 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
 
     fs.mkdirSync(normalizedOutputRoot, { recursive: true });
     if (cleanExisting) {
-      cleanupManagedStaticFiles(normalizedOutputRoot);
+      cleanupManagedStaticFiles(normalizedOutputRoot, { columns: templateContext.columns });
       cleanupTemplateClientBundles(normalizedOutputRoot);
     }
 
@@ -576,10 +616,11 @@ function buildLegacyNewsSectionCategoryPagesByDir({
     return createBuildResult(sectionKey, defaultSectionLabel, 0, 0);
   }
   const dirName = section.dirName;
-  const categoryList = templateContext.newsCategories.filter((item) => normalizeInteger(item.parent_id, 0) === normalizeInteger(section.rootColumnId, 0));
+  const categoryList = getSectionTopLevelCategories(templateContext, section);
   const items = listNews({ limit: 10000, languageCode });
   const categoryBuckets = groupBy(items, (item) => normalizeInteger(item.column_id, 0));
   const directRootItems = (categoryBuckets.get(section.rootColumnId) || []).slice();
+  const hasSectionRootLanding = shouldRenderSectionRootLanding(section?.rootColumn);
   const effectiveCategoryList = categoryList.length > 0
     ? categoryList
     : directRootItems.length > 0
@@ -587,7 +628,27 @@ function buildLegacyNewsSectionCategoryPagesByDir({
       : [];
   let filesWritten = 0;
 
+  if (hasSectionRootLanding) {
+    const rootPublicUrl = buildColumnPublicUrl(section.rootColumn, templateContext.publicSections) || `/${dirName}/`;
+    const rootHtml = renderCmsSitePage('legacy-section-root', buildLegacySectionRootPageProps({
+      templateContext,
+      section,
+      allItems: items,
+      categoryBuckets,
+      categoryList
+    }), templateContext, {
+      targets: []
+    });
+    writeTextFile(outputRoot, resolveColumnRouteOutputPath(rootPublicUrl), rootHtml, templateContext.site);
+    filesWritten += 1;
+  }
+
   for (const [categoryIndex, category] of effectiveCategoryList.entries()) {
+    const isRootCategory = normalizeInteger(category.id, 0) === normalizeInteger(section.rootColumnId, 0);
+    if (hasSectionRootLanding && isRootCategory) {
+      continue;
+    }
+
     const categoryId = normalizeInteger(category.id, 0);
     const pageItems = (categoryBuckets.get(categoryId) || []).slice();
     const pages = paginate(pageItems, NEWS_LIST_PAGE_SIZE);
@@ -598,7 +659,7 @@ function buildLegacyNewsSectionCategoryPagesByDir({
       const currentItems = pageList[pageIndex];
       const html = renderCmsSitePage('legacy-article-list', buildLegacyArticleListPageProps({
         templateContext,
-        section: section.sectionType,
+        section,
         category,
         pageItems: currentItems,
         pageNumber,
@@ -613,8 +674,6 @@ function buildLegacyNewsSectionCategoryPagesByDir({
       });
 
       const categoryDirName = String(category.dir_name || '').trim();
-      const isRootCategory = normalizeInteger(category.id, 0) === normalizeInteger(section.rootColumnId, 0);
-
       // 子栏目使用目录结构: /services/introduction/index.html
       // 根栏目使用根目录: /services/index.html, /services/index-2.html
       if (!isRootCategory && categoryDirName) {
@@ -704,9 +763,10 @@ function getLegacyTemplateContext(languageCode = null) {
   const publicSections = resolvePublicSectionContext(columns);
   const managedCategoryRoot = columns.find((item) => item?.column_semantics?.is_root && String(item?.column_semantics?.render_driver || '') === 'managed_category') || null;
   const pageTreeRoot = columns.find((item) => item?.column_semantics?.is_root && String(item?.column_semantics?.render_driver || '') === 'page_tree') || null;
-  const productCategories = managedCategoryRoot
+  const rawProductCategories = managedCategoryRoot
     ? listColumnCategoriesByRoot(managedCategoryRoot.id, { languageCode }).slice().sort(compareCategoryOrder)
     : listColumnCategories('product', { languageCode }).slice().sort(compareCategoryOrder);
+  const productCategories = filterManagedRootCategory(rawProductCategories, managedCategoryRoot);
   const newsCategories = publicSections.newsSections
     .flatMap((section) => listColumnCategoriesByRoot(section.rootColumnId, { languageCode }))
     .slice()
@@ -1271,6 +1331,75 @@ function buildLegacySingleColumnPageProps(templateContext, column) {
   };
 }
 
+function buildLegacySectionRootPageProps({ templateContext, section, allItems, categoryBuckets, categoryList }) {
+  const sectionUrl = `/${String(section?.dirName || '').trim().replace(/^\/+|\/+$/g, '')}/`;
+  const rootColumn = section?.rootColumn || null;
+  const pageContent = resolveDedicatedColumnPageContent(rootColumn, templateContext.languageCode);
+  const rootPageData = normalizeLegacyCategoryPageData(rootColumn?.page_data);
+  const topLevelCategories = Array.isArray(categoryList) ? categoryList : getSectionTopLevelCategories(templateContext, section);
+  const buckets = categoryBuckets instanceof Map ? categoryBuckets : groupBy(allItems || [], (item) => normalizeInteger(item.column_id, 0));
+  const directRootItems = (buckets.get(normalizeInteger(section?.rootColumnId, 0)) || []).slice().sort(compareByCreatedDesc);
+  const generatedPageData = buildLegacySectionRootPageData({
+    templateContext,
+    section,
+    topLevelCategories,
+    directRootItems,
+    categoryBuckets: buckets
+  });
+  const pageData = {
+    ...(rootPageData || {}),
+    ...generatedPageData,
+    cards: Array.isArray(rootPageData?.cards) && rootPageData.cards.length > 0 ? rootPageData.cards : generatedPageData.cards,
+    sections: Array.isArray(rootPageData?.sections) && rootPageData.sections.length > 0 ? rootPageData.sections : generatedPageData.sections
+  };
+  const pageTitle = pageData?.title || rootColumn?.name || section?.sectionLabel || '';
+  const pageSummary = pageContent?.seo_description || pageContent?.summary || pageData?.summary || templateContext.site.seo_default_description || pageTitle;
+
+  return {
+    ...buildLegacyCommonProps(templateContext),
+    ...buildLegacyPageContextProps({
+      pageType: 'section-root',
+      title: pageTitle,
+      url: sectionUrl,
+      section: { type: section.sectionType || 'section', name: section.sectionLabel || pageTitle, url: sectionUrl },
+      categoryChain: rootColumn ? [{
+        raw: rootColumn,
+        type: 'section',
+        url: sectionUrl
+      }] : [],
+      categoryType: 'section',
+      categoryUrl: sectionUrl,
+      breadcrumbItems: [{ label: section.sectionLabel || pageTitle }],
+      breadcrumbOptions: { homeHref: '/', homeLabel: '首页', prefixHtml: '' }
+    }),
+    title: pageTitle,
+    section: section.sectionType || 'section',
+    sectionDir: section.dirName,
+    sectionLabel: section.sectionLabel || pageTitle,
+    pageData,
+    currentCategoryPageData: pageData,
+    currentCategoryHeroImage: pageData?.mastheadImage || pageData?.heroImage || '',
+    contentHtml: normalizeLegacyRichTextHtml(pageContent?.content_html, templateContext.site) || '',
+    bodyHtml: normalizeLegacyRichTextHtml(pageContent?.content_html, templateContext.site) || '',
+    newsDescription: pageContent?.seo_description || pageData?.summary || '',
+    newsKeywords: pageContent?.seo_keywords || '',
+    keywords: pageContent?.seo_keywords || '',
+    description: pageContent?.seo_description || pageData?.summary || '',
+    secondaryMenuItems: buildLegacyNewsMenuItems(templateContext, section.dirName, 0),
+    seoMeta: buildSeoMeta({
+      title: pageContent?.seo_title || buildSectionSeoTitle(pageTitle, templateContext.site),
+      description: pageSummary,
+      url: sectionUrl,
+      image: pageData?.mastheadImage || pageData?.heroImage || '',
+      site: templateContext.site
+    }),
+    jsonLd: buildJsonLdOrganization(templateContext.site),
+    faviconLinks: generateFaviconLinks(),
+    themeColorMetas: generateThemeColorMetas(),
+    hreflangLinks: buildHreflangLinks(templateContext.site)
+  };
+}
+
 function buildLegacyProductListPageProps({ templateContext, category, parent, children, pageItems, pageNumber, pageCount, totalRecords, categoryMap = null }) {
   const categoryPageContent = resolveDedicatedColumnPageContent(category, templateContext.languageCode);
   const rootLevelCategories = templateContext.productCategories.filter((item) => normalizeInteger(item.parent_id, 0) === 0);
@@ -1551,11 +1680,12 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
 }
 
 function buildLegacyArticleListPageProps({ templateContext, section, category, pageItems, pageNumber, pageCount, totalRecords, summaryClassName }) {
-  const isService = section === 'service';
-  const sectionConfig = templateContext.publicSections.getNewsSectionByType(isService ? 'service' : 'news')
-    || { dirName: isService ? 'services' : 'news', sectionLabel: isService ? '服务' : '公司新闻', sectionType: isService ? 'service' : 'news' };
-  const sectionDir = sectionConfig.dirName;
-  const sectionLabel = sectionConfig.sectionLabel;
+  const resolvedSectionConfig = typeof section === 'object' && section
+    ? section
+    : templateContext.publicSections.getNewsSectionByType(String(section || '').trim().toLowerCase())
+      || { dirName: 'news', sectionLabel: '公司新闻', sectionType: 'news' };
+  const sectionDir = resolvedSectionConfig.dirName;
+  const sectionLabel = resolvedSectionConfig.sectionLabel;
   const categoryPublicId = resolveLegacyCategoryPublicId(category);
   const categoryUrl = buildLegacyNewsCategoryUrl(sectionDir, category);
   return {
@@ -1564,7 +1694,7 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
       pageType: 'section-list',
       title: category.name || '',
       url: categoryUrl,
-      section: { type: 'section', name: sectionLabel, url: `/${sectionDir}/` },
+      section: { type: resolvedSectionConfig.sectionType || 'section', name: sectionLabel, url: `/${sectionDir}/` },
       categoryChain: buildTemplateCategoryChain({
         category,
         categories: templateContext.newsCategories,
@@ -1579,7 +1709,7 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
       ],
       breadcrumbOptions: { homeHref: '/', homeLabel: '首页', prefixHtml: '' }
     }),
-    section,
+    section: resolvedSectionConfig.sectionType || 'section',
     sectionDir,
     sectionLabel,
     sectionCategoryHtml: buildLegacyNewsCategoryList(templateContext, sectionDir),
@@ -1600,7 +1730,7 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
       date: formatLegacyDateOnly(item.created_at)
     })),
     pagerHtml: buildLegacyArticlePager({
-      categoryId: categoryPublicId,
+      categoryUrl,
       pageNumber,
       pageCount,
       totalRecords
@@ -1619,10 +1749,10 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
 }
 
 function buildLegacyArticleDetailPageProps({ templateContext, section, sectionConfig = null, item, category, previous, next }) {
-  const isService = section === 'service';
   const resolvedSectionConfig = sectionConfig
-    || templateContext.publicSections.getNewsSectionByType(isService ? 'service' : 'news')
-    || { dirName: isService ? 'services' : 'news', sectionLabel: isService ? '服务' : '公司新闻', sectionType: isService ? 'service' : 'news', rootColumn: null };
+    || (typeof section === 'object' && section)
+    || templateContext.publicSections.getNewsSectionByType(String(section || '').trim().toLowerCase())
+    || { dirName: 'news', sectionLabel: '公司新闻', sectionType: 'news', rootColumn: null };
   const sectionDir = resolvedSectionConfig.dirName;
   const sectionLabel = resolvedSectionConfig.sectionLabel;
   const articleUrl = resolvedSectionConfig.rootColumn
@@ -1637,7 +1767,7 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, sectionCo
       pageType: 'section-detail',
       title: item.title || '',
       url: articleUrl,
-      section: { type: 'section', name: sectionLabel, url: `/${sectionDir}/` },
+      section: { type: resolvedSectionConfig.sectionType || 'section', name: sectionLabel, url: `/${sectionDir}/` },
       categoryChain: buildTemplateCategoryChain({
         category,
         categories: templateContext.newsCategories,
@@ -1655,7 +1785,7 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, sectionCo
       ],
       breadcrumbOptions: { homeHref: '/', homeLabel: '首页', prefixHtml: '' }
     }),
-    section,
+    section: resolvedSectionConfig.sectionType || 'section',
     sectionDir,
     sectionLabel,
     sectionCategoryHtml: buildLegacyNewsCategoryList(templateContext, sectionDir),
@@ -1943,7 +2073,7 @@ function buildLegacyCorporationMenuItems(categories, activeId = 0) {
 function buildLegacyNewsCategoryList(templateContext, dirName) {
   const section = templateContext.publicSections.getNewsSectionByDirName(dirName);
   const items = section
-    ? templateContext.newsCategories.filter((item) => normalizeInteger(item.parent_id, 0) === normalizeInteger(section.rootColumnId, 0))
+    ? getSectionTopLevelCategories(templateContext, section)
     : [];
   let html = '<table width="80%" border="0" align="center" cellpadding="0" cellspacing="0">';
   items.forEach((item, index) => {
@@ -1962,13 +2092,113 @@ function buildLegacyNewsMenuItems(templateContext, dirName, activeId = 0) {
   if (!section) {
     return [];
   }
-  return templateContext.newsCategories
-    .filter((item) => normalizeInteger(item.parent_id, 0) === normalizeInteger(section.rootColumnId, 0))
-    .map((item) => ({
+  return getSectionTopLevelCategories(templateContext, section).map((item) => ({
       label: item.name || '',
       url: buildLegacyNewsCategoryUrl(dirName, item),
       active: normalizeInteger(item.id, 0) === normalizeInteger(activeId, 0)
     }));
+}
+
+function shouldRenderSectionRootLanding(rootColumn) {
+  if (!rootColumn) {
+    return false;
+  }
+  if (normalizeLegacyCategoryPageData(rootColumn.page_data)) {
+    return true;
+  }
+  return Boolean(
+    String(rootColumn.summary || '').trim()
+    || String(rootColumn.content_html || '').trim()
+    || String(rootColumn.seo_title || '').trim()
+    || String(rootColumn.seo_description || '').trim()
+  );
+}
+
+function buildLegacySectionRootPageData({
+  templateContext,
+  section,
+  topLevelCategories,
+  directRootItems,
+  categoryBuckets
+}) {
+  const rootColumn = section?.rootColumn || null;
+  const existing = normalizeLegacyCategoryPageData(rootColumn?.page_data) || {};
+  const safeCategoryBuckets = categoryBuckets instanceof Map ? categoryBuckets : new Map();
+  const generatedCards = (directRootItems || []).map((item) => ({
+    title: item.title || '',
+    description: resolveRenderableNewsSummary(item),
+    href: buildArticleUrl(item, templateContext, section),
+    image: item.picture || '',
+    imageAlt: item.title || '',
+    cta: ''
+  }));
+  const generatedSections = (topLevelCategories || []).map((category) => {
+    const categoryLinks = buildLegacySectionRootCategoryLinks({
+      templateContext,
+      section,
+      category,
+      categoryBuckets: safeCategoryBuckets
+    });
+    return {
+      title: category.name || '',
+      description: category.seo_description || category.summary || '',
+      links: categoryLinks
+    };
+  }).filter((item) => Array.isArray(item.links) && item.links.length > 0);
+  const generatedCategoryCards = (topLevelCategories || []).map((category) => ({
+    title: category.name || '',
+    description: category.seo_description || category.summary || '',
+    href: buildLegacyNewsCategoryUrl(section.dirName, category),
+    image: '',
+    imageAlt: category.name || '',
+    cta: ''
+  }));
+
+  return {
+    ...existing,
+    cards: generatedCards.length > 0 ? generatedCards : generatedCategoryCards,
+    sections: generatedSections,
+    summary: existing.summary || rootColumn?.summary || section?.sectionLabel || '',
+    introBlock: existing.introBlock || (
+      rootColumn?.summary
+        ? { body: rootColumn.summary }
+        : null
+    )
+  };
+}
+
+function buildLegacySectionRootCategoryLinks({ templateContext, section, category, categoryBuckets }) {
+  const allowedIds = Array.from(new Set(getDescendantColumnIds(
+    templateContext.publicSections.newsTree.childrenByParentId,
+    normalizeInteger(category?.id, 0)
+  )));
+  const links = allowedIds
+    .flatMap((columnId) => (categoryBuckets.get(normalizeInteger(columnId, 0)) || []).slice())
+    .slice()
+    .sort(compareByCreatedDesc)
+    .map((item) => ({
+      title: item.title || '',
+      href: buildArticleUrl(item, templateContext, section),
+      description: resolveRenderableNewsSummary(item)
+    }));
+
+  if (links.length > 0) {
+    return links;
+  }
+
+  return [{
+    title: category?.name || '',
+    href: buildLegacyNewsCategoryUrl(section.dirName, category),
+    description: category?.seo_description || category?.summary || ''
+  }];
+}
+
+function compareByCreatedDesc(left, right) {
+  const timeDiff = String(right?.created_at || '').localeCompare(String(left?.created_at || ''));
+  if (timeDiff !== 0) {
+    return timeDiff;
+  }
+  return Number(right?.id || 0) - Number(left?.id || 0);
 }
 
 function buildLegacyProductSmallCategories(categories) {
@@ -2270,7 +2500,7 @@ function writeProductCategoryPageSet({
   let filesWritten = 0;
 
   const categoryId = normalizeInteger(category.id, 0);
-  const categorySlugPath = category.dir_name && categoryMap
+  const categorySlugPath = categoryId > 0 && category.dir_name && categoryMap
     ? buildCategorySlugPath(category, categoryMap)
     : [];
   const useSlugPath = categorySlugPath.length > 0 || categoryId === 0;
@@ -2342,16 +2572,10 @@ function buildLegacyArticleListItems({ pageItems, summaryClassName, column }) {
     const summary = resolveRenderableNewsSummary(item);
     const fullUrl = buildContentDetailUrlFromColumn(item, column);
 
-    // 返回相对于 route_path 的路径
-    const routePath = String(column?.route_path || '').trim();
-    const relativeUrl = fullUrl.startsWith(routePath)
-      ? fullUrl.substring(routePath.length)
-      : `detail/${item.id}.html`;
-
     return {
       id: item.id,
       title: item.title || '',
-      url: relativeUrl,
+      url: fullUrl,
       date: formatLegacyDateOnly(item.created_at) || '',
       summary: gotTopicLegacy(summary || '', 230),
       summaryClassName: summaryClassName || ''
@@ -2359,13 +2583,23 @@ function buildLegacyArticleListItems({ pageItems, summaryClassName, column }) {
   });
 }
 
-function buildLegacyArticlePager({ categoryId, pageNumber, pageCount, totalRecords }) {
+function buildLegacyArticlePager({ categoryUrl, pageNumber, pageCount, totalRecords }) {
+  const normalizedCategoryUrl = String(categoryUrl || '').trim();
+  const isDirStyle = normalizedCategoryUrl.endsWith('/');
+  const buildPageHref = (targetPage) => {
+    if (isDirStyle) {
+      return targetPage <= 1 ? 'index.html' : `index-${targetPage}.html`;
+    }
+    const base = normalizedCategoryUrl.split('/').pop() || '';
+    const baseName = base.replace(/\.html$/i, '');
+    return `${baseName}-${targetPage}.html`;
+  };
   let html = '<table width="90%" border="0" align="center" cellpadding="0" cellspacing="0"><tr><td height="45" align="center">';
   html += `共 <strong>${totalRecords}</strong> 条信息 `;
-  html += `<a href="${categoryId}-1.html" class="0a">首页</a>`;
-  html += pageNumber > 1 ? ` <a href="${categoryId}-${pageNumber - 1}.html" class="0a">上一页</a>` : ' <span class="0a">上一页</span>';
-  html += pageNumber < pageCount ? ` <a href="${categoryId}-${pageNumber + 1}.html" class="0a">下一页</a>` : ' <span class="0a">下一页</span>';
-  html += ` <a href="${categoryId}-${pageCount}.html" class="0a">尾页</a> `;
+  html += `<a href="${buildPageHref(1)}" class="0a">首页</a>`;
+  html += pageNumber > 1 ? ` <a href="${buildPageHref(pageNumber - 1)}" class="0a">上一页</a>` : ' <span class="0a">上一页</span>';
+  html += pageNumber < pageCount ? ` <a href="${buildPageHref(pageNumber + 1)}" class="0a">下一页</a>` : ' <span class="0a">下一页</span>';
+  html += ` <a href="${buildPageHref(pageCount)}" class="0a">尾页</a> `;
   html += `页次：<strong> ${pageNumber}/${pageCount} </strong>页 <strong>${NEWS_LIST_PAGE_SIZE}</strong>条信息/页</td></tr></table>`;
   return html;
 }
@@ -2531,7 +2765,8 @@ function normalizeSections(sections, columns = null) {
   );
 }
 
-function cleanupManagedStaticFiles(outputRoot) {
+function cleanupManagedStaticFiles(outputRoot, { columns = null } = {}) {
+  const managedDirs = collectManagedStaticDirs(columns);
   for (const relativePath of MANAGED_STATIC_ROOT_FILES) {
     const filePath = path.resolve(outputRoot, relativePath);
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
@@ -2539,7 +2774,7 @@ function cleanupManagedStaticFiles(outputRoot) {
     }
   }
 
-  for (const relativeDir of MANAGED_STATIC_DIRS) {
+  for (const relativeDir of managedDirs) {
     const dirPath = path.resolve(outputRoot, relativeDir);
     if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) {
       continue;
@@ -2547,7 +2782,80 @@ function cleanupManagedStaticFiles(outputRoot) {
     cleanupHtmlFilesRecursive(dirPath);
   }
 
+  cleanupStaleTopLevelStaticDirs(outputRoot, managedDirs);
   cleanupManagedSitemapChunks(outputRoot);
+}
+
+function collectManagedStaticDirs(columns = null) {
+  const resolvedColumns = Array.isArray(columns) ? columns : listColumns();
+  const publicSections = resolvePublicSectionContext(resolvedColumns);
+  const dirs = new Set(LEGACY_MANAGED_STATIC_DIRS);
+
+  for (const column of resolvedColumns) {
+    addManagedStaticDirFromPath(dirs, column?.route_path);
+    addManagedStaticDirFromPath(dirs, column?.custom_url);
+    addManagedStaticDirFromPath(dirs, buildColumnPublicUrl(column, publicSections));
+  }
+
+  return Array.from(dirs).filter(Boolean).sort();
+}
+
+function addManagedStaticDirFromPath(target, pathValue) {
+  const normalized = String(pathValue || '').trim();
+  if (!normalized || /^https?:\/\//i.test(normalized)) {
+    return;
+  }
+
+  const firstSegment = normalized
+    .split(/[?#]/, 1)[0]
+    .split('/')
+    .filter(Boolean)[0] || '';
+  if (!firstSegment) {
+    return;
+  }
+
+  const reservedRoots = new Set([
+    'admin',
+    'api',
+    'assets',
+    'css',
+    'images',
+    'img',
+    'skin',
+    'upload',
+    'uploadfile',
+    'uploads'
+  ]);
+  if (reservedRoots.has(firstSegment.toLowerCase())) {
+    return;
+  }
+
+  target.add(firstSegment);
+}
+
+function cleanupStaleTopLevelStaticDirs(outputRoot, managedDirs = []) {
+  const protectedDirs = new Set([
+    ...managedDirs,
+    ...SHARED_STATIC_DIRS,
+    'assets',
+    'img',
+    'admin',
+    'api',
+    'upload',
+    'uploadfile'
+  ].map((item) => String(item || '').trim()).filter(Boolean));
+
+  for (const entry of fs.readdirSync(outputRoot, { withFileTypes: true })) {
+    if (!entry.isDirectory()) {
+      continue;
+    }
+    if (protectedDirs.has(entry.name)) {
+      continue;
+    }
+    const dirPath = path.join(outputRoot, entry.name);
+    cleanupHtmlFilesRecursive(dirPath);
+    removeDirectoryIfEmpty(dirPath);
+  }
 }
 
 function cleanupHtmlFilesRecursive(currentPath) {
@@ -2555,6 +2863,7 @@ function cleanupHtmlFilesRecursive(currentPath) {
     const fullPath = path.join(currentPath, entry.name);
     if (entry.isDirectory()) {
       cleanupHtmlFilesRecursive(fullPath);
+      removeDirectoryIfEmpty(fullPath);
       continue;
     }
 
@@ -2563,9 +2872,18 @@ function cleanupHtmlFilesRecursive(currentPath) {
     }
 
     const extension = path.extname(entry.name).toLowerCase();
-    if (extension === '.html' || extension === '.htm' || extension === '.md') {
+    if (extension === '.html' || extension === '.htm' || extension === '.md' || entry.name === '.DS_Store') {
       fs.unlinkSync(fullPath);
     }
+  }
+}
+
+function removeDirectoryIfEmpty(dirPath) {
+  if (!fs.existsSync(dirPath) || !fs.statSync(dirPath).isDirectory()) {
+    return;
+  }
+  if (fs.readdirSync(dirPath).length === 0) {
+    fs.rmdirSync(dirPath);
   }
 }
 

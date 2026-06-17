@@ -77,9 +77,6 @@ export function buildColumnPublicUrl(column, publicSections) {
   const relativeCustomUrl = String(column.custom_url || '').trim();
   const columnType = String(column.column_type || '');
   const renderDriver = String(column.column_semantics?.render_driver || '');
-  if (columnType !== 'link' && explicitRoutePath) {
-    return explicitRoutePath;
-  }
   if (renderDriver === 'managed_category' && toInteger(column.parent_id, 0) === 0) {
     return '/products/';
   }
@@ -104,6 +101,9 @@ export function buildColumnPublicUrl(column, publicSections) {
   }
   if (explicitRoutePath === '/contact.html') {
     return '/contact.html';
+  }
+  if (columnType !== 'link' && explicitRoutePath) {
+    return explicitRoutePath;
   }
   if (columnType === 'link') {
     return resolveRelativePublicPath(relativeCustomUrl, resolveColumnParentPublicUrl(column, publicSections));
