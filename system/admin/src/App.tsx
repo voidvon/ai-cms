@@ -22,7 +22,6 @@ function App() {
           <Route index element={<Navigate to="/columns" replace />} />
           <Route path="dashboard" element={<Navigate to="/columns" replace />} />
           <Route path="columns" element={<ColumnsPage />} />
-          <Route path="corporation-categories" element={<Navigate to="/columns" replace />} />
           <Route path="themes" element={<TemplateVariantsPage />} />
           <Route path="templates" element={<Navigate to="/themes" replace />} />
           <Route path="content-models" element={<ContentModelsPage />} />

@@ -1,13 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { getSiteConfig } from './site.mjs';
-import { listColumns } from './columns.mjs';
-import { listColumnCategories } from './column-categories.mjs';
+import { ensureColumnsSchema, listColumns } from './columns.mjs';
+import { listColumnCategoriesByRoot } from './column-categories.mjs';
 import {
   buildColumnTreeIndex,
   isColumnUnderRoot
 } from './column-tree.mjs';
-import { listCorporationCategoriesAdmin, ensureCorporationCategoriesSchema } from './corporation-categories.mjs';
 import { listNews } from './news.mjs';
 import { listProducts, ensureProductsSchema } from './products.mjs';
 import {
@@ -15,6 +14,7 @@ import {
 } from './public-sections.mjs';
 import {
   buildCategorySlugPath,
+  buildProductCategoryPublicUrl,
   buildContentDetailUrlFromColumn
 } from './column-paths.mjs';
 
@@ -112,19 +112,22 @@ export function getLlmsDiagnostics({ generatedAt = new Date().toISOString(), lan
 
 function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   ensureProductsSchema();
-  ensureCorporationCategoriesSchema();
+  ensureColumnsSchema();
 
   const columns = listColumns({ languageCode });
   const publicSections = resolvePublicSectionContext(columns);
-  const productCategories = listColumnCategories('product', { languageCode });
-  const newsCategories = listColumnCategories('news', { languageCode });
+  const managedCategoryRoot = getRootColumnByDriver(columns, 'managed_category');
+  const pageTreeRoot = getRootColumnByDriver(columns, 'page_tree');
+  const productCategories = managedCategoryRoot ? listColumnCategoriesByRoot(managedCategoryRoot.id, { languageCode }) : [];
+  const newsCategories = publicSections.newsSections.flatMap((section) => (
+    listColumnCategoriesByRoot(section.rootColumnId, { languageCode })
+  ));
   const products = listProducts({ visibleOnly: true, limit: 10000, languageCode });
   const newsItems = listNews({ limit: 10000, languageCode });
-  const corporationCategories = collectCorporationCategories();
+  const pageTreeCategories = pageTreeRoot ? listColumnCategoriesByRoot(pageTreeRoot.id, { languageCode }) : [];
 
   const productCategoriesById = new Map(productCategories.map((item) => [toInteger(item.id, 0), item]));
   const newsCategoriesById = new Map(newsCategories.map((item) => [toInteger(item.id, 0), item]));
-  const corporationById = new Map(corporationCategories.map((item) => [toInteger(item.id, 0), item]));
   const columnMap = new Map(columns.map((col) => [toInteger(col.id, 0), col]));
   const pages = [];
 
@@ -152,7 +155,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     const routePath = String(column.route_path || '').trim();
     if (
       String(column.column_type || '') === 'single'
-      && String(column.model_code || '') !== 'corporation'
+      && String(column.column_semantics?.render_driver || '') !== 'page_tree'
       && routePath
     ) {
       pages.push(createPage({
@@ -169,19 +172,19 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     }
   }
 
-  const corporationIndex = corporationCategories.find((item) => toInteger(item.parent_id, 0) === 0)
-    ?? corporationCategories[0];
-  if (corporationIndex) {
+  const pageTreeIndex = pageTreeCategories.find((item) => toInteger(item.parent_id, 0) === 0)
+    ?? pageTreeCategories[0];
+  if (pageTreeIndex) {
     pages.push(createPage({
-      title: corporationIndex.name,
+      title: pageTreeIndex.name,
       routePath: '/about/index.html',
       section: '公司栏目',
-      summary: extractPlainText(corporationIndex.content_html) || '公司介绍栏目首页。',
-      contentLines: [extractPlainText(corporationIndex.content_html)].filter(Boolean)
+      summary: extractPlainText(pageTreeIndex.content_html) || '单页栏目树首页。',
+      contentLines: [extractPlainText(pageTreeIndex.content_html)].filter(Boolean)
     }));
   }
 
-  for (const item of corporationCategories) {
+  for (const item of pageTreeCategories) {
     if (toInteger(item.id, 0) <= 0) {
       continue;
     }
@@ -189,14 +192,14 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
       title: item.name,
       routePath: `/about/about-${item.id}.html`,
       section: '公司栏目',
-      summary: extractPlainText(item.content_html) || '公司相关介绍页面。',
+      summary: extractPlainText(item.content_html) || '单页栏目树页面。',
       contentLines: [extractPlainText(item.content_html)].filter(Boolean)
     }));
   }
 
   pages.push(createPage({
     title: '产品中心',
-    routePath: '/valve/index.html',
+    routePath: '/products/',
     section: '产品栏目',
     summary: '产品分类导航与产品列表入口。',
     contentLines: buildCategorySampleLines(productCategories)
@@ -208,7 +211,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     const categoryProducts = products.filter((item) => toInteger(item.column_id, 0) === categoryId).slice(0, MAX_LIST_SAMPLE_ITEMS);
     pages.push(createPage({
       title: category.name,
-      routePath: `/valve/${categoryId}.html`,
+      routePath: buildProductCategoryPublicUrl(category, productCategoriesById),
       section: '产品栏目',
       summary: category.seo_description || `产品分类：${category.name}`,
       contentLines: [
@@ -286,7 +289,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   }
 
   return {
-    pages: dedupePages(pages).map((page) => finalizePage({ page, siteUrl, corporationById })),
+    pages: dedupePages(pages).map((page) => finalizePage({ page, siteUrl })),
     publicSections
   };
 }
@@ -443,26 +446,11 @@ function finalizePage({ page, siteUrl }) {
   };
 }
 
-function collectCorporationCategories() {
-  const queue = [0];
-  const collected = [];
-  const seen = new Set();
-
-  while (queue.length > 0) {
-    const parentId = queue.shift();
-    const children = listCorporationCategoriesAdmin({ parentId });
-    for (const item of children) {
-      const id = toInteger(item.id, 0);
-      if (seen.has(id)) {
-        continue;
-      }
-      seen.add(id);
-      collected.push(item);
-      queue.push(id);
-    }
-  }
-
-  return collected;
+function getRootColumnByDriver(columns, renderDriver) {
+  return columns.find((item) => (
+    item?.column_semantics?.is_root
+    && String(item?.column_semantics?.render_driver || '') === String(renderDriver || '')
+  )) || null;
 }
 
 function buildSiteSummary(site) {

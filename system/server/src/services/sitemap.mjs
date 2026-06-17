@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { getSiteConfig } from './site.mjs';
-import { listColumns } from './columns.mjs';
-import { listColumnCategories } from './column-categories.mjs';
+import { ensureColumnsSchema, listColumns } from './columns.mjs';
+import { listColumnCategoriesByRoot } from './column-categories.mjs';
 import {
   buildColumnTreeIndex,
   getDescendantColumnIds,
@@ -17,7 +17,6 @@ import {
   buildProductCategoryPublicUrl,
   buildContentDetailUrlFromColumn
 } from './column-paths.mjs';
-import { ensureCorporationCategoriesSchema } from './corporation-categories.mjs';
 import { ensureProductsSchema, listProducts } from './products.mjs';
 import { ensureNewsSchema, listNews } from './news.mjs';
 import { escapeHtml } from '../utils/html.mjs';
@@ -76,7 +75,9 @@ export function getSitemapDiagnostics({ generatedAt = new Date().toISOString(), 
   const urls = siteUrl ? collectSitemapEntries({ siteUrl, generatedAt, languageCode }) : [];
   const chunks = chunkEntries(urls, SITEMAP_CHUNK_SIZE);
   const products = listProducts({ visibleOnly: true, limit: 10000, languageCode });
-  const corporationCategories = listColumnCategories('corporation', { languageCode });
+  const columns = listColumns({ languageCode });
+  const pageTreeRoot = getRootColumnByDriver(columns, 'page_tree');
+  const pageTreeCategories = pageTreeRoot ? listColumnCategoriesByRoot(pageTreeRoot.id, { languageCode }) : [];
 
   return {
     generated_at: generatedAt,
@@ -91,7 +92,7 @@ export function getSitemapDiagnostics({ generatedAt = new Date().toISOString(), 
     warnings: buildDiagnosticWarnings({
       siteUrl,
       products,
-      corporationCategories
+      corporationCategories: pageTreeCategories
     }),
     chunk_files: chunks.map((chunk, index) => ({
       file_name: `sitemap-${index + 1}.xml`,
@@ -104,25 +105,29 @@ export function getSitemapDiagnostics({ generatedAt = new Date().toISOString(), 
 function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   ensureProductsSchema();
   ensureNewsSchema();
-  ensureCorporationCategoriesSchema();
+  ensureColumnsSchema();
 
   const entries = new Map();
   const columns = listColumns({ languageCode });
   const publicSections = resolvePublicSectionContext(columns);
-  const productCategories = listColumnCategories('product', { languageCode });
-  const newsCategories = listColumnCategories('news', { languageCode });
+  const managedCategoryRoot = getRootColumnByDriver(columns, 'managed_category');
+  const productCategories = managedCategoryRoot ? listColumnCategoriesByRoot(managedCategoryRoot.id, { languageCode }) : [];
+  const newsCategories = publicSections.newsSections.flatMap((section) => (
+    listColumnCategoriesByRoot(section.rootColumnId, { languageCode })
+  ));
   const products = listProducts({ visibleOnly: true, limit: 10000, languageCode });
   const newsItems = listNews({ limit: 10000, languageCode });
-  const corporationCategories = listColumnCategories('corporation', { languageCode });
+  const pageTreeRoot = getRootColumnByDriver(columns, 'page_tree');
+  const pageTreeCategories = pageTreeRoot ? listColumnCategoriesByRoot(pageTreeRoot.id, { languageCode }) : [];
   const productCountByCategory = buildDescendantProductCountMap(productCategories, products);
   const latestProductDateByCategory = buildDescendantLatestDateMap(productCategories, products, generatedAt);
   const newsCountByCategory = buildCountMap(newsItems, (item) => toInteger(item.column_id, 0));
   const latestNewsDateByCategory = buildLatestDateMap(newsItems, (item) => toInteger(item.column_id, 0), 'created_at', generatedAt);
-  const corporationLatestDateById = buildCorporationLatestDateMap(corporationCategories, generatedAt);
+  const corporationLatestDateById = buildCorporationLatestDateMap(pageTreeCategories, generatedAt);
   const productCategoryMap = new Map(productCategories.map((item) => [toInteger(item.id, 0), item]));
   const columnMap = new Map(columns.map((col) => [toInteger(col.id, 0), col]));
-  const corporationIndexId = corporationCategories.find((item) => toInteger(item.parent_id, 0) === 0)?.id
-    ?? corporationCategories[0]?.id
+  const corporationIndexId = pageTreeCategories.find((item) => toInteger(item.parent_id, 0) === 0)?.id
+    ?? pageTreeCategories[0]?.id
     ?? null;
 
   addEntry(entries, siteUrl, '/', generatedAt);
@@ -133,7 +138,7 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
     const routePath = String(column.route_path || '').trim();
     if (
       String(column.column_type || '') === 'single'
-      && String(column.model_code || '') !== 'corporation'
+      && String(column.column_semantics?.render_driver || '') !== 'page_tree'
       && routePath
     ) {
       addEntry(entries, siteUrl, normalizeRoutePathForPublic(routePath), column.updated_at || generatedAt);
@@ -143,7 +148,7 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   if (corporationIndexId != null) {
     addEntry(entries, siteUrl, '/about/index.html', corporationLatestDateById.get(toInteger(corporationIndexId, 0)) || generatedAt);
   }
-  for (const item of corporationCategories) {
+  for (const item of pageTreeCategories) {
     const id = toInteger(item.id, 0);
     if (id > 0) {
       addEntry(entries, siteUrl, `/about/about-${id}.html`, corporationLatestDateById.get(id) || item.updated_at || generatedAt);
@@ -171,7 +176,6 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
     }
   }
 
-  addEntry(entries, siteUrl, '/valve/index.html', latestProductDateByCategory.get(0) || generatedAt);
   for (const category of productCategories) {
     const categoryId = toInteger(category.id, 0);
     if (categoryId <= 0) {
@@ -181,11 +185,9 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
     const pageCount = Math.max(Math.ceil(total / PRODUCT_LIST_PAGE_SIZE), 1);
     const lastmod = latestProductDateByCategory.get(categoryId) || generatedAt;
     const publicCategoryUrl = buildProductCategoryPublicUrl(category, productCategoryMap);
-    addEntry(entries, siteUrl, `/valve/${categoryId}.html`, lastmod);
-    addEntry(entries, siteUrl, `/valve/${categoryId}-1.html`, lastmod);
     addEntry(entries, siteUrl, publicCategoryUrl, lastmod);
     for (let pageNumber = 2; pageNumber <= pageCount; pageNumber += 1) {
-      addEntry(entries, siteUrl, `/valve/${categoryId}-${pageNumber}.html`, lastmod);
+      addEntry(entries, siteUrl, `${publicCategoryUrl}index-${pageNumber}.html`, lastmod);
     }
   }
 
@@ -199,6 +201,13 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   }
 
   return Array.from(entries.values());
+}
+
+function getRootColumnByDriver(columns, renderDriver) {
+  return columns.find((item) => (
+    item?.column_semantics?.is_root
+    && String(item?.column_semantics?.render_driver || '') === String(renderDriver || '')
+  )) || null;
 }
 
 function addSectionEntries({

@@ -1,12 +1,11 @@
 import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { contentModelsApi, corporationCategoriesApi, templateVariantsApi, templatesApi } from '@/api/advanced'
+import { contentModelsApi, templateVariantsApi, templatesApi } from '@/api/advanced'
+import { columnCategoriesApi } from '@/api/column-categories'
 import { columnsApi } from '@/api/columns'
 import { languagesApi } from '@/api/languages'
 import { newsApi } from '@/api/news'
-import { newsCategoriesApi } from '@/api/news-categories'
-import { productCategoriesApi } from '@/api/product-categories'
 import { productsApi } from '@/api/products'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -37,14 +36,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import CategoryTemplateBindingDialog from '@/components/CategoryTemplateBindingDialog'
-import CorporationCategoryFormDialog from '@/components/CorporationCategoryFormDialog'
+import ColumnCategoryFormDialog from '@/components/ColumnCategoryFormDialog'
 import ManualColumnFormDialog, { type ManualColumnFormValue } from '@/components/ManualColumnFormDialog'
-import NewsCategoryFormDialog from '@/components/NewsCategoryFormDialog'
 import NewsFormDialog from '@/components/NewsFormDialog'
-import ProductCategoryFormDialog from '@/components/ProductCategoryFormDialog'
 import ProductFormDialog from '@/components/ProductFormDialog'
 import { toast } from 'sonner'
-import type { Column, ContentModel, News, Product, Template, TemplateBinding } from '@/types'
+import type { Column, ColumnCategory, ContentModel, News, Product, Template, TemplateBinding } from '@/types'
 
 const DEFAULT_TEMPLATE_VALUE = '__default__'
 
@@ -57,10 +54,8 @@ type DeleteTarget =
   | { type: 'news'; id: number }
   | null
 
-type CategoryModel = 'product' | 'news' | 'corporation'
-
 type EditingCategoryTarget =
-  | { type: CategoryModel; id: number }
+  | { rootColumnId: number; id: number }
   | null
 
 type EditingColumnTarget =
@@ -68,16 +63,20 @@ type EditingColumnTarget =
   | null
 
 type CategoryTreeTarget = {
-  type: CategoryModel
   id: number
   columnId: number
+  rootColumnId: number
   name: string
   targetType: 'column'
+  renderDriver: string
 } | null
 
 interface RootCategoryForm {
   name: string
-  model: CategoryModel
+  contentModelId: string
+  dirName: string
+  routePath: string
+  detailRule: string
   listTemplateId: string
   contentTemplateId: string
 }
@@ -127,7 +126,10 @@ export default function ColumnsPage() {
   const [rootCategoryDialogOpen, setRootCategoryDialogOpen] = useState(false)
   const [rootCategoryForm, setRootCategoryForm] = useState<RootCategoryForm>({
     name: '',
-    model: 'product',
+    contentModelId: '',
+    dirName: '',
+    routePath: '',
+    detailRule: '{id}.html',
     listTemplateId: DEFAULT_TEMPLATE_VALUE,
     contentTemplateId: DEFAULT_TEMPLATE_VALUE,
   })
@@ -153,22 +155,10 @@ export default function ColumnsPage() {
   })
   const selectedThemeId = selectedThemeData?.data?.id
 
-  const { data: editingProductCategoryData } = useQuery({
-    queryKey: ['product-categories', 'detail', editingCategoryTarget?.id],
-    queryFn: () => productCategoriesApi.get(editingCategoryTarget!.id),
-    enabled: categoryFormOpen && categoryFormMode === 'edit' && editingCategoryTarget?.type === 'product',
-  })
-
-  const { data: editingNewsCategoryData } = useQuery({
-    queryKey: ['news-categories', 'detail', editingCategoryTarget?.id],
-    queryFn: () => newsCategoriesApi.get(editingCategoryTarget!.id),
-    enabled: categoryFormOpen && categoryFormMode === 'edit' && editingCategoryTarget?.type === 'news',
-  })
-
-  const { data: editingCorporationCategoryData } = useQuery({
-    queryKey: ['corporation-categories', 'detail', editingCategoryTarget?.id],
-    queryFn: () => corporationCategoriesApi.get(editingCategoryTarget!.id),
-    enabled: categoryFormOpen && categoryFormMode === 'edit' && editingCategoryTarget?.type === 'corporation',
+  const { data: editingCategoryData } = useQuery({
+    queryKey: ['column-categories', editingCategoryTarget?.rootColumnId, 'detail', editingCategoryTarget?.id],
+    queryFn: () => columnCategoriesApi.get(editingCategoryTarget!.rootColumnId, editingCategoryTarget!.id),
+    enabled: categoryFormOpen && categoryFormMode === 'edit' && Boolean(editingCategoryTarget?.rootColumnId) && Boolean(editingCategoryTarget?.id),
   })
 
   const { data: templatesData } = useQuery({
@@ -195,19 +185,22 @@ export default function ColumnsPage() {
     [columnTree]
   )
   const selectedColumn = columns.find((column) => column.id === selectedColumnId)
-    || columns.find((column) => column.column_type === 'list' && column.model_code === 'product' && column.column_semantics?.is_root)
+    || columns.find((column) => column.column_semantics?.is_root)
     || columns[0]
     || null
 
   const selectedColumnType = selectedColumn?.column_type || ''
   const selectedModelCode = selectedColumn?.model_code || ''
+  const selectedRenderDriver = String(selectedColumn?.column_semantics?.render_driver || '')
   const isProductColumn = selectedColumnType === 'list' && selectedModelCode === 'product'
   const isNewsColumn = selectedColumnType === 'list' && selectedModelCode === 'news'
-  const isCorporationColumn = selectedColumnType === 'single' && selectedModelCode === 'corporation'
   const isManualLinkColumn = selectedColumnType === 'link'
-  const isManualSingleColumn = selectedColumnType === 'single' && selectedModelCode !== 'corporation'
+  const isManualSingleColumn = selectedColumnType === 'single' && selectedRenderDriver !== 'page_tree'
   const isManualColumn = isManualLinkColumn || isManualSingleColumn
-  const categoryFormTargetType = editingCategoryTarget?.type || creatingCategoryTarget?.type
+  const categoryFormRootColumnId = editingCategoryTarget?.rootColumnId || creatingCategoryTarget?.rootColumnId || 0
+  const categoryFormRootColumn = categoryFormRootColumnId
+    ? columns.find((item) => item.id === categoryFormRootColumnId) || null
+    : null
 
   const { data: productsData, isLoading: productsLoading } = useQuery({
     queryKey: ['products', 'columns', selectedColumn?.id || 0, page, limit],
@@ -261,47 +254,13 @@ export default function ColumnsPage() {
     },
   })
 
-  const deleteProductCategoryMutation = useMutation({
-    mutationFn: (id: number) => productCategoriesApi.delete(id),
+  const deleteCategoryMutation = useMutation({
+    mutationFn: ({ rootColumnId, id }: { rootColumnId: number; id: number }) => columnCategoriesApi.delete(rootColumnId, id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['product-categories'] })
+      queryClient.invalidateQueries({ queryKey: ['column-categories'] })
       queryClient.invalidateQueries({ queryKey: ['columns'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
-      toast.success('删除成功')
-      if (deletingCategoryTarget?.columnId === selectedColumn?.id) {
-        setSearchParams({})
-      }
-      setCategoryDeleteDialogOpen(false)
-      setDeletingCategoryTarget(null)
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || '删除失败')
-    },
-  })
-
-  const deleteNewsCategoryMutation = useMutation({
-    mutationFn: (id: number) => newsCategoriesApi.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['news-categories'] })
-      queryClient.invalidateQueries({ queryKey: ['columns'] })
       queryClient.invalidateQueries({ queryKey: ['news'] })
-      toast.success('删除成功')
-      if (deletingCategoryTarget?.columnId === selectedColumn?.id) {
-        setSearchParams({})
-      }
-      setCategoryDeleteDialogOpen(false)
-      setDeletingCategoryTarget(null)
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || '删除失败')
-    },
-  })
-
-  const deleteCorporationCategoryMutation = useMutation({
-    mutationFn: (id: number) => corporationCategoriesApi.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['corporation-categories'] })
-      queryClient.invalidateQueries({ queryKey: ['columns'] })
       queryClient.invalidateQueries({ queryKey: ['template-bindings'] })
       toast.success('删除成功')
       if (deletingCategoryTarget?.columnId === selectedColumn?.id) {
@@ -321,25 +280,46 @@ export default function ColumnsPage() {
       if (!name) {
         throw new Error('请输入栏目名称')
       }
+      const contentModelId = Number.parseInt(rootCategoryForm.contentModelId, 10)
+      if (!contentModelId) {
+        throw new Error('请选择内容模型')
+      }
+      const routePath = rootCategoryForm.routePath.trim()
+      if (!routePath) {
+        throw new Error('请输入访问路径')
+      }
 
-      const response = await createCategoryByModel(rootCategoryForm.model, { name, parent_id: 0, sort_order: 0 })
-      const categoryId = response.data?.id
-      if (!categoryId) {
+      const response = await columnsApi.create({
+        base: {
+          parent_id: 0,
+          column_type: 'list',
+          content_model_id: contentModelId,
+          custom_url: '',
+          dir_name: rootCategoryForm.dirName.trim(),
+          route_path: routePath,
+          detail_rule: rootCategoryForm.detailRule.trim() || '{id}.html',
+          sort_order: 0,
+          is_visible: 1,
+        },
+        translations: {
+          [defaultLanguageCode]: {
+            name,
+          },
+        },
+      })
+      const columnId = response.data?.id
+      if (!columnId) {
         throw new Error('栏目创建失败')
       }
 
-      if (rootCategoryForm.model !== 'corporation') {
-        await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', categoryId, 'list', rootCategoryForm.listTemplateId)
-      }
-      await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', categoryId, 'content', rootCategoryForm.contentTemplateId)
+      await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', columnId, 'list', rootCategoryForm.listTemplateId)
+      await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', columnId, 'content', rootCategoryForm.contentTemplateId)
 
       return response
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['columns'] })
-      queryClient.invalidateQueries({ queryKey: ['product-categories'] })
-      queryClient.invalidateQueries({ queryKey: ['news-categories'] })
-      queryClient.invalidateQueries({ queryKey: ['corporation-categories'] })
+      queryClient.invalidateQueries({ queryKey: ['column-categories'] })
       queryClient.invalidateQueries({ queryKey: ['template-bindings'] })
       toast.success('栏目已创建')
       setRootCategoryDialogOpen(false)
@@ -481,7 +461,10 @@ export default function ColumnsPage() {
   const resetRootCategoryForm = () => {
     setRootCategoryForm({
       name: '',
-      model: 'product',
+      contentModelId: '',
+      dirName: '',
+      routePath: '',
+      detailRule: '{id}.html',
       listTemplateId: DEFAULT_TEMPLATE_VALUE,
       contentTemplateId: DEFAULT_TEMPLATE_VALUE,
     })
@@ -545,21 +528,10 @@ export default function ColumnsPage() {
       return
     }
 
-    if (target.id === 0) {
-      setEditingCategoryTarget(null)
-      setCreatingCategoryTarget(null)
-      setEditingColumnTarget(column)
-      setManualColumnDialogMode('edit')
-      setManualColumnDialogKind('link')
-      setEditingManualColumn(column)
-      setManualColumnDialogOpen(true)
-      return
-    }
-
     setCategoryFormMode('edit')
     setCreatingCategoryTarget(null)
     setEditingColumnTarget(null)
-    setEditingCategoryTarget({ type: target.type, id: target.id })
+    setEditingCategoryTarget({ rootColumnId: target.rootColumnId, id: target.id })
     setCategoryFormOpen(true)
   }
 
@@ -586,7 +558,7 @@ export default function ColumnsPage() {
       queryClient.invalidateQueries({ queryKey: ['columns'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
       queryClient.invalidateQueries({ queryKey: ['news'] })
-      queryClient.invalidateQueries({ queryKey: ['corporation-categories'] })
+      queryClient.invalidateQueries({ queryKey: ['column-categories'] })
     }
   }
 
@@ -594,18 +566,7 @@ export default function ColumnsPage() {
     if (!deletingCategoryTarget) {
       return
     }
-
-    if (deletingCategoryTarget.type === 'product') {
-      deleteProductCategoryMutation.mutate(deletingCategoryTarget.id)
-      return
-    }
-
-    if (deletingCategoryTarget.type === 'news') {
-      deleteNewsCategoryMutation.mutate(deletingCategoryTarget.id)
-      return
-    }
-
-    deleteCorporationCategoryMutation.mutate(deletingCategoryTarget.id)
+    deleteCategoryMutation.mutate({ rootColumnId: deletingCategoryTarget.rootColumnId, id: deletingCategoryTarget.id })
   }
 
   const renderColumnTreeAction = (item: TreeItemData<Column>) => {
@@ -643,7 +604,7 @@ export default function ColumnsPage() {
           {categoryTarget ? (
             <DropdownMenuItem onSelect={() => handleCreateChildCategory(column)}>
               <Plus className="size-4" />
-              添加子分类
+              添加子栏目
             </DropdownMenuItem>
           ) : null}
 
@@ -659,7 +620,7 @@ export default function ColumnsPage() {
           {categoryTarget ? (
             <DropdownMenuItem onSelect={() => handleEditColumnCategory(column)}>
               <Pencil className="size-4" />
-              编辑分类
+              编辑栏目
             </DropdownMenuItem>
           ) : null}
 
@@ -688,7 +649,7 @@ export default function ColumnsPage() {
               onSelect={() => handleDeleteColumnCategory(column)}
             >
               <Trash2 className="size-4" />
-              删除分类
+              删除栏目
             </DropdownMenuItem>
           ) : null}
         </DropdownMenuContent>
@@ -842,9 +803,9 @@ export default function ColumnsPage() {
             <div className="min-h-0 flex-1">
               <ManualColumnPanel column={selectedColumn} onEdit={handleEditManualColumn} onDelete={handleDeleteManualColumn} />
             </div>
-          ) : isCorporationColumn ? (
+          ) : selectedRenderDriver === 'page_tree' ? (
             <div className="min-h-0 flex-1">
-              <CorporationColumnPanel column={selectedColumn} />
+              <PageTreeColumnPanel column={selectedColumn} />
             </div>
           ) : activeLoading ? (
             <div className="flex min-h-0 flex-1 items-center justify-center rounded border p-8 text-center text-muted-foreground">加载中...</div>
@@ -952,7 +913,7 @@ export default function ColumnsPage() {
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>新增一级栏目</DialogTitle>
-            <DialogDescription>填写栏目名称，选择内容模型和生成模板。</DialogDescription>
+            <DialogDescription>创建一个列表式栏目根节点，用于承载分类树和内容列表。</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateRootCategory} className="space-y-4">
             <div className="space-y-2">
@@ -965,42 +926,71 @@ export default function ColumnsPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label>模型</Label>
+              <Label>内容模型</Label>
               <Select
-                value={rootCategoryForm.model}
-                onValueChange={(value: CategoryModel) => setRootCategoryForm({ ...rootCategoryForm, model: value })}
+                value={rootCategoryForm.contentModelId}
+                onValueChange={(value) => setRootCategoryForm({ ...rootCategoryForm, contentModelId: value })}
               >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="product">产品</SelectItem>
-                  <SelectItem value="news">新闻</SelectItem>
-                  <SelectItem value="corporation">公司</SelectItem>
+                  {contentModels.map((model) => (
+                    <SelectItem key={model.id} value={String(model.id)}>
+                      {model.name}
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
-            {rootCategoryForm.model !== 'corporation' && (
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label>列表模板</Label>
-                <Select
-                  value={rootCategoryForm.listTemplateId}
-                  onValueChange={(value) => setRootCategoryForm({ ...rootCategoryForm, listTemplateId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={DEFAULT_TEMPLATE_VALUE}>不单独绑定</SelectItem>
-                    {listTemplates.map((template: Template) => (
-                      <SelectItem key={template.id} value={String(template.id)}>
-                        {template.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label htmlFor="root-category-dir-name">目录名</Label>
+                <Input
+                  id="root-category-dir-name"
+                  value={rootCategoryForm.dirName}
+                  onChange={(event) => setRootCategoryForm({ ...rootCategoryForm, dirName: event.target.value })}
+                  placeholder="catalog"
+                />
               </div>
-            )}
+              <div className="space-y-2">
+                <Label htmlFor="root-category-route-path">访问路径 *</Label>
+                <Input
+                  id="root-category-route-path"
+                  value={rootCategoryForm.routePath}
+                  onChange={(event) => setRootCategoryForm({ ...rootCategoryForm, routePath: event.target.value })}
+                  placeholder="/catalog/"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="root-category-detail-rule">内容页规则</Label>
+              <Input
+                id="root-category-detail-rule"
+                value={rootCategoryForm.detailRule}
+                onChange={(event) => setRootCategoryForm({ ...rootCategoryForm, detailRule: event.target.value })}
+                placeholder="{id}.html"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>列表模板</Label>
+              <Select
+                value={rootCategoryForm.listTemplateId}
+                onValueChange={(value) => setRootCategoryForm({ ...rootCategoryForm, listTemplateId: value })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={DEFAULT_TEMPLATE_VALUE}>不单独绑定</SelectItem>
+                  {listTemplates.map((template: Template) => (
+                    <SelectItem key={template.id} value={String(template.id)}>
+                      {template.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="space-y-2">
               <Label>内容模板</Label>
               <Select
@@ -1049,26 +1039,11 @@ export default function ColumnsPage() {
         onSubmit={handleSubmitManualColumn}
       />
 
-      <ProductCategoryFormDialog
-        open={categoryFormOpen && categoryFormTargetType === 'product'}
+      <ColumnCategoryFormDialog
+        open={categoryFormOpen && Boolean(categoryFormRootColumn)}
         onOpenChange={handleCategoryFormOpenChange}
-        category={categoryFormMode === 'edit' ? editingProductCategoryData?.data : undefined}
-        currentParentId={categoryFormMode === 'create' ? creatingCategoryTarget?.id || 0 : 0}
-        mode={categoryFormMode}
-      />
-
-      <NewsCategoryFormDialog
-        open={categoryFormOpen && categoryFormTargetType === 'news'}
-        onOpenChange={handleCategoryFormOpenChange}
-        category={categoryFormMode === 'edit' ? editingNewsCategoryData?.data : undefined}
-        currentParentId={categoryFormMode === 'create' ? creatingCategoryTarget?.id || 0 : 0}
-        mode={categoryFormMode}
-      />
-
-      <CorporationCategoryFormDialog
-        open={categoryFormOpen && categoryFormTargetType === 'corporation'}
-        onOpenChange={handleCategoryFormOpenChange}
-        category={categoryFormMode === 'edit' ? editingCorporationCategoryData?.data : undefined}
+        rootColumn={categoryFormRootColumn}
+        category={categoryFormMode === 'edit' ? editingCategoryData?.data as ColumnCategory | undefined : undefined}
         currentParentId={categoryFormMode === 'create' ? creatingCategoryTarget?.id || 0 : 0}
         mode={categoryFormMode}
       />
@@ -1083,7 +1058,7 @@ export default function ColumnsPage() {
         targetType={bindingCategoryTarget?.targetType || 'column'}
         targetId={bindingCategoryTarget?.id}
         targetName={bindingCategoryTarget?.name}
-        templateTypes={bindingCategoryTarget?.type === 'corporation' ? ['content'] : ['list', 'content']}
+        templateTypes={bindingCategoryTarget?.renderDriver === 'page_tree' ? ['content'] : ['list', 'content']}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -1104,16 +1079,16 @@ export default function ColumnsPage() {
       <AlertDialog open={categoryDeleteDialogOpen} onOpenChange={setCategoryDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认删除分类</AlertDialogTitle>
+            <AlertDialogTitle>确认删除栏目</AlertDialogTitle>
             <AlertDialogDescription>
-              确定要删除「{deletingCategoryTarget?.name}」吗？此操作无法撤销；如果该分类下有子分类或内容，删除可能会失败。
+              确定要删除「{deletingCategoryTarget?.name}」吗？此操作无法撤销；如果该栏目下有子栏目或内容，删除可能会失败。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteCategory}
-              disabled={deleteProductCategoryMutation.isPending || deleteNewsCategoryMutation.isPending || deleteCorporationCategoryMutation.isPending}
+              disabled={deleteCategoryMutation.isPending}
             >
               确定
             </AlertDialogAction>
@@ -1290,14 +1265,14 @@ function NewsTable({
   )
 }
 
-function CorporationColumnPanel({ column }: { column: Column | null }) {
+function PageTreeColumnPanel({ column }: { column: Column | null }) {
   if (!column) {
     return <div className="flex h-full items-center justify-center rounded border p-8 text-center text-muted-foreground">请选择左侧栏目</div>
   }
 
   return (
     <div className="flex h-full items-center justify-center rounded border p-8 text-center text-sm text-muted-foreground">
-      公司栏目页面不包含产品或新闻列表。
+      该栏目树使用单页模式，不包含列表内容。
     </div>
   )
 }
@@ -1541,51 +1516,23 @@ async function saveOptionalTemplateBinding(
 }
 
 function isEditableManualColumn(column: Column) {
-  return column.column_type === 'link' || (column.column_type === 'single' && column.model_code !== 'corporation')
-}
-
-function createCategoryByModel(model: CategoryModel, data: { name: string; parent_id: number; sort_order: number }) {
-  if (model === 'product') {
-    return productCategoriesApi.create(data)
-  }
-  if (model === 'news') {
-    return newsCategoriesApi.create(data)
-  }
-  return corporationCategoriesApi.create(data)
+  return column.column_type === 'link' || (column.column_type === 'single' && String(column.column_semantics?.render_driver || '') !== 'page_tree')
 }
 
 function getCategoryTreeTarget(column: Column): CategoryTreeTarget {
-  if (column.column_type === 'list' && column.model_code === 'product') {
-    return {
-      type: 'product',
-      id: column.id,
-      columnId: column.id,
-      name: column.name,
-      targetType: 'column',
-    }
+  const renderDriver = String(column.column_semantics?.render_driver || '')
+  const rootColumnId = Number(column.column_semantics?.root_column_id || column.id || 0)
+  if (!rootColumnId || !['managed_category', 'section', 'page_tree'].includes(renderDriver)) {
+    return null
   }
-
-  if (column.column_type === 'list' && column.model_code === 'news') {
-    return {
-      type: 'news',
-      id: column.id,
-      columnId: column.id,
-      name: column.name,
-      targetType: 'column',
-    }
+  return {
+    id: column.id,
+    columnId: column.id,
+    rootColumnId,
+    name: column.name,
+    targetType: 'column',
+    renderDriver,
   }
-
-  if (column.column_type === 'single' && column.model_code === 'corporation') {
-    return {
-      type: 'corporation',
-      id: column.id,
-      columnId: column.id,
-      name: column.name,
-      targetType: 'column',
-    }
-  }
-
-  return null
 }
 
 function toTreeItem(column: ColumnTreeNode): TreeItemData<Column> {

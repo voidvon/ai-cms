@@ -66,10 +66,8 @@ export async function createApp(options = {}) {
   // 注册路由模块
   await app.register(import('./routes/auth.mjs'), { prefix: '/admin' });
   await app.register(import('./routes/api/products.mjs'), { prefix: '/api' });
-  await app.register(import('./routes/api/product-categories.mjs'), { prefix: '/api' });
-  await app.register(import('./routes/api/news-categories.mjs'), { prefix: '/api' });
+  await app.register(import('./routes/api/column-categories.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/news.mjs'), { prefix: '/api' });
-  await app.register(import('./routes/api/corporation-categories.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/template-variants.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/templates.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/content-models.mjs'), { prefix: '/api' });

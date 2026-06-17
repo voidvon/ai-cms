@@ -103,7 +103,7 @@ export interface NewsTranslationStatus {
   has_content: boolean;
 }
 
-export interface ProductCategory {
+export interface ColumnCategory {
   id: number;
   column_id?: number;
   name: string;
@@ -114,38 +114,13 @@ export interface ProductCategory {
   seo_keywords?: string;
   seo_description?: string;
   current_language_code?: string;
-  translations?: Record<string, ProductCategoryTranslation>;
+  translations?: Record<string, ColumnCategoryTranslation>;
 }
 
-export interface NewsCategory {
-  id: number;
-  column_id?: number;
-  name: string;
-  parent_id: number;
-  dir_name?: string | null;
-  detail_rule?: string | null;
-  sort_order: number;
-  current_language_code?: string;
-  translations?: Record<string, NewsCategoryTranslation>;
-}
-
-export interface ProductCategoryTranslation {
+export interface ColumnCategoryTranslation {
   name: string;
   seo_keywords?: string;
   seo_description?: string;
-}
-
-export interface NewsCategoryTranslation {
-  name: string;
-}
-
-export interface CorporationCategory {
-  id: number;
-  name: string;
-  parent_id: number;
-  dir_name?: string | null;
-  detail_rule?: string | null;
-  sort_order: number;
 }
 
 export interface TemplateVariant {

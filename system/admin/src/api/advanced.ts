@@ -1,38 +1,5 @@
 import apiClient from './client'
-import type { ContentModel, ContentModelField, CorporationCategory, Template, TemplateBinding, TemplateDependencyInfo, TemplatePreview, TemplateVariant, TemplateVersion, ApiResponse } from '@/types'
-
-// 公司信息分类 API
-export const corporationCategoriesApi = {
-  list: async () => {
-    const response = await apiClient.get<ApiResponse<CorporationCategory[]>>('/corporation-categories')
-    return response.data
-  },
-
-  listAdmin: async () => {
-    const response = await apiClient.get<ApiResponse<CorporationCategory[]>>('/corporation-categories/admin')
-    return response.data
-  },
-
-  get: async (id: number) => {
-    const response = await apiClient.get<ApiResponse<CorporationCategory>>(`/corporation-categories/${id}`)
-    return response.data
-  },
-
-  create: async (data: Partial<CorporationCategory>) => {
-    const response = await apiClient.post<ApiResponse<CorporationCategory>>('/corporation-categories', data)
-    return response.data
-  },
-
-  update: async (id: number, data: Partial<CorporationCategory>) => {
-    const response = await apiClient.put<ApiResponse<CorporationCategory>>(`/corporation-categories/${id}`, data)
-    return response.data
-  },
-
-  delete: async (id: number) => {
-    const response = await apiClient.delete<ApiResponse<void>>(`/corporation-categories/${id}`)
-    return response.data
-  },
-}
+import type { ContentModel, ContentModelField, Template, TemplateBinding, TemplateDependencyInfo, TemplatePreview, TemplateVariant, TemplateVersion, ApiResponse } from '@/types'
 
 // 模板变体 API
 export const templateVariantsApi = {

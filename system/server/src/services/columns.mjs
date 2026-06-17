@@ -809,13 +809,18 @@ function inferColumnSemantics(row, rowById, semanticsById, modelCode) {
     generationModes = [];
   } else if (columnType === 'single') {
     structureKind = 'page';
-    renderDriver = modelCode === 'corporation' ? 'page_tree' : 'single_page';
+    const resolvedPath = String(resolveColumnResolvedRoutePath(row, null, rowById) || '').trim();
+    renderDriver = resolvedPath === '/about/' || resolvedPath.startsWith('/about/')
+      ? 'page_tree'
+      : 'single_page';
     generationModes = ['page'];
   } else {
     structureKind = 'collection';
-    renderDriver = modelCode === 'product'
+    const resolvedPath = String(resolveColumnResolvedRoutePath(row, null, rowById) || '').trim();
+    const hasDetailRule = Boolean(toNullableString(row?.detail_rule));
+    renderDriver = resolvedPath.startsWith('/products/')
       ? 'managed_category'
-      : modelCode === 'news'
+      : hasDetailRule
         ? 'section'
         : 'collection';
     generationModes = ['list'];

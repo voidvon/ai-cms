@@ -14,8 +14,7 @@ export function resolvePublicSectionContext(columns) {
   const allById = new Map(rows.map((item) => [toInteger(item?.id, 0), item]));
   const newsRows = rows
     .filter((item) => (
-      String(item?.column_type || '') === 'list'
-      && String(item?.model_code || '') === 'news'
+      String(item?.column_semantics?.render_driver || '') === 'section'
     ))
     .slice()
     .sort(compareBySortAndId);
@@ -52,8 +51,8 @@ export function resolvePublicSectionContext(columns) {
 
   return {
     allById,
-    productRootColumnId: findRootColumnId(rows, { columnType: 'list', modelCode: 'product' }),
-    corporationRootColumnId: findRootColumnId(rows, { columnType: 'single', modelCode: 'corporation' }),
+    productRootColumnId: findRootColumnId(rows, { renderDriver: 'managed_category' }),
+    corporationRootColumnId: findRootColumnId(rows, { renderDriver: 'page_tree' }),
     newsTree,
     newsSections: rootSections,
     newsSectionsByRootId: sectionsByRootId,
@@ -77,17 +76,17 @@ export function buildColumnPublicUrl(column, publicSections) {
   const explicitRoutePath = String(column.route_path || '').trim();
   const relativeCustomUrl = String(column.custom_url || '').trim();
   const columnType = String(column.column_type || '');
-  const modelCode = String(column.model_code || '');
+  const renderDriver = String(column.column_semantics?.render_driver || '');
   if (columnType !== 'link' && explicitRoutePath) {
     return explicitRoutePath;
   }
-  if (columnType === 'list' && modelCode === 'product' && toInteger(column.parent_id, 0) === 0) {
+  if (renderDriver === 'managed_category' && toInteger(column.parent_id, 0) === 0) {
     return '/products/';
   }
-  if (columnType === 'list' && modelCode === 'product') {
+  if (renderDriver === 'managed_category') {
     return '';
   }
-  if (columnType === 'list' && modelCode === 'news') {
+  if (renderDriver === 'section') {
     const section = publicSections?.getNewsSectionByColumnId?.(column.id);
     if (!section) {
       return '';
@@ -97,10 +96,10 @@ export function buildColumnPublicUrl(column, publicSections) {
     }
     return '';
   }
-  if (columnType === 'single' && modelCode === 'corporation' && toInteger(column.parent_id, 0) === 0) {
+  if (renderDriver === 'page_tree' && toInteger(column.parent_id, 0) === 0) {
     return '/about/';
   }
-  if (columnType === 'single' && modelCode === 'corporation') {
+  if (renderDriver === 'page_tree') {
     return `/about/about-${toInteger(column.id, 0)}.html`;
   }
   if (explicitRoutePath === '/contact.html') {
@@ -125,11 +124,10 @@ function resolveColumnParentPublicUrl(column, publicSections) {
   return parentUrl || '/';
 }
 
-function findRootColumnId(columns, { columnType, modelCode }) {
+function findRootColumnId(columns, { renderDriver }) {
   return toInteger(
     columns.find((item) => (
-      String(item?.column_type || '') === columnType
-      && String(item?.model_code || '') === modelCode
+      String(item?.column_semantics?.render_driver || '') === renderDriver
       && toInteger(item?.parent_id, 0) === 0
     ))?.id,
     0

@@ -3,9 +3,10 @@ import { detachTemplateFromAllThemeVariants, getSelectedTemplateVariant, listTem
 import { createTsxTemplateElement, renderTsxTemplate } from '../tsx-template-renderer.mjs';
 import { getTsxTemplateStyleAsset } from '../tsx-template-styles.mjs';
 import { escapeHtml } from '../utils/html.mjs';
+import { listColumns } from './columns.mjs';
 import { listProducts } from './products.mjs';
 import { listNews } from './news.mjs';
-import { listColumnCategories } from './column-categories.mjs';
+import { listColumnCategories, listColumnCategoriesByRoot } from './column-categories.mjs';
 import { buildColumnPublicUrl, resolvePublicSectionContext } from './public-sections.mjs';
 
 export const TEMPLATE_TYPES = ['home', 'list', 'content', 'component'];
@@ -17,6 +18,45 @@ const CONTENT_TYPE_CONTACT_ID = 4;
 const CONTENT_TYPE_CORPORATION_ID = 6;
 
 let schemaEnsured = false;
+
+const PREVIEW_FALLBACK_SITE_COLUMNS = [
+  {
+    id: 1,
+    name: '示例列表栏目',
+    parentId: 0,
+    columnType: 'list',
+    modelCode: '',
+    url: '/example-list/',
+    children: [
+      {
+        id: 11,
+        name: '示例子栏目',
+        parentId: 1,
+        columnType: 'list',
+        modelCode: '',
+        url: '/example-list/example-child/'
+      }
+    ]
+  },
+  {
+    id: 2,
+    name: '示例单页栏目',
+    parentId: 0,
+    columnType: 'single',
+    modelCode: '',
+    url: '/example-page.html',
+    children: []
+  },
+  {
+    id: 3,
+    name: '示例链接栏目',
+    parentId: 0,
+    columnType: 'link',
+    modelCode: '',
+    url: '/example-link/',
+    children: []
+  }
+];
 
 export function ensureTemplatesSchema() {
   if (schemaEnsured) {
@@ -583,7 +623,7 @@ export function renderTemplatePreview(input) {
 }
 
 function buildTemplatePreviewProps(template, previewContext = {}) {
-  const mode = String(previewContext?.mode || 'auto').trim();
+  const mode = normalizePreviewMode(previewContext?.mode);
   const props = buildTemplateValidationProps(template);
   const effectiveMode = mode === 'auto' ? inferPreviewMode(template) : mode;
 
@@ -599,13 +639,17 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
     };
   }
 
-  if (effectiveMode === 'product-list') {
-    const category = getPreviewProductCategory();
+  if (effectiveMode === 'category-list') {
+    const managedRootColumn = getPreviewRootColumnByDriver('managed_category');
+    const category = getPreviewColumnCategory({
+      rootColumn: managedRootColumn,
+      fallbackName: '示例列表栏目'
+    });
     const products = getPreviewProducts(8);
     return {
       ...props,
       ...buildPreviewPageContext({
-        pageType: 'product-list',
+        pageType: 'category-list',
         title: category.name,
         url: `/valve/${category.id}.html`,
         section: { type: 'product', name: '产品', url: '/valve/' },
@@ -622,7 +666,11 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       bigName: category.name,
       prodKeywords: category.seo_keywords || category.name,
       productsSmallCatHtml: `<span class="abv">【<a href="/valve/${category.id}.html">${escapeHtml(category.name)}</a>】</span>`,
-      secondaryMenuItems: buildPreviewProductMenuItems(category),
+      secondaryMenuItems: buildPreviewColumnMenuItems({
+        rootColumn: managedRootColumn,
+        category,
+        baseUrl: '/valve/'
+      }),
       items: products.map((item) => ({
         id: item.id,
         name: item.name || '',
@@ -634,13 +682,18 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
     };
   }
 
-  if (effectiveMode === 'product-detail') {
+  if (effectiveMode === 'content-detail') {
     const product = getPreviewProduct();
-    const category = getPreviewProductCategory(product.column_id);
+    const managedRootColumn = getPreviewRootColumnByDriver('managed_category');
+    const category = getPreviewColumnCategory({
+      rootColumn: managedRootColumn,
+      id: product.column_id,
+      fallbackName: '示例列表栏目'
+    });
     return {
       ...props,
       ...buildPreviewPageContext({
-        pageType: 'product-detail',
+        pageType: 'content-detail',
         title: product.name,
         url: `/product/${product.id}.html`,
         section: { type: 'product', name: '产品', url: '/valve/' },
@@ -660,13 +713,20 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       code: product.code || '',
       relatedProductsHtml: buildPreviewProductLinksHtml(4),
       bodyHtml: product.content_html || product.summary || '',
-      secondaryMenuItems: buildPreviewProductMenuItems(category)
+      secondaryMenuItems: buildPreviewColumnMenuItems({
+        rootColumn: managedRootColumn,
+        category,
+        baseUrl: '/valve/'
+      })
     };
   }
 
-  if (effectiveMode === 'article-list' || effectiveMode === 'service-list') {
+  if (effectiveMode === 'section-list' || effectiveMode === 'knowledge-list') {
     const sectionConfig = buildPreviewArticleSectionConfig(effectiveMode, template);
-    const category = getPreviewNewsCategory();
+    const category = getPreviewColumnCategory({
+      rootColumnId: sectionConfig.rootId,
+      fallbackName: '示例信息栏目'
+    });
     const articles = getPreviewArticles(6);
     return {
       ...props,
@@ -687,7 +747,12 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       sectionDir: sectionConfig.sectionDir,
       sectionLabel: sectionConfig.sectionLabel,
       sectionCategoryHtml: `<a href="/${sectionConfig.sectionDir}/${category.id}.html">${escapeHtml(category.name)}</a>`,
-      secondaryMenuItems: buildPreviewNewsMenuItems(sectionConfig.rootId, sectionConfig.sectionDir, category.id),
+      secondaryMenuItems: buildPreviewColumnMenuItems({
+        rootColumnId: sectionConfig.rootId,
+        dirName: sectionConfig.sectionDir,
+        activeId: category.id,
+        fallbackName: '示例分类'
+      }),
       categoryId: category.id,
       title: category.name,
       items: articles.map((item) => ({
@@ -702,10 +767,14 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
     };
   }
 
-  if (effectiveMode === 'article-detail' || effectiveMode === 'service-detail') {
+  if (effectiveMode === 'section-detail' || effectiveMode === 'knowledge-detail') {
     const sectionConfig = buildPreviewArticleSectionConfig(effectiveMode, template);
     const article = getPreviewArticle();
-    const category = getPreviewNewsCategory(article.column_id);
+    const category = getPreviewColumnCategory({
+      rootColumnId: sectionConfig.rootId,
+      id: article.column_id,
+      fallbackName: '示例信息栏目'
+    });
     return {
       ...props,
       ...buildPreviewPageContext({
@@ -732,7 +801,12 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       sectionDir: sectionConfig.sectionDir,
       sectionLabel: sectionConfig.sectionLabel,
       sectionCategoryHtml: `<a href="/${sectionConfig.sectionDir}/${category.id}.html">${escapeHtml(category.name)}</a>`,
-      secondaryMenuItems: buildPreviewNewsMenuItems(sectionConfig.rootId, sectionConfig.sectionDir, category.id),
+      secondaryMenuItems: buildPreviewColumnMenuItems({
+        rootColumnId: sectionConfig.rootId,
+        dirName: sectionConfig.sectionDir,
+        activeId: category.id,
+        fallbackName: '示例分类'
+      }),
       title: article.title,
       newsKeywords: article.keywords || article.title,
       newsDescription: article.summary || '',
@@ -744,8 +818,13 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
     };
   }
 
-  if (effectiveMode === 'content') {
-    const category = getPreviewCorporationCategory();
+  if (effectiveMode === 'single-page') {
+    const pageTreeRootColumn = getPreviewRootColumnByDriver('page_tree');
+    const category = getPreviewColumnCategory({
+      rootColumn: pageTreeRootColumn,
+      fallbackName: '示例单页栏目',
+      fallbackContentHtml: '单页栏目内容预览'
+    });
     return {
       ...props,
       ...buildPreviewPageContext({
@@ -760,11 +839,17 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       primaryMenuItems: buildPreviewPrimaryMenuItems('corporation'),
       title: category.name,
       contentHtml: category.content_html || '公司栏目内容预览',
-      secondaryMenuItems: buildPreviewCorporationMenuItems(category.id)
+      secondaryMenuItems: buildPreviewColumnMenuItems({
+        rootColumn: pageTreeRootColumn,
+        activeId: category.id,
+        baseUrl: '/about/',
+        detailPattern: '/about/about-{id}.html',
+        fallbackName: '示例单页栏目'
+      })
     };
   }
 
-  if (effectiveMode === 'contact') {
+  if (effectiveMode === 'contact-page') {
     return {
       ...props,
       ...buildPreviewPageContext({
@@ -790,24 +875,39 @@ function inferPreviewMode(template) {
     return 'home';
   }
   if (template.code === 'list_product' || (template.type === 'list' && code.includes('product'))) {
-    return 'product-list';
+    return 'category-list';
   }
   if (template.code === 'list_article' || (template.type === 'list' && (code.includes('article') || code.includes('news') || code.includes('service')))) {
-    return 'article-list';
+    return code.includes('service') ? 'knowledge-list' : 'section-list';
   }
   if (template.code === 'content_product' || (template.type === 'content' && code.includes('product'))) {
-    return 'product-detail';
+    return 'content-detail';
   }
   if (template.code === 'content_article' || (template.type === 'content' && (code.includes('article') || code.includes('news') || code.includes('service')))) {
-    return 'article-detail';
+    return code.includes('service') ? 'knowledge-detail' : 'section-detail';
   }
   if (template.code === 'content_contact' || code.includes('contact')) {
-    return 'contact';
+    return 'contact-page';
   }
   if (template.type === 'content') {
-    return 'content';
+    return 'single-page';
   }
   return 'generic';
+}
+
+function normalizePreviewMode(value) {
+  const mode = String(value || 'auto').trim();
+  const legacyToGenericMap = new Map([
+    ['product-list', 'category-list'],
+    ['product-detail', 'content-detail'],
+    ['article-list', 'section-list'],
+    ['article-detail', 'section-detail'],
+    ['service-list', 'knowledge-list'],
+    ['service-detail', 'knowledge-detail'],
+    ['content', 'single-page'],
+    ['contact', 'contact-page']
+  ]);
+  return legacyToGenericMap.get(mode) || mode || 'auto';
 }
 
 function ensurePreviewBaseHref(html) {
@@ -878,22 +978,6 @@ function getPreviewProducts(limit = 8) {
   return rows.length > 0 ? rows : [getPreviewProduct()];
 }
 
-function getPreviewProductCategory(id = null) {
-  const rows = listColumnCategories('product');
-  const row = id
-    ? rows.find((item) => toInteger(item.id, 0) === toInteger(id, 0))
-    : rows[0];
-  return row
-    ? {
-        id: toInteger(row.id, 0),
-        name: row.name || '产品',
-        parent_id: toInteger(row.parent_id, 0),
-        seo_keywords: row.seo_keywords || row.name || '产品',
-        seo_description: row.seo_description || ''
-      }
-    : { id: 1, name: '产品', parent_id: 0, seo_keywords: '产品', seo_description: '' };
-}
-
 function getPreviewArticle() {
   return listNews({ limit: 1 })[0] || {
     id: 1,
@@ -911,28 +995,54 @@ function getPreviewArticles(limit = 6) {
   return rows.length > 0 ? rows : [getPreviewArticle()];
 }
 
-function getPreviewNewsCategory(id = null) {
-  const rows = listColumnCategories('news');
+function getPreviewRootColumnByDriver(renderDriver) {
+  return listColumns().find((item) => (
+    item?.column_semantics?.is_root
+    && String(item?.column_semantics?.render_driver || '') === String(renderDriver || '')
+  )) || null;
+}
+
+function getPreviewColumnCategory({
+  rootColumn = null,
+  rootColumnId = null,
+  id = null,
+  fallbackName = '示例栏目',
+  fallbackContentHtml = ''
+} = {}) {
+  const resolvedRootColumnId = toInteger(rootColumnId || rootColumn?.id, 0);
+  const rows = resolvedRootColumnId > 0
+    ? listColumnCategoriesByRoot(resolvedRootColumnId)
+    : [];
   const row = id
     ? rows.find((item) => toInteger(item.id, 0) === toInteger(id, 0))
     : rows[0];
-  return row
-    ? {
-        id: toInteger(row.id, 0),
-        name: row.name || '公司新闻',
-        parent_id: toInteger(row.parent_id, 0)
-      }
-    : { id: 1, name: '公司新闻', parent_id: 0 };
+
+  if (row) {
+    return {
+      ...row,
+      id: toInteger(row.id, 0),
+      name: row.name || getPreviewColumnFallback({ fallbackName, fallbackContentHtml }).name,
+      parent_id: toInteger(row.parent_id, 0),
+      seo_keywords: row.seo_keywords || row.name || getPreviewColumnFallback({ fallbackName, fallbackContentHtml }).seo_keywords || '',
+      seo_description: row.seo_description || getPreviewColumnFallback({ fallbackName, fallbackContentHtml }).seo_description || '',
+      content_html: String(row.content_html ?? getPreviewColumnFallback({ fallbackName, fallbackContentHtml }).content_html ?? '')
+    };
+  }
+
+  return getPreviewColumnFallback({ fallbackName, fallbackContentHtml });
 }
 
-function getPreviewCorporationCategory() {
-  const row = listColumnCategories('corporation')[0];
-  if (!row) {
-    return { id: 1, name: '关于我们', parent_id: 0, content_html: '公司栏目内容预览' };
-  }
+function getPreviewColumnFallback({
+  fallbackName = '示例栏目',
+  fallbackContentHtml = ''
+} = {}) {
   return {
-    ...row,
-    content_html: String(row.content_html ?? '公司栏目内容预览')
+    id: 1,
+    name: fallbackName,
+    parent_id: 0,
+    seo_keywords: fallbackName,
+    seo_description: '',
+    content_html: fallbackContentHtml
   };
 }
 
@@ -966,20 +1076,6 @@ function buildPreviewArticleSectionConfig(mode, template) {
       };
 }
 
-function buildPreviewCorporationMenuItems(activeId = 0) {
-  const rows = listColumnCategories('corporation')
-    .filter((item) => toInteger(item.parent_id, 0) === 0);
-  const items = rows.length > 0
-    ? rows
-    : [{ id: activeId || 1, name: '关于我们' }];
-
-  return items.map((item) => ({
-    label: item.name || '',
-    url: `/about/about-${toInteger(item.id, 0)}.html`,
-    active: toInteger(item.id, 0) === toInteger(activeId, 0)
-  }));
-}
-
 function buildPreviewRootColumnMenuItems() {
   return buildPreviewSiteColumns().map((item) => ({
     label: item.name || '',
@@ -992,12 +1088,10 @@ function buildPreviewSiteColumns() {
   const rows = listColumns();
 
   if (rows.length === 0) {
-    return [
-      { id: 1, name: '产品', parentId: 0, sourceType: 'list', sourceId: 1, modelCode: 'product', url: '/valve/', children: [] },
-      { id: 2, name: '公司新闻', parentId: 0, sourceType: 'list', sourceId: 2, modelCode: 'news', url: '/news/', children: [] },
-      { id: 3, name: '服务', parentId: 0, sourceType: 'list', sourceId: 3, modelCode: 'news', url: '/service/', children: [] },
-      { id: 4, name: '公司信息', parentId: 0, sourceType: 'single', sourceId: 4, modelCode: 'corporation', url: '/about/', children: [] }
-    ];
+    return PREVIEW_FALLBACK_SITE_COLUMNS.map((item) => ({
+      ...item,
+      children: Array.isArray(item.children) ? item.children.map((child) => ({ ...child })) : []
+    }));
   }
 
   const publicSections = resolvePublicSectionContext(rows);
@@ -1005,8 +1099,7 @@ function buildPreviewSiteColumns() {
     id: toInteger(item.id, 0),
     name: item.name || '',
     parentId: toInteger(item.parent_id, 0),
-    sourceType: item.column_type || '',
-    sourceId: toInteger(item.id, 0),
+    columnType: item.column_type || '',
     modelCode: item.model_code || '',
     url: buildPreviewColumnUrl(item, publicSections)
   })).filter((item) => item.id !== 0);
@@ -1023,8 +1116,7 @@ function buildPreviewSiteColumns() {
       id: item.id,
       name: item.name,
       parentId: item.parentId,
-      sourceType: item.sourceType,
-      sourceId: item.sourceId,
+      columnType: item.columnType,
       modelCode: item.modelCode,
       url: item.url
     });
@@ -1041,19 +1133,10 @@ function buildPreviewSiteColumns() {
 }
 
 function buildPreviewPrimaryMenuItems(activeKey = '') {
-  const items = [
-    { key: 'home', label: '首页', url: '/index.html' },
-    { key: 'corporation', label: '公司栏目', url: '/about/' },
-    { key: 'product', label: '产品', url: '/valve/' },
-    { key: 'news', label: '公司新闻', url: '/news/' },
-    { key: 'service', label: '阀门知识', url: '/service/' },
-    { key: 'contact', label: '联系我们', url: '/contact.html' }
-  ];
-
+  const items = buildPreviewRootColumnMenuItems();
   return items.map((item) => ({
-    label: item.label,
-    url: item.url,
-    active: item.key === activeKey
+    ...item,
+    active: !activeKey ? Boolean(item.active) : item.url === activeKey || item.key === activeKey
   }));
 }
 
@@ -1063,41 +1146,31 @@ function buildPreviewColumnUrl(column, rowsById = new Map()) {
     .replace(/\/products\/(\d+)\.html$/, '/valve/$1.html');
 }
 
-function buildPreviewNewsMenuItems(rootId, dirName, activeId = 0) {
-  const section = resolvePreviewSections().getNewsSectionByDirName(dirName);
-  const rows = section
-    ? listColumnCategories('news').filter((item) => toInteger(item.parent_id, 0) === toInteger(section.rootColumnId, 0))
-    : [];
-  const items = rows.length > 0
-    ? rows
-    : [{ id: activeId || 1, name: '示例分类' }];
-
-  return items.map((item) => ({
-    label: item.name || '',
-    url: `/${dirName}/${toInteger(item.id, 0)}.html`,
-    active: toInteger(item.id, 0) === toInteger(activeId, 0)
-  }));
-}
-
 function resolvePreviewSections() {
   const rows = listColumns();
   return resolvePublicSectionContext(rows);
 }
 
-function buildPreviewProductMenuItems(category) {
-  const currentCategory = category || getPreviewProductCategory();
-  const rootColumn = getCategoryRootColumn('product');
-  const rows = rootColumn
-    ? listColumnCategories('product').filter((item) => toInteger(item.parent_id, 0) === 0)
+function buildPreviewColumnMenuItems(options = {}) {
+  const resolvedRootColumnId = toInteger(options.rootColumnId || options.rootColumn?.id, 0);
+  const rows = resolvedRootColumnId > 0
+    ? listColumnCategoriesByRoot(resolvedRootColumnId).filter((item) => toInteger(item.parent_id, 0) === 0)
     : [];
-  const items = rows.length > 0
-    ? rows
-    : [currentCategory].filter(Boolean);
+  const currentCategory = options.category || null;
+  const fallbackItem = {
+    id: options.activeId || currentCategory?.id || 1,
+    name: options.fallbackName || currentCategory?.name || '示例栏目'
+  };
+  const items = rows.length > 0 ? rows : [fallbackItem];
+  const baseUrl = String(options.baseUrl || '').trim();
+  const detailPattern = String(options.detailPattern || '').trim();
 
   return items.map((item) => ({
     label: item.name || '',
-    url: `/valve/${toInteger(item.id, 0)}.html`,
-    active: toInteger(item.id, 0) === toInteger(currentCategory?.id, 0)
+    url: detailPattern
+      ? detailPattern.replace('{id}', String(toInteger(item.id, 0)))
+      : `${baseUrl}${toInteger(item.id, 0)}.html`,
+    active: toInteger(item.id, 0) === toInteger(options.activeId, currentCategory?.id || 0)
   }));
 }
 

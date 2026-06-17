@@ -37,14 +37,14 @@ const templateTypes: Array<{ value: Template['type']; label: string; description
 const previewModes = [
   { value: 'auto', label: '自动场景' },
   { value: 'home', label: '首页' },
-  { value: 'product-list', label: '产品列表' },
-  { value: 'product-detail', label: '产品详情' },
-  { value: 'article-list', label: '文章列表' },
-  { value: 'article-detail', label: '文章详情' },
-  { value: 'service-list', label: '服务列表' },
-  { value: 'service-detail', label: '服务详情' },
-  { value: 'content', label: '公司栏目' },
-  { value: 'contact', label: '联系我们' },
+  { value: 'category-list', label: '列表栏目' },
+  { value: 'content-detail', label: '内容详情' },
+  { value: 'section-list', label: '信息列表' },
+  { value: 'section-detail', label: '信息详情' },
+  { value: 'knowledge-list', label: '知识列表' },
+  { value: 'knowledge-detail', label: '知识详情' },
+  { value: 'single-page', label: '单页栏目' },
+  { value: 'contact-page', label: '联系页' },
 ]
 
 const templateTypeLabelMap: Record<Template['type'], string> = {

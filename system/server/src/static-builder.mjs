@@ -4,7 +4,7 @@ import { CONTENT_ROOT, PUBLIC_ROOT } from './config.mjs';
 import { getDb, queryAll } from './db.mjs';
 import { createCmsTemplateRuntime } from './cms-template-runtime.mjs';
 import { listColumns } from './services/columns.mjs';
-import { listColumnCategories } from './services/column-categories.mjs';
+import { listColumnCategories, listColumnCategoriesByRoot } from './services/column-categories.mjs';
 import {
   buildColumnTreeIndex,
   getDescendantColumnIds,
@@ -134,12 +134,6 @@ const CMS_TEMPLATE_TYPE_BY_PAGE = {
   'legacy-article-list': 'list',
   'legacy-article-detail': 'content'
 };
-const CONTENT_TYPE_TARGETS = {
-  product: 1,
-  article: 2,
-  contact: 4,
-  corporation: 6
-};
 const TEMPLATE_CLIENT_ASSET_DIR = path.join('assets', 'cms-templates');
 const {
   renderCmsSitePage,
@@ -230,7 +224,7 @@ function listStaticBuildTargetDefinitions({ columns = null } = {}) {
   const rootColumns = resolvedColumns.filter((item) => item?.column_semantics?.is_root);
   const managedCategoryRoots = rootColumns.filter((item) => item?.column_semantics?.render_driver === 'managed_category');
   const pageTreeRoots = rootColumns.filter((item) => item?.column_semantics?.render_driver === 'page_tree');
-  const contactColumn = resolvedColumns.find((item) => item?.column_semantics?.system_key === 'contact') || null;
+  const contactColumn = resolvedColumns.find((item) => String(item?.route_path || '').trim() === '/contact.html') || null;
   const baseTargets = [
     createStaticBuildTargetDefinition({
       group: '网站页面',
@@ -273,8 +267,11 @@ function listStaticBuildTargetDefinitions({ columns = null } = {}) {
       group: '网站页面',
       label: `生成栏目页: ${contactColumn.name || '联系页'}`,
       value: `column:${contactColumn.id}:page`,
-      aliases: ['contact'],
-      execute: ({ outputRoot, languageCode }) => buildContactPage({ outputRoot, languageCode })
+      execute: ({ outputRoot, languageCode }) => buildDedicatedColumnPage({
+        outputRoot,
+        languageCode,
+        column: contactColumn
+      })
     }));
   }
 
@@ -283,8 +280,11 @@ function listStaticBuildTargetDefinitions({ columns = null } = {}) {
       group: '栏目页',
       label: `生成栏目页: ${rootColumn.name || '栏目'}`,
       value: `column:${rootColumn.id}:page`,
-      aliases: ['corporation', 'corporation-pages'],
-      execute: ({ outputRoot, languageCode }) => buildCorporationPages({ outputRoot, languageCode })
+      execute: ({ outputRoot, languageCode }) => buildPageTreeColumnPages({
+        outputRoot,
+        languageCode,
+        rootColumn
+      })
     }));
   }
 
@@ -294,15 +294,21 @@ function listStaticBuildTargetDefinitions({ columns = null } = {}) {
         group: '栏目页',
         label: `生成栏目列表: ${rootColumn.name || '栏目'}`,
         value: `column:${rootColumn.id}:list`,
-        aliases: ['product-lists'],
-        execute: ({ outputRoot, languageCode }) => buildProductCategoryPages({ outputRoot, languageCode })
+        execute: ({ outputRoot, languageCode }) => buildManagedCategoryColumnListPages({
+          outputRoot,
+          languageCode,
+          rootColumn
+        })
       }),
       createStaticBuildTargetDefinition({
         group: '内容页',
         label: `生成内容页: ${rootColumn.name || '栏目'}`,
         value: `column:${rootColumn.id}:detail`,
-        aliases: ['product-details'],
-        execute: ({ outputRoot, languageCode }) => buildProductDetailPages({ outputRoot, languageCode })
+        execute: ({ outputRoot, languageCode }) => buildManagedCategoryContentPages({
+          outputRoot,
+          languageCode,
+          rootColumn
+        })
       })
     );
   }
@@ -313,14 +319,14 @@ function listStaticBuildTargetDefinitions({ columns = null } = {}) {
       label: `生成栏目列表: ${section.sectionLabel}`,
       value: `column:${section.rootColumnId}:list`,
       aliases: [`${section.dirName}-lists`],
-      execute: ({ outputRoot, languageCode }) => buildNewsSectionCategoryPages({ outputRoot, languageCode, section })
+      execute: ({ outputRoot, languageCode }) => buildSectionColumnListPages({ outputRoot, languageCode, section })
     }),
     createStaticBuildTargetDefinition({
       group: '内容页',
       label: `生成内容页: ${section.sectionLabel}`,
       value: `column:${section.rootColumnId}:detail`,
       aliases: [`${section.dirName}-details`],
-      execute: ({ outputRoot, languageCode }) => buildNewsSectionDetailPages({ outputRoot, languageCode, section })
+      execute: ({ outputRoot, languageCode }) => buildSectionContentPages({ outputRoot, languageCode, section })
     })
   ]));
 
@@ -356,17 +362,19 @@ export function buildIndexPage({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode 
   return createBuildResult('index', '首页', 1, 1);
 }
 
-export function buildContactPage({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null } = {}) {
+export function buildDedicatedColumnPage({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null, column = null } = {}) {
   const templateContext = getLegacyTemplateContext(languageCode);
-  const contactColumn = templateContext.columns.find((item) => item?.column_semantics?.system_key === 'contact') || null;
-  const pageLabel = contactColumn?.name || '栏目页';
+  const targetColumn = column
+    ? templateContext.columns.find((item) => normalizeInteger(item.id, 0) === normalizeInteger(column.id, 0)) || null
+    : templateContext.columns.find((item) => String(item.route_path || '').trim() === '/contact.html') || null;
+  const pageLabel = targetColumn?.name || '栏目页';
   const html = renderCmsSitePage('legacy-contact', buildLegacyContactPageProps(templateContext), templateContext, {
-    targets: [{ target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.contact }]
+    targets: targetColumn ? [{ target_type: 'column', target_id: targetColumn.id }] : []
   });
 
   writeTextFile(outputRoot, 'contact.html', html, templateContext.site);
   buildRegisteredTsxAssets(outputRoot);
-  return createBuildResult('contact', pageLabel, 1, 1);
+  return createBuildResult(targetColumn ? `column:${targetColumn.id}:page` : 'column:dedicated:page', pageLabel, 1, 1);
 }
 
 export function buildManualSinglePageColumns({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null } = {}) {
@@ -379,10 +387,7 @@ export function buildManualSinglePageColumns({ outputRoot = DEFAULT_OUTPUT_ROOT,
 
   for (const item of items) {
     const html = renderCmsSitePage('legacy-content', buildLegacySingleColumnPageProps(templateContext, item), templateContext, {
-      targets: [
-        { target_type: 'column', target_id: item.id },
-        { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.corporation }
-      ]
+      targets: [{ target_type: 'column', target_id: item.id }]
     });
 
     writeTextFile(outputRoot, resolveColumnRouteOutputPath(item.route_path), html, templateContext.site);
@@ -393,8 +398,11 @@ export function buildManualSinglePageColumns({ outputRoot = DEFAULT_OUTPUT_ROOT,
   return createBuildResult('column-pages', '单页栏目', items.length, filesWritten);
 }
 
-export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null } = {}) {
+export function buildPageTreeColumnPages({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null, rootColumn = null } = {}) {
   const templateContext = getLegacyTemplateContext(languageCode);
+  const targetRootColumn = rootColumn
+    ? templateContext.columns.find((item) => normalizeInteger(item.id, 0) === normalizeInteger(rootColumn.id, 0)) || null
+    : templateContext.columns.find((item) => item?.column_semantics?.is_root && item?.column_semantics?.render_driver === 'page_tree') || null;
   const items = templateContext.corporationCategories
     .filter((item) => normalizeInteger(item.id, 0) !== 0);
   const indexItemId = items.find((item) => normalizeInteger(item.parent_id, 0) === 0)?.id ?? items[0]?.id;
@@ -403,10 +411,7 @@ export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT, langua
 
   for (const item of items) {
     const html = renderCmsSitePage('legacy-content', buildLegacyContentPageProps(templateContext, item), templateContext, {
-      targets: [
-        { target_type: 'column', target_id: item.id },
-        { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.corporation }
-      ]
+      targets: [{ target_type: 'column', target_id: item.id }]
     });
 
     writeTextFile(outputRoot, path.join('about', `about-${item.id}.html`), html, templateContext.site);
@@ -419,10 +424,10 @@ export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT, langua
   }
 
   buildRegisteredTsxAssets(outputRoot);
-  return createBuildResult('corporation-pages', `${rootColumn?.name || '栏目'}列表页`, items.length, filesWritten);
+  return createBuildResult(targetRootColumn ? `column:${targetRootColumn.id}:page` : 'column:page-tree:page', `${targetRootColumn?.name || '栏目'}列表页`, items.length, filesWritten);
 }
 
-export function buildNewsSectionCategoryPages({
+export function buildSectionColumnListPages({
   outputRoot = DEFAULT_OUTPUT_ROOT,
   languageCode = null,
   section
@@ -437,7 +442,7 @@ export function buildNewsSectionCategoryPages({
   });
 }
 
-export function buildNewsSectionDetailPages({
+export function buildSectionContentPages({
   outputRoot = DEFAULT_OUTPUT_ROOT,
   idRange,
   languageCode = null,
@@ -453,9 +458,11 @@ export function buildNewsSectionDetailPages({
   });
 }
 
-export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null } = {}) {
+export function buildManagedCategoryColumnListPages({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null, rootColumn = null } = {}) {
   const templateContext = getLegacyTemplateContext(languageCode);
-  const rootColumn = templateContext.columns.find((item) => item?.column_semantics?.is_root && item?.column_semantics?.render_driver === 'managed_category') || null;
+  const targetRootColumn = rootColumn
+    ? templateContext.columns.find((item) => normalizeInteger(item.id, 0) === normalizeInteger(rootColumn.id, 0)) || null
+    : templateContext.columns.find((item) => item?.column_semantics?.is_root && item?.column_semantics?.render_driver === 'managed_category') || null;
   const categories = templateContext.productCategories;
   const products = listProducts({ visibleOnly: false, limit: 10000, languageCode });
   const categoryMap = new Map(categories.map((item) => [item.id, item]));
@@ -473,10 +480,11 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, la
   };
 
   filesWritten += writeProductCategoryPageSet({
-    outputRoot,
-    templateContext,
-    category: rootCategory,
-    parent: null,
+      outputRoot,
+      templateContext,
+      rootColumn: targetRootColumn,
+      category: rootCategory,
+      parent: null,
     children: topLevelCategories,
     items: products.slice().sort(compareBySortAndId),
     fileStem: 'index',
@@ -499,6 +507,7 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, la
     filesWritten += writeProductCategoryPageSet({
       outputRoot,
       templateContext,
+      rootColumn: targetRootColumn,
       category,
       parent,
       children,
@@ -509,13 +518,15 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, la
   }
 
   buildRegisteredTsxAssets(outputRoot);
-  return createBuildResult('product-lists', `${rootColumn?.name || '栏目'}列表页`, categories.filter((item) => normalizeInteger(item.id, 0) !== 0).length, filesWritten);
+  return createBuildResult(targetRootColumn ? `column:${targetRootColumn.id}:list` : 'column:managed-category:list', `${targetRootColumn?.name || '栏目'}列表页`, categories.filter((item) => normalizeInteger(item.id, 0) !== 0).length, filesWritten);
 }
 
-export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange, languageCode = null } = {}) {
+export function buildManagedCategoryContentPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange, languageCode = null, rootColumn = null } = {}) {
   const products = filterByIdRange(listProducts({ visibleOnly: false, limit: 10000, languageCode }), idRange);
   const templateContext = getLegacyTemplateContext(languageCode);
-  const rootColumn = templateContext.columns.find((item) => item?.column_semantics?.is_root && item?.column_semantics?.render_driver === 'managed_category') || null;
+  const targetRootColumn = rootColumn
+    ? templateContext.columns.find((item) => normalizeInteger(item.id, 0) === normalizeInteger(rootColumn.id, 0)) || null
+    : templateContext.columns.find((item) => item?.column_semantics?.is_root && item?.column_semantics?.render_driver === 'managed_category') || null;
 
   // 初始化全局栏目映射
   globalColumnMap = new Map(
@@ -538,10 +549,7 @@ export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
       category,
       parent
     }), templateContext, {
-      targets: [
-        { target_type: 'column', target_id: normalizeInteger(product.column_id, 0) },
-        { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.product }
-      ]
+      targets: [{ target_type: 'column', target_id: normalizeInteger(product.column_id, 0) }]
     });
 
     const categorySlugPath = category ? buildCategorySlugPath(category, categoryMap) : null;
@@ -552,7 +560,7 @@ export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
   }
 
   buildRegisteredTsxAssets(outputRoot);
-  return createBuildResult('product-details', `${rootColumn?.name || '栏目'}内容页`, products.length, filesWritten);
+  return createBuildResult(targetRootColumn ? `column:${targetRootColumn.id}:detail` : 'column:managed-category:detail', `${targetRootColumn?.name || '栏目'}内容页`, products.length, filesWritten);
 }
 
 function buildLegacyNewsSectionCategoryPagesByDir({
@@ -600,8 +608,7 @@ function buildLegacyNewsSectionCategoryPagesByDir({
       }), templateContext, {
         targets: [
           { target_type: 'column', target_id: category.id },
-          { target_type: 'column', target_id: section.rootColumnId },
-          { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.article }
+          { target_type: 'column', target_id: section.rootColumnId }
         ]
       });
 
@@ -676,8 +683,7 @@ function buildLegacyNewsSectionDetailPagesByDir({
     }), templateContext, {
       targets: [
         { target_type: 'column', target_id: normalizeInteger(item.column_id, 0) },
-        { target_type: 'column', target_id: section.rootColumnId },
-        { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.article }
+        { target_type: 'column', target_id: section.rootColumnId }
       ]
     });
 
@@ -695,9 +701,19 @@ function buildLegacyNewsSectionDetailPagesByDir({
 function getLegacyTemplateContext(languageCode = null) {
   const site = getSiteConfig(languageCode);
   const columns = listColumns({ languageCode });
-  const productCategories = listColumnCategories('product', { languageCode }).slice().sort(compareCategoryOrder);
-  const newsCategories = listColumnCategories('news', { languageCode }).slice().sort(compareCategoryOrder);
   const publicSections = resolvePublicSectionContext(columns);
+  const managedCategoryRoot = columns.find((item) => item?.column_semantics?.is_root && String(item?.column_semantics?.render_driver || '') === 'managed_category') || null;
+  const pageTreeRoot = columns.find((item) => item?.column_semantics?.is_root && String(item?.column_semantics?.render_driver || '') === 'page_tree') || null;
+  const productCategories = managedCategoryRoot
+    ? listColumnCategoriesByRoot(managedCategoryRoot.id, { languageCode }).slice().sort(compareCategoryOrder)
+    : listColumnCategories('product', { languageCode }).slice().sort(compareCategoryOrder);
+  const newsCategories = publicSections.newsSections
+    .flatMap((section) => listColumnCategoriesByRoot(section.rootColumnId, { languageCode }))
+    .slice()
+    .sort(compareCategoryOrder);
+  const pageTreeCategories = pageTreeRoot
+    ? listColumnCategoriesByRoot(pageTreeRoot.id, { languageCode }).slice().sort(compareCategoryOrder)
+    : listColumnCategories('corporation', { languageCode }).slice().sort(compareCategoryOrder);
 
   return {
     site,
@@ -705,7 +721,7 @@ function getLegacyTemplateContext(languageCode = null) {
     columns,
     publicSections,
     newsEntries: listNews({ limit: 10000, languageCode }),
-    corporationCategories: listColumnCategories('corporation', { languageCode }).slice().sort(compareCategoryOrder),
+    corporationCategories: pageTreeCategories,
     productCategories,
     newsCategories
   };
@@ -1173,17 +1189,17 @@ function buildLegacyContentPageProps(templateContext, item) {
       pageType: 'content',
       title: item.name || '',
       url: pageUrl,
-      section: { type: 'corporation', name: '公司栏目', url: '/about/' },
+      section: { type: 'page-tree', name: '单页栏目', url: '/about/' },
       categoryChain: buildTemplateCategoryChain({
         category: item,
         categories: templateContext.corporationCategories,
-        type: 'corporation',
+        type: 'page-tree',
         urlBuilder: (categoryItem) => `/about/about-${normalizeInteger(categoryItem.id, 0)}.html`
       }),
-      categoryType: 'corporation',
+      categoryType: 'page-tree',
       categoryUrl: pageUrl,
       parentCategory,
-      parentCategoryType: 'corporation',
+      parentCategoryType: 'page-tree',
       parentCategoryUrl: parentCategory ? `/about/about-${normalizeInteger(parentCategory.id, 0)}.html` : '',
       breadcrumbItems: [{ label: item.name || '' }],
       breadcrumbOptions: { separatorHtml: ' &gt;&gt; ' }
@@ -1258,7 +1274,6 @@ function buildLegacySingleColumnPageProps(templateContext, column) {
 function buildLegacyProductListPageProps({ templateContext, category, parent, children, pageItems, pageNumber, pageCount, totalRecords, categoryMap = null }) {
   const categoryPageContent = resolveDedicatedColumnPageContent(category, templateContext.languageCode);
   const rootLevelCategories = templateContext.productCategories.filter((item) => normalizeInteger(item.parent_id, 0) === 0);
-  const fileStem = normalizeInteger(category.id, 0) === 0 ? 'index' : String(category.id);
   const categoryUrl = normalizeInteger(category?.id, 0) === 0
     ? '/products/'
     : buildLegacyProductCategoryUrl(category, categoryMap);
@@ -1339,20 +1354,20 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
-      pageType: 'product-list',
+      pageType: 'category-list',
       title: category.name || '',
       url: categoryUrl,
-      section: { type: 'product', name: '产品', url: '/products/' },
+      section: { type: 'managed-category', name: '栏目列表', url: '/products/' },
       categoryChain: buildTemplateCategoryChain({
         category,
         categories: templateContext.productCategories,
-        type: 'product',
+        type: 'managed-category',
         urlBuilder: (cat) => buildLegacyProductCategoryUrl(cat, categoryMap)
       }),
-      categoryType: 'product',
+      categoryType: 'managed-category',
       categoryUrl,
       parentCategory: parent,
-      parentCategoryType: 'product',
+      parentCategoryType: 'managed-category',
       parentCategoryUrl: parent ? buildLegacyProductCategoryUrl(parent, categoryMap) : '',
       breadcrumbItems: buildLegacyProductBreadcrumbItems(category, parent, categoryMap)
     }),
@@ -1388,7 +1403,7 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
           image: child.primary_image || '',
           summary: child.seo_description || ''
         })),
-    pagerHtml: buildLegacyProductPager(fileStem, pageNumber, pageCount, totalRecords),
+    pagerHtml: buildLegacyProductPager(categoryUrl, pageNumber, pageCount, totalRecords),
     prodKeywords: categoryPageContent?.seo_keywords || category.name || '',
     seoMeta: buildSeoMeta({
       title: categoryPageContent?.seo_title || buildSectionSeoTitle(category.name || '产品', templateContext.site),
@@ -1469,23 +1484,23 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
-      pageType: 'product-detail',
+      pageType: 'content-detail',
       title: product.name || '',
       url: productUrl,
-      section: { type: 'product', name: '产品', url: '/products/' },
+      section: { type: 'managed-category', name: '栏目列表', url: '/products/' },
       categoryChain: buildTemplateCategoryChain({
         category,
         categories: templateContext.productCategories,
-        type: 'product',
+        type: 'managed-category',
         urlBuilder: (cat) => buildLegacyProductCategoryUrl(cat, categoryMap)
       }),
-      categoryType: 'product',
+      categoryType: 'managed-category',
       categoryUrl: category ? buildLegacyProductCategoryUrl(category, categoryMap) : '',
       parentCategory: parent,
-      parentCategoryType: 'product',
+      parentCategoryType: 'managed-category',
       parentCategoryUrl: parent ? buildLegacyProductCategoryUrl(parent, categoryMap) : '',
       content: product,
-      contentType: 'product',
+      contentType: 'structured-content',
       contentUrl: productUrl,
       breadcrumbItems: [
         { label: '产品', href: '/products/' },
@@ -1546,17 +1561,17 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
-      pageType: 'article-list',
+      pageType: 'section-list',
       title: category.name || '',
       url: categoryUrl,
-      section: { type: isService ? 'service' : 'news', name: sectionLabel, url: `/${sectionDir}/` },
+      section: { type: 'section', name: sectionLabel, url: `/${sectionDir}/` },
       categoryChain: buildTemplateCategoryChain({
         category,
         categories: templateContext.newsCategories,
-        type: isService ? 'service' : 'news',
+        type: 'section',
         urlBuilder: (categoryItem) => buildLegacyNewsCategoryUrl(sectionDir, categoryItem)
       }),
-      categoryType: isService ? 'service' : 'news',
+      categoryType: 'section',
       categoryUrl,
       breadcrumbItems: [
         { label: sectionLabel, href: `/${sectionDir}/` },
@@ -1619,20 +1634,20 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, sectionCo
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
-      pageType: 'article-detail',
+      pageType: 'section-detail',
       title: item.title || '',
       url: articleUrl,
-      section: { type: isService ? 'service' : 'news', name: sectionLabel, url: `/${sectionDir}/` },
+      section: { type: 'section', name: sectionLabel, url: `/${sectionDir}/` },
       categoryChain: buildTemplateCategoryChain({
         category,
         categories: templateContext.newsCategories,
-        type: isService ? 'service' : 'news',
+        type: 'section',
         urlBuilder: (categoryItem) => buildLegacyNewsCategoryUrl(sectionDir, categoryItem)
       }),
-      categoryType: isService ? 'service' : 'news',
+      categoryType: 'section',
       categoryUrl: category ? buildLegacyNewsCategoryUrl(sectionDir, category) : '',
       content: item,
-      contentType: isService ? 'service-article' : 'news-article',
+      contentType: 'structured-content',
       contentUrl: articleUrl,
       breadcrumbItems: [
         { label: sectionLabel, href: `/${sectionDir}/` },
@@ -2213,13 +2228,28 @@ function buildLegacyProductListItems(pageItems) {
   }));
 }
 
-function buildLegacyProductPager(fileStem, pageNumber, pageCount, totalRecords) {
+function buildLegacyProductPager(categoryUrl, pageNumber, pageCount, totalRecords) {
+  const normalizedCategoryUrl = String(categoryUrl || '/products/').trim() || '/products/';
+  const firstPageUrl = normalizedCategoryUrl;
+  const buildPagedUrl = (targetPageNumber) => (
+    targetPageNumber <= 1
+      ? firstPageUrl
+      : `${normalizedCategoryUrl}index-${targetPageNumber}.html`
+  );
+  const previousPageUrl = pageNumber <= 2
+    ? firstPageUrl
+    : buildPagedUrl(pageNumber - 1);
+  const nextPageUrl = buildPagedUrl(pageNumber + 1);
+  const lastPageUrl = pageCount <= 1
+    ? firstPageUrl
+    : buildPagedUrl(pageCount);
+
   let html = '<table width="90%" border="0" align="center" cellpadding="0" cellspacing="0"><tr><td height="45" align="center">';
   html += `共 <strong>${totalRecords}</strong> 条信息 `;
-  html += ` <a href="${fileStem}.html">首页</a>`;
-  html += pageNumber > 1 ? ` <a href="${fileStem}-${pageNumber - 1}.html">上一页</a>` : ' <span>上一页</span>';
-  html += pageNumber < pageCount ? ` <a href="${fileStem}-${pageNumber + 1}.html">下一页</a>` : ' <span>下一页</span>';
-  html += ` <a href="${fileStem}-${pageCount}.html">末页</a>`;
+  html += ` <a href="${firstPageUrl}">首页</a>`;
+  html += pageNumber > 1 ? ` <a href="${previousPageUrl}">上一页</a>` : ' <span>上一页</span>';
+  html += pageNumber < pageCount ? ` <a href="${nextPageUrl}">下一页</a>` : ' <span>下一页</span>';
+  html += ` <a href="${lastPageUrl}">末页</a>`;
   html += ` 页次：<strong> ${pageNumber}/${pageCount} </strong>页 <strong>${PRODUCT_LIST_PAGE_SIZE}</strong>条信息/页</td></tr></table>`;
   return html;
 }
@@ -2227,6 +2257,7 @@ function buildLegacyProductPager(fileStem, pageNumber, pageCount, totalRecords) 
 function writeProductCategoryPageSet({
   outputRoot,
   templateContext,
+  rootColumn,
   category,
   parent,
   children,
@@ -2238,12 +2269,11 @@ function writeProductCategoryPageSet({
   const pageList = pages.length > 0 ? pages : [[]];
   let filesWritten = 0;
 
-  // 计算分类的完整栏目目录路径
   const categoryId = normalizeInteger(category.id, 0);
   const categorySlugPath = category.dir_name && categoryMap
     ? buildCategorySlugPath(category, categoryMap)
     : [];
-  const useSlugPath = categorySlugPath.length > 0 || categoryId === 0; // 根分类也使用新路径格式
+  const useSlugPath = categorySlugPath.length > 0 || categoryId === 0;
 
   for (let index = 0; index < pageList.length; index += 1) {
     const pageNumber = index + 1;
@@ -2259,43 +2289,26 @@ function writeProductCategoryPageSet({
       totalRecords: items.length,
       categoryMap
     }), templateContext, {
-      targets: [
-        { target_type: 'column', target_id: normalizeInteger(category.id, 0) },
-        { target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.product }
-      ]
+      targets: normalizeInteger(category.id, 0) > 0
+        ? [{ target_type: 'column', target_id: normalizeInteger(category.id, 0) }]
+        : rootColumn
+          ? [{ target_type: 'column', target_id: rootColumn.id }]
+          : []
     });
 
-    // 根据是否有栏目目录路径决定输出路径
     let outputDir, fileName;
 
     if (useSlugPath) {
-      // 使用完整目录路径: /products/{parent-dir}/{category-dir}/
-      // 或根目录: /products/
       outputDir = categorySlugPath.length > 0
         ? path.join('products', ...categorySlugPath)
         : 'products';
-      fileName = pageNumber === 1 ? 'index.html' : `page-${pageNumber}.html`;
+      fileName = pageNumber === 1 ? 'index.html' : `index-${pageNumber}.html`;
     } else {
-      // 回退到数字ID: /products/{id}.html
-      outputDir = 'products';
-      fileName = buildLegacyListFileName(fileStem, pageNumber);
+      continue;
     }
 
     writeTextFile(outputRoot, path.join(outputDir, fileName), legacyHtml, templateContext.site);
     filesWritten += 1;
-
-    // 兼容性：如果使用目录路径，也生成旧的数字ID路径
-    if (useSlugPath && fileStem !== 'index') {
-      const legacyFileName = buildLegacyListFileName(fileStem, pageNumber);
-      writeTextFile(outputRoot, path.join('products', legacyFileName), legacyHtml, templateContext.site);
-      filesWritten += 1;
-
-      if (pageNumber === 1) {
-        const firstPageFileName = `${fileStem}.html`;
-        writeTextFile(outputRoot, path.join('products', firstPageFileName), legacyHtml, templateContext.site);
-        filesWritten += 1;
-      }
-    }
   }
 
   return filesWritten;
@@ -2728,10 +2741,6 @@ function paginate(items, pageSize) {
 
 function compareBySortAndId(left, right) {
   return normalizeInteger(left.sort_order, 0) - normalizeInteger(right.sort_order, 0) || right.id - left.id;
-}
-
-function buildLegacyListFileName(categoryId, pageNumber) {
-  return pageNumber > 1 ? `${categoryId}-${pageNumber}.html` : `${categoryId}-1.html`;
 }
 
 function filterByIdRange(items, idRange) {
