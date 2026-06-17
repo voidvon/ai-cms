@@ -52,7 +52,7 @@ export function buildLlmsFiles({ outputRoot, generatedAt = new Date().toISOStrin
     ['llms-full.txt', diagnostics.llms_full_txt]
   ];
 
-  cleanupExistingLlmsFiles(outputRoot);
+  cleanupExistingLlmsFiles(outputRoot, diagnostics.public_sections);
 
   for (const page of diagnostics.markdown_pages) {
     files.push([page.markdown_path.replace(/^\//, ''), page.markdown_content]);
@@ -75,7 +75,9 @@ export function buildLlmsFiles({ outputRoot, generatedAt = new Date().toISOStrin
 export function getLlmsDiagnostics({ generatedAt = new Date().toISOString(), languageCode = null } = {}) {
   const site = getSiteConfig(languageCode);
   const siteUrl = normalizeSiteUrl(site.web_url);
-  const pages = siteUrl ? collectMarkdownPages({ site, siteUrl, languageCode }) : [];
+  const result = siteUrl ? collectMarkdownPages({ site, siteUrl, languageCode }) : { pages: [], publicSections: null };
+  const pages = result.pages || [];
+  const publicSections = result.publicSections;
   const llmsGroups = buildLlmsGroups(pages);
   const llmsIndexGroups = buildLlmsIndexGroups(llmsGroups);
   const llmsTxt = siteUrl ? renderLlmsTxt({ site, siteUrl, groups: llmsIndexGroups }) : '';
@@ -103,7 +105,8 @@ export function getLlmsDiagnostics({ generatedAt = new Date().toISOString(), lan
     recent_pages: pages.slice(0, MAX_RECENT_PAGES).map(toPagePreview),
     markdown_pages: pages,
     llms_txt: llmsTxt,
-    llms_full_txt: llmsFullTxt
+    llms_full_txt: llmsFullTxt,
+    public_sections: publicSections
   };
 }
 
@@ -235,55 +238,29 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     }));
   }
 
-  const newsSection = publicSections.getNewsSectionByDirName('news');
-  const serviceSection = publicSections.getNewsSectionByDirName('services');
-  const newsRootCategories = newsSection
-    ? newsCategories.filter((item) => toInteger(item.parent_id, 0) === newsSection.rootColumnId)
-    : [];
-  const serviceRootCategories = serviceSection
-    ? newsCategories.filter((item) => toInteger(item.parent_id, 0) === serviceSection.rootColumnId)
-    : [];
+  // 为每个新闻类栏目生成列表页
+  for (const section of publicSections.newsSections) {
+    const rootCategories = newsCategories.filter((item) => toInteger(item.parent_id, 0) === section.rootColumnId);
 
-  pages.push(createPage({
-    title: '新闻中心',
-    routePath: '/news/index.html',
-    section: '新闻栏目',
-    summary: '公司新闻分类与文章入口。',
-    contentLines: buildCategorySampleLines(newsRootCategories)
-  }));
-
-  if (serviceSection) {
     pages.push(createPage({
-      title: '服务',
-      routePath: `/${serviceSection.dirName}/index.html`,
-      section: '服务栏目',
-      summary: '服务分类与文章入口。',
-      contentLines: buildCategorySampleLines(serviceRootCategories)
+      title: section.sectionLabel,
+      routePath: `/${section.dirName}/index.html`,
+      section: `${section.sectionLabel}栏目`,
+      summary: `${section.sectionLabel}分类与文章入口。`,
+      contentLines: buildCategorySampleLines(rootCategories)
     }));
-  }
 
-  for (const category of newsRootCategories) {
-    const categoryId = toInteger(category.id, 0);
-    const items = newsItems.filter((item) => toInteger(item.column_id, 0) === categoryId).slice(0, MAX_LIST_SAMPLE_ITEMS);
-    pages.push(createPage({
-      title: category.name,
-      routePath: `/news/${categoryId}.html`,
-      section: '新闻栏目',
-      summary: `新闻分类：${category.name}`,
-      contentLines: items.length > 0 ? [`示例文章：${items.map((item) => item.title).join('、')}`] : []
-    }));
-  }
-
-  for (const category of serviceRootCategories) {
-    const categoryId = toInteger(category.id, 0);
-    const items = newsItems.filter((item) => toInteger(item.column_id, 0) === categoryId).slice(0, MAX_LIST_SAMPLE_ITEMS);
-    pages.push(createPage({
-      title: category.name,
-      routePath: `/service/${categoryId}.html`,
-      section: '服务栏目',
-      summary: `服务分类：${category.name}`,
-      contentLines: items.length > 0 ? [`示例内容：${items.map((item) => item.title).join('、')}`] : []
-    }));
+    for (const category of rootCategories) {
+      const categoryId = toInteger(category.id, 0);
+      const items = newsItems.filter((item) => toInteger(item.column_id, 0) === categoryId).slice(0, MAX_LIST_SAMPLE_ITEMS);
+      pages.push(createPage({
+        title: category.name,
+        routePath: `/${section.dirName}/${categoryId}.html`,
+        section: `${section.sectionLabel}栏目`,
+        summary: `${section.sectionLabel}分类：${category.name}`,
+        contentLines: items.length > 0 ? [`示例文章：${items.map((item) => item.title).join('、')}`] : []
+      }));
+    }
   }
 
   for (const item of newsItems) {
@@ -297,7 +274,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     pages.push(createPage({
       title: item.title,
       routePath: buildContentDetailUrlFromColumn(item, section.rootColumn),
-      section: section.dirName === 'service' ? '服务详情' : '新闻详情',
+      section: `${section.sectionLabel}详情`,
       summary: item.summary || item.title,
       contentLines: [
         category?.name ? `分类：${category.name}` : '',
@@ -307,7 +284,10 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     }));
   }
 
-  return dedupePages(pages).map((page) => finalizePage({ page, siteUrl, corporationById }));
+  return {
+    pages: dedupePages(pages).map((page) => finalizePage({ page, siteUrl, corporationById })),
+    publicSections
+  };
 }
 
 function buildLlmsGroups(pages) {
@@ -638,9 +618,10 @@ function dedupePages(items) {
   return deduped;
 }
 
-function cleanupExistingLlmsFiles(outputRoot) {
+function cleanupExistingLlmsFiles(outputRoot, publicSections) {
   const rootFiles = ['llms.txt', 'llms-full.txt', 'index.md', 'contact.md'];
-  const managedDirs = ['about', 'news', 'services', 'valve', 'product'];
+  const newsSectionDirs = publicSections?.newsSections?.map(s => s.dirName) || [];
+  const managedDirs = ['about', 'valve', 'product', ...newsSectionDirs];
 
   for (const relativePath of rootFiles) {
     const filePath = path.resolve(outputRoot, relativePath);
