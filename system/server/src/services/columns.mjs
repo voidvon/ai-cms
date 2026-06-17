@@ -1674,27 +1674,14 @@ function migrateColumnRoutePathConventions() {
 }
 
 function resolveNewsRouteDirFromColumn(row) {
-  // 优先使用已存在的 dir_name（如果已经显式配置）
-  const existingDirName = String(row?.dir_name || '').trim();
-  if (existingDirName && existingDirName !== 'null') {
-    return existingDirName;
+  // 只使用数据库配置的 dir_name，不进行任何推断
+  const explicitDirName = String(row?.dir_name || '').trim();
+  if (explicitDirName && explicitDirName !== 'null') {
+    return explicitDirName;
   }
 
-  // 回退到启发式推断
-  const legacy = parseJsonObject(row?.legacy_extra);
-  const hints = [
-    legacy.key,
-    legacy.import_key,
-    row?.route_path
-  ].filter(Boolean).map((value) => String(value).trim().toLowerCase());
-
-  if (hints.some((value) => /(service|services|support|knowledge|learn|training|服务|知识|学习|培训)/i.test(value))) {
-    return 'service';
-  }
-  if (hints.some((value) => /(news|article|articles|insight|updates|新闻|资讯|动态)/i.test(value))) {
-    return 'news';
-  }
-  return 'news';
+  // 如果没有配置，返回 null（强制要求手动配置）
+  return null;
 }
 
 function migrateColumnsReplaceSlugWithDirName() {

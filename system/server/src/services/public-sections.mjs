@@ -135,27 +135,14 @@ function findRootColumnId(columns, sourceType) {
 }
 
 function resolveNewsSectionDirName(root, index, usedDirNames) {
-  // 优先使用数据库配置的 dir_name
+  // 只使用数据库配置的 dir_name，不进行任何推断
   const explicitDirName = String(root?.dir_name || '').trim();
   if (explicitDirName) {
     return reserveDirName(explicitDirName, usedDirNames, root);
   }
 
-  // 回退到启发式推断
-  const normalizedHints = collectNewsRootHints(root);
-  if (normalizedHints.some((value) => SERVICE_SECTION_PATTERN.test(value))) {
-    return reserveDirName('service', usedDirNames, root);
-  }
-  if (normalizedHints.some((value) => NEWS_SECTION_PATTERN.test(value))) {
-    return reserveDirName('news', usedDirNames, root);
-  }
-  if (!usedDirNames.has('news')) {
-    return 'news';
-  }
-  if (!usedDirNames.has('service') && index === 1) {
-    return 'service';
-  }
-  return reserveDirName(`news-${resolveLegacyCategoryPublicId(root)}`, usedDirNames, root);
+  // 如果没有配置，抛出错误（强制要求手动配置）
+  throw new Error(`栏目 ${root?.id} 缺少 dir_name 配置，请在数据库中设置`);
 }
 
 function reserveDirName(candidate, usedDirNames, root) {
@@ -168,22 +155,6 @@ function reserveDirName(candidate, usedDirNames, root) {
     suffix += 1;
   }
   return `${base}-${suffix}`;
-}
-
-function collectNewsRootHints(root) {
-  const hints = [
-    root?.name,
-    root?.dir_name,
-    root?.route_path
-  ].filter(Boolean);
-  const legacyExtra = parseLegacyExtra(root?.legacy_extra);
-  if (legacyExtra.key) {
-    hints.push(legacyExtra.key);
-  }
-  if (legacyExtra.import_key) {
-    hints.push(legacyExtra.import_key);
-  }
-  return hints.map((item) => String(item || '').trim().toLowerCase()).filter(Boolean);
 }
 
 function parseLegacyExtra(value) {
