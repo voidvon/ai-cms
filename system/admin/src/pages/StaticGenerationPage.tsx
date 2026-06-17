@@ -105,8 +105,9 @@ export default function StaticGenerationPage() {
   }
 
   return (
-    <div className="space-y-4">
-      <Card>
+    <div className="h-full overflow-y-auto pr-1">
+      <div className="space-y-4 pb-4">
+        <Card>
         <CardHeader>
           <CardTitle>静态页面生成</CardTitle>
           <CardDescription>
@@ -198,7 +199,8 @@ export default function StaticGenerationPage() {
             </div>
           ) : null}
         </CardContent>
-      </Card>
+        </Card>
+      </div>
     </div>
   )
 }

@@ -114,7 +114,7 @@ function getSectionTopLevelCategories(templateContext, section) {
   }
   const sectionRootPath = String(section.rootColumn.route_path || '').trim();
   return templateContext.newsCategories.filter((item) => {
-    if (normalizeInteger(item.parent_id, 0) !== 0) {
+    if (normalizeInteger(item.parent_id, 0) !== normalizeInteger(section.rootColumnId, 0)) {
       return false;
     }
     const routePath = String(item.route_path || '').trim();
@@ -123,6 +123,12 @@ function getSectionTopLevelCategories(templateContext, section) {
 }
 
 function buildLegacyNewsCategoryUrl(dirName, category) {
+  if (
+    category?.column_semantics?.is_root
+    && String(category?.column_semantics?.render_driver || '') === 'section'
+  ) {
+    return `/${dirName}/`;
+  }
   const categoryDirName = String(category.dir_name || '').trim();
   if (categoryDirName) {
     return `/${dirName}/${categoryDirName}/`;
@@ -623,7 +629,7 @@ function buildLegacyNewsSectionCategoryPagesByDir({
   const hasSectionRootLanding = shouldRenderSectionRootLanding(section?.rootColumn);
   const effectiveCategoryList = categoryList.length > 0
     ? categoryList
-    : directRootItems.length > 0
+    : section?.rootColumn
       ? [section.rootColumn]
       : [];
   let filesWritten = 0;

@@ -336,41 +336,33 @@ export function createContentEntry(modelCode, input) {
   const payload = normalizeContentEntryInput(modelCode, input);
   const tableName = getContentTableName(modelCode);
   const translationTableName = getTranslationTableName(modelCode);
+  const { mainFields } = getModelFieldNames(modelCode);
   const defaultLanguage = getDefaultLanguage();
   const defaultTranslation = resolveDefaultTranslation(payload.translations, defaultLanguage?.code);
   const now = new Date().toISOString();
+  const insertFields = ['column_id'];
+  const insertValues = [payload.base.column_id];
+
+  appendMainTableField(insertFields, insertValues, 'custom_url', payload.base.custom_url, mainFields);
+  appendMainTableField(insertFields, insertValues, 'code', payload.base.code, mainFields);
+  appendMainTableField(insertFields, insertValues, 'images', payload.base.images, mainFields);
+  appendMainTableField(insertFields, insertValues, 'primary_image', payload.base.primary_image, mainFields);
+  appendMainTableField(insertFields, insertValues, 'is_visible', payload.base.is_visible, mainFields);
+  appendMainTableField(insertFields, insertValues, 'is_featured_home', payload.base.is_featured_home, mainFields);
+  appendMainTableField(insertFields, insertValues, 'sort_order', payload.base.sort_order, mainFields);
+  appendMainTableField(insertFields, insertValues, 'legacy_extra', payload.base.legacy_extra, mainFields);
+
+  insertFields.push('created_at', 'updated_at');
+  insertValues.push(payload.base.created_at || now, now);
+  const placeholders = insertFields.map(() => '?').join(', ');
 
   const result = execute(
     `
       INSERT INTO ${quoteIdentifier(tableName)} (
-        column_id,
-        custom_url,
-        code,
-        images,
-        primary_image,
-        is_visible,
-        is_featured_home,
-        sort_order,
-        publish_status,
-        legacy_extra,
-        created_at,
-        updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ${insertFields.join(',\n        ')}
+      ) VALUES (${placeholders})
     `,
-    [
-      payload.base.column_id,
-      payload.base.custom_url,
-      payload.base.code,
-      payload.base.images,
-      payload.base.primary_image,
-      payload.base.is_visible,
-      payload.base.is_featured_home,
-      payload.base.sort_order,
-      defaultTranslation.publish_status,
-      payload.base.legacy_extra,
-      payload.base.created_at || now,
-      now
-    ]
+    insertValues
   );
 
   saveEntryTranslations(translationTableName, result.lastInsertRowid, payload.translations, now);
@@ -393,43 +385,31 @@ export function updateContentEntry(modelCode, id, input) {
   const payload = normalizeContentEntryInput(modelCode, input, { existingEntry: existing });
   const tableName = getContentTableName(modelCode);
   const translationTableName = getTranslationTableName(modelCode);
+  const { mainFields } = getModelFieldNames(modelCode);
   const defaultLanguage = getDefaultLanguage();
-  const defaultTranslation = resolveDefaultTranslation(payload.translations, defaultLanguage?.code);
   const now = new Date().toISOString();
+  const updateAssignments = ['column_id = ?'];
+  const updateValues = [payload.base.column_id];
+
+  appendMainTableAssignment(updateAssignments, updateValues, 'custom_url', payload.base.custom_url, mainFields);
+  appendMainTableAssignment(updateAssignments, updateValues, 'code', payload.base.code, mainFields);
+  appendMainTableAssignment(updateAssignments, updateValues, 'images', payload.base.images, mainFields);
+  appendMainTableAssignment(updateAssignments, updateValues, 'primary_image', payload.base.primary_image, mainFields);
+  appendMainTableAssignment(updateAssignments, updateValues, 'is_visible', payload.base.is_visible, mainFields);
+  appendMainTableAssignment(updateAssignments, updateValues, 'is_featured_home', payload.base.is_featured_home, mainFields);
+  appendMainTableAssignment(updateAssignments, updateValues, 'sort_order', payload.base.sort_order, mainFields);
+  appendMainTableAssignment(updateAssignments, updateValues, 'legacy_extra', payload.base.legacy_extra, mainFields);
+  updateAssignments.push('created_at = ?', 'updated_at = ?');
+  updateValues.push(payload.base.created_at || existing.created_at || now, now, id);
 
   execute(
     `
       UPDATE ${quoteIdentifier(tableName)}
       SET
-        column_id = ?,
-        custom_url = ?,
-        code = ?,
-        images = ?,
-        primary_image = ?,
-        is_visible = ?,
-        is_featured_home = ?,
-        sort_order = ?,
-        publish_status = ?,
-        legacy_extra = ?,
-        created_at = ?,
-        updated_at = ?
+        ${updateAssignments.join(',\n        ')}
       WHERE id = ?
     `,
-    [
-      payload.base.column_id,
-      payload.base.custom_url,
-      payload.base.code,
-      payload.base.images,
-      payload.base.primary_image,
-      payload.base.is_visible,
-      payload.base.is_featured_home,
-      payload.base.sort_order,
-      defaultTranslation.publish_status,
-      payload.base.legacy_extra,
-      payload.base.created_at || existing.created_at || now,
-      now,
-      id
-    ]
+    updateValues
   );
 
   saveEntryTranslations(translationTableName, id, payload.translations, now);
@@ -506,6 +486,22 @@ function loadEntryTranslations(modelCode, entryIds) {
     map.set(Number(row.entry_id), list);
   }
   return map;
+}
+
+function appendMainTableField(fields, values, fieldName, fieldValue, mainFields) {
+  if (!mainFields.includes(fieldName)) {
+    return;
+  }
+  fields.push(fieldName);
+  values.push(fieldValue);
+}
+
+function appendMainTableAssignment(assignments, values, fieldName, fieldValue, mainFields) {
+  if (!mainFields.includes(fieldName)) {
+    return;
+  }
+  assignments.push(`${fieldName} = ?`);
+  values.push(fieldValue);
 }
 
 function saveEntryTranslations(translationTableName, entryId, translations, now) {
@@ -790,15 +786,14 @@ function normalizeEntryCustomUrl(value) {
     throw new Error('内容自定义文件名不能是完整网址');
   }
 
-  let routePath = normalized.startsWith('/') ? normalized : `/${normalized}`;
-  routePath = routePath.replace(/\/{2,}/g, '/');
+  let routePath = normalized.replace(/\/{2,}/g, '/');
   routePath = routePath.replace(/\/+$/g, '');
 
-  if (routePath === '/') {
+  if (!routePath || routePath === '/') {
     throw new Error('内容自定义文件名不能为空');
   }
 
-  const segments = routePath.split('/').filter(Boolean);
+  const segments = routePath.replace(/^\/+/, '').split('/').filter(Boolean);
   if (segments.length === 0) {
     throw new Error('内容自定义文件名不能为空');
   }
@@ -808,7 +803,7 @@ function normalizeEntryCustomUrl(value) {
     throw new Error('内容自定义文件名必须包含文件名，例如 abcd/index.html');
   }
 
-  return routePath;
+  return normalized.startsWith('/') ? `/${segments.join('/')}` : segments.join('/');
 }
 
 function resolvePrimaryImage(modelCode, primaryImage, imagesValue) {
