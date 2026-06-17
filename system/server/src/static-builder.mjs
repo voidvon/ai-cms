@@ -99,6 +99,10 @@ function listNewsCategories({ languageCode = null } = {}) {
 }
 
 function buildLegacyNewsCategoryUrl(dirName, category) {
+  const categoryDirName = String(category.dir_name || '').trim();
+  if (categoryDirName) {
+    return `/${dirName}/${categoryDirName}/`;
+  }
   return `/${dirName}/${resolveLegacyCategoryPublicId(category)}.html`;
 }
 
@@ -511,18 +515,26 @@ function buildLegacyNewsSectionCategoryPagesByDir({
         ]
       });
 
-      const publicCategoryId = resolveLegacyCategoryPublicId(category);
-      const fileName = pageNumber === 1 ? `${publicCategoryId}.html` : `${publicCategoryId}-${pageNumber}.html`;
-      writeTextFile(outputRoot, path.join(dirName, fileName), html, templateContext.site);
-      filesWritten += 1;
+      const categoryDirName = String(category.dir_name || '').trim();
+      const isRootCategory = normalizeInteger(category.id, 0) === normalizeInteger(section.rootColumnId, 0);
 
-      if (pageNumber === 1) {
-        writeTextFile(outputRoot, path.join(dirName, `${publicCategoryId}-1.html`), html, templateContext.site);
+      // 子栏目使用目录结构: /services/introduction/index.html
+      // 根栏目使用根目录: /services/index.html, /services/index-2.html
+      if (!isRootCategory && categoryDirName) {
+        // 子栏目有目录名，使用目录结构
+        const fileName = pageNumber === 1 ? 'index.html' : `index-${pageNumber}.html`;
+        const relativePath = path.join(dirName, categoryDirName, fileName);
+        writeTextFile(outputRoot, relativePath, html, templateContext.site);
         filesWritten += 1;
+      } else {
+        // 根栏目，直接在section目录下
         if (categoryIndex === 0) {
-          writeTextFile(outputRoot, path.join(dirName, 'index.html'), html, templateContext.site);
+          // 第一个分类（根分类）生成 index.html
+          const fileName = pageNumber === 1 ? 'index.html' : `index-${pageNumber}.html`;
+          writeTextFile(outputRoot, path.join(dirName, fileName), html, templateContext.site);
           filesWritten += 1;
         }
+        // 其他非根栏目分类但没有dir_name的，暂不处理（未来可扩展）
       }
     }
   }
