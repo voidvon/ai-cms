@@ -66,6 +66,10 @@ export function buildProductCategoryPublicUrl(category, categoryMap = null) {
   return id === 0 ? '/products/index.html' : `/products/${id}.html`;
 }
 
+/**
+ * @deprecated 使用 buildContentDetailUrlFromColumn(product, column, categoryPath) 代替
+ * 此函数硬编码了 /products/ 路径，不支持栏目配置驱动
+ */
 export function buildProductDetailPublicUrl(product, categorySlugPath = null) {
   return buildContentDetailPublicUrl({
     entry: product,
@@ -76,6 +80,10 @@ export function buildProductDetailPublicUrl(product, categorySlugPath = null) {
   });
 }
 
+/**
+ * @deprecated 使用 buildContentDetailUrlFromColumn(entry, column) 代替
+ * 此函数需要手动传入 sectionDir 和 detail_rule，不支持栏目配置驱动
+ */
 export function buildNewsDetailPublicUrl(entry, options = {}) {
   const sectionDir = String(options.sectionDir || '').trim().replace(/^\/+|\/+$/g, '');
   const categoryPath = options.categoryPath ?? null;
@@ -132,6 +140,10 @@ function buildContentDetailPublicUrl({ entry, categoryPath = null, detailRule = 
   return legacyFallback || `${ensureTrailingSlash(sectionRoot)}${id}.html`;
 }
 
+/**
+ * @deprecated 使用 buildContentDetailPathFromColumn(product, column, categoryPath) 代替
+ * 此函数硬编码了 products 目录，不支持栏目配置驱动
+ */
 export function buildProductDetailOutputPath(product, categorySlugPath = null) {
   return buildContentDetailOutputPath({
     entry: product,
@@ -142,6 +154,10 @@ export function buildProductDetailOutputPath(product, categorySlugPath = null) {
   });
 }
 
+/**
+ * @deprecated 使用 buildContentDetailPathFromColumn(entry, column) 代替
+ * 此函数需要手动传入 sectionDir 和 detail_rule，不支持栏目配置驱动
+ */
 export function buildNewsDetailOutputPath(entry, options = {}) {
   const sectionDir = String(options.sectionDir || '').trim().replace(/^\/+|\/+$/g, '');
   const categoryPath = options.categoryPath ?? null;

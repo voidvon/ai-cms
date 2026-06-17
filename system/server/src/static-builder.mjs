@@ -23,11 +23,7 @@ import {
 import {
   buildRelativeCategoryPathFromRoutePath,
   buildCategorySlugPath,
-  buildNewsDetailOutputPath,
-  buildNewsDetailPublicUrl,
   buildProductCategoryPublicUrl,
-  buildProductDetailOutputPath,
-  buildProductDetailPublicUrl,
   resolveColumnRouteOutputPath,
   buildContentDetailUrlFromColumn,
   buildContentDetailPathFromColumn
@@ -56,7 +52,8 @@ const NEWS_LIST_PAGE_SIZE = 6;
 
 // 全局分类目录映射，在静态生成时填充
 let globalCategorySlugMap = new Map();
-let globalCategoryMap = new Map(); // 新增：存储完整的分类对象映射
+let globalCategoryMap = new Map(); // 产品分类映射
+let globalColumnMap = new Map(); // 栏目映射
 
 /**
  * 设置全局分类目录映射
@@ -77,13 +74,9 @@ function setGlobalCategorySlugMap(categories) {
 
 function buildProductUrl(product, categorySlugPath = null) {
   // 从 product.column_id 获取栏目
-  const column = globalCategoryMap.get(normalizeInteger(product.column_id, 0));
+  const column = globalColumnMap.get(normalizeInteger(product.column_id, 0));
   if (!column) {
-    // 如果找不到栏目，回退到旧逻辑
-    if (!categorySlugPath && product.column_id) {
-      categorySlugPath = globalCategorySlugMap.get(normalizeInteger(product.column_id, 0));
-    }
-    return buildProductDetailPublicUrl(product, categorySlugPath);
+    throw new Error(`产品 ${product.id} 的栏目 ${product.column_id} 不存在`);
   }
   return buildContentDetailUrlFromColumn(product, column, categorySlugPath);
 }
@@ -93,9 +86,12 @@ function buildArticleUrl(entry, templateContext, sectionOverride = null) {
   const section = sectionOverride
     || publicSections?.getNewsSectionByColumnId?.(normalizeInteger(entry?.column_id, 0))
     || null;
-  const sectionDir = String(section?.dirName || 'news').trim();
-  const detailRule = section?.rootColumn?.detail_rule || null;
-  return buildNewsDetailPublicUrl(entry, { sectionDir, detail_rule: detailRule });
+
+  if (!section?.rootColumn) {
+    throw new Error(`内容 ${entry.id} 的栏目 ${entry.column_id} 未找到或缺少根栏目配置`);
+  }
+
+  return buildContentDetailUrlFromColumn(entry, section.rootColumn);
 }
 
 function listNewsCategories({ languageCode = null } = {}) {
@@ -170,9 +166,12 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
     const normalizedOutputRoot = resolveLanguageOutputRoot(outputRoot, language);
     const results = [];
 
-    // 初始化全局分类目录映射
+    // 初始化全局分类目录映射和栏目映射
     const templateContext = getLegacyTemplateContext(language.code);
     setGlobalCategorySlugMap(templateContext.productCategories);
+    globalColumnMap = new Map(
+      templateContext.columns.map(col => [normalizeInteger(col.id, 0), col])
+    );
 
     fs.mkdirSync(normalizedOutputRoot, { recursive: true });
     if (cleanExisting) {
@@ -401,6 +400,12 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, la
 export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange, languageCode = null } = {}) {
   const products = filterByIdRange(listProducts({ visibleOnly: false, limit: 10000, languageCode }), idRange);
   const templateContext = getLegacyTemplateContext(languageCode);
+
+  // 初始化全局栏目映射
+  globalColumnMap = new Map(
+    templateContext.columns.map(col => [normalizeInteger(col.id, 0), col])
+  );
+
   const productMap = groupBy(products, (item) => normalizeInteger(item.column_id, 0));
   const categoryMap = new Map(templateContext.productCategories.map((item) => [normalizeInteger(item.id, 0), item]));
   let filesWritten = 0;
@@ -1502,10 +1507,9 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, sectionCo
     || { dirName: isService ? 'service' : 'news', sectionLabel: isService ? '服务' : '公司新闻', sectionType: isService ? 'service' : 'news', rootColumn: null };
   const sectionDir = resolvedSectionConfig.dirName;
   const sectionLabel = resolvedSectionConfig.sectionLabel;
-  const articleUrl = buildNewsDetailPublicUrl(item, {
-    sectionDir,
-    detail_rule: resolvedSectionConfig.rootColumn?.detail_rule
-  });
+  const articleUrl = resolvedSectionConfig.rootColumn
+    ? buildContentDetailUrlFromColumn(item, resolvedSectionConfig.rootColumn)
+    : `/news/detail/${normalizeInteger(item.id, 0)}.html`;
   const relatedArticles = listNews({ limit: 10000, languageCode: templateContext.languageCode })
     .filter((entry) => normalizeInteger(entry.column_id, 0) === normalizeInteger(item.column_id, 0) && normalizeInteger(entry.id, 0) !== normalizeInteger(item.id, 0))
     .slice(0, 3);
@@ -1556,10 +1560,9 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, sectionCo
     relatedArticleItems: relatedArticles.map((entry) => ({
       id: entry.id,
       title: entry.title || '',
-      url: buildNewsDetailPublicUrl(entry, {
-        sectionDir,
-        detail_rule: resolvedSectionConfig.rootColumn?.detail_rule
-      }),
+      url: resolvedSectionConfig.rootColumn
+        ? buildContentDetailUrlFromColumn(entry, resolvedSectionConfig.rootColumn)
+        : `/news/detail/${normalizeInteger(entry.id, 0)}.html`,
       image: entry.picture || '',
       summary: resolveRenderableNewsSummary(entry),
       date: formatLegacyDateOnly(entry.created_at)
