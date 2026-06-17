@@ -76,10 +76,16 @@ function setGlobalCategorySlugMap(categories) {
 }
 
 function buildProductUrl(product, categorySlugPath = null) {
-  if (!categorySlugPath && product.column_id) {
-    categorySlugPath = globalCategorySlugMap.get(normalizeInteger(product.column_id, 0));
+  // 从 product.column_id 获取栏目
+  const column = globalCategoryMap.get(normalizeInteger(product.column_id, 0));
+  if (!column) {
+    // 如果找不到栏目，回退到旧逻辑
+    if (!categorySlugPath && product.column_id) {
+      categorySlugPath = globalCategorySlugMap.get(normalizeInteger(product.column_id, 0));
+    }
+    return buildProductDetailPublicUrl(product, categorySlugPath);
   }
-  return buildProductDetailPublicUrl(product, categorySlugPath);
+  return buildContentDetailUrlFromColumn(product, column, categorySlugPath);
 }
 
 function buildArticleUrl(entry, templateContext, sectionOverride = null) {
@@ -418,7 +424,7 @@ export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
     });
 
     const categorySlugPath = category ? buildCategorySlugPath(category, categoryMap) : null;
-    const outputPath = buildProductDetailOutputPath(product, categorySlugPath);
+    const outputPath = buildContentDetailPathFromColumn(product, category, categorySlugPath);
 
     writeTextFile(outputRoot, outputPath, html, templateContext.site);
     filesWritten += 1;
