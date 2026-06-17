@@ -5,10 +5,8 @@ const SERVICE_SECTION_PATTERN = /(service|services|support|knowledge|learn|train
 const NEWS_SECTION_PATTERN = /(news|article|articles|insight|updates|新闻|资讯|动态)/i;
 
 export function resolveLegacyCategoryPublicId(category) {
-  const sourceId = toInteger(category?.source_id, 0);
-  if (sourceId > 0) {
-    return String(sourceId);
-  }
+  // 直接使用栏目ID，不再使用source_id
+  // 所有URL通过custom_url自定义，不依赖source_id向后兼容
   return String(toInteger(category?.id, 0));
 }
 
