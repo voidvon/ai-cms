@@ -153,7 +153,12 @@ const {
 
 export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cleanExisting = false, languageCode = null } = {}) {
   getDb();
-  const requestedSections = normalizeSections(sections);
+  const targetLanguages = resolveStaticBuildLanguages(languageCode);
+
+  // 先获取 columns 用于动态生成 section 列表
+  const columns = listColumns({ languageCode: targetLanguages[0]?.code || null });
+  const requestedSections = normalizeSections(sections, columns);
+
   const requiresTemplateRuntime = Array.from(requestedSections).some((section) => !['robots', 'sitemap', 'llms'].includes(section));
   const sharedAssetRoot = path.resolve(outputRoot);
 
@@ -161,7 +166,6 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
     ensureTemplatesSchema();
   }
 
-  const targetLanguages = resolveStaticBuildLanguages(languageCode);
   const languageBuilds = [];
   let totalFiles = 0;
   let totalRecords = 0;
@@ -195,23 +199,34 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
     if (requestedSections.has('corporation-pages')) {
       results.push(buildCorporationPages({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
     }
-    if (requestedSections.has('news-lists')) {
-      results.push(buildNewsCategoryPages({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
+
+    // 动态遍历所有新闻类section
+    for (const section of templateContext.publicSections.newsSections) {
+      const listKey = `${section.dirName}-lists`;
+      const detailKey = `${section.dirName}-details`;
+
+      if (requestedSections.has(listKey)) {
+        results.push(buildNewsSectionCategoryPages({
+          outputRoot: normalizedOutputRoot,
+          languageCode: language.code,
+          section
+        }));
+      }
+
+      if (requestedSections.has(detailKey)) {
+        results.push(buildNewsSectionDetailPages({
+          outputRoot: normalizedOutputRoot,
+          languageCode: language.code,
+          section
+        }));
+      }
     }
-    if (requestedSections.has('service-lists')) {
-      results.push(buildServiceCategoryPages({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
-    }
+
     if (requestedSections.has('product-lists')) {
       results.push(buildProductCategoryPages({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
     }
     if (requestedSections.has('product-details')) {
       results.push(buildProductDetailPages({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
-    }
-    if (requestedSections.has('service-details')) {
-      results.push(buildServiceDetailPages({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
-    }
-    if (requestedSections.has('news-details')) {
-      results.push(buildNewsDetailPages({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
     }
     if (requestedSections.has('robots')) {
       results.push(buildRobotsTxt({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
@@ -321,25 +336,34 @@ export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT, langua
   return createBuildResult('corporation-pages', '公司栏目页', items.length, filesWritten);
 }
 
-export function buildNewsCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null } = {}) {
+export function buildNewsSectionCategoryPages({
+  outputRoot = DEFAULT_OUTPUT_ROOT,
+  languageCode = null,
+  section
+} = {}) {
   return buildLegacyNewsSectionCategoryPagesByDir({
     outputRoot,
     languageCode,
-    dirName: 'news',
-    sectionKey: 'news-lists',
-    defaultSectionLabel: '新闻分类页',
-    summaryClassName: 'Font_000000_a'
+    section,
+    sectionKey: `${section.dirName}-lists`,
+    defaultSectionLabel: `${section.sectionLabel}分类页`,
+    summaryClassName: section.sectionType === 'service' ? '0a' : 'Font_000000_a'
   });
 }
 
-export function buildServiceCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null } = {}) {
-  return buildLegacyNewsSectionCategoryPagesByDir({
+export function buildNewsSectionDetailPages({
+  outputRoot = DEFAULT_OUTPUT_ROOT,
+  idRange,
+  languageCode = null,
+  section
+} = {}) {
+  return buildLegacyNewsSectionDetailPagesByDir({
     outputRoot,
+    idRange,
     languageCode,
-    dirName: 'services',
-    sectionKey: 'service-lists',
-    defaultSectionLabel: '服务分类页',
-    summaryClassName: '0a'
+    section,
+    sectionKey: `${section.dirName}-details`,
+    defaultSectionLabel: `${section.sectionLabel}详情页`
   });
 }
 
@@ -443,41 +467,19 @@ export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
   return createBuildResult('product-details', '产品详情页', products.length, filesWritten);
 }
 
-export function buildNewsDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange, languageCode = null } = {}) {
-  return buildLegacyNewsSectionDetailPagesByDir({
-    outputRoot,
-    idRange,
-    languageCode,
-    dirName: 'news',
-    sectionKey: 'news-details',
-    defaultSectionLabel: '新闻详情页'
-  });
-}
-
-export function buildServiceDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange, languageCode = null } = {}) {
-  return buildLegacyNewsSectionDetailPagesByDir({
-    outputRoot,
-    idRange,
-    languageCode,
-    dirName: 'services',
-    sectionKey: 'service-details',
-    defaultSectionLabel: '服务详情页'
-  });
-}
-
 function buildLegacyNewsSectionCategoryPagesByDir({
   outputRoot,
   languageCode = null,
-  dirName,
+  section,
   sectionKey,
   defaultSectionLabel,
   summaryClassName
 }) {
   const templateContext = getLegacyTemplateContext(languageCode);
-  const section = templateContext.publicSections.getNewsSectionByDirName(dirName);
   if (!section) {
     return createBuildResult(sectionKey, defaultSectionLabel, 0, 0);
   }
+  const dirName = section.dirName;
   const categoryList = templateContext.newsCategories.filter((item) => normalizeInteger(item.parent_id, 0) === normalizeInteger(section.rootColumnId, 0));
   const items = listNews({ limit: 10000, languageCode });
   const categoryBuckets = groupBy(items, (item) => normalizeInteger(item.column_id, 0));
@@ -547,15 +549,15 @@ function buildLegacyNewsSectionDetailPagesByDir({
   outputRoot,
   idRange,
   languageCode = null,
-  dirName,
+  section,
   sectionKey,
   defaultSectionLabel
 }) {
   const templateContext = getLegacyTemplateContext(languageCode);
-  const section = templateContext.publicSections.getNewsSectionByDirName(dirName);
   if (!section) {
     return createBuildResult(sectionKey, defaultSectionLabel, 0, 0);
   }
+  const dirName = section.dirName;
   const allowedColumnIds = new Set(getDescendantColumnIds(
     templateContext.publicSections.newsTree.childrenByParentId,
     section.rootColumnId
@@ -2351,16 +2353,23 @@ function getDescendantNewsCategoryIds(categories, rootId) {
   return collected;
 }
 
-function normalizeSections(sections) {
+function normalizeSections(sections, columns = null) {
+  // 动态构建新闻类section键名
+  const newsSectionKeys = [];
+  if (columns) {
+    const publicSections = resolvePublicSectionContext(columns);
+    for (const section of publicSections.newsSections) {
+      newsSectionKeys.push(`${section.dirName}-lists`);
+      newsSectionKeys.push(`${section.dirName}-details`);
+    }
+  }
+
   const defaults = [
     'index',
     'contact',
     'column-pages',
     'corporation-pages',
-    'news-lists',
-    'news-details',
-    'service-lists',
-    'service-details',
+    ...newsSectionKeys,  // 动态：news-lists, services-lists, knowledge-lists...
     'product-lists',
     'product-details',
     'robots',
