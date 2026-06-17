@@ -236,7 +236,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   }
 
   const newsSection = publicSections.getNewsSectionByDirName('news');
-  const serviceSection = publicSections.getNewsSectionByDirName('service');
+  const serviceSection = publicSections.getNewsSectionByDirName('services');
   const newsRootCategories = newsSection
     ? newsCategories.filter((item) => toInteger(item.parent_id, 0) === newsSection.rootColumnId)
     : [];
@@ -252,13 +252,15 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     contentLines: buildCategorySampleLines(newsRootCategories)
   }));
 
-  pages.push(createPage({
-    title: '服务',
-    routePath: '/service/index.html',
-    section: '服务栏目',
-    summary: '服务分类与文章入口。',
-    contentLines: buildCategorySampleLines(serviceRootCategories)
-  }));
+  if (serviceSection) {
+    pages.push(createPage({
+      title: '服务',
+      routePath: `/${serviceSection.dirName}/index.html`,
+      section: '服务栏目',
+      summary: '服务分类与文章入口。',
+      contentLines: buildCategorySampleLines(serviceRootCategories)
+    }));
+  }
 
   for (const category of newsRootCategories) {
     const categoryId = toInteger(category.id, 0);
@@ -638,7 +640,7 @@ function dedupePages(items) {
 
 function cleanupExistingLlmsFiles(outputRoot) {
   const rootFiles = ['llms.txt', 'llms-full.txt', 'index.md', 'contact.md'];
-  const managedDirs = ['about', 'news', 'service', 'valve', 'product'];
+  const managedDirs = ['about', 'news', 'services', 'valve', 'product'];
 
   for (const relativePath of rootFiles) {
     const filePath = path.resolve(outputRoot, relativePath);

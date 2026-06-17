@@ -103,7 +103,7 @@ function buildLegacyNewsCategoryUrl(dirName, category) {
 }
 
 const MANAGED_STATIC_ROOT_FILES = ['index.html', 'contact.html', 'sitemap.xml', 'robots.txt', 'llms.txt', 'llms-full.txt', 'index.md'];
-const MANAGED_STATIC_DIRS = ['about', 'news', 'product', 'products', 'service', 'products'];
+const MANAGED_STATIC_DIRS = ['about', 'news', 'product', 'products', 'services'];
 const SHARED_STATIC_DIRS = ['css', 'images', 'skin', 'uploads'];
 const SHARED_STATIC_ROOT_FILES = ['logo.svg'];
 const OBSOLETE_SHARED_STATIC_DIRS = ['js', 'JS'];
@@ -708,7 +708,7 @@ function expandLegacyCommonPlaceholders(value, templateContext) {
 
   html = html.replace(/#HOPE_aboutCat\((\d+)\)#/gi, () => buildLegacyAboutCategoryList(templateContext.corporationCategories));
   html = html.replace(/#HOPE_NewsCat\((\d+)\s*,\s*(\d+)\)#/gi, (_, id, dirCode) => {
-    const dirName = normalizeInteger(dirCode, 1) === 2 ? 'service' : 'news';
+    const dirName = normalizeInteger(dirCode, 1) === 2 ? 'services' : 'news';
     if (normalizeInteger(id, 0) > 0) {
       const explicitSection = templateContext.publicSections.getNewsSectionByColumnId(normalizeInteger(id, 0));
       return buildLegacyNewsCategoryList(templateContext, explicitSection?.dirName || dirName);
@@ -752,7 +752,7 @@ function buildLegacyHomePageProps(templateContext) {
   const newsColumns = templateContext.columns.filter((entry) => String(entry.source_type || '') === 'news_category');
   const newsColumnById = new Map(newsColumns.map((entry) => [normalizeInteger(entry.id, 0), entry]));
   const newsSection = templateContext.publicSections.getNewsSectionByDirName('news');
-  const serviceSection = templateContext.publicSections.getNewsSectionByDirName('service');
+  const serviceSection = templateContext.publicSections.getNewsSectionByDirName('services');
   const homeNewsItems = listNews({ limit: 6, languageCode: templateContext.languageCode })
     .filter((item) => newsSection
       ? isColumnUnderRoot(newsColumnById, normalizeInteger(item.column_id, 0), newsSection.rootColumnId)
@@ -954,7 +954,7 @@ function buildLegacySiteColumns(columns, options = {}) {
   const findByUrl = (url) => visibleRows.find((item) => item.url === url) || null;
   const findBySourceType = (sourceType) => visibleRows.find((item) => item.sourceType === sourceType) || null;
   const newsSection = publicSections.getNewsSectionByDirName('news');
-  const serviceSection = publicSections.getNewsSectionByDirName('service');
+  const serviceSection = publicSections.getNewsSectionByDirName('services');
   const newsRoot = newsSection
     ? visibleRows.find((item) => item.id === normalizeInteger(newsSection.rootColumnId, 0)) || null
     : null;
@@ -1435,7 +1435,7 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
 function buildLegacyArticleListPageProps({ templateContext, section, category, pageItems, pageNumber, pageCount, totalRecords, summaryClassName }) {
   const isService = section === 'service';
   const sectionConfig = templateContext.publicSections.getNewsSectionByType(isService ? 'service' : 'news')
-    || { dirName: isService ? 'service' : 'news', sectionLabel: isService ? '服务' : '公司新闻', sectionType: isService ? 'service' : 'news' };
+    || { dirName: isService ? 'services' : 'news', sectionLabel: isService ? '服务' : '公司新闻', sectionType: isService ? 'service' : 'news' };
   const sectionDir = sectionConfig.dirName;
   const sectionLabel = sectionConfig.sectionLabel;
   const categoryPublicId = resolveLegacyCategoryPublicId(category);
@@ -1504,7 +1504,7 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, sectionCo
   const isService = section === 'service';
   const resolvedSectionConfig = sectionConfig
     || templateContext.publicSections.getNewsSectionByType(isService ? 'service' : 'news')
-    || { dirName: isService ? 'service' : 'news', sectionLabel: isService ? '服务' : '公司新闻', sectionType: isService ? 'service' : 'news', rootColumn: null };
+    || { dirName: isService ? 'services' : 'news', sectionLabel: isService ? '服务' : '公司新闻', sectionType: isService ? 'service' : 'news', rootColumn: null };
   const sectionDir = resolvedSectionConfig.dirName;
   const sectionLabel = resolvedSectionConfig.sectionLabel;
   const articleUrl = resolvedSectionConfig.rootColumn
@@ -2314,7 +2314,7 @@ function buildLegacyIndexNews() {
 function buildLegacyServiceIndex() {
   const columns = listColumns();
   const publicSections = resolvePublicSectionContext(columns);
-  const serviceSection = publicSections.getNewsSectionByDirName('service');
+  const serviceSection = publicSections.getNewsSectionByDirName('services');
   const newsColumnById = new Map(publicSections.newsTree.rows.map((item) => [normalizeInteger(item.id, 0), item]));
   const templateContext = { publicSections };
   const items = listNews({ limit: 10000 })
