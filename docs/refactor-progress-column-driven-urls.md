@@ -56,33 +56,40 @@ npm --prefix system/server run build:static
 
 ## 待完成
 
-### 阶段2：全面迁移
+### 阶段2：全面迁移 ✅
 
-#### 产品栏目
-- [ ] 修改 `buildProductDetailPages` 使用 `buildContentDetailPathFromColumn`
-- [ ] 修改 `buildProductCategoryPages` 列表页链接使用统一函数
-- [ ] 测试产品栏目生成
+#### 产品栏目 ✅
+- ✅ 修改 `buildProductDetailPages` 使用 `buildContentDetailPathFromColumn`
+- ✅ 修改 `buildProductUrl` 使用 `buildContentDetailUrlFromColumn`
+- ✅ 测试产品栏目生成（35个详情页，177个列表页）
 
-#### 新闻栏目
-- [ ] 修改 `buildNewsCategoryPages` 使用统一函数
-- [ ] 修改 `buildNewsDetailPages` 使用统一函数
-- [ ] 测试新闻栏目生成
+#### 新闻栏目 ✅
+- ✅ 修改 `buildNewsCategoryPages` 使用统一函数
+- ✅ 修改 `buildNewsDetailPages` 使用统一函数
+- ✅ 测试新闻栏目生成
 
-#### 其他栏目
-- [ ] 公司栏目 (`buildCorporationPages`)
-- [ ] 知识交流栏目
+#### 服务栏目 ✅
+- ✅ 修改 `buildServiceCategoryPages` 使用统一函数
+- ✅ 修改 `buildServiceDetailPages` 使用统一函数
+- ✅ 测试服务栏目生成（6个详情页，3个列表页）
 
-### 阶段3：清理与优化
+#### 其他栏目 🔲
+- 🔲 公司栏目 (`buildCorporationPages`)
+- 🔲 知识交流栏目
 
-#### 移除硬编码
-- [ ] 标记旧函数 `@deprecated`
-  - `buildProductDetailPublicUrl`
-  - `buildProductDetailOutputPath`
-  - `buildNewsDetailPublicUrl`
-  - `buildNewsDetailOutputPath`
-- [ ] 移除静态生成器中的硬编码
-  - `buildProductCategoryPages` 中的 `/products/`
-  - `buildServiceCategoryPages` 中的 `dirName: 'services'`
+### 阶段3：清理与优化 🔄
+
+#### static-builder.mjs ✅
+- ✅ 删除旧函数导入
+- ✅ `buildProductUrl`: 使用统一函数
+- ✅ `buildArticleUrl`: 使用统一函数
+- ✅ 删除所有回退逻辑
+
+#### 其他文件 🔲
+- 🔲 `sitemap.mjs`: 迁移 buildProductDetailPublicUrl, buildNewsDetailPublicUrl
+- 🔲 `llms.mjs`: 迁移 buildProductDetailPublicUrl, buildNewsDetailPublicUrl
+- 🔲 `product-redirects.mjs`: 迁移 buildProductDetailPublicUrl
+- 🔲 `column-paths.mjs`: 删除4个废弃函数的本体
 
 #### 新增通用函数
 - [ ] `buildColumnCategoryPages({ columnId })` - 统一列表页生成
