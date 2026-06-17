@@ -33,8 +33,8 @@ export function resolvePublicSectionContext(columns) {
       rootSourceId: toInteger(root.source_id, 0),
       publicRootId: resolveLegacyCategoryPublicId(root),
       dirName,
-      sectionType: dirName === 'service' ? 'service' : 'news',
-      sectionLabel: String(root.name || '').trim() || (dirName === 'service' ? '服务' : '公司新闻'),
+      sectionType: SERVICE_SECTION_PATTERN.test(dirName) ? 'service' : 'news',
+      sectionLabel: String(root.name || '').trim() || (SERVICE_SECTION_PATTERN.test(dirName) ? '服务' : '公司新闻'),
       rootColumn: root
     });
   }
@@ -135,6 +135,13 @@ function findRootColumnId(columns, sourceType) {
 }
 
 function resolveNewsSectionDirName(root, index, usedDirNames) {
+  // 优先使用数据库配置的 dir_name
+  const explicitDirName = String(root?.dir_name || '').trim();
+  if (explicitDirName) {
+    return reserveDirName(explicitDirName, usedDirNames, root);
+  }
+
+  // 回退到启发式推断
   const normalizedHints = collectNewsRootHints(root);
   if (normalizedHints.some((value) => SERVICE_SECTION_PATTERN.test(value))) {
     return reserveDirName('service', usedDirNames, root);

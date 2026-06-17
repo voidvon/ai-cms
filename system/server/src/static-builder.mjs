@@ -28,7 +28,9 @@ import {
   buildProductCategoryPublicUrl,
   buildProductDetailOutputPath,
   buildProductDetailPublicUrl,
-  resolveColumnRouteOutputPath
+  resolveColumnRouteOutputPath,
+  buildContentDetailUrlFromColumn,
+  buildContentDetailPathFromColumn
 } from './services/column-paths.mjs';
 import { getSiteConfig } from './services/site.mjs';
 import { ensureTemplatesSchema } from './services/templates.mjs';
@@ -325,7 +327,7 @@ export function buildServiceCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, la
   return buildLegacyNewsSectionCategoryPagesByDir({
     outputRoot,
     languageCode,
-    dirName: 'service',
+    dirName: 'services',
     sectionKey: 'service-lists',
     defaultSectionLabel: '服务分类页',
     summaryClassName: '0a'
@@ -442,7 +444,7 @@ export function buildServiceDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
     outputRoot,
     idRange,
     languageCode,
-    dirName: 'service',
+    dirName: 'services',
     sectionKey: 'service-details',
     defaultSectionLabel: '服务详情页'
   });
@@ -567,11 +569,7 @@ function buildLegacyNewsSectionDetailPagesByDir({
     });
 
     const categoryPath = buildRelativeCategoryPathFromRoutePath(category?.route_path, `/${dirName}/`);
-    const outputPath = buildNewsDetailOutputPath(item, {
-      categoryPath,
-      sectionDir: dirName,
-      detail_rule: section.rootColumn?.detail_rule
-    });
+    const outputPath = buildContentDetailPathFromColumn(item, category, categoryPath);
     writeTextFile(outputRoot, outputPath, html, templateContext.site);
     filesWritten += 1;
   }
@@ -1459,11 +1457,15 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
     secondaryMenuItems: buildLegacyNewsMenuItems(templateContext, sectionDir, normalizeInteger(category.id, 0)),
     categoryId: categoryPublicId,
     title: category.name || '',
-    items: buildLegacyArticleListItems({ pageItems, summaryClassName }),
+    items: buildLegacyArticleListItems({
+      pageItems,
+      summaryClassName,
+      column: category
+    }),
     articleCardItems: pageItems.map((item) => ({
       id: item.id,
       title: item.title || '',
-      url: `/${sectionDir}/detail/${item.id}.html`,
+      url: buildContentDetailUrlFromColumn(item, category),
       image: item.picture || '',
       summary: resolveRenderableNewsSummary(item),
       date: formatLegacyDateOnly(item.created_at)
@@ -2210,13 +2212,21 @@ function getDescendantProductCategoryIds(childrenByParent, rootId) {
   return Array.from(visited);
 }
 
-function buildLegacyArticleListItems({ pageItems, summaryClassName }) {
+function buildLegacyArticleListItems({ pageItems, summaryClassName, column }) {
   return pageItems.map((item) => {
     const summary = resolveRenderableNewsSummary(item);
+    const fullUrl = buildContentDetailUrlFromColumn(item, column);
+
+    // 返回相对于 route_path 的路径
+    const routePath = String(column?.route_path || '').trim();
+    const relativeUrl = fullUrl.startsWith(routePath)
+      ? fullUrl.substring(routePath.length)
+      : `detail/${item.id}.html`;
+
     return {
       id: item.id,
       title: item.title || '',
-      url: `detail/${item.id}.html`,
+      url: relativeUrl,
       date: formatLegacyDateOnly(item.created_at) || '',
       summary: gotTopicLegacy(summary || '', 230),
       summaryClassName: summaryClassName || ''

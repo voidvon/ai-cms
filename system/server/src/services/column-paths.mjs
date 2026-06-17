@@ -319,3 +319,46 @@ function normalizeOutputCustomUrl(value) {
 function trimSlashes(value) {
   return String(value || '').trim().replace(/^\/+|\/+$/g, '');
 }
+
+/**
+ * 从栏目配置构建内容详情页公开URL（统一函数，替代按模型的硬编码函数）
+ * @param {Object} entry - 内容条目（包含 id, custom_url 等）
+ * @param {Object} column - 栏目配置（包含 route_path, detail_rule 等）
+ * @param {Array|null} categoryPath - 分类路径（可选）
+ * @returns {string} 公开URL
+ */
+export function buildContentDetailUrlFromColumn(entry, column, categoryPath = null) {
+  const sectionRoot = String(column?.route_path || '').trim() || '/';
+  const detailRule = String(column?.detail_rule || '').trim();
+  const entryId = toInteger(entry?.id, 0);
+
+  return buildContentDetailPublicUrl({
+    entry,
+    categoryPath,
+    detailRule,
+    sectionRoot,
+    legacyFallback: `${sectionRoot}detail/${entryId}.html`
+  });
+}
+
+/**
+ * 从栏目配置构建内容详情页输出路径（统一函数，替代按模型的硬编码函数）
+ * @param {Object} entry - 内容条目
+ * @param {Object} column - 栏目配置
+ * @param {Array|null} categoryPath - 分类路径（可选）
+ * @returns {string} 文件系统路径
+ */
+export function buildContentDetailPathFromColumn(entry, column, categoryPath = null) {
+  const routePath = String(column?.route_path || '').trim() || '/';
+  const sectionRoot = trimSlashes(routePath);
+  const detailRule = String(column?.detail_rule || '').trim();
+  const entryId = toInteger(entry?.id, 0);
+
+  return buildContentDetailOutputPath({
+    entry,
+    categoryPath,
+    detailRule,
+    sectionRoot,
+    legacyFallback: path.join(sectionRoot, 'detail', `${entryId}.html`)
+  });
+}
