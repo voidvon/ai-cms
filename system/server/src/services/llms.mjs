@@ -151,7 +151,8 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   for (const column of columns) {
     const routePath = String(column.route_path || '').trim();
     if (
-      String(column.source_type || '') === 'single_page'
+      String(column.column_type || '') === 'single'
+      && String(column.model_code || '') !== 'corporation'
       && routePath
     ) {
       pages.push(createPage({

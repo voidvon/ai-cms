@@ -115,6 +115,7 @@ const STATIC_COMPAT_ALIASES = [
   ['images', 'Images'],
   ['skin', 'Skin']
 ];
+const STATIC_BUILD_GROUP_ORDER = ['网站页面', '栏目页', '内容页', '系统文件'];
 const CMS_TEMPLATE_BY_PAGE = {
   'legacy-home': 'spirax_home',
   'legacy-contact': 'spirax_contact_page',
@@ -158,8 +159,13 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
   // 先获取 columns 用于动态生成 section 列表
   const columns = listColumns({ languageCode: targetLanguages[0]?.code || null });
   const requestedSections = normalizeSections(sections, columns);
+  const targetDefinitions = listStaticBuildTargetDefinitions({ columns });
+  const targetMap = new Map(targetDefinitions.map((definition) => [definition.value, definition]));
+  const resolvedTargets = Array.from(requestedSections)
+    .map((section) => targetMap.get(section))
+    .filter(Boolean);
 
-  const requiresTemplateRuntime = Array.from(requestedSections).some((section) => !['robots', 'sitemap', 'llms'].includes(section));
+  const requiresTemplateRuntime = resolvedTargets.some((definition) => definition.requiresTemplateRuntime !== false);
   const sharedAssetRoot = path.resolve(outputRoot);
 
   if (requiresTemplateRuntime) {
@@ -187,55 +193,12 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
       cleanupTemplateClientBundles(normalizedOutputRoot);
     }
 
-    if (requestedSections.has('index')) {
-      results.push(buildIndexPage({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
-    }
-    if (requestedSections.has('contact')) {
-      results.push(buildContactPage({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
-    }
-    if (requestedSections.has('column-pages')) {
-      results.push(buildManualSinglePageColumns({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
-    }
-    if (requestedSections.has('corporation-pages')) {
-      results.push(buildCorporationPages({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
-    }
-
-    // 动态遍历所有新闻类section
-    for (const section of templateContext.publicSections.newsSections) {
-      const listKey = `${section.dirName}-lists`;
-      const detailKey = `${section.dirName}-details`;
-
-      if (requestedSections.has(listKey)) {
-        results.push(buildNewsSectionCategoryPages({
-          outputRoot: normalizedOutputRoot,
-          languageCode: language.code,
-          section
-        }));
-      }
-
-      if (requestedSections.has(detailKey)) {
-        results.push(buildNewsSectionDetailPages({
-          outputRoot: normalizedOutputRoot,
-          languageCode: language.code,
-          section
-        }));
-      }
-    }
-
-    if (requestedSections.has('product-lists')) {
-      results.push(buildProductCategoryPages({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
-    }
-    if (requestedSections.has('product-details')) {
-      results.push(buildProductDetailPages({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
-    }
-    if (requestedSections.has('robots')) {
-      results.push(buildRobotsTxt({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
-    }
-    if (requestedSections.has('sitemap')) {
-      results.push(buildSitemap({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
-    }
-    if (requestedSections.has('llms')) {
-      results.push(buildLlmsFiles({ outputRoot: normalizedOutputRoot, languageCode: language.code }));
+    for (const target of resolvedTargets) {
+      results.push(target.execute({
+        outputRoot: normalizedOutputRoot,
+        languageCode: language.code,
+        templateContext
+      }));
     }
     syncStaticSupportAssets(sharedAssetRoot, normalizedOutputRoot);
 
@@ -261,6 +224,127 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
   };
 }
 
+function listStaticBuildTargetDefinitions({ columns = null } = {}) {
+  const resolvedColumns = Array.isArray(columns) ? columns : listColumns();
+  const publicSections = resolvePublicSectionContext(resolvedColumns);
+  const rootColumns = resolvedColumns.filter((item) => item?.column_semantics?.is_root);
+  const managedCategoryRoots = rootColumns.filter((item) => item?.column_semantics?.render_driver === 'managed_category');
+  const pageTreeRoots = rootColumns.filter((item) => item?.column_semantics?.render_driver === 'page_tree');
+  const contactColumn = resolvedColumns.find((item) => item?.column_semantics?.system_key === 'contact') || null;
+  const baseTargets = [
+    createStaticBuildTargetDefinition({
+      group: '网站页面',
+      label: '生成首页',
+      value: 'index',
+      execute: ({ outputRoot, languageCode }) => buildIndexPage({ outputRoot, languageCode })
+    }),
+    createStaticBuildTargetDefinition({
+      group: '栏目页',
+      label: '生成单页栏目',
+      value: 'column-pages',
+      execute: ({ outputRoot, languageCode }) => buildManualSinglePageColumns({ outputRoot, languageCode })
+    }),
+    createStaticBuildTargetDefinition({
+      group: '系统文件',
+      label: '生成 robots.txt',
+      value: 'robots',
+      requiresTemplateRuntime: false,
+      execute: ({ outputRoot, languageCode }) => buildRobotsTxt({ outputRoot, languageCode })
+    }),
+    createStaticBuildTargetDefinition({
+      group: '系统文件',
+      label: '生成 sitemap.xml',
+      value: 'sitemap',
+      requiresTemplateRuntime: false,
+      execute: ({ outputRoot, languageCode }) => buildSitemap({ outputRoot, languageCode })
+    }),
+    createStaticBuildTargetDefinition({
+      group: '系统文件',
+      label: '生成 LLMS 文件',
+      value: 'llms',
+      requiresTemplateRuntime: false,
+      execute: ({ outputRoot, languageCode }) => buildLlmsFiles({ outputRoot, languageCode })
+    })
+  ];
+  const rootColumnTargets = [];
+
+  if (contactColumn) {
+    rootColumnTargets.push(createStaticBuildTargetDefinition({
+      group: '网站页面',
+      label: `生成栏目页: ${contactColumn.name || '联系页'}`,
+      value: `column:${contactColumn.id}:page`,
+      aliases: ['contact'],
+      execute: ({ outputRoot, languageCode }) => buildContactPage({ outputRoot, languageCode })
+    }));
+  }
+
+  for (const rootColumn of pageTreeRoots) {
+    rootColumnTargets.push(createStaticBuildTargetDefinition({
+      group: '栏目页',
+      label: `生成栏目页: ${rootColumn.name || '栏目'}`,
+      value: `column:${rootColumn.id}:page`,
+      aliases: ['corporation', 'corporation-pages'],
+      execute: ({ outputRoot, languageCode }) => buildCorporationPages({ outputRoot, languageCode })
+    }));
+  }
+
+  for (const rootColumn of managedCategoryRoots) {
+    rootColumnTargets.push(
+      createStaticBuildTargetDefinition({
+        group: '栏目页',
+        label: `生成栏目列表: ${rootColumn.name || '栏目'}`,
+        value: `column:${rootColumn.id}:list`,
+        aliases: ['product-lists'],
+        execute: ({ outputRoot, languageCode }) => buildProductCategoryPages({ outputRoot, languageCode })
+      }),
+      createStaticBuildTargetDefinition({
+        group: '内容页',
+        label: `生成内容页: ${rootColumn.name || '栏目'}`,
+        value: `column:${rootColumn.id}:detail`,
+        aliases: ['product-details'],
+        execute: ({ outputRoot, languageCode }) => buildProductDetailPages({ outputRoot, languageCode })
+      })
+    );
+  }
+
+  const sectionTargets = publicSections.newsSections.flatMap((section) => ([
+    createStaticBuildTargetDefinition({
+      group: '栏目页',
+      label: `生成栏目列表: ${section.sectionLabel}`,
+      value: `column:${section.rootColumnId}:list`,
+      aliases: [`${section.dirName}-lists`],
+      execute: ({ outputRoot, languageCode }) => buildNewsSectionCategoryPages({ outputRoot, languageCode, section })
+    }),
+    createStaticBuildTargetDefinition({
+      group: '内容页',
+      label: `生成内容页: ${section.sectionLabel}`,
+      value: `column:${section.rootColumnId}:detail`,
+      aliases: [`${section.dirName}-details`],
+      execute: ({ outputRoot, languageCode }) => buildNewsSectionDetailPages({ outputRoot, languageCode, section })
+    })
+  ]));
+
+  return [...baseTargets, ...rootColumnTargets, ...sectionTargets];
+}
+
+function createStaticBuildTargetDefinition({
+  group,
+  label,
+  value,
+  execute,
+  aliases = [],
+  requiresTemplateRuntime = true
+}) {
+  return {
+    group,
+    label,
+    value,
+    aliases,
+    execute,
+    requiresTemplateRuntime
+  };
+}
+
 export function buildIndexPage({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null } = {}) {
   const templateContext = getLegacyTemplateContext(languageCode);
   const html = renderCmsSitePage('legacy-home', buildLegacyHomePageProps(templateContext), templateContext, {
@@ -274,19 +358,21 @@ export function buildIndexPage({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode 
 
 export function buildContactPage({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null } = {}) {
   const templateContext = getLegacyTemplateContext(languageCode);
+  const contactColumn = templateContext.columns.find((item) => item?.column_semantics?.system_key === 'contact') || null;
+  const pageLabel = contactColumn?.name || '栏目页';
   const html = renderCmsSitePage('legacy-contact', buildLegacyContactPageProps(templateContext), templateContext, {
     targets: [{ target_type: 'content_type', target_id: CONTENT_TYPE_TARGETS.contact }]
   });
 
   writeTextFile(outputRoot, 'contact.html', html, templateContext.site);
   buildRegisteredTsxAssets(outputRoot);
-  return createBuildResult('contact', '联系页面', 1, 1);
+  return createBuildResult('contact', pageLabel, 1, 1);
 }
 
 export function buildManualSinglePageColumns({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null } = {}) {
   const templateContext = getLegacyTemplateContext(languageCode);
   const items = templateContext.columns.filter((item) => (
-    String(item.source_type || '') === 'single_page'
+    item?.column_semantics?.render_driver === 'single_page'
     && String(item.route_path || '').trim()
   ));
   let filesWritten = 0;
@@ -333,7 +419,7 @@ export function buildCorporationPages({ outputRoot = DEFAULT_OUTPUT_ROOT, langua
   }
 
   buildRegisteredTsxAssets(outputRoot);
-  return createBuildResult('corporation-pages', '公司栏目页', items.length, filesWritten);
+  return createBuildResult('corporation-pages', `${rootColumn?.name || '栏目'}列表页`, items.length, filesWritten);
 }
 
 export function buildNewsSectionCategoryPages({
@@ -369,6 +455,7 @@ export function buildNewsSectionDetailPages({
 
 export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null } = {}) {
   const templateContext = getLegacyTemplateContext(languageCode);
+  const rootColumn = templateContext.columns.find((item) => item?.column_semantics?.is_root && item?.column_semantics?.render_driver === 'managed_category') || null;
   const categories = templateContext.productCategories;
   const products = listProducts({ visibleOnly: false, limit: 10000, languageCode });
   const categoryMap = new Map(categories.map((item) => [item.id, item]));
@@ -422,12 +509,13 @@ export function buildProductCategoryPages({ outputRoot = DEFAULT_OUTPUT_ROOT, la
   }
 
   buildRegisteredTsxAssets(outputRoot);
-  return createBuildResult('product-lists', '产品分类页', categories.filter((item) => normalizeInteger(item.id, 0) !== 0).length, filesWritten);
+  return createBuildResult('product-lists', `${rootColumn?.name || '栏目'}列表页`, categories.filter((item) => normalizeInteger(item.id, 0) !== 0).length, filesWritten);
 }
 
 export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRange, languageCode = null } = {}) {
   const products = filterByIdRange(listProducts({ visibleOnly: false, limit: 10000, languageCode }), idRange);
   const templateContext = getLegacyTemplateContext(languageCode);
+  const rootColumn = templateContext.columns.find((item) => item?.column_semantics?.is_root && item?.column_semantics?.render_driver === 'managed_category') || null;
 
   // 初始化全局栏目映射
   globalColumnMap = new Map(
@@ -464,7 +552,7 @@ export function buildProductDetailPages({ outputRoot = DEFAULT_OUTPUT_ROOT, idRa
   }
 
   buildRegisteredTsxAssets(outputRoot);
-  return createBuildResult('product-details', '产品详情页', products.length, filesWritten);
+  return createBuildResult('product-details', `${rootColumn?.name || '栏目'}内容页`, products.length, filesWritten);
 }
 
 function buildLegacyNewsSectionCategoryPagesByDir({
@@ -763,7 +851,7 @@ function buildLegacyHomePageProps(templateContext) {
         summary: item.summary || ''
       };
     });
-  const newsColumns = templateContext.columns.filter((entry) => String(entry.source_type || '') === 'news_category');
+  const newsColumns = templateContext.columns.filter((entry) => String(entry.column_type || '') === 'list' && String(entry.model_code || '') === 'news');
   const newsColumnById = new Map(newsColumns.map((entry) => [normalizeInteger(entry.id, 0), entry]));
   const newsSection = templateContext.publicSections.getNewsSectionByDirName('news');
   const serviceSection = templateContext.publicSections.getNewsSectionByDirName('services');
@@ -954,8 +1042,9 @@ function buildLegacySiteColumns(columns, options = {}) {
     id: normalizeInteger(item?.id, 0),
     name: item?.name || '',
     parentId: normalizeInteger(item?.parent_id, 0),
-    sourceType: item?.source_type || '',
-    sourceId: normalizeInteger(item?.source_id, 0),
+    sourceType: item?.column_type || '',
+    sourceId: normalizeInteger(item?.id, 0),
+    modelCode: item?.model_code || '',
     showInNav: normalizeInteger(item?.is_visible, 1),
     sortOrder: normalizeInteger(item?.sort_order, 0),
     url: buildLegacyColumnUrl(item, publicSections)
@@ -966,7 +1055,7 @@ function buildLegacySiteColumns(columns, options = {}) {
     .filter((item) => item.url);
 
   const findByUrl = (url) => visibleRows.find((item) => item.url === url) || null;
-  const findBySourceType = (sourceType) => visibleRows.find((item) => item.sourceType === sourceType) || null;
+  const findByModelRoot = (modelCode) => visibleRows.find((item) => item.modelCode === modelCode && item.sourceType === 'list' && item.parentId === 0) || null;
   const newsSection = publicSections.getNewsSectionByDirName('news');
   const serviceSection = publicSections.getNewsSectionByDirName('services');
   const newsRoot = newsSection
@@ -985,8 +1074,8 @@ function buildLegacySiteColumns(columns, options = {}) {
         name: cat.name,
         parentId: normalizeInteger(cat.parent_id, 0),
         modelCode: 'product',
-        sourceType: 'product_category',
-        sourceId: normalizeInteger(cat.source_id, 0),
+        sourceType: 'list',
+        sourceId: normalizeInteger(cat.id, 0),
         active: false,
         showInNav: 1,
         url: buildLegacyProductCategoryUrl(cat, productCategoryMap)
@@ -999,7 +1088,7 @@ function buildLegacySiteColumns(columns, options = {}) {
       name: '首页',
       parentId: 0,
       modelCode: 'link',
-      sourceType: 'custom_link',
+      sourceType: 'link',
       sourceId: 1,
       active: false,
       showInNav: 1,
@@ -1010,7 +1099,7 @@ function buildLegacySiteColumns(columns, options = {}) {
       name: '您的目标',
       children: buildHeaderPrefixChildren(normalizedRows, '/your-goals/', activeColumnId)
     }),
-    buildHeaderNavItem(findBySourceType('product_root'), {
+    buildHeaderNavItem(findByModelRoot('product'), {
       name: '产品',
       children: productChildren
     }),
@@ -1044,7 +1133,7 @@ function buildLegacyColumnUrl(column, rowsById = new Map()) {
 }
 
 function buildLegacyContactPageProps(templateContext) {
-  const contactColumn = templateContext.columns.find((item) => String(item.source_type || '') === 'contact_page') || null;
+  const contactColumn = templateContext.columns.find((item) => String(item.route_path || '') === '/contact.html') || null;
   const contactPage = contactColumn
     ? resolveDedicatedColumnPageContent(contactColumn, templateContext.languageCode)
     : null;
@@ -1121,7 +1210,7 @@ function buildLegacySingleColumnPageProps(templateContext, column) {
   const pageContent = resolveDedicatedColumnPageContent(column, templateContext.languageCode);
   const categoryChain = buildTemplateCategoryChain({
     category: column,
-    categories: templateContext.columns.filter((item) => String(item.source_type || '') === 'single_page'),
+    categories: templateContext.columns.filter((item) => String(item.column_type || '') === 'single' && String(item.model_code || '') !== 'corporation'),
     type: 'content',
     urlBuilder: (columnItem) => buildLegacyColumnUrl(columnItem)
   });
@@ -2353,36 +2442,80 @@ function getDescendantNewsCategoryIds(categories, rootId) {
   return collected;
 }
 
-function normalizeSections(sections, columns = null) {
-  // 动态构建新闻类section键名
-  const newsSectionKeys = [];
-  if (columns) {
-    const publicSections = resolvePublicSectionContext(columns);
-    for (const section of publicSections.newsSections) {
-      newsSectionKeys.push(`${section.dirName}-lists`);
-      newsSectionKeys.push(`${section.dirName}-details`);
-    }
+export function resolveStaticBuildSectionKey(section, { languageCode = null, columns = null } = {}) {
+  const normalized = String(section || '').trim();
+  if (!normalized) {
+    return '';
+  }
+  if (normalized === 'all') {
+    return 'all';
   }
 
-  const defaults = [
-    'index',
-    'contact',
-    'column-pages',
-    'corporation-pages',
-    ...newsSectionKeys,  // 动态：news-lists, services-lists, knowledge-lists...
-    'product-lists',
-    'product-details',
-    'robots',
-    'sitemap',
-    'llms'
-  ];
+  const resolvedColumns = columns || listColumns({ languageCode });
+  const target = listStaticBuildTargetDefinitions({ columns: resolvedColumns }).find((definition) => (
+    definition.value === normalized || definition.aliases.includes(normalized)
+  ));
+
+  return target?.value || normalized;
+}
+
+export function listStaticBuildTargetGroups({ languageCode = null, columns = null } = {}) {
+  const resolvedColumns = columns || listColumns({ languageCode });
+  const definitions = listStaticBuildTargetDefinitions({ columns: resolvedColumns });
+  const grouped = new Map();
+
+  for (const groupTitle of STATIC_BUILD_GROUP_ORDER) {
+    grouped.set(groupTitle, []);
+  }
+
+  for (const definition of definitions) {
+    if (!grouped.has(definition.group)) {
+      grouped.set(definition.group, []);
+    }
+    grouped.get(definition.group).push({
+      label: definition.label,
+      value: definition.value
+    });
+  }
+
+  return Array.from(grouped.entries())
+    .map(([title, items]) => ({ title, items }))
+    .filter((group) => group.items.length > 0);
+}
+
+export function listStaticBuildSectionKeys({ languageCode = null, columns = null } = {}) {
+  const resolvedColumns = columns || listColumns({ languageCode });
+  return listStaticBuildTargetDefinitions({ columns: resolvedColumns }).map((item) => item.value);
+}
+
+export function isSupportedStaticBuildSection(section, { languageCode = null, columns = null } = {}) {
+  const normalized = resolveStaticBuildSectionKey(section, { languageCode, columns });
+  if (!normalized) {
+    return false;
+  }
+
+  return new Set(listStaticBuildSectionKeys({ languageCode, columns })).has(normalized);
+}
+
+function normalizeSections(sections, columns = null) {
+  const defaults = listStaticBuildSectionKeys({ columns });
   if (!sections) {
     return new Set(defaults);
   }
-  if (Array.isArray(sections)) {
-    return new Set(sections);
+  const targetDefinitions = listStaticBuildTargetDefinitions({ columns });
+  const aliasMap = new Map();
+  for (const target of targetDefinitions) {
+    aliasMap.set(target.value, target.value);
+    for (const alias of target.aliases) {
+      aliasMap.set(alias, target.value);
+    }
   }
-  return new Set([sections]);
+  const requestedSections = Array.isArray(sections) ? sections : [sections];
+  return new Set(
+    requestedSections
+      .map((section) => aliasMap.get(String(section || '').trim()) || String(section || '').trim())
+      .filter(Boolean)
+  );
 }
 
 function cleanupManagedStaticFiles(outputRoot) {

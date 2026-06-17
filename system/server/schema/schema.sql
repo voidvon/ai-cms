@@ -67,6 +67,43 @@ CREATE TABLE IF NOT EXISTS news (
   column_id INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS columns (
+  id INTEGER PRIMARY KEY,
+  parent_id INTEGER,
+  column_type TEXT NOT NULL CHECK (column_type IN ('single', 'list', 'link')),
+  custom_url TEXT,
+  route_path TEXT,
+  content_model_id INTEGER,
+  dir_name TEXT,
+  detail_rule TEXT,
+  is_visible INTEGER NOT NULL DEFAULT 1,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  legacy_extra TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (content_model_id) REFERENCES content_models(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS column_translations (
+  id INTEGER PRIMARY KEY,
+  column_id INTEGER NOT NULL,
+  language_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  summary TEXT NOT NULL DEFAULT '',
+  content_html TEXT NOT NULL DEFAULT '',
+  keywords TEXT,
+  seo_title TEXT,
+  seo_keywords TEXT,
+  seo_description TEXT,
+  publish_status TEXT NOT NULL DEFAULT 'published',
+  published_at TEXT,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE (column_id, language_id),
+  FOREIGN KEY (column_id) REFERENCES columns(id) ON DELETE CASCADE,
+  FOREIGN KEY (language_id) REFERENCES languages(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS corporation_categories (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
@@ -181,6 +218,11 @@ CREATE INDEX IF NOT EXISTS idx_products_visible_sort ON products(is_visible, sor
 CREATE INDEX IF NOT EXISTS idx_news_created_at ON news(created_at, id);
 CREATE INDEX IF NOT EXISTS idx_admin_sessions_admin_id ON admin_sessions(admin_id);
 CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires_at ON admin_sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_columns_parent_sort ON columns(parent_id, sort_order, id);
+CREATE INDEX IF NOT EXISTS idx_columns_visible_sort ON columns(is_visible, sort_order, id);
+CREATE INDEX IF NOT EXISTS idx_columns_dir_name ON columns(dir_name);
+CREATE INDEX IF NOT EXISTS idx_columns_route_path ON columns(route_path) WHERE route_path IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_column_translations_column_id ON column_translations(column_id, language_id);
 CREATE INDEX IF NOT EXISTS idx_templates_type_sort ON templates(type, sort_order, id);
 CREATE INDEX IF NOT EXISTS idx_templates_status ON templates(status);
 CREATE INDEX IF NOT EXISTS idx_template_bindings_target ON template_bindings(target_type, target_id, template_type);

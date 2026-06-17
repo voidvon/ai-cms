@@ -3,8 +3,7 @@ import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 const PROTECTED_TRANSLATION_FIELDS = new Set([
   'id',
   'parent_id',
-  'source_id',
-  'source_type',
+  'column_type',
   'route_path',
   'custom_url',
   'sort_order',

@@ -25,6 +25,14 @@ interface BuildResult {
   }
 }
 
+interface StaticSectionGroup {
+  title: string
+  items: Array<{
+    label: string
+    value: string
+  }>
+}
+
 const buildClient = axios.create({
   withCredentials: true,
   timeout: 300000, // 5 minutes for build operations
@@ -41,8 +49,16 @@ export default function StaticGenerationPage() {
     queryKey: ['languages'],
     queryFn: () => languagesApi.list(),
   })
+  const { data: sectionGroupsData } = useQuery({
+    queryKey: ['static-build-sections'],
+    queryFn: async () => {
+      const response = await buildClient.get<{ success: boolean; data?: StaticSectionGroup[]; message?: string }>('/admin/build/sections')
+      return response.data
+    },
+  })
 
   const languages = languagesData?.data || []
+  const sectionGroups = sectionGroupsData?.data || []
   const enabledLanguages = useMemo(
     () => languages.filter((item) => Number(item.is_enabled || 0) === 1),
     [languages]
@@ -87,31 +103,6 @@ export default function StaticGenerationPage() {
     setBuilding(true)
     buildMutation.mutate({ section, languageCode })
   }
-
-  const sections = [
-    { title: '基础页面', items: [
-      { label: '生成首页', value: 'index' },
-      { label: '生成联系我们', value: 'contact' },
-      { label: '生成公司页面', value: 'corporation' },
-    ]},
-    { title: '产品相关', items: [
-      { label: '生成产品分类列表', value: 'product-lists' },
-      { label: '生成产品详情页', value: 'product-details' },
-    ]},
-    { title: '新闻相关', items: [
-      { label: '生成新闻分类列表', value: 'news-lists' },
-      { label: '生成新闻详情页', value: 'news-details' },
-    ]},
-    { title: '服务相关', items: [
-      { label: '生成服务分类列表', value: 'service-lists' },
-      { label: '生成服务详情页', value: 'service-details' },
-    ]},
-    { title: '索引与 AI 文件', items: [
-      { label: '生成 robots.txt', value: 'robots' },
-      { label: '生成 sitemap.xml', value: 'sitemap' },
-      { label: '生成 LLMS 文件', value: 'llms' },
-    ]},
-  ]
 
   return (
     <div className="space-y-4">
@@ -163,7 +154,7 @@ export default function StaticGenerationPage() {
             ) : null}
           </div>
 
-          {sections.map((section) => (
+          {sectionGroups.map((section) => (
             <div key={section.title} className="space-y-2">
               <h3 className="font-semibold">{section.title}</h3>
               <div className="flex flex-wrap gap-2">

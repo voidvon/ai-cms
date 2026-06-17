@@ -5,8 +5,7 @@ const SERVICE_SECTION_PATTERN = /(service|services|support|knowledge|learn|train
 const NEWS_SECTION_PATTERN = /(news|article|articles|insight|updates|新闻|资讯|动态)/i;
 
 export function resolveLegacyCategoryPublicId(category) {
-  // 直接使用栏目ID，不再使用source_id
-  // 所有URL通过custom_url自定义，不依赖source_id向后兼容
+  // 公共栏目标识统一直接使用栏目 ID
   return String(toInteger(category?.id, 0));
 }
 
@@ -15,7 +14,8 @@ export function resolvePublicSectionContext(columns) {
   const allById = new Map(rows.map((item) => [toInteger(item?.id, 0), item]));
   const newsRows = rows
     .filter((item) => (
-      String(item?.source_type || '') === 'news_category'
+      String(item?.column_type || '') === 'list'
+      && String(item?.model_code || '') === 'news'
     ))
     .slice()
     .sort(compareBySortAndId);
@@ -28,7 +28,6 @@ export function resolvePublicSectionContext(columns) {
     usedDirNames.add(dirName);
     rootSections.push({
       rootColumnId: toInteger(root.id, 0),
-      rootSourceId: toInteger(root.source_id, 0),
       publicRootId: resolveLegacyCategoryPublicId(root),
       dirName,
       sectionType: SERVICE_SECTION_PATTERN.test(dirName) ? 'service' : 'news',
@@ -53,8 +52,8 @@ export function resolvePublicSectionContext(columns) {
 
   return {
     allById,
-    productRootColumnId: findRootColumnId(rows, 'product_root'),
-    corporationRootColumnId: findRootColumnId(rows, 'corporation_root'),
+    productRootColumnId: findRootColumnId(rows, { columnType: 'list', modelCode: 'product' }),
+    corporationRootColumnId: findRootColumnId(rows, { columnType: 'single', modelCode: 'corporation' }),
     newsTree,
     newsSections: rootSections,
     newsSectionsByRootId: sectionsByRootId,
@@ -77,17 +76,18 @@ export function buildColumnPublicUrl(column, publicSections) {
 
   const explicitRoutePath = String(column.route_path || '').trim();
   const relativeCustomUrl = String(column.custom_url || '').trim();
-  const sourceType = String(column.source_type || '');
-  if (sourceType !== 'custom_link' && explicitRoutePath) {
+  const columnType = String(column.column_type || '');
+  const modelCode = String(column.model_code || '');
+  if (columnType !== 'link' && explicitRoutePath) {
     return explicitRoutePath;
   }
-  if (sourceType === 'product_root') {
+  if (columnType === 'list' && modelCode === 'product' && toInteger(column.parent_id, 0) === 0) {
     return '/products/';
   }
-  if (sourceType === 'product_category') {
+  if (columnType === 'list' && modelCode === 'product') {
     return '';
   }
-  if (sourceType === 'news_category') {
+  if (columnType === 'list' && modelCode === 'news') {
     const section = publicSections?.getNewsSectionByColumnId?.(column.id);
     if (!section) {
       return '';
@@ -97,16 +97,16 @@ export function buildColumnPublicUrl(column, publicSections) {
     }
     return '';
   }
-  if (sourceType === 'corporation_root') {
+  if (columnType === 'single' && modelCode === 'corporation' && toInteger(column.parent_id, 0) === 0) {
     return '/about/';
   }
-  if (sourceType === 'corporation_category') {
+  if (columnType === 'single' && modelCode === 'corporation') {
     return `/about/about-${toInteger(column.id, 0)}.html`;
   }
-  if (sourceType === 'contact_page') {
+  if (explicitRoutePath === '/contact.html') {
     return '/contact.html';
   }
-  if (sourceType === 'custom_link') {
+  if (columnType === 'link') {
     return resolveRelativePublicPath(relativeCustomUrl, resolveColumnParentPublicUrl(column, publicSections));
   }
   return '';
@@ -125,9 +125,13 @@ function resolveColumnParentPublicUrl(column, publicSections) {
   return parentUrl || '/';
 }
 
-function findRootColumnId(columns, sourceType) {
+function findRootColumnId(columns, { columnType, modelCode }) {
   return toInteger(
-    columns.find((item) => String(item?.source_type || '') === sourceType)?.id,
+    columns.find((item) => (
+      String(item?.column_type || '') === columnType
+      && String(item?.model_code || '') === modelCode
+      && toInteger(item?.parent_id, 0) === 0
+    ))?.id,
     0
   );
 }
@@ -153,18 +157,6 @@ function reserveDirName(candidate, usedDirNames, root) {
     suffix += 1;
   }
   return `${base}-${suffix}`;
-}
-
-function parseLegacyExtra(value) {
-  if (!value) {
-    return {};
-  }
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
 }
 
 function sanitizeDirName(value) {

@@ -59,7 +59,7 @@ export default async function columnsRoutes(app) {
         return { success: false, message: '栏目不存在' };
       }
 
-      const isManual = String(current.source_type || '') === 'custom_link' || String(current.source_type || '') === 'single_page';
+      const isManual = String(current.column_type || '') === 'link' || String(current.column_type || '') === 'single';
       const column = isManual
         ? updateManualColumn(request.params.id, request.body || {})
         : updateColumnRecord(request.params.id, request.body || {});

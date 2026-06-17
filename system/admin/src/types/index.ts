@@ -106,7 +106,6 @@ export interface NewsTranslationStatus {
 export interface ProductCategory {
   id: number;
   column_id?: number;
-  source_id?: number;
   name: string;
   parent_id: number;
   dir_name?: string | null;
@@ -121,7 +120,6 @@ export interface ProductCategory {
 export interface NewsCategory {
   id: number;
   column_id?: number;
-  source_id?: number;
   name: string;
   parent_id: number;
   dir_name?: string | null;
@@ -255,7 +253,7 @@ export interface ContentModel {
   bound_columns?: Array<{
     id: number;
     parent_id?: number | null;
-    source_type: string;
+    column_type: 'single' | 'list' | 'link' | string;
     route_path?: string | null;
     sort_order: number;
   }>;
@@ -269,8 +267,7 @@ export interface Column {
   name: string;
   parent_id?: number | null;
   content_model_id?: number | null;
-  source_type: 'product_root' | 'product_category' | 'news_category' | 'corporation_root' | 'corporation_category' | 'contact_page' | 'custom_link' | 'single_page' | string;
-  source_id: number;
+  column_type: 'single' | 'list' | 'link' | string;
   custom_url?: string | null;
   dir_name?: string | null;
   route_path?: string | null;
@@ -281,6 +278,16 @@ export interface Column {
   seo_keywords?: string | null;
   seo_description?: string | null;
   sort_order: number;
+  model_code?: string | null;
+  column_semantics?: {
+    structure_kind?: string;
+    render_driver?: string;
+    generation_modes?: string[];
+    is_root?: boolean;
+    root_column_id?: number | null;
+    model_code?: string | null;
+    column_type?: string;
+  };
   current_language_code?: string;
   translations?: Record<string, ColumnTranslation>;
   created_at?: string;

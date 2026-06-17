@@ -14,7 +14,7 @@ import type { Column, ColumnTranslation, ContentModel, Template } from '@/types'
 export interface ManualColumnFormValue {
   base: {
     parent_id: number
-    column_kind: 'link' | 'single'
+    column_type: 'link' | 'single' | 'list'
     content_model_id: number
     custom_url: string
     dir_name: string
@@ -64,7 +64,7 @@ export default function ManualColumnFormDialog({
   const [activeLanguage, setActiveLanguage] = useState('zh-CN')
   const [baseData, setBaseData] = useState<ManualColumnFormValue['base']>({
     parent_id: 0,
-    column_kind: initialKind,
+    column_type: initialKind,
     content_model_id: 0,
     custom_url: '',
     dir_name: '',
@@ -86,15 +86,15 @@ export default function ManualColumnFormDialog({
   const defaultLanguageCode = languages.find((item) => item.is_default === 1)?.code || 'zh-CN'
   const availableLanguageCodes = useMemo(() => languages.map((item) => item.code), [languages])
   const currentTranslation = translations[activeLanguage] || createEmptyTranslation()
-  const basicOnly = forceBasicOnly || (mode === 'edit' && column?.column_kind === 'category')
+  const basicOnly = forceBasicOnly || (mode === 'edit' && column?.column_type === 'list')
   const detailRuleOptions = basicOnly
     ? (
-      column?.source_type === 'news_category'
+      column?.model_code === 'news'
         ? [
             { value: 'detail/{id}.html', label: 'detail/{id}.html' },
             { value: '{id}.html', label: '{id}.html' },
           ]
-        : column?.source_type === 'product_root' || column?.source_type === 'product_category'
+        : column?.model_code === 'product'
           ? [
               { value: '{id}/index.html', label: '{id}/index.html' },
               { value: '{id}.html', label: '{id}.html' },
@@ -111,7 +111,7 @@ export default function ManualColumnFormDialog({
     if (mode === 'edit' && column) {
       const nextBaseData = {
         parent_id: Number(column.parent_id || 0),
-        column_kind: column.column_kind === 'single' ? 'single' : 'link',
+        column_type: column.column_type === 'single' ? 'single' : (column.column_type === 'list' ? 'list' : 'link'),
         content_model_id: Number(column.content_model_id || 0),
         custom_url: column.custom_url || '',
         dir_name: column.dir_name || '',
@@ -136,7 +136,7 @@ export default function ManualColumnFormDialog({
 
     const nextBaseData = {
       parent_id: 0,
-      column_kind: initialKind,
+      column_type: initialKind,
       content_model_id: 0,
       custom_url: '',
       dir_name: '',
@@ -162,7 +162,7 @@ export default function ManualColumnFormDialog({
       if (mode === 'edit' && column && item.id === column.id) {
         return false
       }
-      return String(item.column_kind || 'category') !== 'single'
+      return String(item.column_type || 'list') !== 'single'
     })
   }, [columns, mode, column])
 
@@ -229,7 +229,7 @@ export default function ManualColumnFormDialog({
                   />
                 </div>
 
-                {!basicOnly && baseData.column_kind === 'single' ? (
+                {!basicOnly && baseData.column_type === 'single' ? (
                   <>
                     <div className="space-y-2">
                       <Label htmlFor={`manual-column-content_${language.code}`}>页面内容</Label>
@@ -299,8 +299,8 @@ export default function ManualColumnFormDialog({
                 <Label>栏目类型</Label>
                 <Select
                   disabled={mode === 'edit'}
-                  value={baseData.column_kind}
-                  onValueChange={(value: 'link' | 'single') => setBaseData({ ...baseData, column_kind: value })}
+                  value={baseData.column_type}
+                  onValueChange={(value: 'link' | 'single') => setBaseData({ ...baseData, column_type: value })}
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -382,7 +382,7 @@ export default function ManualColumnFormDialog({
             </div>
 
             <div className="grid gap-4 md:grid-cols-2">
-              {baseData.column_kind !== 'single' ? (
+              {baseData.column_type !== 'single' ? (
                 <div className="space-y-2">
                   <Label>列表模板</Label>
                   <Select value={listTemplateId} onValueChange={setListTemplateId}>
@@ -418,7 +418,7 @@ export default function ManualColumnFormDialog({
               </div>
             </div>
 
-            {!basicOnly && baseData.column_kind === 'link' ? (
+            {!basicOnly && baseData.column_type === 'link' ? (
               <>
                 <div className="space-y-2">
                   <Label htmlFor="manual-column-url">链接地址</Label>
@@ -524,7 +524,7 @@ function buildInitialTranslations(column: Column, defaultLanguageCode: string, a
 
 function shallowEqualBaseData(left: ManualColumnFormValue['base'], right: ManualColumnFormValue['base']) {
   return left.parent_id === right.parent_id
-    && left.column_kind === right.column_kind
+    && left.column_type === right.column_type
     && left.content_model_id === right.content_model_id
     && left.custom_url === right.custom_url
     && left.dir_name === right.dir_name

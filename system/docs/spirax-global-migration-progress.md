@@ -146,7 +146,7 @@
 
 当前导入脚本：
 
-- `system/server/scripts/import-spirax-global.mjs`
+- `system/server/scripts/import-spirax-global.mjs` 已移除，不再使用
 
 ### 9. 手工单页栏目迁移
 
@@ -304,7 +304,7 @@
 推荐顺序：
 
 1. `npm --prefix system/server run db:import:spirax-templates`
-2. `node system/server/scripts/import-spirax-global.mjs`
+2. 内容导入主脚本 `system/server/scripts/import-spirax-global.mjs` 已移除
 3. `npm --prefix system/server run build:static`
 
 ### 2. 不直接修改生成页
@@ -328,7 +328,7 @@
 
 本轮迁移过程中，重点文件包括：
 
-- `system/server/scripts/import-spirax-global.mjs`
+- `system/server/scripts/import-spirax-global.mjs`（已移除）
 - `system/server/scripts/import-spirax-global-templates.mjs`
 - `system/server/scripts/import-spirax-global-site-config.mjs`
 - `system/server/src/static-builder.mjs`
@@ -366,7 +366,7 @@
 最近一次已成功执行：
 
 - `npm --prefix system/server run db:import:spirax-templates`
-- `node system/server/scripts/import-spirax-global.mjs`
+- `node system/server/scripts/import-spirax-global.mjs`（历史记录，脚本现已移除）
 - `npm --prefix system/server run build:static`
 
 ## 结论

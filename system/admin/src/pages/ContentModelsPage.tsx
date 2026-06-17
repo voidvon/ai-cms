@@ -102,7 +102,7 @@ export default function ContentModelsPage() {
                       {selectedModel.bound_columns.map((column) => (
                         <Badge key={column.id} variant="secondary" className="gap-1">
                           <span>#{column.id}</span>
-                          <span>{column.source_type}</span>
+                          <span>{column.column_type}</span>
                         </Badge>
                       ))}
                     </div>
@@ -235,8 +235,7 @@ function isProtectedField(fieldName: string) {
   return [
     'id',
     'parent_id',
-    'source_id',
-    'source_type',
+    'column_type',
     'column_id',
     'route_path',
     'custom_url',

@@ -63,7 +63,7 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
   const newsModel = (contentModelsData?.data || []).find((item) => item.code === 'news')
   const newsColumns = (columnsData?.data || []).filter((item) => (
     Number(item.content_model_id || 0) === Number(newsModel?.id || 0)
-    && item.source_type === 'news_category'
+    && item.column_type === 'list'
   ))
   const fieldMap = mapFieldsByName(newsModel?.fields || [])
   const currentTranslation = translations[activeLanguage] || createEmptyTranslation()

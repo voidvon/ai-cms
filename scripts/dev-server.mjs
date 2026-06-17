@@ -7,6 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
 const watchRoot = path.join(projectRoot, 'system/server/src');
 const serverEntryPath = path.join(projectRoot, 'system/server/src/server.mjs');
+const useProcessGroups = process.platform !== 'win32';
 let serverProcess = null;
 let restarting = false;
 let pendingRestart = false;
@@ -48,6 +49,7 @@ async function startServer() {
   serverProcess = spawn('node', [serverEntryPath], {
     cwd: projectRoot,
     stdio: 'inherit',
+    detached: useProcessGroups,
     env: process.env
   });
 
@@ -100,9 +102,7 @@ async function stopServer() {
 
     const target = serverProcess;
     const timer = setTimeout(() => {
-      if (!target.killed) {
-        target.kill('SIGKILL');
-      }
+      terminateProcessTree(target, 'SIGKILL');
     }, 500);
 
     target.once('exit', () => {
@@ -110,7 +110,7 @@ async function stopServer() {
       resolve();
     });
 
-    target.kill('SIGTERM');
+    terminateProcessTree(target, 'SIGTERM');
   });
 }
 
@@ -123,4 +123,22 @@ async function shutdown(exitCode) {
   await watcher.close();
   await stopServer();
   process.exit(exitCode);
+}
+
+function terminateProcessTree(child, signal) {
+  if (!child || child.killed) {
+    return;
+  }
+
+  try {
+    if (useProcessGroups && child.pid) {
+      process.kill(-child.pid, signal);
+      return;
+    }
+    child.kill(signal);
+  } catch (error) {
+    if (error?.code !== 'ESRCH') {
+      console.error(`[dev:server] failed to send ${signal}: ${error.message}`);
+    }
+  }
 }

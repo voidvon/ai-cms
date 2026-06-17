@@ -195,16 +195,17 @@ export default function ColumnsPage() {
     [columnTree]
   )
   const selectedColumn = columns.find((column) => column.id === selectedColumnId)
-    || columns.find((column) => column.source_type === 'product_root')
+    || columns.find((column) => column.column_type === 'list' && column.model_code === 'product' && column.column_semantics?.is_root)
     || columns[0]
     || null
 
-  const selectedSourceType = selectedColumn?.source_type || ''
-  const isProductColumn = selectedSourceType === 'product_root' || selectedSourceType === 'product_category'
-  const isNewsColumn = selectedSourceType === 'news_category'
-  const isCorporationColumn = selectedSourceType === 'corporation_root' || selectedSourceType === 'corporation_category'
-  const isManualLinkColumn = selectedSourceType === 'custom_link'
-  const isManualSingleColumn = selectedSourceType === 'single_page'
+  const selectedColumnType = selectedColumn?.column_type || ''
+  const selectedModelCode = selectedColumn?.model_code || ''
+  const isProductColumn = selectedColumnType === 'list' && selectedModelCode === 'product'
+  const isNewsColumn = selectedColumnType === 'list' && selectedModelCode === 'news'
+  const isCorporationColumn = selectedColumnType === 'single' && selectedModelCode === 'corporation'
+  const isManualLinkColumn = selectedColumnType === 'link'
+  const isManualSingleColumn = selectedColumnType === 'single' && selectedModelCode !== 'corporation'
   const isManualColumn = isManualLinkColumn || isManualSingleColumn
   const categoryFormTargetType = editingCategoryTarget?.type || creatingCategoryTarget?.type
 
@@ -356,7 +357,7 @@ export default function ColumnsPage() {
       if (!columnId) {
         throw new Error('栏目创建失败')
       }
-      if (value.base.source_type !== 'single_page' && value.base.source_type !== 'contact_page') {
+      if (value.base.column_type !== 'single') {
         await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', columnId, 'list', templateIds.listTemplateId)
       }
       await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', columnId, 'content', templateIds.contentTemplateId)
@@ -377,7 +378,7 @@ export default function ColumnsPage() {
   const updateManualColumnMutation = useMutation({
     mutationFn: async ({ id, value, templateIds }: { id: number; value: ManualColumnFormValue; templateIds: { listTemplateId: string; contentTemplateId: string } }) => {
       const response = await columnsApi.update(id, value)
-      if (value.base.source_type !== 'single_page' && value.base.source_type !== 'contact_page') {
+      if (value.base.column_type !== 'single') {
         await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'list', templateIds.listTemplateId, bindings)
       } else {
         await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'list', DEFAULT_TEMPLATE_VALUE, bindings)
@@ -409,7 +410,7 @@ export default function ColumnsPage() {
         is_visible: value.base.is_visible,
         translations: value.translations,
       } : value)
-      if (value.base.source_type !== 'single_page' && value.base.source_type !== 'contact_page') {
+      if (value.base.column_type !== 'single') {
         await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'list', templateIds.listTemplateId, bindings)
       } else {
         await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'list', DEFAULT_TEMPLATE_VALUE, bindings)
@@ -528,7 +529,7 @@ export default function ColumnsPage() {
 
   const handleEditManualColumn = (column: Column) => {
     setManualColumnDialogMode('edit')
-    setManualColumnDialogKind(column.source_type === 'single_page' || column.source_type === 'contact_page' ? 'single' : 'link')
+    setManualColumnDialogKind(column.column_type === 'single' ? 'single' : 'link')
     setEditingManualColumn(column)
     setManualColumnDialogOpen(true)
   }
@@ -1314,7 +1315,7 @@ function ManualColumnPanel({
     return <div className="flex h-full items-center justify-center rounded border p-8 text-center text-muted-foreground">请选择左侧栏目</div>
   }
 
-  const isSingle = column.source_type === 'single_page' || column.source_type === 'contact_page'
+  const isSingle = column.column_type === 'single'
   return (
     <div className="flex h-full flex-col rounded border">
       <div className="border-b px-5 py-4">
@@ -1374,9 +1375,9 @@ function CategoryDetailPanel({
   const target = getCategoryTreeTarget(column)
   const listBinding = bindings.find((item) => item.template_type === 'list')
   const contentBinding = bindings.find((item) => item.template_type === 'content')
-  const detailText = (column.source_type === 'single_page' || column.source_type === 'contact_page')
+  const detailText = column.column_type === 'single'
     ? (column.route_path || '-')
-    : column.source_type === 'custom_link'
+    : column.column_type === 'link'
       ? (column.custom_url || '-')
       : `栏目ID ${column.id || '-'}`
   const seoSummary = column.seo_description?.trim() || '-'
@@ -1400,7 +1401,7 @@ function CategoryDetailPanel({
         <div className="space-y-1 text-sm">
           <div className="text-muted-foreground">路径与来源</div>
           <div className="break-all">{detailText}</div>
-          <div>来源类型：{column.source_type || '-'}</div>
+          <div>栏目形态：{column.column_type || '-'}</div>
           <div>模型绑定：{modelBindingText}</div>
           {target ? <div>栏目ID：{target.id}</div> : null}
         </div>
@@ -1470,18 +1471,13 @@ function buildColumnTree(columns: Column[]) {
 }
 
 function shouldShowInColumnTree(column: Column) {
-  const sourceType = String(column.source_type || '')
   const displayKind = getColumnDisplayKind(column)
 
   if (displayKind === 'link' || displayKind === 'single') {
     return true
   }
 
-  return sourceType === 'product_root'
-    || sourceType === 'product_category'
-    || sourceType === 'news_category'
-    || sourceType === 'corporation_root'
-    || sourceType === 'corporation_category'
+  return column.column_type === 'list'
 }
 
 function sortColumnTree(nodes: ColumnTreeNode[]) {
@@ -1505,10 +1501,10 @@ function getColumnKindLabel(column: Column) {
 }
 
 function getColumnDisplayKind(column: Column): ColumnDisplayKind {
-  if (column.source_type === 'single_page' || column.source_type === 'contact_page') {
+  if (column.column_type === 'single') {
     return 'single'
   }
-  if (column.source_type === 'custom_link') {
+  if (column.column_type === 'link') {
     return 'link'
   }
   return 'category'
@@ -1545,7 +1541,7 @@ async function saveOptionalTemplateBinding(
 }
 
 function isEditableManualColumn(column: Column) {
-  return column.source_type === 'custom_link' || column.source_type === 'single_page'
+  return column.column_type === 'link' || (column.column_type === 'single' && column.model_code !== 'corporation')
 }
 
 function createCategoryByModel(model: CategoryModel, data: { name: string; parent_id: number; sort_order: number }) {
@@ -1559,7 +1555,7 @@ function createCategoryByModel(model: CategoryModel, data: { name: string; paren
 }
 
 function getCategoryTreeTarget(column: Column): CategoryTreeTarget {
-  if (column.source_type === 'product_root') {
+  if (column.column_type === 'list' && column.model_code === 'product') {
     return {
       type: 'product',
       id: column.id,
@@ -1569,17 +1565,7 @@ function getCategoryTreeTarget(column: Column): CategoryTreeTarget {
     }
   }
 
-  if (column.source_type === 'product_category') {
-    return {
-      type: 'product',
-      id: column.id,
-      columnId: column.id,
-      name: column.name,
-      targetType: 'column',
-    }
-  }
-
-  if (column.source_type === 'news_category') {
+  if (column.column_type === 'list' && column.model_code === 'news') {
     return {
       type: 'news',
       id: column.id,
@@ -1589,17 +1575,7 @@ function getCategoryTreeTarget(column: Column): CategoryTreeTarget {
     }
   }
 
-  if (column.source_type === 'corporation_category') {
-    return {
-      type: 'corporation',
-      id: column.id,
-      columnId: column.id,
-      name: column.name,
-      targetType: 'column',
-    }
-  }
-
-  if (column.source_type === 'corporation_root') {
+  if (column.column_type === 'single' && column.model_code === 'corporation') {
     return {
       type: 'corporation',
       id: column.id,

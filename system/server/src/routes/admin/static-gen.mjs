@@ -1,16 +1,10 @@
 import { requireAuth } from '../../middleware/auth.mjs';
 import { CONTENT_ROOT } from '../../config.mjs';
 import {
-  buildIndexPage,
-  buildContactPage,
-  buildCorporationPages,
-  buildNewsCategoryPages,
-  buildNewsDetailPages,
-  buildProductCategoryPages,
-  buildProductDetailPages,
-  buildServiceCategoryPages,
-  buildServiceDetailPages,
-  buildStaticSite
+  buildStaticSite,
+  isSupportedStaticBuildSection,
+  listStaticBuildTargetGroups,
+  resolveStaticBuildSectionKey
 } from '../../static-builder.mjs';
 
 export default async function staticGenRoutes(app) {
@@ -21,59 +15,43 @@ export default async function staticGenRoutes(app) {
     return reply.redirect('/admin/static-gen');
   });
 
+  app.get('/build/sections', {
+    onRequest: [requireAuth]
+  }, async (request, reply) => {
+    try {
+      const languageCode = String(request.query.language || '').trim() || null;
+      return {
+        success: true,
+        data: listStaticBuildTargetGroups({ languageCode })
+      };
+    } catch (error) {
+      app.log.error(error);
+      reply.code(500);
+      return {
+        success: false,
+        message: error.message || '静态生成分组加载失败'
+      };
+    }
+  });
+
   // 静态生成接口
   app.post('/build/generate', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
-    const section = request.query.section || 'all';
+    const section = String(request.query.section || 'all').trim();
     const languageCode = String(request.query.language || '').trim() || null;
 
     try {
-      let result;
-
-      switch (section) {
-        case 'index':
-          result = buildIndexPage({ outputRoot: CONTENT_ROOT, languageCode });
-          break;
-        case 'contact':
-          result = buildContactPage({ outputRoot: CONTENT_ROOT, languageCode });
-          break;
-        case 'corporation':
-          result = buildCorporationPages({ outputRoot: CONTENT_ROOT, languageCode });
-          break;
-        case 'product-lists':
-          result = buildProductCategoryPages({ outputRoot: CONTENT_ROOT, languageCode });
-          break;
-        case 'product-details':
-          result = buildProductDetailPages({ outputRoot: CONTENT_ROOT, languageCode });
-          break;
-        case 'news-lists':
-          result = buildNewsCategoryPages({ outputRoot: CONTENT_ROOT, languageCode });
-          break;
-        case 'news-details':
-          result = buildNewsDetailPages({ outputRoot: CONTENT_ROOT, languageCode });
-          break;
-        case 'service-lists':
-          result = buildServiceCategoryPages({ outputRoot: CONTENT_ROOT, languageCode });
-          break;
-        case 'service-details':
-          result = buildServiceDetailPages({ outputRoot: CONTENT_ROOT, languageCode });
-          break;
-        case 'robots':
-          result = buildStaticSite({ outputRoot: CONTENT_ROOT, sections: ['robots'], languageCode });
-          break;
-        case 'sitemap':
-          result = buildStaticSite({ outputRoot: CONTENT_ROOT, sections: ['sitemap'], languageCode });
-          break;
-        case 'llms':
-          result = buildStaticSite({ outputRoot: CONTENT_ROOT, sections: ['llms'], languageCode });
-          break;
-        case 'all':
-          result = buildStaticSite({ outputRoot: CONTENT_ROOT, languageCode });
-          break;
-        default:
-          return reply.badRequest('未知的生成类型');
+      if (section !== 'all' && !isSupportedStaticBuildSection(section, { languageCode })) {
+        return reply.badRequest('未知的生成类型');
       }
+
+      const normalizedSection = resolveStaticBuildSectionKey(section, { languageCode });
+      const result = buildStaticSite({
+        outputRoot: CONTENT_ROOT,
+        sections: normalizedSection === 'all' ? undefined : [normalizedSection],
+        languageCode
+      });
 
       return {
         success: true,

@@ -65,7 +65,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
   const productModel = (contentModelsData?.data || []).find((item) => item.code === 'product')
   const productColumns = (columnsData?.data || []).filter((item) => (
     Number(item.content_model_id || 0) === Number(productModel?.id || 0)
-    && (item.source_type === 'product_root' || item.source_type === 'product_category')
+    && item.column_type === 'list'
   ))
   const fieldMap = mapFieldsByName(productModel?.fields || [])
   const currentTranslation = translations[activeLanguage] || createEmptyTranslation()

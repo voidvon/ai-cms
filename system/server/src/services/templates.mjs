@@ -879,14 +879,7 @@ function getPreviewProducts(limit = 8) {
 }
 
 function getPreviewProductCategory(id = null) {
-  const rows = queryAll(
-    `
-      SELECT id, parent_id, name, seo_keywords, seo_description
-      FROM columns
-      WHERE source_type = 'product_category'
-      ORDER BY parent_id ASC, sort_order ASC, id ASC
-    `
-  );
+  const rows = listColumnCategories('product');
   const row = id
     ? rows.find((item) => toInteger(item.id, 0) === toInteger(id, 0))
     : rows[0];
@@ -919,14 +912,7 @@ function getPreviewArticles(limit = 6) {
 }
 
 function getPreviewNewsCategory(id = null) {
-  const rows = queryAll(
-    `
-      SELECT id, parent_id, name
-      FROM columns
-      WHERE source_type = 'news_category'
-      ORDER BY parent_id ASC, sort_order ASC, id ASC
-    `
-  );
+  const rows = listColumnCategories('news');
   const row = id
     ? rows.find((item) => toInteger(item.id, 0) === toInteger(id, 0))
     : rows[0];
@@ -1003,20 +989,14 @@ function buildPreviewRootColumnMenuItems() {
 }
 
 function buildPreviewSiteColumns() {
-  const rows = queryAll(
-    `
-      SELECT id, name, parent_id, source_type, source_id, custom_url, route_path
-      FROM columns
-      ORDER BY coalesce(parent_id, 0) ASC, sort_order ASC, id ASC
-    `
-  );
+  const rows = listColumns();
 
   if (rows.length === 0) {
     return [
-      { id: 1, name: '产品', parentId: 0, sourceType: 'product_root', sourceId: 0, url: '/valve/', children: [] },
-      { id: 2, name: '公司新闻', parentId: 0, sourceType: 'news_category', sourceId: 0, url: '/news/', children: [] },
-      { id: 3, name: '服务', parentId: 0, sourceType: 'news_category', sourceId: 0, url: '/service/', children: [] },
-      { id: 4, name: '公司信息', parentId: 0, sourceType: 'corporation_root', sourceId: 0, url: '/about/', children: [] }
+      { id: 1, name: '产品', parentId: 0, sourceType: 'list', sourceId: 1, modelCode: 'product', url: '/valve/', children: [] },
+      { id: 2, name: '公司新闻', parentId: 0, sourceType: 'list', sourceId: 2, modelCode: 'news', url: '/news/', children: [] },
+      { id: 3, name: '服务', parentId: 0, sourceType: 'list', sourceId: 3, modelCode: 'news', url: '/service/', children: [] },
+      { id: 4, name: '公司信息', parentId: 0, sourceType: 'single', sourceId: 4, modelCode: 'corporation', url: '/about/', children: [] }
     ];
   }
 
@@ -1025,8 +1005,9 @@ function buildPreviewSiteColumns() {
     id: toInteger(item.id, 0),
     name: item.name || '',
     parentId: toInteger(item.parent_id, 0),
-    sourceType: item.source_type || '',
-    sourceId: toInteger(item.source_id, 0),
+    sourceType: item.column_type || '',
+    sourceId: toInteger(item.id, 0),
+    modelCode: item.model_code || '',
     url: buildPreviewColumnUrl(item, publicSections)
   })).filter((item) => item.id !== 0);
 
@@ -1044,13 +1025,14 @@ function buildPreviewSiteColumns() {
       parentId: item.parentId,
       sourceType: item.sourceType,
       sourceId: item.sourceId,
+      modelCode: item.modelCode,
       url: item.url
     });
   }
 
   return normalizedRows
     .filter((item) => item.parentId === 0)
-    .filter((item) => String(item?.sourceType || '') !== 'contact_page')
+    .filter((item) => item.url !== '/contact.html')
     .map((item) => ({
       ...item,
       children: childrenByParentId.get(item.id) || []
@@ -1083,16 +1065,9 @@ function buildPreviewColumnUrl(column, rowsById = new Map()) {
 
 function buildPreviewNewsMenuItems(rootId, dirName, activeId = 0) {
   const section = resolvePreviewSections().getNewsSectionByDirName(dirName);
-  const rows = section ? queryAll(
-    `
-      SELECT id, name
-      FROM columns
-      WHERE parent_id = ?
-        AND source_type = 'news_category'
-      ORDER BY sort_order ASC, id ASC
-    `,
-    [section.rootColumnId]
-  ) : [];
+  const rows = section
+    ? listColumnCategories('news').filter((item) => toInteger(item.parent_id, 0) === toInteger(section.rootColumnId, 0))
+    : [];
   const items = rows.length > 0
     ? rows
     : [{ id: activeId || 1, name: '示例分类' }];
@@ -1105,36 +1080,16 @@ function buildPreviewNewsMenuItems(rootId, dirName, activeId = 0) {
 }
 
 function resolvePreviewSections() {
-  const rows = queryAll(
-    `
-      SELECT id, name, parent_id, source_type, source_id, sort_order, route_path, dir_name, legacy_extra
-      FROM columns
-      ORDER BY coalesce(parent_id, 0) ASC, sort_order ASC, id ASC
-    `
-  );
+  const rows = listColumns();
   return resolvePublicSectionContext(rows);
 }
 
 function buildPreviewProductMenuItems(category) {
   const currentCategory = category || getPreviewProductCategory();
-  const rootColumn = queryOne(
-    `
-      SELECT id
-      FROM columns
-      WHERE source_type = 'product_root'
-      LIMIT 1
-    `
-  );
-  const rows = rootColumn ? queryAll(
-    `
-      SELECT id, name, 0 AS parent_id
-      FROM columns
-      WHERE parent_id = ?
-        AND source_type = 'product_category'
-      ORDER BY sort_order ASC, id ASC
-    `,
-    [rootColumn.id]
-  ) : [];
+  const rootColumn = getCategoryRootColumn('product');
+  const rows = rootColumn
+    ? listColumnCategories('product').filter((item) => toInteger(item.parent_id, 0) === 0)
+    : [];
   const items = rows.length > 0
     ? rows
     : [currentCategory].filter(Boolean);

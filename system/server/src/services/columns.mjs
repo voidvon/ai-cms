@@ -1,47 +1,13 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { ensureLanguagesSchema, getDefaultLanguage, listLanguages } from './languages.mjs';
 import { ensureTemplatesSchema } from './templates.mjs';
-import { normalizeUploadedRelativePath } from './uploads.mjs';
 import { ensureContentModelsSchema, getContentModelById } from './content-models.mjs';
 import { resolveRelativePublicPath } from './column-paths.mjs';
 
 let schemaEnsured = false;
 
-const EDITABLE_MANUAL_SOURCE_TYPES = new Set(['custom_link', 'single_page', 'contact_page', 'product_category', 'news_category', 'corporation_category']);
-const MANUAL_SOURCE_TYPES = new Set(['custom_link', 'single_page', 'contact_page', 'product_category', 'news_category', 'corporation_category']);
-const CATEGORY_SOURCE_TYPE_BY_MODEL = {
-  product: 'product_category',
-  news: 'news_category',
-  corporation: 'corporation_category'
-};
-const CATEGORY_SOURCE_TYPES = new Set(Object.values(CATEGORY_SOURCE_TYPE_BY_MODEL));
-const ROOT_SOURCE_TYPE_BY_MODEL = {
-  product: 'product_root',
-  news: null,
-  corporation: 'corporation_root'
-};
-const ROOT_SOURCE_ID_BY_MODEL = {
-  product: 0,
-  news: null,
-  corporation: 0
-};
-const COLUMN_SOURCE_TYPES = new Set([
-  'product_root',
-  'product_category',
-  'news_category',
-  'corporation_root',
-  'corporation_category',
-  'contact_page',
-  'single_page',
-  'custom_link'
-]);
+const COLUMN_TYPES = new Set(['single', 'list', 'link']);
 const RESERVED_SINGLE_PAGE_PREFIXES = [
-  '/about',
-  '/news',
-  '/service',
-  '/valve',
-  '/product',
-  '/products',
   '/admin',
   '/api',
   '/assets',
@@ -52,7 +18,6 @@ const RESERVED_SINGLE_PAGE_PREFIXES = [
 const RESERVED_SINGLE_PAGE_PATHS = new Set([
   '/',
   '/index.html',
-  '/contact.html',
   '/robots.txt',
   '/sitemap.xml',
   '/web.config',
@@ -65,82 +30,10 @@ export function ensureColumnsSchema() {
   }
 
   ensureLanguagesSchema();
-  rebuildColumnTranslationsIfNeeded();
-  getDb().exec(`
-    CREATE TABLE IF NOT EXISTS columns (
-      id INTEGER PRIMARY KEY,
-      parent_id INTEGER,
-      source_type TEXT NOT NULL,
-      source_id INTEGER NOT NULL DEFAULT 0,
-      custom_url TEXT,
-      route_path TEXT,
-      content_model_id INTEGER,
-      dir_name TEXT,
-      detail_rule TEXT,
-      is_visible INTEGER NOT NULL DEFAULT 1,
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      legacy_extra TEXT,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (source_type, source_id)
-    );
-
-    CREATE TABLE IF NOT EXISTS column_translations (
-      id INTEGER PRIMARY KEY,
-      column_id INTEGER NOT NULL,
-      language_id INTEGER NOT NULL,
-      name TEXT NOT NULL,
-      summary TEXT NOT NULL DEFAULT '',
-      content_html TEXT NOT NULL DEFAULT '',
-      keywords TEXT,
-      seo_title TEXT,
-      seo_keywords TEXT,
-      seo_description TEXT,
-      publish_status TEXT NOT NULL DEFAULT 'published',
-      published_at TEXT,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (column_id, language_id)
-    );
-
-    CREATE INDEX IF NOT EXISTS idx_column_translations_column_id
-    ON column_translations(column_id, language_id);
-  `);
-
-  addColumnIfMissing('columns', 'custom_url', 'TEXT');
-  addColumnIfMissing('columns', 'route_path', 'TEXT');
-  addColumnIfMissing('columns', 'content_model_id', 'INTEGER');
-  addColumnIfMissing('columns', 'dir_name', 'TEXT');
-  addColumnIfMissing('columns', 'detail_rule', 'TEXT');
-  addColumnIfMissing('columns', 'legacy_extra', 'TEXT');
-  addColumnIfMissing('columns', 'is_visible', 'INTEGER NOT NULL DEFAULT 1');
-  addColumnIfMissing('column_translations', 'summary', "TEXT NOT NULL DEFAULT ''");
-  addColumnIfMissing('column_translations', 'content_html', "TEXT NOT NULL DEFAULT ''");
-  addColumnIfMissing('column_translations', 'keywords', 'TEXT');
-  addColumnIfMissing('column_translations', 'seo_title', 'TEXT');
-  addColumnIfMissing('column_translations', 'seo_keywords', 'TEXT');
-  addColumnIfMissing('column_translations', 'seo_description', 'TEXT');
-  addColumnIfMissing('column_translations', 'publish_status', "TEXT NOT NULL DEFAULT 'published'");
-  addColumnIfMissing('column_translations', 'published_at', 'TEXT');
-
-  getDb().exec(`
-    CREATE INDEX IF NOT EXISTS idx_columns_parent_sort ON columns(parent_id, sort_order, id);
-    CREATE INDEX IF NOT EXISTS idx_columns_source ON columns(source_type, source_id);
-    CREATE INDEX IF NOT EXISTS idx_columns_visible_sort ON columns(is_visible, sort_order, id);
-    CREATE INDEX IF NOT EXISTS idx_columns_dir_name ON columns(dir_name);
-    DROP INDEX IF EXISTS idx_columns_route_path_unique;
-    CREATE INDEX IF NOT EXISTS idx_columns_route_path
-    ON columns(route_path)
-    WHERE route_path IS NOT NULL;
-  `);
-
-  ensureColumnContentModelBindings();
-  migrateColumnVisibilityToSingleField();
-  migrateColumnsToLeanSchema();
-  migrateColumnsDropOpenInNewTab();
-  migrateColumnsReplaceSlugWithDirName();
-  migrateColumnPageDataSummaryToTranslations();
-  migrateColumnRoutePathConventions();
+  ensureContentModelsSchema();
+  ensureColumnsTableSchema();
+  ensureColumnTranslationsSchema();
+  createColumnsIndexes();
 
   schemaEnsured = true;
 }
@@ -152,8 +45,7 @@ export function listColumns({ languageCode = null, includeTranslations = true } 
       SELECT
         id,
         parent_id,
-        source_type,
-        source_id,
+        column_type,
         custom_url,
         route_path,
         content_model_id,
@@ -180,39 +72,22 @@ export function getColumnById(id, { languageCode = null, includeTranslations = t
 }
 
 export function listCategoryColumns(model, { languageCode = null } = {}) {
-  ensureColumnsSchema();
-  const sourceType = CATEGORY_SOURCE_TYPE_BY_MODEL[model];
-  if (!sourceType) {
-    return [];
-  }
-  return listColumns({ languageCode, includeTranslations: true }).filter((item) => (
-    String(item.source_type || '') === sourceType
-  ));
+  return listColumns({ languageCode, includeTranslations: true }).filter((item) => isColumnInModelTree(item, model));
 }
 
 export function getCategoryRootColumn(model, { languageCode = null } = {}) {
-  ensureColumnsSchema();
-  const sourceType = ROOT_SOURCE_TYPE_BY_MODEL[model];
-  if (!sourceType) {
-    return null;
-  }
-  return listColumns({ languageCode, includeTranslations: true }).find((item) => (
-    String(item.source_type || '') === sourceType
-  )) || null;
+  return listCategoryColumns(model, { languageCode }).find((item) => toInteger(item.parent_id, 0) <= 0) || null;
 }
 
 export function createManualColumn(input) {
   const payload = normalizeManualColumnMutationInput(input);
   validateColumnResolvedPathConflict(payload.base);
   const now = new Date().toISOString();
-  const sourceType = payload.base.source_type || 'single_page';
-  const sourceId = getNextSourceId(sourceType);
   const result = execute(
     `
       INSERT INTO columns (
         parent_id,
-        source_type,
-        source_id,
+        column_type,
         custom_url,
         route_path,
         content_model_id,
@@ -227,8 +102,7 @@ export function createManualColumn(input) {
     `,
     [
       payload.base.parent_id,
-      sourceType,
-      sourceId,
+      payload.base.column_type,
       payload.base.custom_url,
       payload.base.route_path,
       payload.base.content_model_id,
@@ -242,7 +116,6 @@ export function createManualColumn(input) {
     ]
   );
 
-  syncManagedColumnRoutePaths();
   saveColumnTranslations(result.lastInsertRowid, payload.translations, now);
   return getColumnById(result.lastInsertRowid, { includeTranslations: true });
 }
@@ -263,7 +136,7 @@ export function updateManualColumn(id, input) {
       UPDATE columns
       SET
         parent_id = ?,
-        source_type = ?,
+        column_type = ?,
         custom_url = ?,
         route_path = ?,
         content_model_id = ?,
@@ -277,7 +150,7 @@ export function updateManualColumn(id, input) {
     `,
     [
       payload.base.parent_id,
-      payload.base.source_type,
+      payload.base.column_type,
       payload.base.custom_url,
       payload.base.route_path,
       payload.base.content_model_id,
@@ -291,7 +164,6 @@ export function updateManualColumn(id, input) {
     ]
   );
 
-  syncManagedColumnRoutePaths();
   saveColumnTranslations(id, payload.translations);
   return getColumnById(id, { includeTranslations: true });
 }
@@ -304,7 +176,7 @@ export function updateColumnRecord(id, input) {
 
   const existingHydrated = getColumnById(id, { includeTranslations: true });
   const payload = normalizeExistingColumnMutationInput(input, existingHydrated);
-  validateColumnResolvedPathConflict({ ...existingHydrated, ...payload.base, source_type: existing.source_type }, id);
+  validateColumnResolvedPathConflict({ ...existingHydrated, ...payload.base }, id);
 
   execute(
     `
@@ -333,7 +205,6 @@ export function updateColumnRecord(id, input) {
     ]
   );
 
-  syncManagedColumnRoutePaths();
   saveColumnTranslations(id, payload.translations);
   return getColumnById(id, { includeTranslations: true });
 }
@@ -358,6 +229,7 @@ export function deleteManualColumn(id) {
     'DELETE FROM template_bindings WHERE target_type = ? AND target_id = ?',
     ['column', id]
   );
+  execute('DELETE FROM column_translations WHERE column_id = ?', [id]);
   execute('DELETE FROM columns WHERE id = ?', [id]);
   return existing;
 }
@@ -371,16 +243,25 @@ function hydrateColumns(rows, {
     return [];
   }
 
+  ensureContentModelsSchema();
+  const modelCodeById = new Map(
+    queryAll('SELECT id, code FROM content_models ORDER BY id ASC')
+      .map((row) => [toInteger(row.id, 0), String(row.code || '').trim()])
+  );
+
   const columnIds = rows.map((row) => Number(row.id)).filter((id) => Number.isInteger(id) && id > 0);
   const translationsById = loadColumnTranslations(columnIds);
   const selectedLanguage = resolveLanguageForContent(languageCode);
+  const rowById = new Map(rows.map((row) => [toInteger(row.id, 0), row]));
+  const semanticsById = new Map();
+
   return rows.map((row) => {
     const translations = translationsById.get(Number(row.id)) || [];
     const translationMap = Object.fromEntries(translations.map((translation) => [translation.language_code, translation]));
     const selectedTranslation = translationMap[selectedLanguage.code];
     const defaultTranslation = translationMap[selectedLanguage.default_code];
     const fallbackTranslation = selectedTranslation || defaultTranslation || translations[0] || null;
-    const displayName = fallbackTranslation?.name || row.name;
+    const displayName = fallbackTranslation?.name || row.name || '';
     const resolvedSummary = fallbackTranslation?.summary ?? '';
     const resolvedContentHtml = fallbackTranslation?.content_html ?? '';
     const resolvedKeywords = fallbackTranslation?.keywords ?? '';
@@ -389,28 +270,33 @@ function hydrateColumns(rows, {
     const resolvedSeoDescription = fallbackTranslation?.seo_description ?? null;
     const resolvedPublishStatus = fallbackTranslation?.publish_status ?? 'published';
     const resolvedPublishedAt = fallbackTranslation?.published_at ?? null;
+    const modelCode = inferModelCode(row, rowById, modelCodeById);
+    const semantics = inferColumnSemantics(row, rowById, semanticsById, modelCode);
+
     const base = {
       ...row,
-      model_code: inferModelCodeBySourceType(row.source_type),
-      column_kind: inferColumnKindBySourceType(row.source_type),
       name: displayName,
-      content_html: resolvedContentHtml,
       summary: resolvedSummary,
+      content_html: resolvedContentHtml,
       keywords: resolvedKeywords || '',
       seo_title: resolvedSeoTitle ?? null,
       seo_keywords: resolvedSeoKeywords ?? null,
       seo_description: resolvedSeoDescription ?? null,
+      publish_status: resolvedPublishStatus,
+      published_at: resolvedPublishedAt,
+      current_language_code: fallbackTranslation?.language_code || selectedLanguage.code,
       content_model_id: toNullableInteger(row.content_model_id),
       dir_name: row.dir_name || null,
       detail_rule: row.detail_rule || null,
-      publish_status: resolvedPublishStatus,
-      published_at: resolvedPublishedAt,
+      route_path: row.route_path || null,
+      custom_url: row.custom_url || null,
       legacy_extra: row.legacy_extra || null,
       page_data: extractColumnPageData(row.legacy_extra),
-      current_language_code: fallbackTranslation?.language_code || selectedLanguage.code,
-      source_id: toInteger(row.source_id, 0),
       sort_order: toInteger(row.sort_order, 0),
-      is_visible: toBooleanInt(row.is_visible, 1)
+      is_visible: toBooleanInt(row.is_visible, 1),
+      column_type: normalizeColumnType(row.column_type),
+      model_code: modelCode,
+      column_semantics: semantics
     };
 
     return {
@@ -503,7 +389,7 @@ function loadColumnTranslations(columnIds) {
   return map;
 }
 
-function saveColumnTranslations(columnId, translations, now = new Date().toISOString(), options = {}) {
+function saveColumnTranslations(columnId, translations, now = new Date().toISOString()) {
   const languageIdByCode = new Map(listLanguages().map((language) => [language.code, language.id]));
 
   for (const [languageCode, translation] of Object.entries(translations || {})) {
@@ -568,8 +454,7 @@ function getColumnByIdRaw(id) {
       SELECT
         id,
         parent_id,
-        source_type,
-        source_id,
+        column_type,
         custom_url,
         route_path,
         content_model_id,
@@ -591,10 +476,7 @@ function normalizeManualColumnInput(input, options = {}) {
   const currentId = toInteger(options.currentId, 0);
   const existing = currentId ? getColumnByIdRaw(currentId) : null;
   const existingView = options.existingColumn || existing || {};
-  const currentSourceType = String(existing?.source_type || '').trim().toLowerCase();
-  const requestedKind = normalizeColumnKind(input.column_kind ?? inferColumnKindBySourceType(currentSourceType));
-  const sourceType = normalizeManualSourceType(input.source_type ?? existing?.source_type, requestedKind);
-  const columnKind = inferColumnKindBySourceType(sourceType);
+  const requestedType = normalizeColumnType(input.column_type ?? existing?.column_type);
   const name = String(input.name ?? existingView.name ?? '').trim();
   if (!name) {
     throw new Error('栏目名称不能为空');
@@ -621,40 +503,14 @@ function normalizeManualColumnInput(input, options = {}) {
   const summary = toNullableString(input.summary ?? existingView.summary) || '';
   const keywords = toNullableString(input.keywords ?? existingView.keywords);
   const contentModelId = normalizeContentModelId(input.content_model_id ?? existing?.content_model_id);
-  const detailRule = normalizeColumnDetailRule(input.detail_rule ?? existing?.detail_rule, sourceType);
+  const detailRule = normalizeColumnDetailRule(input.detail_rule ?? existing?.detail_rule, requestedType);
 
-  if (columnKind === 'category' || CATEGORY_SOURCE_TYPES.has(sourceType)) {
-    const routePath = normalizeRoutePath(input.route_path ?? existing?.route_path ?? getManualRoutePathBySourceType(sourceType));
+  if (requestedType === 'link') {
     return {
       name,
       parent_id: parentId || null,
-      source_type: sourceType,
-      custom_url: toNullableString(input.custom_url ?? existing?.custom_url),
-      route_path: routePath,
-      content_html: String(input.content_html ?? existingView.content_html ?? ''),
-      summary,
-      keywords,
-      seo_title: seoTitle,
-      seo_keywords: seoKeywords,
-      seo_description: seoDescription,
-      content_model_id: contentModelId,
-      dir_name: normalizeColumnDirName(input.dir_name ?? existing?.dir_name),
-      detail_rule: detailRule,
-      publish_status: normalizePublishStatus(input.publish_status ?? existing?.publish_status),
-      published_at: toNullableString(input.published_at ?? existing?.published_at),
-      is_visible: isVisible,
-      legacy_extra: existing?.legacy_extra ?? null,
-      sort_order: sortOrder
-    };
-  }
-
-  if (columnKind === 'link') {
-    const customUrl = normalizeColumnUrl(input.custom_url ?? existing?.custom_url);
-    return {
-      name,
-      parent_id: parentId || null,
-      source_type: sourceType,
-      custom_url: customUrl,
+      column_type: 'link',
+      custom_url: normalizeColumnUrl(input.custom_url ?? existing?.custom_url),
       route_path: null,
       content_html: '',
       summary,
@@ -662,7 +518,7 @@ function normalizeManualColumnInput(input, options = {}) {
       seo_title: seoTitle,
       seo_keywords: seoKeywords,
       seo_description: seoDescription,
-      content_model_id: contentModelId,
+      content_model_id: null,
       dir_name: null,
       detail_rule: null,
       publish_status: 'published',
@@ -673,14 +529,15 @@ function normalizeManualColumnInput(input, options = {}) {
     };
   }
 
-  const routePath = normalizeRoutePath(input.route_path ?? existing?.route_path ?? getManualRoutePathBySourceType(sourceType));
-  if (sourceType === 'single_page') {
+  const routePath = normalizeRoutePath(input.route_path ?? existing?.route_path);
+  if (requestedType === 'single') {
     validateSinglePageRoutePath(routePath, currentId || null);
   }
+
   return {
     name,
     parent_id: parentId || null,
-    source_type: sourceType,
+    column_type: requestedType,
     custom_url: null,
     route_path: routePath,
     content_html: String(input.content_html ?? existingView.content_html ?? ''),
@@ -689,7 +546,7 @@ function normalizeManualColumnInput(input, options = {}) {
     seo_title: seoTitle,
     seo_keywords: seoKeywords,
     seo_description: seoDescription,
-    content_model_id: contentModelId,
+    content_model_id: requestedType === 'link' ? null : contentModelId,
     dir_name: normalizeColumnDirName(input.dir_name ?? existing?.dir_name),
     detail_rule: detailRule,
     publish_status: normalizePublishStatus(input.publish_status ?? existing?.publish_status),
@@ -740,12 +597,9 @@ function normalizeExistingColumnMutationInput(input, existingColumn = null) {
   const sortOrder = toInteger(input?.sort_order ?? existing.sort_order, 0);
   const isVisible = toBooleanInt(input?.is_visible ?? existing.is_visible, 1);
   const contentModelId = normalizeContentModelId(input?.content_model_id ?? existing.content_model_id);
-  const sourceType = String(existing.source_type || '').trim().toLowerCase();
   const dirName = normalizeColumnDirName(input?.dir_name ?? existing.dir_name);
-  const routePath = supportsManagedCategoryRoutePath(sourceType)
-    ? normalizeRoutePath(input?.route_path ?? existing.route_path ?? getManualRoutePathBySourceType(sourceType))
-    : toNullableString(input?.route_path ?? existing.route_path);
-  const detailRule = normalizeColumnDetailRule(input?.detail_rule ?? existing.detail_rule, sourceType);
+  const routePath = normalizeRoutePath(input?.route_path ?? existing.route_path);
+  const detailRule = normalizeColumnDetailRule(input?.detail_rule ?? existing.detail_rule, existing.column_type);
 
   const translations = normalizeColumnTranslations(input?.translations || {}, {
     defaultLanguageCode,
@@ -775,14 +629,6 @@ function normalizeExistingColumnMutationInput(input, existingColumn = null) {
     },
     translations
   };
-}
-
-function supportsManagedCategoryRoutePath(sourceType) {
-  return sourceType === 'product_root'
-    || sourceType === 'product_category'
-    || sourceType === 'news_category'
-    || sourceType === 'corporation_root'
-    || sourceType === 'corporation_category';
 }
 
 function normalizeContentModelId(value) {
@@ -868,19 +714,6 @@ function normalizeColumnTranslations(translations, {
   return output;
 }
 
-function resolveDefaultColumnTranslation(translations, defaultLanguageCode) {
-  const code = defaultLanguageCode || 'zh-CN';
-  const direct = translations[code];
-  if (direct?.name) {
-    return direct;
-  }
-  const first = Object.values(translations).find((item) => item?.name);
-  if (first) {
-    return first;
-  }
-  throw new Error('至少需要提供默认语言名称');
-}
-
 function resolveLanguageForContent(languageCode) {
   const languages = listLanguages();
   const defaultLanguage = getDefaultLanguage();
@@ -897,34 +730,11 @@ function resolveLanguageForContent(languageCode) {
   };
 }
 
-function buildColumnNameJoin(tableAlias, languageId, defaultLanguageId) {
-  const selectedAlias = `${tableAlias}_selected_translation`;
-  const defaultAlias = `${tableAlias}_default_translation`;
-  return {
-    joinSql: `
-      LEFT JOIN column_translations ${selectedAlias}
-        ON ${selectedAlias}.column_id = ${tableAlias}.id
-       AND ${selectedAlias}.language_id = ${languageId ? Number(languageId) : 0}
-      LEFT JOIN column_translations ${defaultAlias}
-        ON ${defaultAlias}.column_id = ${tableAlias}.id
-       AND ${defaultAlias}.language_id = ${defaultLanguageId ? Number(defaultLanguageId) : 0}
-    `,
-    nameExpr: `COALESCE(${selectedAlias}.name, ${defaultAlias}.name, '')`
-  };
-}
-
 function assertEditableManualColumn(column) {
-  if (!column || !EDITABLE_MANUAL_SOURCE_TYPES.has(String(column.source_type || ''))) {
+  const columnType = normalizeColumnType(column?.column_type);
+  if (columnType !== 'single' && columnType !== 'link') {
     throw new Error('当前栏目不支持直接编辑');
   }
-}
-
-function getNextSourceId(sourceType) {
-  const value = queryOne(
-    'SELECT COALESCE(MAX(source_id), 0) + 1 AS value FROM columns WHERE source_type = ?',
-    [sourceType]
-  )?.value;
-  return toInteger(value, 1);
 }
 
 function wouldCreateColumnCycle(currentId, parentId) {
@@ -945,77 +755,118 @@ function wouldCreateColumnCycle(currentId, parentId) {
   return false;
 }
 
-function validateSinglePageRoutePath(routePath, currentId = null) {
-  const normalizedRoutePath = resolveColumnResolvedRoutePath({ route_path: routePath, parent_id: null, source_type: 'single_page' });
+function validateSinglePageRoutePath(routePath) {
+  const normalizedRoutePath = resolveColumnResolvedRoutePath({ route_path: routePath, parent_id: null, column_type: 'single' });
   if (RESERVED_SINGLE_PAGE_PATHS.has(normalizedRoutePath.toLowerCase())) {
     throw new Error('该访问路径已被系统保留');
   }
 
   const normalized = normalizedRoutePath.toLowerCase();
   if (RESERVED_SINGLE_PAGE_PREFIXES.some((prefix) => normalized === prefix || normalized.startsWith(`${prefix}/`))) {
-    throw new Error('该访问路径与保留栏目路径冲突');
+    throw new Error('该访问路径与保留系统路径冲突');
   }
 }
 
-function normalizeColumnKind(value) {
+function normalizeColumnType(value) {
   const normalized = String(value || '').trim().toLowerCase();
-  if (normalized === 'link' || normalized === 'single' || normalized === 'category') {
-    return normalized;
+  if (!COLUMN_TYPES.has(normalized)) {
+    throw new Error('栏目形态不正确');
   }
-  throw new Error('栏目类型不正确');
+  return normalized;
 }
 
-function normalizeManualSourceType(value, columnKind) {
-  const normalized = String(value || '').trim().toLowerCase();
-  if (!normalized) {
-    return columnKind === 'link' ? 'custom_link' : 'single_page';
+function inferModelCode(row, rowById, modelCodeById) {
+  const contentModelId = toInteger(row?.content_model_id, 0);
+  if (contentModelId > 0) {
+    return modelCodeById.get(contentModelId) || null;
   }
-  if ((columnKind === 'single' || columnKind === 'category') && ['product_category', 'news_category', 'corporation_category'].includes(normalized)) {
-    return normalized;
-  }
-  if (columnKind === 'link' && normalized === 'custom_link') {
-    return normalized;
-  }
-  if (columnKind === 'single' && ['single_page', 'contact_page'].includes(normalized)) {
-    return normalized;
-  }
-  throw new Error('栏目来源类型不正确');
-}
 
-function getManualRoutePathBySourceType(sourceType) {
-  if (sourceType === 'contact_page') {
-    return '/contact.html';
-  }
-  if (CATEGORY_SOURCE_TYPES.has(sourceType)) {
-    return `/__internal/${inferModelCodeBySourceType(sourceType) || 'column'}/`;
-  }
-  return '';
-}
-
-function inferModelCodeBySourceType(sourceType) {
-  if (sourceType === 'product_category' || sourceType === 'product_root') {
-    return 'product';
-  }
-  if (sourceType === 'news_category') {
-    return 'news';
-  }
-  if (sourceType === 'corporation_category' || sourceType === 'corporation_root') {
+  const resolvedPath = resolveColumnResolvedRoutePath(row, null, rowById);
+  if (resolvedPath === '/about/' || resolvedPath.startsWith('/about/')) {
     return 'corporation';
   }
-  return '';
+  return null;
 }
 
-function inferColumnKindBySourceType(sourceType) {
-  if (CATEGORY_SOURCE_TYPES.has(sourceType) || sourceType === 'product_root' || sourceType === 'corporation_root') {
-    return 'category';
+function inferColumnSemantics(row, rowById, semanticsById, modelCode) {
+  const columnId = toInteger(row?.id, 0);
+  if (columnId > 0 && semanticsById.has(columnId)) {
+    return semanticsById.get(columnId);
   }
-  if (sourceType === 'custom_link') {
-    return 'link';
+
+  const columnType = normalizeColumnType(row?.column_type);
+  const rootColumn = resolveSemanticRootColumn(row, rowById);
+  const rootColumnId = toInteger(rootColumn?.id, columnId || 0) || null;
+  const isRoot = rootColumnId !== null && rootColumnId === columnId;
+
+  let structureKind = columnType;
+  let renderDriver = columnType;
+  let generationModes = [];
+
+  if (columnType === 'link') {
+    structureKind = 'link';
+    renderDriver = 'link';
+    generationModes = [];
+  } else if (columnType === 'single') {
+    structureKind = 'page';
+    renderDriver = modelCode === 'corporation' ? 'page_tree' : 'single_page';
+    generationModes = ['page'];
+  } else {
+    structureKind = 'collection';
+    renderDriver = modelCode === 'product'
+      ? 'managed_category'
+      : modelCode === 'news'
+        ? 'section'
+        : 'collection';
+    generationModes = ['list'];
+    if (toNullableInteger(row?.content_model_id) && toNullableString(row?.detail_rule)) {
+      generationModes.push('detail');
+    }
   }
-  if (sourceType === 'single_page' || sourceType === 'contact_page') {
-    return 'single';
+
+  const semantics = {
+    structure_kind: structureKind,
+    render_driver: renderDriver,
+    generation_modes: generationModes,
+    is_root: isRoot,
+    root_column_id: rootColumnId,
+    model_code: modelCode,
+    column_type: columnType
+  };
+
+  if (columnId > 0) {
+    semanticsById.set(columnId, semantics);
   }
-  return 'category';
+
+  return semantics;
+}
+
+function resolveSemanticRootColumn(row, rowById) {
+  let current = row;
+  let resolved = row;
+  const visited = new Set();
+
+  while (current) {
+    const currentId = toInteger(current?.id, 0);
+    if (currentId <= 0 || visited.has(currentId)) {
+      break;
+    }
+    visited.add(currentId);
+    resolved = current;
+
+    const parentId = toInteger(current?.parent_id, 0);
+    if (parentId <= 0) {
+      break;
+    }
+
+    const parent = rowById.get(parentId) || null;
+    if (!parent) {
+      break;
+    }
+    current = parent;
+  }
+
+  return resolved || row || null;
 }
 
 function normalizeColumnUrl(value) {
@@ -1032,11 +883,10 @@ function normalizeRoutePath(value) {
     throw new Error('访问路径不能为空');
   }
   if (/^https?:\/\//i.test(normalized)) {
-    throw new Error('单页栏目访问路径不能是完整网址');
+    throw new Error('栏目访问路径不能是完整网址');
   }
 
-  let routePath = normalized.startsWith('/') ? normalized : normalized;
-  routePath = routePath.startsWith('/') ? routePath : routePath.replace(/^\/{2,}/g, '/');
+  let routePath = normalized.startsWith('/') ? normalized : `/${normalized}`;
   routePath = routePath.replace(/\/{2,}/g, '/');
 
   if (routePath !== '/' && routePath.endsWith('/')) {
@@ -1062,63 +912,11 @@ function normalizeColumnDirName(value) {
     .replace(/^[-/]+|[-/]+$/g, '') || null;
 }
 
-function normalizeColumnDetailRule(value, sourceType) {
-  const normalizedSourceType = String(sourceType || '').trim().toLowerCase();
-  const normalizedValue = migrateLegacyDetailRule(toNullableString(value), normalizedSourceType);
-
-  if (!supportsColumnDetailRule(normalizedSourceType)) {
+function normalizeColumnDetailRule(value, columnType) {
+  if (normalizeColumnType(columnType) !== 'list') {
     return null;
   }
-
-  if (!normalizedValue) {
-    return getDefaultColumnDetailRule(normalizedSourceType);
-  }
-
-  const allowed = getAllowedDetailRules(normalizedSourceType);
-  if (!allowed.has(normalizedValue)) {
-    throw new Error('内容页命名规则不受支持');
-  }
-  return normalizedValue;
-}
-
-function supportsColumnDetailRule(sourceType) {
-  return sourceType === 'product_root'
-    || sourceType === 'product_category'
-    || sourceType === 'news_category';
-}
-
-function getDefaultColumnDetailRule(sourceType) {
-  if (sourceType === 'product_root' || sourceType === 'product_category') {
-    return '{id}/index.html';
-  }
-  if (sourceType === 'news_category') {
-    return 'detail/{id}.html';
-  }
-  return null;
-}
-
-function getAllowedDetailRules(sourceType) {
-  if (sourceType === 'product_root' || sourceType === 'product_category') {
-    return new Set(['{id}/index.html', '{id}.html']);
-  }
-  if (sourceType === 'news_category') {
-    return new Set(['detail/{id}.html', '{id}.html', '{slug}/index.html']);
-  }
-  return new Set();
-}
-
-function migrateLegacyDetailRule(value, sourceType) {
-  const normalized = toNullableString(value);
-  if (!normalized) {
-    return normalized;
-  }
-  if ((sourceType === 'product_root' || sourceType === 'product_category') && normalized === '{slug}/index.html') {
-    return '{id}/index.html';
-  }
-  if (sourceType === 'news_category' && normalized === '{slug}.html') {
-    return '{id}.html';
-  }
-  return normalized;
+  return toNullableString(value);
 }
 
 function pathLooksLikeFile(value) {
@@ -1151,32 +949,194 @@ function addColumnIfMissing(tableName, columnName, definition) {
   getDb().exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
 }
 
-function normalizeImageList(value, fallbackImage = null) {
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => normalizeUploadedRelativePath(String(item || '').trim()))
-      .filter(Boolean);
-  }
-  const normalized = String(value || '').trim();
-  if (!normalized) {
-    return fallbackImage ? [normalizeUploadedRelativePath(String(fallbackImage).trim())].filter(Boolean) : [];
-  }
-  try {
-    const parsed = JSON.parse(normalized);
-    if (Array.isArray(parsed)) {
-      return parsed
-        .map((item) => normalizeUploadedRelativePath(String(item || '').trim()))
-        .filter(Boolean);
-    }
-  } catch {
-    // ignore
-  }
-  return [normalizeUploadedRelativePath(normalized)].filter(Boolean);
+function extractColumnPageData(legacyExtra) {
+  const parsed = parseLegacyExtra(legacyExtra);
+  return parsed?.page_data && typeof parsed.page_data === 'object'
+    ? parsed.page_data
+    : null;
 }
 
-function normalizeSingleImage(value) {
-  const normalized = String(value || '').trim();
-  return normalizeUploadedRelativePath(normalized) || '';
+function parseLegacyExtra(value) {
+  if (!value) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function validateColumnResolvedPathConflict(base, currentId = null) {
+  if (normalizeColumnType(base?.column_type) === 'link') {
+    return;
+  }
+
+  const resolvedRoutePath = resolveColumnResolvedRoutePath(base, currentId);
+  if (!resolvedRoutePath) {
+    return;
+  }
+
+  const rows = queryAll(
+    `
+      SELECT id, parent_id, column_type, route_path
+      FROM columns
+      WHERE route_path IS NOT NULL
+    `
+  );
+
+  for (const row of rows) {
+    const rowId = toInteger(row.id, 0);
+    if (currentId && rowId === toInteger(currentId, 0)) {
+      continue;
+    }
+    const existingResolvedPath = resolveColumnResolvedRoutePath(row);
+    if (existingResolvedPath && existingResolvedPath === resolvedRoutePath) {
+      throw new Error('访问路径已存在');
+    }
+  }
+}
+
+function resolveColumnResolvedRoutePath(column, currentId = null, rowById = null) {
+  const columnType = normalizeColumnType(column?.column_type);
+  if (columnType === 'link') {
+    return '';
+  }
+
+  const routePath = toNullableString(column?.route_path);
+  if (!routePath) {
+    return '';
+  }
+
+  const parentPublicPath = resolveColumnParentRoutePath(column, currentId, rowById);
+  const resolved = resolveRelativePublicPath(routePath, parentPublicPath);
+  if (!resolved) {
+    return '';
+  }
+  if (resolved !== '/' && !pathLooksLikeFile(resolved) && !resolved.endsWith('/')) {
+    return `${resolved}/`;
+  }
+  return resolved;
+}
+
+function resolveColumnParentRoutePath(column, currentId = null, rowById = null) {
+  const parentId = toInteger(column?.parent_id, 0);
+  if (parentId <= 0) {
+    return '/';
+  }
+
+  const parent = rowById?.get(parentId) || getColumnByIdRaw(parentId);
+  if (!parent) {
+    return '/';
+  }
+  if (currentId && toInteger(parent.id, 0) === toInteger(currentId, 0)) {
+    return '/';
+  }
+
+  return resolveColumnResolvedRoutePath(parent, currentId, rowById) || '/';
+}
+
+function ensureColumnsTableSchema() {
+  if (!hasTable('columns')) {
+    getDb().exec(`
+      CREATE TABLE columns (
+        id INTEGER PRIMARY KEY,
+        parent_id INTEGER,
+        column_type TEXT NOT NULL,
+        custom_url TEXT,
+        route_path TEXT,
+        content_model_id INTEGER,
+        dir_name TEXT,
+        detail_rule TEXT,
+        is_visible INTEGER NOT NULL DEFAULT 1,
+        sort_order INTEGER NOT NULL DEFAULT 0,
+        legacy_extra TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    return;
+  }
+
+  const columnNames = new Set(queryAll('PRAGMA table_info(columns)').map((column) => String(column.name || '')));
+  const requiredColumns = [
+    'column_type',
+    'custom_url',
+    'route_path',
+    'content_model_id',
+    'dir_name',
+    'detail_rule',
+    'is_visible',
+    'sort_order',
+    'legacy_extra',
+    'created_at',
+    'updated_at'
+  ];
+  const missingRequiredColumns = requiredColumns.filter((columnName) => !columnNames.has(columnName));
+  if (missingRequiredColumns.length > 0) {
+    throw new Error('columns 表结构不符合当前系统要求，请重新初始化数据库');
+  }
+}
+
+function ensureColumnTranslationsSchema() {
+  getDb().exec(`
+    CREATE TABLE IF NOT EXISTS column_translations (
+      id INTEGER PRIMARY KEY,
+      column_id INTEGER NOT NULL,
+      language_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      summary TEXT NOT NULL DEFAULT '',
+      content_html TEXT NOT NULL DEFAULT '',
+      keywords TEXT,
+      seo_title TEXT,
+      seo_keywords TEXT,
+      seo_description TEXT,
+      publish_status TEXT NOT NULL DEFAULT 'published',
+      published_at TEXT,
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (column_id, language_id)
+    );
+  `);
+
+  addColumnIfMissing('column_translations', 'summary', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing('column_translations', 'content_html', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing('column_translations', 'keywords', 'TEXT');
+  addColumnIfMissing('column_translations', 'seo_title', 'TEXT');
+  addColumnIfMissing('column_translations', 'seo_keywords', 'TEXT');
+  addColumnIfMissing('column_translations', 'seo_description', 'TEXT');
+  addColumnIfMissing('column_translations', 'publish_status', "TEXT NOT NULL DEFAULT 'published'");
+  addColumnIfMissing('column_translations', 'published_at', 'TEXT');
+}
+
+function createColumnsIndexes() {
+  getDb().exec(`
+    CREATE INDEX IF NOT EXISTS idx_columns_parent_sort ON columns(parent_id, sort_order, id);
+    CREATE INDEX IF NOT EXISTS idx_columns_visible_sort ON columns(is_visible, sort_order, id);
+    CREATE INDEX IF NOT EXISTS idx_columns_dir_name ON columns(dir_name);
+    CREATE INDEX IF NOT EXISTS idx_columns_route_path
+    ON columns(route_path)
+    WHERE route_path IS NOT NULL;
+    CREATE INDEX IF NOT EXISTS idx_column_translations_column_id
+    ON column_translations(column_id, language_id);
+  `);
+}
+
+function isColumnInModelTree(column, model) {
+  const columnType = normalizeColumnType(column?.column_type);
+  const modelCode = String(column?.model_code || '').trim();
+
+  if (model === 'product') {
+    return columnType === 'list' && modelCode === 'product';
+  }
+  if (model === 'news') {
+    return columnType === 'list' && modelCode === 'news';
+  }
+  if (model === 'corporation') {
+    return columnType === 'single' && modelCode === 'corporation';
+  }
+  return false;
 }
 
 function normalizePublishStatus(value) {
@@ -1217,821 +1177,4 @@ function toNullableString(value) {
   }
   const normalized = String(value).trim();
   return normalized ? normalized : null;
-}
-
-function extractColumnPageData(legacyExtra) {
-  const parsed = parseLegacyExtra(legacyExtra);
-  return parsed?.page_data && typeof parsed.page_data === 'object'
-    ? parsed.page_data
-    : null;
-}
-
-function parseLegacyExtra(value) {
-  if (!value) {
-    return {};
-  }
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function ensureColumnContentModelBindings() {
-  ensureContentModelsSchema();
-  const modelIdByCode = new Map(
-    queryAll('SELECT id, code FROM content_models ORDER BY id ASC')
-      .map((model) => [String(model.code || ''), Number(model.id)])
-  );
-  const bindings = [
-    { code: 'product', sourceTypes: ['product_root', 'product_category'] },
-    { code: 'news', sourceTypes: ['news_category'] }
-  ];
-
-  for (const binding of bindings) {
-    const modelId = modelIdByCode.get(binding.code);
-    if (!Number.isInteger(modelId) || modelId <= 0) {
-      continue;
-    }
-    const placeholders = binding.sourceTypes.map(() => '?').join(', ');
-    execute(
-      `
-        UPDATE columns
-        SET content_model_id = ?
-        WHERE content_model_id IS NULL
-          AND source_type IN (${placeholders})
-      `,
-      [modelId, ...binding.sourceTypes]
-    );
-  }
-}
-
-function migrateColumnPageDataSummaryToTranslations() {
-  const defaultLanguage = getDefaultLanguage() || listLanguages()[0] || null;
-  const languageId = toInteger(defaultLanguage?.id, 0);
-  if (languageId <= 0) {
-    return;
-  }
-
-  execute(
-    `
-      UPDATE column_translations
-      SET
-        summary = (
-          SELECT json_extract(columns.legacy_extra, '$.page_data.summary')
-          FROM columns
-          WHERE columns.id = column_translations.column_id
-        ),
-        updated_at = CURRENT_TIMESTAMP
-      WHERE column_translations.language_id = ?
-        AND trim(COALESCE(column_translations.summary, '')) = ''
-        AND EXISTS (
-          SELECT 1
-          FROM columns
-          WHERE columns.id = column_translations.column_id
-            AND json_type(columns.legacy_extra, '$.page_data.summary') = 'text'
-            AND trim(COALESCE(json_extract(columns.legacy_extra, '$.page_data.summary'), '')) <> ''
-        )
-    `,
-    [languageId]
-  );
-
-  execute(`
-    UPDATE columns
-    SET
-      legacy_extra = CASE
-        WHEN json_type(legacy_extra, '$.page_data') = 'object'
-          THEN json_remove(legacy_extra, '$.page_data.summary')
-        ELSE legacy_extra
-      END,
-      updated_at = CURRENT_TIMESTAMP
-    WHERE json_type(legacy_extra, '$.page_data.summary') IS NOT NULL
-  `);
-}
-
-function migrateColumnsToLeanSchema() {
-  const currentColumns = new Set(queryAll('PRAGMA table_info(columns)').map((column) => String(column.name || '')));
-  const contentRows = queryOne(
-    `
-      SELECT COUNT(*) AS value
-      FROM columns
-      WHERE source_type IN ('product_item', 'news_item')
-    `
-  )?.value || 0;
-
-  if (
-    Number(contentRows) === 0
-    && currentColumns.has('code')
-    && currentColumns.has('images')
-    && currentColumns.has('primary_image')
-    && currentColumns.has('is_featured_home')
-  ) {
-    getDb().exec(`
-      DROP INDEX IF EXISTS idx_columns_model_node;
-      DROP INDEX IF EXISTS idx_columns_dir_name;
-      DROP INDEX IF EXISTS idx_columns_route_path_unique;
-
-      ALTER TABLE columns RENAME TO columns_legacy_rebuild;
-
-      CREATE TABLE columns (
-        id INTEGER PRIMARY KEY,
-        parent_id INTEGER,
-        source_type TEXT NOT NULL,
-        source_id INTEGER NOT NULL DEFAULT 0,
-        custom_url TEXT,
-        route_path TEXT,
-        content_model_id INTEGER,
-        dir_name TEXT,
-        detail_rule TEXT,
-        is_visible INTEGER NOT NULL DEFAULT 1,
-        sort_order INTEGER NOT NULL DEFAULT 0,
-        legacy_extra TEXT,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE (source_type, source_id)
-      );
-
-      INSERT INTO columns (
-        id,
-        parent_id,
-        source_type,
-        source_id,
-        custom_url,
-        route_path,
-        content_model_id,
-        dir_name,
-        detail_rule,
-        is_visible,
-        sort_order,
-        legacy_extra,
-        created_at,
-        updated_at
-      )
-      SELECT
-        id,
-        parent_id,
-        source_type,
-        source_id,
-        custom_url,
-        route_path,
-        content_model_id,
-        CASE
-          WHEN trim(coalesce(slug, '')) <> '' THEN slug
-          ELSE NULL
-        END,
-        NULL,
-        CASE
-          WHEN show_in_nav IS NULL THEN coalesce(is_visible, 1)
-          ELSE show_in_nav
-        END,
-        sort_order,
-        CASE
-          WHEN trim(coalesce(primary_image, '')) <> '' THEN json_set(
-            CASE
-              WHEN json_valid(coalesce(legacy_extra, '')) THEN legacy_extra
-              ELSE '{}'
-            END,
-            '$.cover_image',
-            primary_image
-          )
-          ELSE legacy_extra
-        END,
-        created_at,
-        updated_at
-      FROM columns_legacy_rebuild
-      WHERE source_type NOT IN ('product_item', 'news_item');
-
-      DROP TABLE columns_legacy_rebuild;
-
-      CREATE INDEX idx_columns_parent_sort ON columns(parent_id, sort_order, id);
-      CREATE INDEX idx_columns_source ON columns(source_type, source_id);
-      CREATE INDEX idx_columns_visible_sort ON columns(is_visible, sort_order, id);
-      CREATE INDEX idx_columns_dir_name ON columns(dir_name);
-      CREATE INDEX idx_columns_route_path
-      ON columns(route_path)
-      WHERE route_path IS NOT NULL;
-    `);
-  }
-}
-
-function migrateColumnVisibilityToSingleField() {
-  const currentColumns = new Set(queryAll('PRAGMA table_info(columns)').map((column) => String(column.name || '')));
-  if (!currentColumns.has('show_in_nav')) {
-    return;
-  }
-
-  execute(`
-    UPDATE columns
-    SET
-      is_visible = CASE
-        WHEN show_in_nav IS NULL THEN coalesce(is_visible, 1)
-        ELSE show_in_nav
-      END,
-      updated_at = CURRENT_TIMESTAMP
-  `);
-
-  getDb().exec(`
-    DROP INDEX IF EXISTS idx_columns_parent_sort;
-    DROP INDEX IF EXISTS idx_columns_source;
-    DROP INDEX IF EXISTS idx_columns_visible_sort;
-    DROP INDEX IF EXISTS idx_columns_dir_name;
-    DROP INDEX IF EXISTS idx_columns_route_path_unique;
-
-    ALTER TABLE columns RENAME TO columns_visibility_merge_rebuild;
-
-    CREATE TABLE columns (
-      id INTEGER PRIMARY KEY,
-      parent_id INTEGER,
-      source_type TEXT NOT NULL,
-      source_id INTEGER NOT NULL DEFAULT 0,
-      custom_url TEXT,
-      route_path TEXT,
-      content_model_id INTEGER,
-      dir_name TEXT,
-      detail_rule TEXT,
-      is_visible INTEGER NOT NULL DEFAULT 1,
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      legacy_extra TEXT,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (source_type, source_id)
-    );
-
-    INSERT INTO columns (
-      id,
-      parent_id,
-      source_type,
-      source_id,
-      custom_url,
-      route_path,
-      content_model_id,
-      dir_name,
-      detail_rule,
-      is_visible,
-      sort_order,
-      legacy_extra,
-      created_at,
-      updated_at
-    )
-    SELECT
-      id,
-      parent_id,
-      source_type,
-      source_id,
-      custom_url,
-      route_path,
-      content_model_id,
-      CASE
-        WHEN trim(coalesce(dir_name, '')) <> '' THEN dir_name
-        WHEN trim(coalesce(slug, '')) <> '' THEN slug
-        ELSE NULL
-      END,
-      NULL,
-      coalesce(is_visible, 1),
-      sort_order,
-      legacy_extra,
-      created_at,
-      updated_at
-    FROM columns_visibility_merge_rebuild;
-
-    DROP TABLE columns_visibility_merge_rebuild;
-
-    CREATE INDEX idx_columns_parent_sort ON columns(parent_id, sort_order, id);
-    CREATE INDEX idx_columns_source ON columns(source_type, source_id);
-    CREATE INDEX idx_columns_visible_sort ON columns(is_visible, sort_order, id);
-    CREATE INDEX idx_columns_dir_name ON columns(dir_name);
-    CREATE INDEX idx_columns_route_path
-    ON columns(route_path)
-    WHERE route_path IS NOT NULL;
-  `);
-}
-
-function migrateColumnsDropOpenInNewTab() {
-  const currentColumns = new Set(queryAll('PRAGMA table_info(columns)').map((column) => String(column.name || '')));
-  if (!currentColumns.has('open_in_new_tab')) {
-    return;
-  }
-
-  getDb().exec(`
-    DROP INDEX IF EXISTS idx_columns_parent_sort;
-    DROP INDEX IF EXISTS idx_columns_source;
-    DROP INDEX IF EXISTS idx_columns_visible_sort;
-    DROP INDEX IF EXISTS idx_columns_dir_name;
-    DROP INDEX IF EXISTS idx_columns_route_path_unique;
-
-    ALTER TABLE columns RENAME TO columns_open_in_new_tab_rebuild;
-
-    CREATE TABLE columns (
-      id INTEGER PRIMARY KEY,
-      parent_id INTEGER,
-      source_type TEXT NOT NULL,
-      source_id INTEGER NOT NULL DEFAULT 0,
-      custom_url TEXT,
-      route_path TEXT,
-      content_model_id INTEGER,
-      dir_name TEXT,
-      detail_rule TEXT,
-      is_visible INTEGER NOT NULL DEFAULT 1,
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      legacy_extra TEXT,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (source_type, source_id)
-    );
-
-    INSERT INTO columns (
-      id,
-      parent_id,
-      source_type,
-      source_id,
-      custom_url,
-      route_path,
-      content_model_id,
-      dir_name,
-      detail_rule,
-      is_visible,
-      sort_order,
-      legacy_extra,
-      created_at,
-      updated_at
-    )
-    SELECT
-      id,
-      parent_id,
-      source_type,
-      source_id,
-      custom_url,
-      route_path,
-      content_model_id,
-      CASE
-        WHEN trim(coalesce(dir_name, '')) <> '' THEN dir_name
-        WHEN trim(coalesce(slug, '')) <> '' THEN slug
-        ELSE NULL
-      END,
-      NULL,
-      coalesce(is_visible, 1),
-      sort_order,
-      legacy_extra,
-      created_at,
-      updated_at
-    FROM columns_open_in_new_tab_rebuild;
-
-    DROP TABLE columns_open_in_new_tab_rebuild;
-
-    CREATE INDEX idx_columns_parent_sort ON columns(parent_id, sort_order, id);
-    CREATE INDEX idx_columns_source ON columns(source_type, source_id);
-    CREATE INDEX idx_columns_visible_sort ON columns(is_visible, sort_order, id);
-    CREATE INDEX idx_columns_dir_name ON columns(dir_name);
-    CREATE INDEX idx_columns_route_path
-    ON columns(route_path)
-    WHERE route_path IS NOT NULL;
-  `);
-}
-
-function migrateColumnRoutePathConventions() {
-  const rows = queryAll(`
-    SELECT id, source_type, source_id, parent_id, custom_url, route_path, dir_name, detail_rule, legacy_extra
-    FROM columns
-  `);
-
-  for (const row of rows) {
-    const sourceType = String(row.source_type || '').trim();
-    const currentRoutePath = toNullableString(row.route_path);
-    const currentCustomUrl = toNullableString(row.custom_url);
-    const currentDirName = normalizeColumnDirName(row.dir_name);
-    const currentDetailRule = toNullableString(row.detail_rule);
-
-    let nextRoutePath = currentRoutePath;
-    let nextCustomUrl = currentCustomUrl;
-    let nextDirName = currentDirName;
-    let nextDetailRule = normalizeColumnDetailRule(currentDetailRule, sourceType);
-
-    if (sourceType === 'custom_link') {
-      nextRoutePath = null;
-      nextDirName = null;
-      nextDetailRule = null;
-    } else if (sourceType === 'contact_page') {
-      nextRoutePath = '/contact.html';
-      nextCustomUrl = null;
-      nextDirName = null;
-      nextDetailRule = null;
-    } else if (sourceType === 'product_root') {
-      nextRoutePath = '/products/';
-      nextCustomUrl = null;
-    } else if (sourceType === 'product_category') {
-      nextCustomUrl = null;
-    } else if (sourceType === 'news_category') {
-      nextCustomUrl = null;
-      if (toInteger(row.parent_id, 0) === 0) {
-        const sectionDir = resolveNewsRouteDirFromColumn(row);
-        nextRoutePath = sectionDir ? `/${sectionDir}/` : currentRoutePath;
-        nextDirName = sectionDir || null;
-      }
-    } else if (sourceType === 'corporation_root') {
-      nextRoutePath = '/about/';
-      nextCustomUrl = null;
-      nextDirName = null;
-      nextDetailRule = null;
-    } else if (sourceType === 'corporation_category') {
-      nextRoutePath = `/about/about-${toInteger(row.id, 0)}.html`;
-      nextCustomUrl = null;
-      nextDetailRule = null;
-    } else if (sourceType === 'single_page') {
-      nextCustomUrl = null;
-      nextDetailRule = null;
-    }
-
-    if (
-      nextRoutePath !== currentRoutePath
-      || nextCustomUrl !== currentCustomUrl
-      || nextDirName !== currentDirName
-      || nextDetailRule !== currentDetailRule
-    ) {
-      execute(
-        `
-          UPDATE columns
-          SET
-            custom_url = ?,
-            route_path = ?,
-            dir_name = ?,
-            detail_rule = ?,
-            updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `,
-        [
-          nextCustomUrl,
-          nextRoutePath,
-          nextDirName,
-          nextDetailRule,
-          toInteger(row.id, 0)
-        ]
-      );
-    }
-  }
-
-  syncManagedColumnRoutePaths();
-}
-
-function resolveNewsRouteDirFromColumn(row) {
-  // 只使用数据库配置的 dir_name，不进行任何推断
-  const explicitDirName = String(row?.dir_name || '').trim();
-  if (explicitDirName && explicitDirName !== 'null') {
-    return explicitDirName;
-  }
-
-  // 如果没有配置，返回 null（强制要求手动配置）
-  return null;
-}
-
-function migrateColumnsReplaceSlugWithDirName() {
-  const currentColumns = new Set(queryAll('PRAGMA table_info(columns)').map((column) => String(column.name || '')));
-  if (!currentColumns.has('slug')) {
-    return;
-  }
-
-  getDb().exec(`
-    DROP INDEX IF EXISTS idx_columns_parent_sort;
-    DROP INDEX IF EXISTS idx_columns_source;
-    DROP INDEX IF EXISTS idx_columns_visible_sort;
-    DROP INDEX IF EXISTS idx_columns_slug;
-    DROP INDEX IF EXISTS idx_columns_dir_name;
-    DROP INDEX IF EXISTS idx_columns_route_path_unique;
-
-    ALTER TABLE columns RENAME TO columns_slug_to_dir_name_rebuild;
-
-    CREATE TABLE columns (
-      id INTEGER PRIMARY KEY,
-      parent_id INTEGER,
-      source_type TEXT NOT NULL,
-      source_id INTEGER NOT NULL DEFAULT 0,
-      custom_url TEXT,
-      route_path TEXT,
-      content_model_id INTEGER,
-      dir_name TEXT,
-      detail_rule TEXT,
-      is_visible INTEGER NOT NULL DEFAULT 1,
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      legacy_extra TEXT,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (source_type, source_id)
-    );
-
-    INSERT INTO columns (
-      id,
-      parent_id,
-      source_type,
-      source_id,
-      custom_url,
-      route_path,
-      content_model_id,
-      dir_name,
-      detail_rule,
-      is_visible,
-      sort_order,
-      legacy_extra,
-      created_at,
-      updated_at
-    )
-    SELECT
-      id,
-      parent_id,
-      source_type,
-      source_id,
-      custom_url,
-      route_path,
-      content_model_id,
-      CASE
-        WHEN trim(coalesce(dir_name, '')) <> '' THEN dir_name
-        WHEN trim(coalesce(slug, '')) <> '' THEN slug
-        ELSE NULL
-      END,
-      NULL,
-      coalesce(is_visible, 1),
-      sort_order,
-      legacy_extra,
-      created_at,
-      updated_at
-    FROM columns_slug_to_dir_name_rebuild;
-
-    DROP TABLE columns_slug_to_dir_name_rebuild;
-
-    CREATE INDEX idx_columns_parent_sort ON columns(parent_id, sort_order, id);
-    CREATE INDEX idx_columns_source ON columns(source_type, source_id);
-    CREATE INDEX idx_columns_visible_sort ON columns(is_visible, sort_order, id);
-    CREATE INDEX idx_columns_dir_name ON columns(dir_name);
-    CREATE INDEX idx_columns_route_path
-    ON columns(route_path)
-    WHERE route_path IS NOT NULL;
-  `);
-}
-
-function validateColumnResolvedPathConflict(base, currentId = null) {
-  const sourceType = String(base?.source_type || '').trim().toLowerCase();
-  if (sourceType === 'custom_link') {
-    return;
-  }
-
-  const resolvedRoutePath = resolveColumnResolvedRoutePath(base, currentId);
-  if (!resolvedRoutePath) {
-    return;
-  }
-
-  const rows = queryAll(
-    `
-      SELECT id, parent_id, source_type, route_path
-      FROM columns
-      WHERE route_path IS NOT NULL
-    `
-  );
-
-  for (const row of rows) {
-    const rowId = toInteger(row.id, 0);
-    if (currentId && rowId === toInteger(currentId, 0)) {
-      continue;
-    }
-    const existingResolvedPath = resolveColumnResolvedRoutePath(row);
-    if (existingResolvedPath && existingResolvedPath === resolvedRoutePath) {
-      throw new Error('访问路径已存在');
-    }
-  }
-}
-
-function resolveColumnResolvedRoutePath(column, currentId = null) {
-  const sourceType = String(column?.source_type || '').trim().toLowerCase();
-  const routePath = toNullableString(column?.route_path);
-  if (!routePath) {
-    return '';
-  }
-
-  const parentPublicPath = resolveColumnParentRoutePath(column, currentId);
-  const resolved = resolveRelativePublicPath(routePath, parentPublicPath);
-  if (!resolved) {
-    return '';
-  }
-  if (resolved !== '/' && !pathLooksLikeFile(resolved) && !resolved.endsWith('/')) {
-    return `${resolved}/`;
-  }
-  return resolved;
-}
-
-function resolveColumnParentRoutePath(column, currentId = null) {
-  const parentId = toInteger(column?.parent_id, 0);
-  if (parentId <= 0) {
-    return '/';
-  }
-  const parent = getColumnByIdRaw(parentId);
-  if (!parent) {
-    return '/';
-  }
-  if (currentId && toInteger(parent.id, 0) === toInteger(currentId, 0)) {
-    return '/';
-  }
-
-  const sourceType = String(parent.source_type || '').trim().toLowerCase();
-  if (sourceType === 'product_root') {
-    return '/products/';
-  }
-  if (sourceType === 'corporation_root') {
-    return '/about/';
-  }
-
-  return resolveColumnResolvedRoutePath(parent, currentId) || '/';
-}
-
-function syncManagedColumnRoutePaths() {
-  const rows = queryAll(`
-    SELECT id, parent_id, source_type, route_path, dir_name, sort_order
-    FROM columns
-    ORDER BY coalesce(parent_id, 0) ASC, sort_order ASC, id ASC
-  `);
-  if (!rows.length) {
-    return;
-  }
-
-  const rowById = new Map(rows.map((row) => [toInteger(row.id, 0), row]));
-  const computedPathById = new Map();
-
-  for (const row of rows) {
-    const id = toInteger(row.id, 0);
-    const nextRoutePath = computeManagedColumnRoutePath(row, rowById, computedPathById);
-    if (!nextRoutePath) {
-      continue;
-    }
-    computedPathById.set(id, nextRoutePath);
-    if (String(row.route_path || '').trim() !== nextRoutePath) {
-      execute(
-        `
-          UPDATE columns
-          SET route_path = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `,
-        [nextRoutePath, id]
-      );
-    }
-  }
-}
-
-function computeManagedColumnRoutePath(row, rowById, computedPathById) {
-  const sourceType = String(row?.source_type || '').trim();
-  if (sourceType === 'product_root') {
-    return '/products/';
-  }
-  if (sourceType === 'product_category') {
-    const segments = buildManagedColumnDirSegments(row, rowById, 'product_root');
-    return segments.length > 0 ? `/products/${segments.join('/')}/` : '/products/';
-  }
-  if (sourceType === 'news_category') {
-    const parentId = toInteger(row?.parent_id, 0);
-    if (parentId <= 0) {
-      return String(row?.route_path || '').trim() || '/news/';
-    }
-    const parent = rowById.get(parentId);
-    const parentRoutePath = parent ? (
-      computedPathById.get(parentId)
-      || computeManagedColumnRoutePath(parent, rowById, computedPathById)
-    ) : '';
-    const dirName = normalizeColumnDirName(row?.dir_name);
-    if (!dirName || !parentRoutePath) {
-      return String(row?.route_path || '').trim();
-    }
-    return joinManagedRoutePath(parentRoutePath, dirName);
-  }
-  if (sourceType === 'corporation_root') {
-    return '/about/';
-  }
-  return null;
-}
-
-function buildManagedColumnDirSegments(row, rowById, stopSourceType) {
-  const segments = [];
-  let current = row;
-  const visited = new Set();
-
-  while (current) {
-    const currentId = toInteger(current.id, 0);
-    if (currentId <= 0 || visited.has(currentId)) {
-      break;
-    }
-    visited.add(currentId);
-
-    const dirName = normalizeColumnDirName(current.dir_name);
-    if (dirName) {
-      segments.unshift(dirName);
-    }
-
-    const parentId = toInteger(current.parent_id, 0);
-    if (parentId <= 0) {
-      break;
-    }
-    const parent = rowById.get(parentId);
-    if (!parent) {
-      break;
-    }
-    if (String(parent.source_type || '').trim() === stopSourceType) {
-      break;
-    }
-    current = parent;
-  }
-
-  return segments;
-}
-
-function joinManagedRoutePath(parentRoutePath, dirName) {
-  const parent = String(parentRoutePath || '').trim().replace(/\/+$/, '');
-  const child = String(dirName || '').trim().replace(/^\/+|\/+$/g, '');
-  if (!parent) {
-    return child ? `/${child}/` : '/';
-  }
-  if (!child) {
-    return `${parent}/`;
-  }
-  return `${parent}/${child}/`;
-}
-
-function parseJsonObject(value) {
-  if (!value) {
-    return {};
-  }
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function rebuildColumnTranslationsIfNeeded() {
-  const createSql = queryOne(
-    `
-      SELECT sql
-      FROM sqlite_master
-      WHERE type = 'table' AND name = 'column_translations'
-    `
-  )?.sql || '';
-
-  if (!createSql.includes('"columns_legacy_rebuild"') && !createSql.includes('columns_legacy_rebuild')) {
-    return;
-  }
-
-  getDb().exec(`
-    ALTER TABLE column_translations RENAME TO column_translations__rebuild;
-
-    CREATE TABLE column_translations (
-      id INTEGER PRIMARY KEY,
-      column_id INTEGER NOT NULL,
-      language_id INTEGER NOT NULL,
-      name TEXT NOT NULL,
-      summary TEXT NOT NULL DEFAULT '',
-      content_html TEXT NOT NULL DEFAULT '',
-      keywords TEXT,
-      seo_title TEXT,
-      seo_keywords TEXT,
-      seo_description TEXT,
-      publish_status TEXT NOT NULL DEFAULT 'published',
-      published_at TEXT,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE (column_id, language_id)
-    );
-
-    INSERT INTO column_translations (
-      id,
-      column_id,
-      language_id,
-      name,
-      summary,
-      content_html,
-      keywords,
-      seo_title,
-      seo_keywords,
-      seo_description,
-      publish_status,
-      published_at,
-      created_at,
-      updated_at
-    )
-    SELECT
-      id,
-      column_id,
-      language_id,
-      name,
-      coalesce(summary, ''),
-      coalesce(content_html, ''),
-      keywords,
-      seo_title,
-      seo_keywords,
-      seo_description,
-      coalesce(publish_status, 'published'),
-      published_at,
-      created_at,
-      updated_at
-    FROM column_translations__rebuild;
-
-    DROP TABLE column_translations__rebuild;
-
-    CREATE INDEX idx_column_translations_column_id
-    ON column_translations(column_id, language_id);
-  `);
 }
