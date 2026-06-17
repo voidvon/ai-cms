@@ -19,10 +19,16 @@ buildContentDetailUrlFromColumn(entry, column, categoryPath?)
 buildContentDetailPathFromColumn(entry, column, categoryPath?)
 ```
 
-✅ **修复路径推断逻辑** (`columns.mjs`, `public-sections.mjs`)
-- `resolveNewsSectionDirName`: 优先使用数据库 `dir_name`
-- `resolveNewsRouteDirFromColumn`: 防止迁移函数覆盖已配置的 `dir_name`
-- 支持单复数形式兼容（`service` / `services`）
+✅ **完全移除启发式推断** (`columns.mjs`, `public-sections.mjs`)
+- `resolveNewsSectionDirName`: 只读取 `dir_name`，无配置则抛出错误
+- `resolveNewsRouteDirFromColumn`: 只读取 `dir_name`，无配置则返回 null
+- 删除 `collectNewsRootHints` 启发式函数
+- **设计理念：配置驱动，拒绝推断**
+
+✅ **修复数据库配置冲突**
+- ID 94 (行业): `dir_name='industry'`, `route_path='/industry/'`
+- ID 328 (客户案例): `dir_name='cases'`, `route_path='/cases/'`
+- 避免多个栏目使用相同的 `dir_name`
 
 ✅ **静态生成器部分迁移** (`static-builder.mjs`)
 - 服务详情页：`buildLegacyNewsSectionDetailPagesByDir` 使用统一函数
@@ -38,11 +44,15 @@ npm --prefix system/server run build:static
 ✅ 6条详情页生成到 html/services/{custom-url}/
 ✅ 3个列表页文件（index.html, 70.html, 70-1.html）
 ✅ 列表页链接使用自定义URL路径
+✅ 所有根栏目从数据库读取配置：news, services, industry, cases
 ```
 
 **示例URL**：
 - 列表页：`/services/` → `html/services/index.html`
 - 详情页：`/services/wireless-steam-trap-monitoring/` → `html/services/wireless-steam-trap-monitoring/index.html`
+
+**错误处理**：
+- 缺少配置时正确抛出：`栏目 X 缺少 dir_name 配置，请在数据库中设置`
 
 ## 待完成
 
@@ -83,7 +93,7 @@ npm --prefix system/server run build:static
 
 ### 核心设计原则
 
-**"路径来源于栏目配置，而非内容类型"**
+**1. "路径来源于栏目配置，而非内容类型"**
 
 ```javascript
 // ❌ 旧方式：按模型硬编码
@@ -97,6 +107,39 @@ function buildContentDetailUrlFromColumn(entry, column) {
   const sectionRoot = column.route_path;  // 从数据库读取
   const detailRule = column.detail_rule;  // 从数据库读取
   // ...
+}
+```
+
+**2. "配置驱动，拒绝推断"**
+
+启发式推断的问题：
+- ❌ **不透明**：从多个字段猜测，难以调试
+- ❌ **不可靠**：推断结果可能与预期不符
+- ❌ **难维护**：规则复杂，容易出错
+- ❌ **隐式行为**：修改一个字段可能意外影响路径
+
+数据库配置的优势：
+- ✅ **明确**：直接从 `columns.dir_name` 读取
+- ✅ **可控**：管理员在后台设置，所见即所得
+- ✅ **可验证**：缺少配置时明确报错
+- ✅ **显式行为**：修改配置直接生效，行为可预测
+
+```javascript
+// ❌ 旧方式：启发式推断
+function resolveNewsRouteDirFromColumn(row) {
+  const hints = [row.name, row.route_path, row.legacy_extra.key];
+  if (hints.some(h => /service/.test(h))) return 'service';
+  if (hints.some(h => /news/.test(h))) return 'news';
+  return 'news';  // 默认值，隐式行为
+}
+
+// ✅ 新方式：配置驱动
+function resolveNewsRouteDirFromColumn(row) {
+  const explicitDirName = String(row?.dir_name || '').trim();
+  if (explicitDirName && explicitDirName !== 'null') {
+    return explicitDirName;
+  }
+  return null;  // 强制要求配置
 }
 ```
 
