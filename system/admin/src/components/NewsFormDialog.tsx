@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { contentModelsApi } from '@/api/advanced'
 import { columnsApi } from '@/api/columns'
@@ -41,9 +41,9 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
     queryKey: ['languages'],
     queryFn: () => languagesApi.list(),
   })
-  const languages = languagesData?.data || []
+  const languages = useMemo(() => languagesData?.data || [], [languagesData?.data])
   const defaultLanguageCode = languages.find((item) => item.is_default === 1)?.code || 'zh-CN'
-  const availableLanguageCodes = languages.map((item) => item.code)
+  const availableLanguageCodes = useMemo(() => languages.map((item) => item.code), [languages])
 
   const { data: newsDetailData } = useQuery({
     queryKey: ['news-detail', news?.id, open],
@@ -97,7 +97,7 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
       })
       setActiveLanguage(defaultLanguageCode)
     }
-  }, [news, newsDetailData, mode, defaultColumnId, defaultLanguageCode])
+  }, [news, newsDetailData?.data, mode, defaultColumnId, defaultLanguageCode, availableLanguageCodes.join('|')])
 
   const mutation = useMutation({
     mutationFn: async () => {

@@ -344,12 +344,20 @@ function migrateLegacySlugUrlsToCustomUrl(tableName) {
 }
 
 function buildContentTranslationTableSql(tableName, translationTableName, modelCode) {
-  // 只创建基础系统字段，其他字段通过 addColumnIfMissing 动态添加
+  // 创建完整的字段，确保重建时字段一致
   return `
     CREATE TABLE IF NOT EXISTS ${quoteIdentifier(translationTableName)} (
       id INTEGER PRIMARY KEY,
       entry_id INTEGER NOT NULL,
       language_id INTEGER NOT NULL,
+      name TEXT NOT NULL DEFAULT '',
+      summary TEXT NOT NULL DEFAULT '',
+      content_html TEXT NOT NULL DEFAULT '',
+      keywords TEXT,
+      seo_title TEXT,
+      seo_keywords TEXT,
+      seo_description TEXT,
+      publish_status TEXT NOT NULL DEFAULT 'published',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(entry_id, language_id)

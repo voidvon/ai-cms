@@ -81,7 +81,7 @@ export default function CorporationCategoryFormDialog({
       })
       setContentTemplateId(DEFAULT_TEMPLATE_VALUE)
     }
-  }, [category, currentParentId, mode, bindingsData])
+  }, [category, currentParentId, mode, bindingsData?.data])
 
   const mutation = useMutation({
     mutationFn: async () => {

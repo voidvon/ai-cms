@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { contentModelsApi } from '@/api/advanced'
 import { columnsApi } from '@/api/columns'
@@ -43,9 +43,9 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
     queryKey: ['languages'],
     queryFn: () => languagesApi.list(),
   })
-  const languages = languagesData?.data || []
+  const languages = useMemo(() => languagesData?.data || [], [languagesData?.data])
   const defaultLanguageCode = languages.find((item) => item.is_default === 1)?.code || 'zh-CN'
-  const availableLanguageCodes = languages.map((item) => item.code)
+  const availableLanguageCodes = useMemo(() => languages.map((item) => item.code), [languages])
 
   const { data: productDetailData } = useQuery({
     queryKey: ['product-detail', product?.id, open],
@@ -103,7 +103,7 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
       })
       setActiveLanguage(defaultLanguageCode)
     }
-  }, [product, productDetailData, mode, defaultColumnId, defaultLanguageCode])
+  }, [product, productDetailData?.data, mode, defaultColumnId, defaultLanguageCode, availableLanguageCodes.join('|')])
 
   const mutation = useMutation({
     mutationFn: async () => {

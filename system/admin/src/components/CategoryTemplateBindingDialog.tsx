@@ -66,8 +66,14 @@ export default function CategoryTemplateBindingDialog({
       const binding = targetBindings.find((item) => item.template_type === type)
       nextValues[type] = binding?.template_id ? String(binding.template_id) : DEFAULT_VALUE
     }
-    setSelectedTemplates(nextValues)
-  }, [open, targetBindings, templateTypes])
+    setSelectedTemplates((previous) => {
+      const previousKeys = Object.keys(previous)
+      const nextKeys = Object.keys(nextValues)
+      const unchanged = previousKeys.length === nextKeys.length
+        && nextKeys.every((key) => previous[key] === nextValues[key])
+      return unchanged ? previous : nextValues
+    })
+  }, [open, targetBindings, templateTypes.join('|')])
 
   const saveMutation = useMutation({
     mutationFn: async () => {

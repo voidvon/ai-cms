@@ -746,20 +746,25 @@ export default function ColumnsPage() {
   }
 
   const selectedEditingColumnId = editingColumnTarget?.id || editingManualColumn?.id || 0
-  const selectedManualListBinding = selectedEditingColumnId
-    ? bindings.find((binding) => (
-      binding.target_type === 'column'
-      && binding.target_id === selectedEditingColumnId
-      && binding.template_type === 'list'
-    ))
-    : null
-  const selectedManualContentBinding = selectedEditingColumnId
-    ? bindings.find((binding) => (
-      binding.target_type === 'column'
-      && binding.target_id === selectedEditingColumnId
-      && binding.template_type === 'content'
-    ))
-    : null
+  const selectedManualListBinding = useMemo(() =>
+    selectedEditingColumnId
+      ? bindings.find((binding) => (
+        binding.target_type === 'column'
+        && binding.target_id === selectedEditingColumnId
+        && binding.template_type === 'list'
+      ))
+      : null
+  , [selectedEditingColumnId, bindings])
+
+  const selectedManualContentBinding = useMemo(() =>
+    selectedEditingColumnId
+      ? bindings.find((binding) => (
+        binding.target_type === 'column'
+        && binding.target_id === selectedEditingColumnId
+        && binding.template_type === 'content'
+      ))
+      : null
+  , [selectedEditingColumnId, bindings])
 
   return (
     <div className="grid h-full min-h-0 gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">

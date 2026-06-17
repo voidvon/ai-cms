@@ -7,6 +7,56 @@ const DEFAULT_PRODUCT_IMAGE = '/skin/dfpic.gif';
 const EMPTY_IMAGE_LIST = '[]';
 
 /**
+ * 获取模型的字段配置
+ */
+function getModelFieldNames(modelCode) {
+  const rows = queryAll(
+    `SELECT field_name, is_translatable
+     FROM content_model_fields
+     WHERE model_code = ?
+     ORDER BY sort_order`,
+    [modelCode]
+  );
+  return {
+    mainFields: rows.filter(r => r.is_translatable === 0).map(r => r.field_name),
+    translationFields: rows.filter(r => r.is_translatable === 1).map(r => r.field_name)
+  };
+}
+
+/**
+ * 构建主表字段的 SELECT 子句
+ * 对于不存在的字段，使用默认值
+ */
+function buildMainTableSelect(modelCode, alias = 'e') {
+  const { mainFields } = getModelFieldNames(modelCode);
+  const allPossibleFields = [
+    'custom_url',
+    'code',
+    'images',
+    'primary_image',
+    'is_visible',
+    'is_featured_home',
+    'sort_order',
+    'legacy_extra'
+  ];
+
+  const selectParts = allPossibleFields.map(field => {
+    if (mainFields.includes(field)) {
+      return `${alias}.${field}`;
+    } else {
+      // 字段不存在，返回默认值
+      if (field === 'images') return `'[]' AS ${field}`;
+      if (field === 'is_visible') return `1 AS ${field}`;
+      if (field === 'is_featured_home') return `0 AS ${field}`;
+      if (field === 'sort_order') return `0 AS ${field}`;
+      return `NULL AS ${field}`;
+    }
+  });
+
+  return selectParts.join(',\n        ');
+}
+
+/**
  * 获取翻译表的发布时间字段表达式
  * 所有模型统一使用 created_at（已删除 published_at 字段）
  */
@@ -25,8 +75,11 @@ export function listContentEntries(modelCode, {
   const selectedLanguage = resolveLanguage(languageCode);
   const tableName = getContentTableName(modelCode);
   const translationTableName = getTranslationTableName(modelCode);
+  const { mainFields } = getModelFieldNames(modelCode);
   const whereParts = [];
-  if (visibleOnly) {
+
+  // 只有当字段存在时才添加过滤条件
+  if (visibleOnly && mainFields.includes('is_visible')) {
     whereParts.push('e.is_visible = 1');
   }
   if (featured) {
@@ -38,16 +91,7 @@ export function listContentEntries(modelCode, {
       SELECT
         e.id,
         e.column_id,
-        e.custom_url,
-        e.code,
-        e.images,
-        e.primary_image,
-        e.is_visible,
-        e.is_featured_home,
-        e.sort_order,
-        e.publish_status,
-        e.created_at,
-        e.legacy_extra,
+        ${buildMainTableSelect(modelCode, 'e')},
         e.created_at,
         e.updated_at,
         ${buildNameExpr('t', 'dt')} AS name,
@@ -57,7 +101,7 @@ export function listContentEntries(modelCode, {
         coalesce(t.seo_title, dt.seo_title) AS seo_title,
         coalesce(t.seo_keywords, dt.seo_keywords) AS seo_keywords,
         coalesce(t.seo_description, dt.seo_description) AS seo_description,
-        coalesce(t.publish_status, dt.publish_status, e.publish_status, 'published') AS translation_publish_status,
+        coalesce(t.publish_status, dt.publish_status, 'published') AS translation_publish_status,
         ${getTranslationPublishedAtExpr(modelCode, 't', 'dt', 'e')} AS translation_published_at,
         coalesce(tc.name, dtc.name, '') AS category_name,
         coalesce(l.code, dl.code, ?) AS current_language_code
@@ -124,7 +168,10 @@ export function listContentEntriesPaged(modelCode, {
     : '';
 
   const queryParams = hasColumnFilter && includeDescendants ? [safeColumnId, ...params] : [...params];
-  if (visibleOnly) {
+  const { mainFields } = getModelFieldNames(modelCode);
+
+  // 只有当字段存在时才添加过滤条件
+  if (visibleOnly && mainFields.includes('is_visible')) {
     whereParts.push('e.is_visible = 1');
   }
   if (hasColumnFilter) {
@@ -141,16 +188,7 @@ export function listContentEntriesPaged(modelCode, {
       SELECT
         e.id,
         e.column_id,
-        e.custom_url,
-        e.code,
-        e.images,
-        e.primary_image,
-        e.is_visible,
-        e.is_featured_home,
-        e.sort_order,
-        e.publish_status,
-        e.created_at,
-        e.legacy_extra,
+        ${buildMainTableSelect(modelCode, 'e')},
         e.created_at,
         e.updated_at,
         ${buildNameExpr('t', 'dt')} AS name,
@@ -160,7 +198,7 @@ export function listContentEntriesPaged(modelCode, {
         coalesce(t.seo_title, dt.seo_title) AS seo_title,
         coalesce(t.seo_keywords, dt.seo_keywords) AS seo_keywords,
         coalesce(t.seo_description, dt.seo_description) AS seo_description,
-        coalesce(t.publish_status, dt.publish_status, e.publish_status, 'published') AS translation_publish_status,
+        coalesce(t.publish_status, dt.publish_status, 'published') AS translation_publish_status,
         ${getTranslationPublishedAtExpr(modelCode, 't', 'dt', 'e')} AS translation_published_at,
         coalesce(tc.name, dtc.name, '') AS category_name,
         coalesce(l.code, dl.code, ?) AS current_language_code
@@ -215,16 +253,7 @@ export function getContentEntryById(modelCode, id, {
       SELECT
         e.id,
         e.column_id,
-        e.custom_url,
-        e.code,
-        e.images,
-        e.primary_image,
-        e.is_visible,
-        e.is_featured_home,
-        e.sort_order,
-        e.publish_status,
-        e.created_at,
-        e.legacy_extra,
+        ${buildMainTableSelect(modelCode, 'e')},
         e.created_at,
         e.updated_at,
         ${buildNameExpr('t', 'dt')} AS name,
@@ -234,7 +263,7 @@ export function getContentEntryById(modelCode, id, {
         coalesce(t.seo_title, dt.seo_title) AS seo_title,
         coalesce(t.seo_keywords, dt.seo_keywords) AS seo_keywords,
         coalesce(t.seo_description, dt.seo_description) AS seo_description,
-        coalesce(t.publish_status, dt.publish_status, e.publish_status, 'published') AS translation_publish_status,
+        coalesce(t.publish_status, dt.publish_status, 'published') AS translation_publish_status,
         ${getTranslationPublishedAtExpr(modelCode, 't', 'dt', 'e')} AS translation_published_at,
         coalesce(tc.name, dtc.name, '') AS category_name,
         coalesce(l.code, dl.code, ?) AS current_language_code

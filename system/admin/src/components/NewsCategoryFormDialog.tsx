@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query'
 import { templateVariantsApi, templatesApi } from '@/api/advanced'
 import { languagesApi } from '@/api/languages'
@@ -76,9 +76,9 @@ export default function NewsCategoryFormDialog({
     enabled: open && Boolean(selectedThemeId) && mode === 'edit' && Boolean(category?.id),
   })
 
-  const languages = languagesData?.data || []
+  const languages = useMemo(() => languagesData?.data || [], [languagesData?.data])
   const defaultLanguageCode = languages.find((item) => item.is_default === 1)?.code || 'zh-CN'
-  const availableLanguageCodes = languages.map((item) => item.code)
+  const availableLanguageCodes = useMemo(() => languages.map((item) => item.code), [languages])
   const currentTranslation = translations[activeLanguage] || createEmptyTranslation()
 
   useEffect(() => {
@@ -114,7 +114,7 @@ export default function NewsCategoryFormDialog({
       setListTemplateId(DEFAULT_TEMPLATE_VALUE)
       setContentTemplateId(DEFAULT_TEMPLATE_VALUE)
     }
-  }, [category, categoryDetailData, currentParentId, mode, defaultLanguageCode, availableLanguageCodes, bindingsData])
+  }, [category, categoryDetailData?.data, currentParentId, mode, defaultLanguageCode, availableLanguageCodes.join('|'), bindingsData?.data])
 
   const mutation = useMutation({
     mutationFn: async () => {

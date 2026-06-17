@@ -84,7 +84,7 @@ export default function ManualColumnFormDialog({
 
   const languages = languagesData?.data || []
   const defaultLanguageCode = languages.find((item) => item.is_default === 1)?.code || 'zh-CN'
-  const availableLanguageCodes = languages.map((item) => item.code)
+  const availableLanguageCodes = useMemo(() => languages.map((item) => item.code), [languages])
   const currentTranslation = translations[activeLanguage] || createEmptyTranslation()
   const basicOnly = forceBasicOnly || (mode === 'edit' && column?.column_kind === 'category')
   const detailRuleOptions = basicOnly
@@ -109,7 +109,7 @@ export default function ManualColumnFormDialog({
     }
 
     if (mode === 'edit' && column) {
-      setBaseData({
+      const nextBaseData = {
         parent_id: Number(column.parent_id || 0),
         column_kind: column.column_kind === 'single' ? 'single' : 'link',
         content_model_id: Number(column.content_model_id || 0),
@@ -119,15 +119,22 @@ export default function ManualColumnFormDialog({
         detail_rule: column.detail_rule || '',
         sort_order: Number(column.sort_order || 0),
         is_visible: Number(column.is_visible ?? 1)
+      }
+      setBaseData((previous) => shallowEqualBaseData(previous, nextBaseData) ? previous : nextBaseData)
+      setTranslations((previous) => {
+        const nextTranslations = buildInitialTranslations(column, defaultLanguageCode, availableLanguageCodes)
+        return JSON.stringify(previous) === JSON.stringify(nextTranslations) ? previous : nextTranslations
       })
-      setTranslations(buildInitialTranslations(column, defaultLanguageCode, availableLanguageCodes))
-      setActiveLanguage(column.current_language_code || defaultLanguageCode)
-      setListTemplateId(initialListTemplateId || DEFAULT_TEMPLATE_VALUE)
-      setContentTemplateId(initialContentTemplateId || DEFAULT_TEMPLATE_VALUE)
+      setActiveLanguage((previous) => {
+        const nextLanguage = column.current_language_code || defaultLanguageCode
+        return previous === nextLanguage ? previous : nextLanguage
+      })
+      setListTemplateId((previous) => previous === (initialListTemplateId || DEFAULT_TEMPLATE_VALUE) ? previous : (initialListTemplateId || DEFAULT_TEMPLATE_VALUE))
+      setContentTemplateId((previous) => previous === (initialContentTemplateId || DEFAULT_TEMPLATE_VALUE) ? previous : (initialContentTemplateId || DEFAULT_TEMPLATE_VALUE))
       return
     }
 
-    setBaseData({
+    const nextBaseData = {
       parent_id: 0,
       column_kind: initialKind,
       content_model_id: 0,
@@ -137,14 +144,18 @@ export default function ManualColumnFormDialog({
       detail_rule: '',
       sort_order: 0,
       is_visible: 1
+    }
+    setBaseData((previous) => shallowEqualBaseData(previous, nextBaseData) ? previous : nextBaseData)
+    setTranslations((previous) => {
+      const nextTranslations = {
+        [defaultLanguageCode]: createEmptyTranslation()
+      }
+      return JSON.stringify(previous) === JSON.stringify(nextTranslations) ? previous : nextTranslations
     })
-    setTranslations({
-      [defaultLanguageCode]: createEmptyTranslation()
-    })
-    setActiveLanguage(defaultLanguageCode)
-    setListTemplateId(DEFAULT_TEMPLATE_VALUE)
-    setContentTemplateId(DEFAULT_TEMPLATE_VALUE)
-  }, [open, mode, column, initialKind, initialListTemplateId, initialContentTemplateId, defaultLanguageCode])
+    setActiveLanguage((previous) => previous === defaultLanguageCode ? previous : defaultLanguageCode)
+    setListTemplateId((previous) => previous === DEFAULT_TEMPLATE_VALUE ? previous : DEFAULT_TEMPLATE_VALUE)
+    setContentTemplateId((previous) => previous === DEFAULT_TEMPLATE_VALUE ? previous : DEFAULT_TEMPLATE_VALUE)
+  }, [open, mode, column?.id, initialKind, initialListTemplateId, initialContentTemplateId, defaultLanguageCode, availableLanguageCodes])
 
   const parentOptions = useMemo(() => {
     return columns.filter((item) => {
@@ -509,4 +520,16 @@ function buildInitialTranslations(column: Column, defaultLanguageCode: string, a
   }
 
   return output
+}
+
+function shallowEqualBaseData(left: ManualColumnFormValue['base'], right: ManualColumnFormValue['base']) {
+  return left.parent_id === right.parent_id
+    && left.column_kind === right.column_kind
+    && left.content_model_id === right.content_model_id
+    && left.custom_url === right.custom_url
+    && left.dir_name === right.dir_name
+    && left.route_path === right.route_path
+    && left.detail_rule === right.detail_rule
+    && left.sort_order === right.sort_order
+    && left.is_visible === right.is_visible
 }

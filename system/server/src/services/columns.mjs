@@ -1102,7 +1102,7 @@ function getAllowedDetailRules(sourceType) {
     return new Set(['{id}/index.html', '{id}.html']);
   }
   if (sourceType === 'news_category') {
-    return new Set(['detail/{id}.html', '{id}.html']);
+    return new Set(['detail/{id}.html', '{id}.html', '{slug}/index.html']);
   }
   return new Set();
 }
