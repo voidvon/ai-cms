@@ -15,8 +15,7 @@ import {
 } from './public-sections.mjs';
 import {
   buildCategorySlugPath,
-  buildNewsDetailPublicUrl,
-  buildProductDetailPublicUrl
+  buildContentDetailUrlFromColumn
 } from './column-paths.mjs';
 
 const MAX_FULL_TEXT_PAGES = 500;
@@ -123,6 +122,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   const productCategoriesById = new Map(productCategories.map((item) => [toInteger(item.id, 0), item]));
   const newsCategoriesById = new Map(newsCategories.map((item) => [toInteger(item.id, 0), item]));
   const corporationById = new Map(corporationCategories.map((item) => [toInteger(item.id, 0), item]));
+  const columnMap = new Map(columns.map((col) => [toInteger(col.id, 0), col]));
   const pages = [];
 
   pages.push(createPage({
@@ -218,12 +218,12 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   for (const product of products) {
     const category = productCategoriesById.get(toInteger(product.column_id, 0));
     const categoryPath = category ? buildCategorySlugPath(category, productCategoriesById) : null;
+    const column = columnMap.get(toInteger(product.column_id, 0));
+    if (!column) continue;
+
     pages.push(createPage({
       title: product.name,
-      routePath: buildProductDetailPublicUrl({
-        ...product,
-        detail_rule: category?.detail_rule
-      }, categoryPath),
+      routePath: buildContentDetailUrlFromColumn(product, column, categoryPath),
       section: '产品详情',
       summary: product.summary || `产品详情：${product.name}`,
       contentLines: [
@@ -288,16 +288,13 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     const category = newsCategoriesById.get(toInteger(item.column_id, 0));
     const columnId = toInteger(item.column_id, 0);
     const section = publicSections.getNewsSectionByColumnId(columnId);
-    if (!section) {
+    if (!section?.rootColumn) {
       continue;
     }
 
     pages.push(createPage({
       title: item.title,
-      routePath: buildNewsDetailPublicUrl(item, {
-        sectionDir: section.dirName,
-        detail_rule: section.rootColumn?.detail_rule
-      }),
+      routePath: buildContentDetailUrlFromColumn(item, section.rootColumn),
       section: section.dirName === 'service' ? '服务详情' : '新闻详情',
       summary: item.summary || item.title,
       contentLines: [

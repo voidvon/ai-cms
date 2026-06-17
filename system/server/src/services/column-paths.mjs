@@ -66,39 +66,6 @@ export function buildProductCategoryPublicUrl(category, categoryMap = null) {
   return id === 0 ? '/products/index.html' : `/products/${id}.html`;
 }
 
-/**
- * @deprecated 使用 buildContentDetailUrlFromColumn(product, column, categoryPath) 代替
- * 此函数硬编码了 /products/ 路径，不支持栏目配置驱动
- */
-export function buildProductDetailPublicUrl(product, categorySlugPath = null) {
-  return buildContentDetailPublicUrl({
-    entry: product,
-    categoryPath: categorySlugPath,
-    detailRule: product?.detail_rule || product?.column_detail_rule,
-    sectionRoot: '/products/',
-    legacyFallback: `/product/${toInteger(product?.id, 0)}.html`
-  });
-}
-
-/**
- * @deprecated 使用 buildContentDetailUrlFromColumn(entry, column) 代替
- * 此函数需要手动传入 sectionDir 和 detail_rule，不支持栏目配置驱动
- */
-export function buildNewsDetailPublicUrl(entry, options = {}) {
-  const sectionDir = String(options.sectionDir || '').trim().replace(/^\/+|\/+$/g, '');
-  const categoryPath = options.categoryPath ?? null;
-  if (!sectionDir) {
-    return `/news/detail/${toInteger(entry?.id, 0)}.html`;
-  }
-  return buildContentDetailPublicUrl({
-    entry,
-    categoryPath,
-    detailRule: options.detail_rule,
-    sectionRoot: `/${sectionDir}/`,
-    legacyFallback: `/${sectionDir}/detail/${toInteger(entry?.id, 0)}.html`
-  });
-}
-
 function buildContentDetailPublicUrl({ entry, categoryPath = null, detailRule = null, sectionRoot = '/', legacyFallback = '' }) {
   const customUrl = normalizeEntryCustomUrl(entry?.custom_url);
   if (customUrl) {
@@ -144,35 +111,6 @@ function buildContentDetailPublicUrl({ entry, categoryPath = null, detailRule = 
  * @deprecated 使用 buildContentDetailPathFromColumn(product, column, categoryPath) 代替
  * 此函数硬编码了 products 目录，不支持栏目配置驱动
  */
-export function buildProductDetailOutputPath(product, categorySlugPath = null) {
-  return buildContentDetailOutputPath({
-    entry: product,
-    categoryPath: categorySlugPath,
-    detailRule: product?.detail_rule || product?.column_detail_rule,
-    sectionRoot: 'products',
-    legacyFallback: path.join('product', `${toInteger(product?.id, 0)}.html`)
-  });
-}
-
-/**
- * @deprecated 使用 buildContentDetailPathFromColumn(entry, column) 代替
- * 此函数需要手动传入 sectionDir 和 detail_rule，不支持栏目配置驱动
- */
-export function buildNewsDetailOutputPath(entry, options = {}) {
-  const sectionDir = String(options.sectionDir || '').trim().replace(/^\/+|\/+$/g, '');
-  const categoryPath = options.categoryPath ?? null;
-  if (!sectionDir) {
-    return path.join('news', 'detail', `${toInteger(entry?.id, 0)}.html`);
-  }
-  return buildContentDetailOutputPath({
-    entry,
-    categoryPath,
-    detailRule: options.detail_rule,
-    sectionRoot: sectionDir,
-    legacyFallback: path.join(sectionDir, 'detail', `${toInteger(entry?.id, 0)}.html`)
-  });
-}
-
 function buildContentDetailOutputPath({ entry, categoryPath = null, detailRule = null, sectionRoot = '', legacyFallback = '' }) {
   const customUrl = normalizeEntryCustomUrl(entry?.custom_url);
   if (customUrl) {

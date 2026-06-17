@@ -6,7 +6,7 @@
 import { queryAll, queryOne } from '../db.mjs';
 import {
   buildCategorySlugPathFromColumnIdMap,
-  buildProductDetailPublicUrl
+  buildContentDetailUrlFromColumn
 } from '../services/column-paths.mjs';
 
 export async function redirectLegacyProductUrls(request, reply) {
@@ -20,14 +20,18 @@ export async function redirectLegacyProductUrls(request, reply) {
 
   const productId = parseInt(match[1], 10);
 
-  // 从新内容表查询产品自定义路径和所属栏目
+  // 从新内容表查询产品和所属栏目
   const product = queryOne(
     `
       SELECT
         p.id,
         p.custom_url,
-        p.column_id
+        p.column_id,
+        c.route_path,
+        c.dir_name,
+        c.detail_rule
       FROM content_product p
+      LEFT JOIN columns c ON c.id = p.column_id
       WHERE p.id = ?
     `,
     [productId]
@@ -39,7 +43,14 @@ export async function redirectLegacyProductUrls(request, reply) {
   }
 
   const categorySlugPath = buildCategorySlugPath(product.column_id);
-  const newUrl = buildProductDetailPublicUrl(product, categorySlugPath);
+  const column = {
+    id: product.column_id,
+    route_path: product.route_path,
+    dir_name: product.dir_name,
+    detail_rule: product.detail_rule
+  };
+
+  const newUrl = buildContentDetailUrlFromColumn(product, column, categorySlugPath);
   reply.redirect(newUrl, 301);
 }
 

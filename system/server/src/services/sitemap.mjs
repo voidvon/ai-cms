@@ -14,9 +14,8 @@ import {
 } from './public-sections.mjs';
 import {
   buildCategorySlugPath,
-  buildNewsDetailPublicUrl,
   buildProductCategoryPublicUrl,
-  buildProductDetailPublicUrl
+  buildContentDetailUrlFromColumn
 } from './column-paths.mjs';
 import { ensureCorporationCategoriesSchema } from './corporation-categories.mjs';
 import { ensureProductsSchema, listProducts } from './products.mjs';
@@ -121,6 +120,7 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   const latestNewsDateByCategory = buildLatestDateMap(newsItems, (item) => toInteger(item.column_id, 0), 'created_at', generatedAt);
   const corporationLatestDateById = buildCorporationLatestDateMap(corporationCategories, generatedAt);
   const productCategoryMap = new Map(productCategories.map((item) => [toInteger(item.id, 0), item]));
+  const columnMap = new Map(columns.map((col) => [toInteger(col.id, 0), col]));
   const corporationIndexId = corporationCategories.find((item) => toInteger(item.parent_id, 0) === 0)?.id
     ?? corporationCategories[0]?.id
     ?? null;
@@ -165,11 +165,8 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   for (const item of newsItems) {
     const columnId = toInteger(item.column_id, 0);
     const section = publicSections.getNewsSectionByColumnId(columnId);
-    if (section) {
-      addEntry(entries, siteUrl, buildNewsDetailPublicUrl(item, {
-        sectionDir: section.dirName,
-        detail_rule: section.rootColumn?.detail_rule
-      }), item.created_at || generatedAt);
+    if (section?.rootColumn) {
+      addEntry(entries, siteUrl, buildContentDetailUrlFromColumn(item, section.rootColumn), item.created_at || generatedAt);
     }
   }
 
@@ -194,10 +191,10 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   for (const product of products) {
     const category = productCategoryMap.get(toInteger(product.column_id, 0));
     const categoryPath = category ? buildCategorySlugPath(category, productCategoryMap) : null;
-    addEntry(entries, siteUrl, buildProductDetailPublicUrl({
-      ...product,
-      detail_rule: category?.detail_rule
-    }, categoryPath), product.updated_at || generatedAt);
+    const column = columnMap.get(toInteger(product.column_id, 0));
+    if (column) {
+      addEntry(entries, siteUrl, buildContentDetailUrlFromColumn(product, column, categoryPath), product.updated_at || generatedAt);
+    }
   }
 
   return Array.from(entries.values());
