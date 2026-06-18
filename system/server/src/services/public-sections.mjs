@@ -103,6 +103,9 @@ export function buildColumnPublicUrl(column, publicSections) {
     return explicitRoutePath;
   }
   if (columnType === 'link') {
+    if (!relativeCustomUrl && !explicitRoutePath && toInteger(column.parent_id, 0) <= 0) {
+      return '/';
+    }
     return resolveRelativePublicPath(relativeCustomUrl, resolveColumnParentPublicUrl(column, publicSections));
   }
   return '';

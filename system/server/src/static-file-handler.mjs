@@ -192,10 +192,13 @@ function rewriteLegacyStaticPath(pathname) {
   const normalized = String(pathname || '').replace(/\/{2,}/g, '/');
 
   if (/^\/img\/css\.css$/i.test(normalized)) {
-    return '/skin/css.css';
+    return '/uploads/skin/css.css';
   }
   if (/^\/img\/(.+)$/i.test(normalized)) {
-    return normalized.replace(/^\/img\//i, '/images/');
+    return normalized.replace(/^\/img\//i, '/uploads/images/');
+  }
+  if (/^\/images\/(.+)$/i.test(normalized)) {
+    return normalized.replace(/^\/images\//i, '/uploads/images/');
   }
   if (/^\/js\/(.+)$/i.test(normalized)) {
     return normalized.replace(/^\/js\//i, '/js/');
@@ -204,13 +207,13 @@ function rewriteLegacyStaticPath(pathname) {
     return '/js';
   }
   if (/^\/skin\/blue\/images\/(.+)$/i.test(normalized)) {
-    return normalized.replace(/^\/skin\/blue\/images\//i, '/skin/blue/images/');
+    return normalized.replace(/^\/skin\/blue\/images\//i, '/uploads/skin/blue/images/');
   }
   if (/^\/skin\/blue\/(.+)$/i.test(normalized)) {
-    return normalized.replace(/^\/skin\/blue\//i, '/skin/blue/');
+    return normalized.replace(/^\/skin\/blue\//i, '/uploads/skin/blue/');
   }
   if (/^\/skin\/(.+)$/i.test(normalized)) {
-    return normalized.replace(/^\/skin\//i, '/skin/');
+    return normalized.replace(/^\/skin\//i, '/uploads/skin/');
   }
 
   return normalized;

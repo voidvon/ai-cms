@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { CONTENT_ROOT, UPLOAD_ALLOWED_EXTENSIONS, UPLOAD_MAX_SIZE_KB } from '../config.mjs';
+import { UPLOADS_IMAGES_ROOT, UPLOAD_ALLOWED_EXTENSIONS, UPLOAD_MAX_SIZE_KB } from '../config.mjs';
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { resolveUploadedFilePath } from './uploads.mjs';
 
@@ -80,7 +80,7 @@ export function uploadMediaAsset({ buffer, originalFilename, purpose }) {
   const target = PURPOSE_TARGETS[normalizedPurpose];
   const monthSegment = getUploadMonthSegment();
   const fileName = buildFileName(extension);
-  const fsDir = path.join(CONTENT_ROOT, 'uploads/images', monthSegment);
+  const fsDir = path.join(UPLOADS_IMAGES_ROOT, monthSegment);
   fs.mkdirSync(fsDir, { recursive: true });
   const fsPath = path.join(fsDir, fileName);
   fs.writeFileSync(fsPath, buffer);

@@ -161,12 +161,12 @@ function prefixRelativeHrefPaths(html, prefix) {
 
 const MANAGED_STATIC_ROOT_FILES = ['index.html', 'contact.html', 'sitemap.xml', 'robots.txt', 'llms.txt', 'llms-full.txt', 'index.md'];
 const LEGACY_MANAGED_STATIC_DIRS = ['about', 'product'];
-const SHARED_STATIC_DIRS = ['css', 'images', 'skin', 'uploads'];
+const SHARED_STATIC_DIRS = ['css', 'uploads'];
 const SHARED_STATIC_ROOT_FILES = ['logo.svg'];
-const OBSOLETE_SHARED_STATIC_DIRS = ['js', 'JS'];
-const STATIC_COMPAT_ALIASES = [
-  ['images', 'Images'],
-  ['skin', 'Skin']
+const OBSOLETE_SHARED_STATIC_DIRS = ['js', 'JS', 'images', 'skin', 'img', 'Images', 'Skin'];
+const SHARED_UPLOAD_ASSET_DIRS = [
+  ['images', path.join('uploads', 'images')],
+  ['skin', path.join('uploads', 'skin')]
 ];
 const STATIC_BUILD_GROUP_ORDER = ['网站页面', '栏目页', '内容页', '系统文件'];
 const CMS_TEMPLATE_BY_PAGE = {
@@ -770,6 +770,13 @@ function getLegacyTemplateContext(languageCode = null) {
 }
 
 function buildLegacyCommonProps(templateContext) {
+  const newsEntries = Array.isArray(templateContext.newsEntries)
+    ? templateContext.newsEntries.map((item) => ({
+      ...item,
+      url: buildArticleUrl(item, templateContext)
+    }))
+    : [];
+
   // 为 footer 准备产品分类数据：一级分类及其二级分类
   const level1Categories = templateContext.productCategories
     .filter(cat => normalizeInteger(cat.parent_id, 0) === 0 && normalizeInteger(cat.id, 0) !== 0)
@@ -802,7 +809,7 @@ function buildLegacyCommonProps(templateContext) {
   // 构建siteColumns用于header导航（保留原始的顶级栏目结构）
   const siteColumns = buildLegacySiteColumns(templateContext.columns, {
     productCategories: templateContext.productCategories,
-    newsEntries: templateContext.newsEntries,
+    newsEntries,
     templateContext
   });
   
@@ -825,6 +832,11 @@ function buildLegacyCommonProps(templateContext) {
 
   return {
     site: templateContext.site,
+    columns: templateContext.columns,
+    newsEntries,
+    newsCategories: templateContext.newsCategories,
+    productCategories: templateContext.productCategories,
+    corporationCategories: templateContext.corporationCategories,
     siteColumns,
     footerColumns,
     footerProductCategories,
@@ -880,6 +892,7 @@ function expandLegacyCommonPlaceholders(value, templateContext) {
 }
 
 function buildLegacyHomePageProps(templateContext) {
+  const homeColumn = templateContext.columns.find((item) => normalizeInteger(item?.id, 0) === 117) || null;
   const featuredProducts = listProducts({ featured: true, visibleOnly: true, limit: 8, languageCode: templateContext.languageCode })
     .slice(0, 8)
     .map((item) => {
@@ -939,9 +952,14 @@ function buildLegacyHomePageProps(templateContext) {
       summary: resolveRenderableNewsSummary(item),
       date: formatLegacyDateOnly(item.created_at)
     }));
-
   return {
     ...buildLegacyCommonProps(templateContext),
+    siteColumns: buildLegacySiteColumns(templateContext.columns, {
+      activeColumnId: normalizeInteger(homeColumn?.id, 0),
+      productCategories: templateContext.productCategories,
+      newsEntries: templateContext.newsEntries,
+      templateContext
+    }),
     secondaryMenuItems: buildLegacyRootColumnMenuItems(templateContext.columns),
     newsIndexHtml: buildLegacyIndexNews(),
     featuredProductsHtml: buildLegacyIndexFeaturedProducts(),
@@ -1141,16 +1159,9 @@ function buildLegacySiteColumns(columns, options = {}) {
     : [];
 
   return [
-    buildHeaderNavItem({
-      id: 117,
+    buildHeaderNavItem(findByUrl('/'), {
       name: '首页',
-      parentId: 0,
-      modelCode: 'link',
-      sourceType: 'link',
-      sourceId: 1,
-      active: false,
-      showInNav: 1,
-      url: '/',
+      active: activeColumnId !== 0 && normalizeInteger(findByUrl('/')?.id, 0) === activeColumnId,
       children: []
     }),
     buildHeaderNavItem(findByUrl('/your-goals/'), {
@@ -3037,18 +3048,8 @@ function syncStaticSupportAssets(sharedRoot, outputRoot) {
 
   cleanupObsoleteSharedStaticDirs(resolvedOutputRoot);
   syncSharedStaticDirs(resolvedSharedRoot, resolvedOutputRoot);
+  syncSharedUploadAssetDirs(resolvedSharedRoot, resolvedOutputRoot);
   syncSharedStaticRootFiles(resolvedSharedRoot, resolvedOutputRoot);
-
-  for (const [sourceName, targetName] of STATIC_COMPAT_ALIASES) {
-    const sourceDir = path.join(resolvedOutputRoot, sourceName);
-    const targetDir = path.join(resolvedOutputRoot, targetName);
-    if (path.resolve(sourceDir).toLowerCase() === path.resolve(targetDir).toLowerCase()) {
-      continue;
-    }
-    syncDirectory(sourceDir, targetDir);
-  }
-
-  syncLegacyImgAlias(resolvedOutputRoot);
 }
 
 function cleanupObsoleteSharedStaticDirs(outputRoot) {
@@ -3063,6 +3064,22 @@ function syncSharedStaticDirs(sharedRoot, outputRoot) {
     const sourceDir = [
       path.join(sharedRoot, dirName),
       path.join(PUBLIC_ROOT, dirName)
+    ].find((candidate) => fs.existsSync(candidate) && path.resolve(candidate) !== path.resolve(targetDir));
+
+    if (!sourceDir) {
+      continue;
+    }
+
+    syncDirectory(sourceDir, targetDir);
+  }
+}
+
+function syncSharedUploadAssetDirs(sharedRoot, outputRoot) {
+  for (const [sourceName, targetRelativeDir] of SHARED_UPLOAD_ASSET_DIRS) {
+    const targetDir = path.join(outputRoot, targetRelativeDir);
+    const sourceDir = [
+      path.join(sharedRoot, targetRelativeDir),
+      path.join(PUBLIC_ROOT, sourceName)
     ].find((candidate) => fs.existsSync(candidate) && path.resolve(candidate) !== path.resolve(targetDir));
 
     if (!sourceDir) {
@@ -3098,20 +3115,6 @@ function syncDirectory(sourceDir, targetDir) {
   fs.rmSync(targetDir, { recursive: true, force: true });
   fs.mkdirSync(targetDir, { recursive: true });
   copyDirectoryContents(sourceDir, targetDir);
-}
-
-function syncLegacyImgAlias(outputRoot) {
-  const targetDir = path.join(outputRoot, 'img');
-  fs.rmSync(targetDir, { recursive: true, force: true });
-  fs.mkdirSync(targetDir, { recursive: true });
-
-  copyDirectoryContents(path.join(outputRoot, 'images'), targetDir);
-  copyDirectoryContents(path.join(outputRoot, 'skin'), targetDir);
-
-  const legacyCssSource = path.join(outputRoot, 'skin', 'css.css');
-  if (fs.existsSync(legacyCssSource)) {
-    fs.copyFileSync(legacyCssSource, path.join(targetDir, 'css.css'));
-  }
 }
 
 function copyDirectoryContents(sourceDir, targetDir) {

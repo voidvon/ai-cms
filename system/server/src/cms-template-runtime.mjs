@@ -88,7 +88,8 @@ export function createCmsTemplateRuntime({
 
   function injectPageAssets(html, { templateCode, styleTemplates, props }) {
     const withSeoHead = injectSeoHead(html, props);
-    return injectStylesheetLinks(withSeoHead, templateCode, styleTemplates);
+    const withStyles = injectStylesheetLinks(withSeoHead, templateCode, styleTemplates);
+    return injectGlobalInteractionScript(withStyles);
   }
 
   function injectSeoHead(html, props = {}) {
@@ -231,6 +232,14 @@ export function createCmsTemplateRuntime({
       return html.replace(/<\/head>/i, `${linkHtml}\n</head>`);
     }
     return `${linkHtml}\n${html}`;
+  }
+
+  function injectGlobalInteractionScript(html) {
+    const scriptHtml = `<script>${GLOBAL_INTERACTION_SCRIPT}</script>`;
+    if (/<\/body>/i.test(html)) {
+      return html.replace(/<\/body>/i, `${scriptHtml}\n</body>`);
+    }
+    return `${html}\n${scriptHtml}`;
   }
   function renderCmsTemplate(content, props, templateContext, options = {}) {
     const components = buildCmsComponentMap(templateContext);
@@ -420,6 +429,246 @@ function resolveTemplateValue(source, pathName) {
   }
   return current ?? '';
 }
+
+const GLOBAL_INTERACTION_SCRIPT = String.raw`(() => {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+  function bindMediaQuery(mediaQuery, handler) {
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handler);
+      return;
+    }
+    mediaQuery.addListener(handler);
+  }
+
+  function initSiteNav(root) {
+    if (!(root instanceof HTMLElement) || root.dataset.navReady === 'true') {
+      return;
+    }
+
+    root.dataset.navReady = 'true';
+
+    const header = root.querySelector('.sg-global-nav');
+    const toggle = root.querySelector('[data-nav-toggle]');
+    const backdrop = root.querySelector('[data-nav-backdrop]');
+    const panel = root.querySelector('[data-nav-panel]');
+    const groups = Array.from(root.querySelectorAll('[data-nav-group]'));
+    const mobileQuery = window.matchMedia('(max-width: 940px)');
+    const hoverQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
+
+    function syncNavOffset() {
+      if (!(header instanceof HTMLElement)) {
+        return;
+      }
+      const headerHeight = Math.ceil(header.getBoundingClientRect().height);
+      root.style.setProperty('--sg-mobile-nav-offset', String(headerHeight) + 'px');
+    }
+
+    function setPanelOpen(open) {
+      const wasOpen = root.classList.contains('is-panel-open');
+      root.classList.toggle('is-panel-open', open);
+      document.body.style.overflow = mobileQuery.matches && open ? 'hidden' : '';
+
+      if (toggle instanceof HTMLButtonElement) {
+        toggle.setAttribute('aria-expanded', String(open));
+        toggle.classList.toggle('sg-nav-hamburger--active', open);
+      }
+
+      if (panel instanceof HTMLElement) {
+        panel.setAttribute('aria-hidden', String(mobileQuery.matches ? !open : false));
+      }
+
+      if (backdrop instanceof HTMLElement) {
+        backdrop.setAttribute('aria-hidden', String(!open));
+      }
+
+      if (mobileQuery.matches && open && panel instanceof HTMLElement) {
+        window.requestAnimationFrame(() => {
+          const firstFocusable = panel.querySelector(FOCUSABLE_SELECTOR);
+          if (firstFocusable instanceof HTMLElement) {
+            firstFocusable.focus();
+          }
+        });
+      }
+
+      if (mobileQuery.matches && !open && wasOpen && toggle instanceof HTMLButtonElement) {
+        window.requestAnimationFrame(() => toggle.focus());
+      }
+    }
+
+    function setGroupOpen(group, open) {
+      if (!(group instanceof HTMLElement)) {
+        return;
+      }
+      group.dataset.open = String(open);
+      group.classList.toggle('is-dismissed', false);
+
+      const groupToggle = group.querySelector('[data-nav-group-toggle]');
+      if (groupToggle instanceof HTMLButtonElement) {
+        groupToggle.setAttribute('aria-expanded', String(open));
+      }
+    }
+
+    function closeOtherGroups(activeGroup) {
+      groups.forEach((group) => {
+        if (!(group instanceof HTMLElement) || group === activeGroup) {
+          return;
+        }
+        setGroupOpen(group, false);
+      });
+    }
+
+    function resetNavState() {
+      setPanelOpen(false);
+      groups.forEach((group) => {
+        if (!(group instanceof HTMLElement)) {
+          return;
+        }
+        group.classList.remove('is-dismissed');
+        setGroupOpen(group, false);
+      });
+    }
+
+    if (toggle instanceof HTMLButtonElement && panel instanceof HTMLElement) {
+      toggle.addEventListener('click', () => {
+        const expanded = toggle.getAttribute('aria-expanded') === 'true';
+        setPanelOpen(!expanded);
+      });
+    }
+
+    if (backdrop instanceof HTMLElement) {
+      backdrop.addEventListener('click', () => {
+        if (!mobileQuery.matches) {
+          return;
+        }
+        setPanelOpen(false);
+      });
+    }
+
+    if (panel instanceof HTMLElement) {
+      panel.addEventListener('click', (event) => {
+        if (!mobileQuery.matches) {
+          return;
+        }
+        const target = event.target;
+        if (!(target instanceof Element) || !target.closest('a[href]')) {
+          return;
+        }
+        setPanelOpen(false);
+      });
+    }
+
+    groups.forEach((group) => {
+      if (!(group instanceof HTMLElement)) {
+        return;
+      }
+
+      const groupToggle = group.querySelector('[data-nav-group-toggle]');
+      if (!(groupToggle instanceof HTMLButtonElement)) {
+        return;
+      }
+
+      setGroupOpen(group, false);
+
+      groupToggle.addEventListener('click', () => {
+        const expanded = groupToggle.getAttribute('aria-expanded') === 'true';
+        if (mobileQuery.matches || !hoverQuery.matches) {
+          closeOtherGroups(group);
+          setGroupOpen(group, !expanded);
+        }
+      });
+
+      group.addEventListener('focusin', () => {
+        if (mobileQuery.matches) {
+          return;
+        }
+        closeOtherGroups(group);
+        setGroupOpen(group, true);
+      });
+
+      group.addEventListener('focusout', (event) => {
+        if (mobileQuery.matches) {
+          return;
+        }
+        const nextTarget = event.relatedTarget;
+        if (nextTarget instanceof Node && group.contains(nextTarget)) {
+          return;
+        }
+        setGroupOpen(group, false);
+      });
+
+      group.addEventListener('pointerenter', (event) => {
+        if (mobileQuery.matches || event.pointerType === 'touch') {
+          return;
+        }
+        closeOtherGroups(group);
+        setGroupOpen(group, true);
+      });
+
+      group.addEventListener('pointerleave', (event) => {
+        if (mobileQuery.matches || event.pointerType === 'touch') {
+          return;
+        }
+        setGroupOpen(group, false);
+      });
+    });
+
+    root.addEventListener('keydown', (event) => {
+      if (event.key !== 'Escape') {
+        return;
+      }
+      resetNavState();
+    });
+
+    bindMediaQuery(mobileQuery, resetNavState);
+    bindMediaQuery(hoverQuery, resetNavState);
+    window.addEventListener('resize', syncNavOffset, { passive: true });
+
+    syncNavOffset();
+    resetNavState();
+  }
+
+  function initFooterSection(section) {
+    if (!(section instanceof HTMLElement) || section.dataset.footerReady === 'true') {
+      return;
+    }
+
+    section.dataset.footerReady = 'true';
+    const toggle = section.querySelector('[data-footer-toggle]');
+    const mobileQuery = window.matchMedia('(max-width: 1050px)');
+
+    function setSectionOpen(open) {
+      section.classList.toggle('is-open', open);
+      if (toggle instanceof HTMLButtonElement) {
+        toggle.setAttribute('aria-expanded', String(open));
+      }
+    }
+
+    function resetFooterState() {
+      setSectionOpen(false);
+    }
+
+    if (toggle instanceof HTMLButtonElement) {
+      toggle.addEventListener('click', () => {
+        if (!mobileQuery.matches) {
+          return;
+        }
+        const expanded = toggle.getAttribute('aria-expanded') === 'true';
+        setSectionOpen(!expanded);
+      });
+    }
+
+    bindMediaQuery(mobileQuery, resetFooterState);
+    resetFooterState();
+  }
+
+  document.querySelectorAll('[data-site-nav]').forEach(initSiteNav);
+  document.querySelectorAll('[data-footer-section]').forEach(initFooterSection);
+})();`;
 
 function stringifyTemplateValue(value) {
   if (value == null) {

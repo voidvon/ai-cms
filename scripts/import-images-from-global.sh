@@ -6,7 +6,7 @@
 set -e
 
 SOURCE_BASE="/Users/yytest/Documents/projects/spirax-global/dist/zh-cn/images/global"
-TARGET_BASE="public/images/global"
+TARGET_BASE="html/uploads/images/global"
 
 # 检查源目录是否存在
 if [ ! -d "$SOURCE_BASE" ]; then
