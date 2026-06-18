@@ -271,6 +271,7 @@ function hydrateColumns(rows, {
     const displayName = fallbackTranslation?.name || row.name || '';
     const resolvedSummary = fallbackTranslation?.summary ?? '';
     const resolvedContentHtml = fallbackTranslation?.content_html ?? '';
+    const resolvedTemplateDataJson = fallbackTranslation?.template_data_json ?? null;
     const resolvedKeywords = fallbackTranslation?.keywords ?? '';
     const resolvedSeoTitle = fallbackTranslation?.seo_title ?? null;
     const resolvedSeoKeywords = fallbackTranslation?.seo_keywords ?? null;
@@ -285,6 +286,8 @@ function hydrateColumns(rows, {
       name: displayName,
       summary: resolvedSummary,
       content_html: resolvedContentHtml,
+      template_data_json: resolvedTemplateDataJson,
+      template_data: parseTemplateDataJson(resolvedTemplateDataJson),
       keywords: resolvedKeywords || '',
       seo_title: resolvedSeoTitle ?? null,
       seo_keywords: resolvedSeoKeywords ?? null,
@@ -318,6 +321,8 @@ function hydrateColumns(rows, {
               title: translation.name,
               summary: translation.summary,
               content_html: translation.content_html,
+              template_data_json: translation.template_data_json,
+              template_data: parseTemplateDataJson(translation.template_data_json),
               keywords: translation.keywords,
               seo_title: translation.seo_title,
               seo_keywords: translation.seo_keywords,
@@ -360,6 +365,7 @@ function loadColumnTranslations(columnIds) {
         t.name,
         t.summary,
         t.content_html,
+        t.template_data_json,
         t.keywords,
         t.seo_title,
         t.seo_keywords,
@@ -385,6 +391,7 @@ function loadColumnTranslations(columnIds) {
       name: row.name || '',
       summary: row.summary || '',
       content_html: row.content_html || '',
+      template_data_json: row.template_data_json || null,
       keywords: row.keywords || '',
       seo_title: row.seo_title || '',
       seo_keywords: row.seo_keywords || '',
@@ -415,6 +422,7 @@ function saveColumnTranslations(columnId, translations, now = new Date().toISOSt
           name,
           summary,
           content_html,
+          template_data_json,
           keywords,
           seo_title,
           seo_keywords,
@@ -423,11 +431,12 @@ function saveColumnTranslations(columnId, translations, now = new Date().toISOSt
           published_at,
           created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(column_id, language_id) DO UPDATE SET
           name = excluded.name,
           summary = excluded.summary,
           content_html = excluded.content_html,
+          template_data_json = excluded.template_data_json,
           keywords = excluded.keywords,
           seo_title = excluded.seo_title,
           seo_keywords = excluded.seo_keywords,
@@ -442,6 +451,7 @@ function saveColumnTranslations(columnId, translations, now = new Date().toISOSt
         String(persistedTranslation?.name || '').trim(),
         String(persistedTranslation?.summary || ''),
         String(persistedTranslation?.content_html || ''),
+        normalizeTemplateDataJson(persistedTranslation?.template_data_json ?? persistedTranslation?.template_data ?? null),
         toNullableString(persistedTranslation?.keywords),
         toNullableString(persistedTranslation?.seo_title),
         toNullableString(persistedTranslation?.seo_keywords),
@@ -682,6 +692,7 @@ function normalizeColumnTranslations(translations, {
       name: translationName,
       summary: String(value?.summary ?? existingTranslations?.[languageCode]?.summary ?? fallbackBase.summary ?? ''),
       content_html: String(value?.content_html ?? existingTranslations?.[languageCode]?.content_html ?? fallbackBase.content_html ?? ''),
+      template_data_json: normalizeTemplateDataJson(value?.template_data_json ?? value?.template_data ?? existingTranslations?.[languageCode]?.template_data_json ?? existingTranslations?.[languageCode]?.template_data ?? fallbackBase.template_data_json ?? fallbackBase.template_data ?? null),
       keywords: toNullableString(value?.keywords ?? existingTranslations?.[languageCode]?.keywords ?? fallbackBase.keywords),
       seo_title: toNullableString(value?.seo_title ?? existingTranslations?.[languageCode]?.seo_title ?? fallbackBase.seo_title),
       seo_keywords: toNullableString(value?.seo_keywords ?? existingTranslations?.[languageCode]?.seo_keywords ?? fallbackBase.seo_keywords),
@@ -711,6 +722,7 @@ function normalizeColumnTranslations(translations, {
       name: String(fallback?.name || fallback?.title || fallbackBase.name || '').trim(),
       summary: String(fallback?.summary || fallbackBase.summary || ''),
       content_html: String(fallback?.content_html || fallbackBase.content_html || ''),
+      template_data_json: normalizeTemplateDataJson(fallback?.template_data_json ?? fallback?.template_data ?? fallbackBase.template_data_json ?? fallbackBase.template_data ?? null),
       keywords: toNullableString(fallback?.keywords || fallbackBase.keywords),
       seo_title: toNullableString(fallback?.seo_title || fallbackBase.seo_title),
       seo_keywords: toNullableString(fallback?.seo_keywords || fallbackBase.seo_keywords),
@@ -1122,6 +1134,36 @@ function serializeColumnImages(value) {
   return JSON.stringify(normalized);
 }
 
+function normalizeTemplateDataJson(value) {
+  if (value == null || value === '') {
+    return null;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    JSON.parse(trimmed);
+    return trimmed;
+  }
+  if (typeof value !== 'object') {
+    throw new Error('template_data_json must be a JSON object or array');
+  }
+  return JSON.stringify(value);
+}
+
+function parseTemplateDataJson(value) {
+  if (!value) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 function migrateColumnImagesFromLegacyExtra() {
   const rows = queryAll(`
     SELECT id, images, legacy_extra
@@ -1149,6 +1191,7 @@ function ensureColumnTranslationsSchema() {
       name TEXT NOT NULL,
       summary TEXT NOT NULL DEFAULT '',
       content_html TEXT NOT NULL DEFAULT '',
+      template_data_json TEXT,
       keywords TEXT,
       seo_title TEXT,
       seo_keywords TEXT,
@@ -1163,6 +1206,7 @@ function ensureColumnTranslationsSchema() {
 
   addColumnIfMissing('column_translations', 'summary', "TEXT NOT NULL DEFAULT ''");
   addColumnIfMissing('column_translations', 'content_html', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing('column_translations', 'template_data_json', 'TEXT');
   addColumnIfMissing('column_translations', 'keywords', 'TEXT');
   addColumnIfMissing('column_translations', 'seo_title', 'TEXT');
   addColumnIfMissing('column_translations', 'seo_keywords', 'TEXT');

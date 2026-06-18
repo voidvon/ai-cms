@@ -51,19 +51,28 @@ export function buildCategorySlugPathFromColumnIdMap(columnId, rowById) {
 export function buildProductCategoryPublicUrl(category, categoryMap = null) {
   const explicitRoutePath = String(category?.route_path || '').trim();
   const id = toInteger(category?.id, 0);
+  const rootCategory = resolveManagedCategoryRoot(category, categoryMap);
+  const rootRoutePath = String(rootCategory?.route_path || '').trim();
+  const baseRoutePath = ensureTrailingSlash(rootRoutePath || '/');
 
   if (explicitRoutePath) {
     return explicitRoutePath;
   }
 
   if (category?.dir_name && categoryMap) {
-    const slugPath = buildCategorySlugPath(category, categoryMap);
+    let slugPath = buildCategorySlugPath(category, categoryMap);
+    const rootDirName = String(rootCategory?.dir_name || '').trim();
+    if (rootDirName && slugPath[0] === rootDirName) {
+      slugPath = slugPath.slice(1);
+    }
     if (slugPath.length > 0) {
-      return `/products/${slugPath.join('/')}/`;
+      return normalizePublicCustomUrl(`${baseRoutePath}${slugPath.join('/')}/`);
     }
   }
 
-  return id === 0 ? '/products/index.html' : `/products/${id}.html`;
+  return id === 0
+    ? normalizePublicCustomUrl(baseRoutePath)
+    : normalizePublicCustomUrl(`${baseRoutePath}${id}.html`);
 }
 
 function buildContentDetailPublicUrl({ entry, categoryPath = null, detailRule = null, sectionRoot = '/', legacyFallback = '' }) {
@@ -210,6 +219,43 @@ function ensureTrailingSlash(value) {
     return '/';
   }
   return normalized.endsWith('/') ? normalized : `${normalized}/`;
+}
+
+function resolveManagedCategoryRoot(category, categoryMap = null) {
+  if (!category) {
+    return null;
+  }
+
+  const currentId = toInteger(category?.id, 0);
+  const rootColumnId = toInteger(category?.column_semantics?.root_column_id, 0);
+  if (currentId > 0 && rootColumnId > 0 && currentId === rootColumnId) {
+    return category;
+  }
+
+  if (categoryMap && rootColumnId > 0) {
+    return categoryMap.get(rootColumnId) || null;
+  }
+
+  if (!categoryMap) {
+    return null;
+  }
+
+  let current = category;
+  const visited = new Set();
+  while (current) {
+    const id = toInteger(current?.id, 0);
+    if (visited.has(id)) {
+      break;
+    }
+    visited.add(id);
+    const parentId = toInteger(current?.parent_id, 0);
+    if (parentId <= 0) {
+      return current;
+    }
+    current = categoryMap.get(parentId) || null;
+  }
+
+  return null;
 }
 
 function normalizeEntryCustomUrl(value) {

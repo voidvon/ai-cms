@@ -178,7 +178,7 @@ CREATE TABLE IF NOT EXISTS template_variants (
 CREATE TABLE IF NOT EXISTS templates (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
-  type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'component')),
+  type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'single', 'component')),
   code TEXT NOT NULL UNIQUE,
   engine TEXT NOT NULL DEFAULT 'html' CHECK (engine IN ('html', 'tsx')),
   content TEXT NOT NULL DEFAULT '',
@@ -195,7 +195,7 @@ CREATE TABLE IF NOT EXISTS template_bindings (
   id INTEGER PRIMARY KEY,
   target_type TEXT NOT NULL,
   target_id INTEGER,
-  template_type TEXT NOT NULL CHECK (template_type IN ('home', 'list', 'content')),
+  template_type TEXT NOT NULL CHECK (template_type IN ('home', 'list', 'content', 'single')),
   template_id INTEGER NOT NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

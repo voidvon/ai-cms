@@ -30,7 +30,8 @@ import type { Template, TemplateVariant, TemplateVersion } from '@/types'
 const templateTypes: Array<{ value: Template['type']; label: string; description: string }> = [
   { value: 'home', label: '首页模板', description: '生成首页' },
   { value: 'list', label: '列表模板', description: '生成栏目和分页列表' },
-  { value: 'content', label: '内容模板', description: '生成详情、单页和表单页面' },
+  { value: 'content', label: '内容模板', description: '生成详情页和表单页面' },
+  { value: 'single', label: '单页模板', description: '生成单页栏目和封面式栏目页面' },
   { value: 'component', label: '组件模板', description: '头部、底部、导航和公共片段' },
 ]
 
@@ -51,6 +52,7 @@ const templateTypeLabelMap: Record<Template['type'], string> = {
   home: '首页模板',
   list: '列表模板',
   content: '内容模板',
+  single: '单页模板',
   component: '组件模板',
 }
 
@@ -112,10 +114,11 @@ export default function TemplateVariantsPage() {
   const templates = data?.data ?? []
   const themeTemplatesByType = useMemo(
     () => {
-      const grouped: Record<'home' | 'list' | 'content', Template[]> = {
+      const grouped: Record<'home' | 'list' | 'content' | 'single', Template[]> = {
         home: [],
         list: [],
         content: [],
+        single: [],
       }
 
       if (templates.length === 0) {
@@ -123,7 +126,7 @@ export default function TemplateVariantsPage() {
       }
 
       for (const template of templates) {
-        if (template.type !== 'home' && template.type !== 'list' && template.type !== 'content') {
+        if (template.type !== 'home' && template.type !== 'list' && template.type !== 'content' && template.type !== 'single') {
           continue
         }
         grouped[template.type].push(template)
@@ -132,6 +135,7 @@ export default function TemplateVariantsPage() {
       grouped.home.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id)
       grouped.list.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id)
       grouped.content.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id)
+      grouped.single.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id)
 
       return grouped
     },
@@ -153,6 +157,10 @@ export default function TemplateVariantsPage() {
   )
   const contentTemplates = useMemo(
     () => themeTemplatesByType.content,
+    [themeTemplatesByType],
+  )
+  const singleTemplates = useMemo(
+    () => themeTemplatesByType.single,
     [themeTemplatesByType],
   )
   const templateLibraryItems = useMemo<TreeItemData<TemplateLibraryNode>[]>(() => {
@@ -209,6 +217,13 @@ export default function TemplateVariantsPage() {
         children: contentTemplates.map(createTemplateLeaf),
       },
       {
+        id: 'group:single',
+        label: '单页模板',
+        selectable: false,
+        data: { kind: 'group', templateType: 'single' },
+        children: singleTemplates.map(createTemplateLeaf),
+      },
+      {
         id: 'group:component',
         label: '组件模板',
         selectable: false,
@@ -216,7 +231,7 @@ export default function TemplateVariantsPage() {
         children: themeComponentTemplates.map(createTemplateLeaf),
       },
     ]
-  }, [contentTemplates, listTemplates, primaryHomeTemplate, themeComponentTemplates])
+  }, [contentTemplates, listTemplates, primaryHomeTemplate, singleTemplates, themeComponentTemplates])
   const selectedTemplate = useMemo(
     () => templates.find((item) => item.id === editorTarget.templateId) || null,
     [editorTarget, templates],
@@ -274,11 +289,11 @@ export default function TemplateVariantsPage() {
     if (editorTarget.templateId || selectedTemplate) {
       return
     }
-    const firstTemplate = homeTemplates[0] || listTemplates[0] || contentTemplates[0] || themeComponentTemplates[0] || null
+    const firstTemplate = homeTemplates[0] || listTemplates[0] || contentTemplates[0] || singleTemplates[0] || themeComponentTemplates[0] || null
     if (firstTemplate) {
       setEditorTarget({ templateId: firstTemplate.id })
     }
-  }, [contentTemplates, editorTarget.templateId, homeTemplates, listTemplates, selectedTemplate, themeComponentTemplates])
+  }, [contentTemplates, editorTarget.templateId, homeTemplates, listTemplates, selectedTemplate, singleTemplates, themeComponentTemplates])
 
   useEffect(() => {
     if (!editorTarget.templateId) {
@@ -289,6 +304,7 @@ export default function TemplateVariantsPage() {
       ...homeTemplates.map((item) => item.id),
       ...listTemplates.map((item) => item.id),
       ...contentTemplates.map((item) => item.id),
+      ...singleTemplates.map((item) => item.id),
       ...themeComponentTemplates.map((item) => item.id),
     ])
 
@@ -296,9 +312,9 @@ export default function TemplateVariantsPage() {
       return
     }
 
-    const fallbackTemplate = homeTemplates[0] || listTemplates[0] || contentTemplates[0] || themeComponentTemplates[0] || null
+    const fallbackTemplate = homeTemplates[0] || listTemplates[0] || contentTemplates[0] || singleTemplates[0] || themeComponentTemplates[0] || null
     setEditorTarget({ templateId: fallbackTemplate?.id || null })
-  }, [contentTemplates, editorTarget.templateId, homeTemplates, listTemplates, themeComponentTemplates])
+  }, [contentTemplates, editorTarget.templateId, homeTemplates, listTemplates, singleTemplates, themeComponentTemplates])
 
   const publishMutation = useMutation({
     mutationFn: async () => {
@@ -318,7 +334,7 @@ export default function TemplateVariantsPage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: async (templateType: Extract<Template['type'], 'home' | 'list' | 'content'>) => {
+    mutationFn: async (templateType: Extract<Template['type'], 'home' | 'list' | 'content' | 'single'>) => {
       const templateCount = templates.filter((item) => item.type === templateType).length
       const code = `${templateType}_${Date.now()}`
       const created = await templatesApi.create({

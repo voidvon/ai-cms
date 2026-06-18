@@ -51,6 +51,11 @@ const contentTsxGroup: VariableGroup = {
   items: ['title', 'image', 'code', 'bodyHtml', 'previousHtml', 'nextHtml'],
 }
 
+const singleTsxGroup: VariableGroup = {
+  title: '单页模板',
+  items: ['title', 'contentHtml', 'currentPage?.url', 'breadcrumb?.items'],
+}
+
 export function TemplateVariableReference({ type }: TemplateVariableReferenceProps) {
   const groups = [...tsxGroups]
   if (type === 'list') {
@@ -58,6 +63,9 @@ export function TemplateVariableReference({ type }: TemplateVariableReferencePro
   }
   if (type === 'content') {
     groups.push(contentTsxGroup)
+  }
+  if (type === 'single') {
+    groups.push(singleTsxGroup)
   }
 
   return (

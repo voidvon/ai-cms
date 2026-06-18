@@ -84,6 +84,7 @@ export default function ColumnCategoryFormDialog({
   const [translations, setTranslations] = useState<Record<string, ColumnCategoryTranslation>>({})
   const [listTemplateId, setListTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
   const [contentTemplateId, setContentTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
+  const [singleTemplateId, setSingleTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
 
   const { data: languagesData } = useQuery({
     queryKey: ['languages'],
@@ -147,8 +148,10 @@ export default function ColumnCategoryFormDialog({
       const bindings = bindingsData?.data || []
       const listBinding = bindings.find((item) => item.target_type === 'column' && item.target_id === source.id && item.template_type === 'list')
       const contentBinding = bindings.find((item) => item.target_type === 'column' && item.target_id === source.id && item.template_type === 'content')
+      const singleBinding = bindings.find((item) => item.target_type === 'column' && item.target_id === source.id && item.template_type === 'single')
       setListTemplateId(listBinding?.template_id ? String(listBinding.template_id) : DEFAULT_TEMPLATE_VALUE)
       setContentTemplateId(contentBinding?.template_id ? String(contentBinding.template_id) : DEFAULT_TEMPLATE_VALUE)
+      setSingleTemplateId(singleBinding?.template_id ? String(singleBinding.template_id) : DEFAULT_TEMPLATE_VALUE)
       return
     }
 
@@ -172,6 +175,7 @@ export default function ColumnCategoryFormDialog({
       }
       setListTemplateId(DEFAULT_TEMPLATE_VALUE)
       setContentTemplateId(DEFAULT_TEMPLATE_VALUE)
+      setSingleTemplateId(DEFAULT_TEMPLATE_VALUE)
     }
   }, [category, categoryDetailData?.data, mode, currentParentId, isSinglePageTree, defaultLanguageCode, availableLanguageCodes.join('|'), bindingsData?.data, meta.supportsSeo])
 
@@ -195,11 +199,11 @@ export default function ColumnCategoryFormDialog({
         if (!categoryId) {
           throw new Error('分类创建失败')
         }
-        await saveTemplateBindings(selectedThemeId, categoryId, listTemplateId, contentTemplateId, bindingsData?.data || [], meta.supportsListTemplate)
+        await saveTemplateBindings(selectedThemeId, categoryId, listTemplateId, contentTemplateId, singleTemplateId, bindingsData?.data || [], meta.supportsListTemplate, isSinglePageTree)
         return response
       }
       const response = await columnCategoriesApi.update(rootColumnId, category!.id, payload)
-      await saveTemplateBindings(selectedThemeId, category!.id, listTemplateId, contentTemplateId, bindingsData?.data || [], meta.supportsListTemplate)
+      await saveTemplateBindings(selectedThemeId, category!.id, listTemplateId, contentTemplateId, singleTemplateId, bindingsData?.data || [], meta.supportsListTemplate, isSinglePageTree)
       return response
     },
     onSuccess: () => {
@@ -223,8 +227,18 @@ export default function ColumnCategoryFormDialog({
         toast.error('请输入栏目名称')
         return
       }
+      if (singleTemplateId === DEFAULT_TEMPLATE_VALUE) {
+        toast.error('请选择单页模板')
+        return
+      }
     } else if (!String(translations[defaultLanguageCode]?.name || '').trim()) {
       toast.error('请输入默认语言的分类名称')
+      return
+    } else if (meta.supportsListTemplate && listTemplateId === DEFAULT_TEMPLATE_VALUE) {
+      toast.error('请选择列表模板')
+      return
+    } else if (contentTemplateId === DEFAULT_TEMPLATE_VALUE) {
+      toast.error('请选择内容模板')
       return
     }
     mutation.mutate()
@@ -245,6 +259,7 @@ export default function ColumnCategoryFormDialog({
   const templates = templatesData?.data || []
   const listTemplates = templates.filter((item) => item.type === 'list')
   const contentTemplates = templates.filter((item) => item.type === 'content')
+  const singleTemplates = templates.filter((item) => item.type === 'single')
   const isEditingWithoutCategory = mode === 'edit' && !category
 
   return (
@@ -409,7 +424,7 @@ export default function ColumnCategoryFormDialog({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={DEFAULT_TEMPLATE_VALUE}>不单独绑定</SelectItem>
+                    <SelectItem value={DEFAULT_TEMPLATE_VALUE}>请选择列表模板</SelectItem>
                     {listTemplates.map((template) => (
                       <SelectItem key={template.id} value={String(template.id)}>
                         {template.name}
@@ -419,22 +434,41 @@ export default function ColumnCategoryFormDialog({
                 </Select>
               </div>
             ) : null}
-            <div className="space-y-2">
-              <Label>内容模板</Label>
-              <Select value={contentTemplateId} onValueChange={setContentTemplateId}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value={DEFAULT_TEMPLATE_VALUE}>不单独绑定</SelectItem>
-                  {contentTemplates.map((template) => (
-                    <SelectItem key={template.id} value={String(template.id)}>
-                      {template.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {isSinglePageTree ? (
+              <div className="space-y-2">
+                <Label>单页模板</Label>
+                <Select value={singleTemplateId} onValueChange={setSingleTemplateId}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={DEFAULT_TEMPLATE_VALUE}>请选择单页模板</SelectItem>
+                    {singleTemplates.map((template) => (
+                      <SelectItem key={template.id} value={String(template.id)}>
+                        {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>内容模板</Label>
+                <Select value={contentTemplateId} onValueChange={setContentTemplateId}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={DEFAULT_TEMPLATE_VALUE}>请选择内容模板</SelectItem>
+                    {contentTemplates.map((template) => (
+                      <SelectItem key={template.id} value={String(template.id)}>
+                        {template.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
 
           <DialogFooter>
@@ -456,31 +490,36 @@ async function saveTemplateBindings(
   targetId: number,
   listTemplateId: string,
   contentTemplateId: string,
+  singleTemplateId: string,
   bindings: TemplateBinding[],
   supportsListTemplate: boolean,
+  isSinglePageTree: boolean,
 ) {
   if (!themeId) {
+    return
+  }
+  if (isSinglePageTree) {
+    await saveTemplateBinding(themeId, targetId, 'single', singleTemplateId, bindings)
+    await deleteTemplateBindingIfExists(targetId, 'content', bindings)
+    await deleteTemplateBindingIfExists(targetId, 'list', bindings)
     return
   }
   if (supportsListTemplate) {
     await saveTemplateBinding(themeId, targetId, 'list', listTemplateId, bindings)
   }
   await saveTemplateBinding(themeId, targetId, 'content', contentTemplateId, bindings)
+  await deleteTemplateBindingIfExists(targetId, 'single', bindings)
 }
 
 async function saveTemplateBinding(
   themeId: number,
   targetId: number,
-  templateType: 'list' | 'content',
+  templateType: 'list' | 'content' | 'single',
   templateId: string,
   bindings: TemplateBinding[],
 ) {
-  const existing = bindings.find((item) => item.target_type === 'column' && item.target_id === targetId && item.template_type === templateType)
   if (templateId === DEFAULT_TEMPLATE_VALUE) {
-    if (existing?.id) {
-      await templatesApi.deleteBinding(existing.id)
-    }
-    return
+    throw new Error(`missing required ${templateType} template binding`)
   }
   await templatesApi.saveBinding({
     theme_id: themeId,
@@ -489,6 +528,17 @@ async function saveTemplateBinding(
     template_type: templateType,
     template_id: Number(templateId),
   })
+}
+
+async function deleteTemplateBindingIfExists(
+  targetId: number,
+  templateType: 'list' | 'content' | 'single',
+  bindings: TemplateBinding[],
+) {
+  const existing = bindings.find((item) => item.target_type === 'column' && item.target_id === targetId && item.template_type === templateType)
+  if (existing?.id) {
+    await templatesApi.deleteBinding(existing.id)
+  }
 }
 
 function createEmptyTranslation(supportsSeo: boolean, patch: Partial<ColumnCategoryTranslation> = {}): ColumnCategoryTranslation {
