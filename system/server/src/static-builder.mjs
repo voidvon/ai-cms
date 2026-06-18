@@ -1489,24 +1489,15 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
     bodyHtml: enrichedCategoryBody.html,
     sectionNavItems: enrichedCategoryBody.items,
     items: buildLegacyProductListItems(pageItems),
-    // 如果有产品，显示产品卡片；否则显示子分类卡片
-    productCardItems: pageItems.length > 0
-      ? pageItems.map((item) => ({
-          id: item.id,
-          name: item.name || '',
-          title: item.name || '',
-          url: buildProductUrl(item),
-          image: item.primary_image || '/skin/dfpic.gif',
-          summary: item.summary || ''
-        }))
-      : (children || []).map((child) => ({
-          id: normalizeInteger(child.id, 0),
-          name: child.name || '',
-          title: child.name || '',
-          url: buildLegacyProductCategoryUrl(child, categoryMap),
-          image: child.primary_image || '',
-          summary: child.seo_description || ''
-        })),
+    productCardItems: pageItems.map((item) => ({
+      id: normalizeInteger(item.id, 0),
+      name: item.name || '',
+      title: item.name || '',
+      url: buildProductUrl(item),
+      image: item.primary_image || '/skin/dfpic.gif',
+      summary: item.summary || '',
+      code: item.code || ''
+    })),
     pagerHtml: buildLegacyProductPager(categoryUrl, pageNumber, pageCount, totalRecords),
     prodKeywords: categoryPageContent?.seo_keywords || category.name || '',
     seoMeta: buildSeoMeta({
@@ -2183,6 +2174,13 @@ function buildLegacyProductMenuItems(categories, activeId = 0, categoryMap = nul
     .map((item) => {
       const description = resolveLegacyProductCategoryDescription(item);
       const itemId = normalizeInteger(item.id, 0);
+      const images = Array.isArray(item?.images) ? item.images : [];
+      const image = normalizeUploadedRelativePath(
+        String(
+          images[0]
+          || ''
+        ).trim()
+      );
       return {
         id: itemId,
         label: item.name || '',
@@ -2191,7 +2189,7 @@ function buildLegacyProductMenuItems(categories, activeId = 0, categoryMap = nul
         active: itemId === normalizeInteger(activeId, 0),
         description,
         ctaLabel: description ? 'Explore more' : '',
-        image: '',
+        image: image || '',
         imageAlt: item.name || ''
       };
     });
@@ -2201,11 +2199,24 @@ function buildLegacyProductNavigation({ categories, currentCategory, currentPare
   const safeCategories = Array.isArray(categories) ? categories : [];
   const activeId = normalizeInteger(currentCategory?.id, 0);
   const parentId = normalizeInteger(currentCategory?.parent_id, 0);
+  const directChildren = activeId > 0
+    ? safeCategories
+      .filter((item) => normalizeInteger(item.parent_id, 0) === activeId)
+      .sort(compareCategoryOrder)
+    : (Array.isArray(fallbackCategories) ? fallbackCategories.slice().sort(compareCategoryOrder) : []);
   const siblingCategories = parentId > 0
     ? safeCategories
       .filter((item) => normalizeInteger(item.parent_id, 0) === parentId)
       .sort(compareCategoryOrder)
     : [];
+
+  if (directChildren.length > 0 || activeId === 0) {
+    return {
+      title: currentCategory?.name || 'Browse categories',
+      parentUrl: currentCategory ? buildLegacyProductCategoryUrl(currentCategory, categoryMap) : '',
+      items: buildLegacyProductMenuItems(directChildren, activeId, categoryMap)
+    };
+  }
 
   if (siblingCategories.length > 0) {
     return {

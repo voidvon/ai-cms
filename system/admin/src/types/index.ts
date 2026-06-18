@@ -109,6 +109,7 @@ export interface ColumnCategory {
   name: string;
   parent_id: number;
   dir_name?: string | null;
+  images?: string[];
   detail_rule?: string | null;
   sort_order: number;
   seo_keywords?: string;

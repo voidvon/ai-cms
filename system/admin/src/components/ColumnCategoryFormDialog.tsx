@@ -4,6 +4,7 @@ import { columnCategoriesApi } from '@/api/column-categories'
 import { templateVariantsApi, templatesApi } from '@/api/advanced'
 import { languagesApi } from '@/api/languages'
 import { Button } from '@/components/ui/button'
+import ImagesUploadField from '@/components/ImagesUploadField'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -75,6 +76,7 @@ export default function ColumnCategoryFormDialog({
   const [baseData, setBaseData] = useState({
     parent_id: currentParentId,
     dir_name: '',
+    images: [] as string[],
     detail_rule: '',
     sort_order: 0,
   })
@@ -130,6 +132,7 @@ export default function ColumnCategoryFormDialog({
       setBaseData({
         parent_id: source.parent_id || 0,
         dir_name: source.dir_name || '',
+        images: Array.isArray(source.images) ? source.images : [],
         detail_rule: source.detail_rule || '',
         sort_order: source.sort_order || 0,
       })
@@ -153,6 +156,7 @@ export default function ColumnCategoryFormDialog({
       setBaseData({
         parent_id: currentParentId,
         dir_name: '',
+        images: [],
         detail_rule: '',
         sort_order: 0,
       })
@@ -359,6 +363,15 @@ export default function ColumnCategoryFormDialog({
                 value={baseData.dir_name}
                 onChange={(e) => setBaseData({ ...baseData, dir_name: e.target.value })}
                 placeholder={meta.dirPlaceholder}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label>栏目图片</Label>
+              <ImagesUploadField
+                value={baseData.images}
+                onChange={(images) => setBaseData({ ...baseData, images })}
+                purpose="column_image"
+                placeholder="请输入栏目图片路径"
               />
             </div>
             {meta.detailRuleOptions.length > 0 ? (

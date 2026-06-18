@@ -18,6 +18,10 @@ const PURPOSE_TARGETS = {
     purpose: 'richtext_image',
     mimeFallback: 'image/jpeg',
   },
+  column_image: {
+    purpose: 'column_image',
+    mimeFallback: 'image/jpeg',
+  },
   attachment: {
     purpose: 'attachment',
     mimeFallback: 'application/octet-stream',
