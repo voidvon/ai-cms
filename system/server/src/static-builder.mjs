@@ -112,13 +112,10 @@ function getSectionTopLevelCategories(templateContext, section) {
   if (!section?.rootColumn) {
     return [];
   }
-  const sectionRootPath = String(section.rootColumn.route_path || '').trim();
   return templateContext.newsCategories.filter((item) => {
-    if (normalizeInteger(item.parent_id, 0) !== normalizeInteger(section.rootColumnId, 0)) {
-      return false;
-    }
-    const routePath = String(item.route_path || '').trim();
-    return routePath.startsWith(sectionRootPath) && normalizeInteger(item.id, 0) !== normalizeInteger(section.rootColumnId, 0);
+    return normalizeInteger(item.parent_id, 0) === 0
+      && normalizeInteger(item.id, 0) !== normalizeInteger(section.rootColumnId, 0)
+      && normalizeInteger(item.column_id, 0) !== normalizeInteger(section.rootColumnId, 0);
   });
 }
 
@@ -270,7 +267,6 @@ function listStaticBuildTargetDefinitions({ columns = null } = {}) {
   const rootColumns = resolvedColumns.filter((item) => item?.column_semantics?.is_root);
   const managedCategoryRoots = rootColumns.filter((item) => item?.column_semantics?.render_driver === 'managed_category');
   const pageTreeRoots = rootColumns.filter((item) => item?.column_semantics?.render_driver === 'page_tree');
-  const contactColumn = resolvedColumns.find((item) => String(item?.route_path || '').trim() === '/contact.html') || null;
   const baseTargets = [
     createStaticBuildTargetDefinition({
       group: '网站页面',
@@ -307,19 +303,6 @@ function listStaticBuildTargetDefinitions({ columns = null } = {}) {
     })
   ];
   const rootColumnTargets = [];
-
-  if (contactColumn) {
-    rootColumnTargets.push(createStaticBuildTargetDefinition({
-      group: '网站页面',
-      label: `生成栏目页: ${contactColumn.name || '联系页'}`,
-      value: `column:${contactColumn.id}:page`,
-      execute: ({ outputRoot, languageCode }) => buildDedicatedColumnPage({
-        outputRoot,
-        languageCode,
-        column: contactColumn
-      })
-    }));
-  }
 
   for (const rootColumn of pageTreeRoots) {
     rootColumnTargets.push(createStaticBuildTargetDefinition({
@@ -406,21 +389,6 @@ export function buildIndexPage({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode 
   writeTextFile(outputRoot, 'index.html', html, templateContext.site);
   buildRegisteredTsxAssets(outputRoot);
   return createBuildResult('index', '首页', 1, 1);
-}
-
-export function buildDedicatedColumnPage({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null, column = null } = {}) {
-  const templateContext = getLegacyTemplateContext(languageCode);
-  const targetColumn = column
-    ? templateContext.columns.find((item) => normalizeInteger(item.id, 0) === normalizeInteger(column.id, 0)) || null
-    : templateContext.columns.find((item) => String(item.route_path || '').trim() === '/contact.html') || null;
-  const pageLabel = targetColumn?.name || '栏目页';
-  const html = renderCmsSitePage('legacy-contact', buildLegacyContactPageProps(templateContext), templateContext, {
-    targets: targetColumn ? [{ target_type: 'column', target_id: targetColumn.id }] : []
-  });
-
-  writeTextFile(outputRoot, 'contact.html', html, templateContext.site);
-  buildRegisteredTsxAssets(outputRoot);
-  return createBuildResult(targetColumn ? `column:${targetColumn.id}:page` : 'column:dedicated:page', pageLabel, 1, 1);
 }
 
 export function buildManualSinglePageColumns({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null } = {}) {
@@ -1219,14 +1187,15 @@ function buildLegacyContactPageProps(templateContext) {
   const contactPage = contactColumn
     ? resolveDedicatedColumnPageContent(contactColumn, templateContext.languageCode)
     : null;
+  const contactUrl = contactColumn ? buildLegacyColumnUrl(contactColumn, templateContext.publicSections) || '/contact.html' : '/contact.html';
   const pageTitleBase = templateContext.site.seo_organization_name || templateContext.site.company_name || templateContext.site.web_name || '';
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
       pageType: 'contact',
       title: '联系我们',
-      url: '/contact.html',
-      section: { type: 'content', name: '联系我们', url: '/contact.html' },
+      url: contactUrl,
+      section: { type: 'content', name: '联系我们', url: contactUrl },
       breadcrumbItems: [{ label: '联系我们' }],
       breadcrumbOptions: { separatorHtml: ' &gt;&gt; ' }
     }),
@@ -1234,7 +1203,7 @@ function buildLegacyContactPageProps(templateContext) {
     seoMeta: buildSeoMeta({
       title: contactPage?.seo_title || (pageTitleBase ? `联系我们 | ${pageTitleBase}` : '联系我们'),
       description: contactPage?.seo_description || contactPage?.summary || templateContext.site.seo_default_description || templateContext.site.company_address || templateContext.site.company_phone || pageTitleBase || '联系我们',
-      url: '/contact.html',
+      url: contactUrl,
       site: templateContext.site
     }),
     jsonLd: buildJsonLdOrganization(templateContext.site),
@@ -2109,15 +2078,7 @@ function shouldRenderSectionRootLanding(rootColumn) {
   if (!rootColumn) {
     return false;
   }
-  if (normalizeLegacyCategoryPageData(rootColumn.page_data)) {
-    return true;
-  }
-  return Boolean(
-    String(rootColumn.summary || '').trim()
-    || String(rootColumn.content_html || '').trim()
-    || String(rootColumn.seo_title || '').trim()
-    || String(rootColumn.seo_description || '').trim()
-  );
+  return true;
 }
 
 function buildLegacySectionRootPageData({
@@ -2359,7 +2320,7 @@ function normalizeLegacyCategoryPageData(value) {
     intro: normalizeLegacyLooseParagraphs(value.intro),
     overview: Array.isArray(value.overview) ? value.overview.filter(Boolean).map((item) => String(item).trim()).filter(Boolean) : [],
     benefits: Array.isArray(value.benefits) ? value.benefits.filter(Boolean) : [],
-    cards: Array.isArray(value.cards) ? value.cards.filter(Boolean) : [],
+    cards: Array.isArray(value.cards) ? value.cards.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
     models: Array.isArray(value.models) ? value.models.filter(Boolean) : [],
     downloads: Array.isArray(value.downloads) ? value.downloads.filter(Boolean) : [],
     supplementalSections: Array.isArray(value.supplementalSections) ? value.supplementalSections.filter(Boolean) : [],
@@ -2367,15 +2328,15 @@ function normalizeLegacyCategoryPageData(value) {
     browseByTopicSection: value.browseByTopicSection && typeof value.browseByTopicSection === 'object' ? value.browseByTopicSection : null,
     topPanel: value.topPanel && typeof value.topPanel === 'object' ? value.topPanel : null,
     seo: value.seo && typeof value.seo === 'object' ? value.seo : null,
-    items: Array.isArray(value.items) ? value.items.filter(Boolean) : [],
-    sections: Array.isArray(value.sections) ? value.sections.filter(Boolean) : [],
-    resources: Array.isArray(value.resources) ? value.resources.filter(Boolean) : [],
-    products: Array.isArray(value.products) ? value.products.filter(Boolean) : [],
+    items: Array.isArray(value.items) ? value.items.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
+    sections: Array.isArray(value.sections) ? value.sections.filter(Boolean).map(normalizeLegacySectionLinkFields) : [],
+    resources: Array.isArray(value.resources) ? value.resources.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
+    products: Array.isArray(value.products) ? value.products.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
     features: Array.isArray(value.features) ? value.features.filter(Boolean) : [],
-    calloutCards: Array.isArray(value.calloutCards) ? value.calloutCards.filter(Boolean) : [],
-    promoCards: Array.isArray(value.promoCards) ? value.promoCards.filter(Boolean) : [],
+    calloutCards: Array.isArray(value.calloutCards) ? value.calloutCards.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
+    promoCards: Array.isArray(value.promoCards) ? value.promoCards.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
     filterGroups: Array.isArray(value.filterGroups) ? value.filterGroups.filter(Boolean) : [],
-    jobs: Array.isArray(value.jobs) ? value.jobs.filter(Boolean) : [],
+    jobs: Array.isArray(value.jobs) ? value.jobs.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
     jobsSummary: String(value.jobsSummary || '').trim(),
     goals: value.goals && typeof value.goals === 'object' ? value.goals : null,
     secondary: value.secondary && typeof value.secondary === 'object' ? value.secondary : null,
@@ -2389,16 +2350,54 @@ function normalizeLegacyCategoryPageData(value) {
     answerSummary: value.answerSummary && typeof value.answerSummary === 'object' ? value.answerSummary : null,
     technicalReview: value.technicalReview && typeof value.technicalReview === 'object' ? value.technicalReview : null,
     featureImage: String(value.featureImage || '').trim(),
-    slides: Array.isArray(value.slides) ? value.slides.filter(Boolean) : [],
+    slides: Array.isArray(value.slides) ? value.slides.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
     featureHeading: value.featureHeading && typeof value.featureHeading === 'object' ? value.featureHeading : null,
     introBlock: value.introBlock && typeof value.introBlock === 'object' ? value.introBlock : (value.intro && typeof value.intro === 'object' && !Array.isArray(value.intro) ? value.intro : null),
     partnerHeading: value.partnerHeading && typeof value.partnerHeading === 'object' ? value.partnerHeading : null,
     advice: value.advice && typeof value.advice === 'object' ? value.advice : null,
     supportList: value.supportList && typeof value.supportList === 'object' ? value.supportList : null,
     frame: value.frame && typeof value.frame === 'object' ? value.frame : null,
-    promo: value.promo && typeof value.promo === 'object' ? value.promo : null,
+    promo: value.promo && typeof value.promo === 'object' ? normalizeLegacyPageLinkFields(value.promo) : null,
     spotlight: value.spotlight && typeof value.spotlight === 'object' ? value.spotlight : null
   };
+}
+
+function normalizeLegacySectionLinkFields(section) {
+  if (!section || typeof section !== 'object' || Array.isArray(section)) {
+    return section;
+  }
+  return {
+    ...section,
+    links: Array.isArray(section.links) ? section.links.filter(Boolean).map(normalizeLegacyPageLinkFields) : section.links
+  };
+}
+
+function normalizeLegacyPageLinkFields(item) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    return item;
+  }
+
+  const normalized = { ...item };
+  for (const key of ['href', 'link', 'url']) {
+    if (key in normalized) {
+      normalized[key] = normalizeLegacyInternalHref(normalized[key]);
+    }
+  }
+  return normalized;
+}
+
+function normalizeLegacyInternalHref(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return normalized;
+  }
+  if (!normalized.startsWith('/')) {
+    return normalized;
+  }
+  if (normalized.endsWith('/') || normalized.endsWith('.html')) {
+    return normalized;
+  }
+  return `${normalized}/`;
 }
 
 function resolveDedicatedColumnPageContent(column, languageCode = null) {

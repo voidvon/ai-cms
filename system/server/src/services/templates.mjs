@@ -855,8 +855,8 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       ...buildPreviewPageContext({
         pageType: 'contact',
         title: '联系我们',
-        url: '/contact.html',
-        section: { type: 'content', name: '联系我们', url: '/contact.html' },
+        url: '/contact-us/',
+        section: { type: 'content', name: '联系我们', url: '/contact-us/' },
         category: null,
         content: null,
         breadcrumbItems: [{ label: '联系我们', url: '' }]
@@ -1124,7 +1124,6 @@ function buildPreviewSiteColumns() {
 
   return normalizedRows
     .filter((item) => item.parentId === 0)
-    .filter((item) => item.url !== '/contact.html')
     .map((item) => ({
       ...item,
       children: childrenByParentId.get(item.id) || []

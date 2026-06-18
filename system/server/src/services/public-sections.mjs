@@ -73,7 +73,7 @@ export function buildColumnPublicUrl(column, publicSections) {
     return '';
   }
 
-  const explicitRoutePath = String(column.route_path || '').trim();
+  const explicitRoutePath = normalizeColumnRoutePath(column.route_path);
   const relativeCustomUrl = String(column.custom_url || '').trim();
   const columnType = String(column.column_type || '');
   const renderDriver = String(column.column_semantics?.render_driver || '');
@@ -99,9 +99,6 @@ export function buildColumnPublicUrl(column, publicSections) {
   if (renderDriver === 'page_tree') {
     return `/about/about-${toInteger(column.id, 0)}.html`;
   }
-  if (explicitRoutePath === '/contact.html') {
-    return '/contact.html';
-  }
   if (columnType !== 'link' && explicitRoutePath) {
     return explicitRoutePath;
   }
@@ -109,6 +106,25 @@ export function buildColumnPublicUrl(column, publicSections) {
     return resolveRelativePublicPath(relativeCustomUrl, resolveColumnParentPublicUrl(column, publicSections));
   }
   return '';
+}
+
+function normalizeColumnRoutePath(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return '';
+  }
+  if (normalized === '/' || normalized.endsWith('/')) {
+    return normalized;
+  }
+  if (pathLooksLikeFile(normalized)) {
+    return normalized;
+  }
+  return `${normalized}/`;
+}
+
+function pathLooksLikeFile(value) {
+  const lastSegment = String(value || '').split('/').filter(Boolean).pop() || '';
+  return lastSegment.includes('.');
 }
 
 function resolveColumnParentPublicUrl(column, publicSections) {
