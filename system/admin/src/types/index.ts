@@ -103,6 +103,7 @@ export interface ColumnCategory {
   name: string;
   parent_id: number;
   dir_name?: string | null;
+  images?: string[];
   detail_rule?: string | null;
   sort_order: number;
   seo_title?: string;
@@ -128,7 +129,7 @@ export interface Template {
   id: number;
   theme_id?: number | null;
   name: string;
-  type: 'home' | 'list' | 'content' | 'component';
+  type: 'home' | 'list' | 'content' | 'single' | 'component';
   code: string;
   engine: 'tsx';
   content: string;
@@ -146,7 +147,7 @@ export interface TemplateBinding {
   theme_id?: number;
   target_type: 'site' | 'product_category' | 'news_category' | 'corporation_category' | 'content_type' | 'column';
   target_id?: number | null;
-  template_type: 'home' | 'list' | 'content';
+  template_type: 'home' | 'list' | 'content' | 'single';
   template_id: number;
   template_name?: string;
   template_code?: string;
@@ -243,6 +244,8 @@ export interface Column {
   detail_rule?: string | null;
   is_visible?: number;
   content_html?: string;
+  template_data_json?: string | null;
+  template_data?: Record<string, unknown> | null;
   seo_title?: string | null;
   seo_description?: string | null;
   sort_order: number;
@@ -265,6 +268,8 @@ export interface Column {
 export interface ColumnTranslation {
   name: string;
   content_html?: string;
+  template_data_json?: string | null;
+  template_data?: Record<string, unknown> | null;
   seo_title?: string | null;
   seo_description?: string | null;
 }

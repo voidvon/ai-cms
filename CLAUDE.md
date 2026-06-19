@@ -85,13 +85,16 @@ Environment variables:
 
 ### Directory Structure
 
-- **`public/`** - Source static resources (committed to git)
-  - `public/images/global/` - Global images from spirax-global project (products, industries, news, etc.)
-  - `public/css/`, `public/js/`, `public/skin/` - Frontend resources
+- **`public/`** - Root-level static resources (committed to git)
+  - `public/logo.svg`, favicons, and manifest files
+- **`html/uploads/`** - Unified image asset root
+  - `html/uploads/images/global/` - Global images from spirax-global project
+  - `html/uploads/images/site-wide/` - Shared site-wide images and icons
+  - `html/uploads/skin/` - Legacy placeholder and skin-compatible image assets
 
 - **`html/`** - Generated static site (**not in git**, generated on server)
   - Generated HTML files
-  - `html/uploads/images/` - User uploaded files (**not in git**, preserved during static generation)
+  - `html/uploads/images/` - User uploaded files and imported image assets (**not in git**, preserved during static generation)
     - `html/uploads/images/products/` - Product images uploaded via admin
     - `html/uploads/images/news/` - News images uploaded via admin
     - `html/uploads/images/richtext/` - Rich text editor images
@@ -99,12 +102,12 @@ Environment variables:
 ### Static File Serving
 
 The server serves files in this priority order:
-1. `public/` - Source static assets (images, css, js)
-2. `html/` - Generated static HTML and user uploads
+1. `public/` - Root files such as `logo.svg` and favicons
+2. `html/` - Generated static HTML and unified image assets under `html/uploads/`
 
 This allows:
-- Development and production to share the same `public/` directory
-- User uploads in `html/uploads/` work in both environments
+- Root files to remain simple in `public/`
+- All image assets to be unified under `html/uploads/`
 - Generated HTML to override specific routes
 - Static generation preserves `html/uploads/` directory (never deleted)
 
@@ -126,12 +129,12 @@ Import product images from spirax-global project:
 bash scripts/import-images-from-global.sh
 ```
 
-This imports 500+ images from `/Users/yytest/Documents/projects/spirax-global` into `public/images/global/`, including:
+This imports 500+ images from `/Users/yytest/Documents/projects/spirax-global` into `html/uploads/images/global/`, including:
 - Product images (390+ files)
 - Industry, news, contact, and other global images
 
 **Important Notes:**
-- User uploaded images are stored in `html/uploads/images/` (not `public/upload/`)
+- User uploaded and imported images are stored in `html/uploads/`
 - Static generation **preserves** `html/uploads/` directory and all uploaded files
 - Image files (`.jpg`, `.png`, `.gif`) are never deleted during static generation
 - Only `.html`, `.htm`, `.md` files in managed directories are cleaned up

@@ -79,12 +79,8 @@ export default function CategoryTemplateBindingDialog({
     mutationFn: async () => {
       for (const type of templateTypes) {
         const selected = selectedTemplates[type] || DEFAULT_VALUE
-        const existing = targetBindings.find((item) => item.template_type === type)
         if (selected === DEFAULT_VALUE) {
-          if (existing?.id) {
-            await templatesApi.deleteBinding(existing.id)
-          }
-          continue
+          throw new Error(`missing required ${type} template binding`)
         }
         await templatesApi.saveBinding({
           theme_id: selectedThemeId,
@@ -100,7 +96,7 @@ export default function CategoryTemplateBindingDialog({
       toast.success('模板绑定已保存')
       onOpenChange(false)
     },
-    onError: () => toast.error('模板绑定保存失败'),
+    onError: (error: any) => toast.error(error?.message || '模板绑定保存失败'),
   })
 
   return (
@@ -122,7 +118,7 @@ export default function CategoryTemplateBindingDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={DEFAULT_VALUE}>不单独绑定</SelectItem>
+                  <SelectItem value={DEFAULT_VALUE}>请选择{formatTemplateType(type)}</SelectItem>
                   {templates
                     .filter((template: Template) => template.type === type)
                     .map((template: Template) => (
@@ -151,5 +147,6 @@ export default function CategoryTemplateBindingDialog({
 function formatTemplateType(type: TemplateBinding['template_type']) {
   if (type === 'list') return '列表模板'
   if (type === 'content') return '内容模板'
+  if (type === 'single') return '单页模板'
   return '首页模板'
 }

@@ -1208,7 +1208,7 @@ export default function Template(props) {
         actionsClassName: 'promo-banner__actions',
         actions: [
           {
-            href: '/contact.html',
+            href: '/contact-us/',
             label: '联系页面',
             className: 'btn btn--primary',
             variant: 'none',

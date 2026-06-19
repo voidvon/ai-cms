@@ -50,6 +50,7 @@ export function listColumns({ languageCode = null, includeTranslations = true } 
         route_path,
         content_model_id,
         dir_name,
+        images,
         detail_rule,
         is_visible,
         legacy_extra,
@@ -92,13 +93,14 @@ export function createManualColumn(input) {
         route_path,
         content_model_id,
         dir_name,
+        images,
         detail_rule,
         is_visible,
         legacy_extra,
         sort_order,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       payload.base.parent_id,
@@ -107,6 +109,7 @@ export function createManualColumn(input) {
       payload.base.route_path,
       payload.base.content_model_id,
       payload.base.dir_name,
+      payload.base.images,
       payload.base.detail_rule,
       payload.base.is_visible,
       payload.base.legacy_extra,
@@ -141,6 +144,7 @@ export function updateManualColumn(id, input) {
         route_path = ?,
         content_model_id = ?,
         dir_name = ?,
+        images = ?,
         detail_rule = ?,
         is_visible = ?,
         legacy_extra = ?,
@@ -155,6 +159,7 @@ export function updateManualColumn(id, input) {
       payload.base.route_path,
       payload.base.content_model_id,
       payload.base.dir_name,
+      payload.base.images,
       payload.base.detail_rule,
       payload.base.is_visible,
       payload.base.legacy_extra,
@@ -185,6 +190,7 @@ export function updateColumnRecord(id, input) {
         parent_id = ?,
         content_model_id = ?,
         dir_name = ?,
+        images = ?,
         route_path = ?,
         detail_rule = ?,
         is_visible = ?,
@@ -196,6 +202,7 @@ export function updateColumnRecord(id, input) {
       payload.base.parent_id,
       payload.base.content_model_id,
       payload.base.dir_name,
+      payload.base.images,
       payload.base.route_path,
       payload.base.detail_rule,
       payload.base.is_visible,
@@ -264,6 +271,7 @@ function hydrateColumns(rows, {
     const displayName = fallbackTranslation?.name || row.name || '';
     const resolvedSummary = fallbackTranslation?.summary ?? '';
     const resolvedContentHtml = fallbackTranslation?.content_html ?? '';
+    const resolvedTemplateDataJson = fallbackTranslation?.template_data_json ?? null;
     const resolvedSeoTitle = fallbackTranslation?.seo_title ?? null;
     const resolvedSeoDescription = fallbackTranslation?.seo_description ?? null;
     const resolvedPublishStatus = fallbackTranslation?.publish_status ?? 'published';
@@ -276,6 +284,8 @@ function hydrateColumns(rows, {
       name: displayName,
       summary: resolvedSummary,
       content_html: resolvedContentHtml,
+      template_data_json: resolvedTemplateDataJson,
+      template_data: parseTemplateDataJson(resolvedTemplateDataJson),
       seo_title: resolvedSeoTitle ?? null,
       seo_description: resolvedSeoDescription ?? null,
       publish_status: resolvedPublishStatus,
@@ -283,6 +293,7 @@ function hydrateColumns(rows, {
       current_language_code: fallbackTranslation?.language_code || selectedLanguage.code,
       content_model_id: toNullableInteger(row.content_model_id),
       dir_name: row.dir_name || null,
+      images: parseColumnImages(row.images),
       detail_rule: row.detail_rule || null,
       route_path: row.route_path || null,
       custom_url: row.custom_url || null,
@@ -306,6 +317,8 @@ function hydrateColumns(rows, {
               title: translation.name,
               summary: translation.summary,
               content_html: translation.content_html,
+              template_data_json: translation.template_data_json,
+              template_data: parseTemplateDataJson(translation.template_data_json),
               seo_title: translation.seo_title,
               seo_description: translation.seo_description,
               publish_status: translation.publish_status,
@@ -346,6 +359,7 @@ function loadColumnTranslations(columnIds) {
         t.name,
         t.summary,
         t.content_html,
+        t.template_data_json,
         t.seo_title,
         t.seo_description,
         t.publish_status,
@@ -369,6 +383,7 @@ function loadColumnTranslations(columnIds) {
       name: row.name || '',
       summary: row.summary || '',
       content_html: row.content_html || '',
+      template_data_json: row.template_data_json || null,
       seo_title: row.seo_title || '',
       seo_description: row.seo_description || '',
       publish_status: normalizePublishStatus(row.publish_status),
@@ -397,6 +412,7 @@ function saveColumnTranslations(columnId, translations, now = new Date().toISOSt
           name,
           summary,
           content_html,
+          template_data_json,
           seo_title,
           seo_description,
           publish_status,
@@ -408,6 +424,7 @@ function saveColumnTranslations(columnId, translations, now = new Date().toISOSt
           name = excluded.name,
           summary = excluded.summary,
           content_html = excluded.content_html,
+          template_data_json = excluded.template_data_json,
           seo_title = excluded.seo_title,
           seo_description = excluded.seo_description,
           publish_status = excluded.publish_status,
@@ -420,6 +437,7 @@ function saveColumnTranslations(columnId, translations, now = new Date().toISOSt
         String(persistedTranslation?.name || '').trim(),
         String(persistedTranslation?.summary || ''),
         String(persistedTranslation?.content_html || ''),
+        normalizeTemplateDataJson(persistedTranslation?.template_data_json ?? persistedTranslation?.template_data ?? null),
         toNullableString(persistedTranslation?.seo_title),
         toNullableString(persistedTranslation?.seo_description),
         normalizePublishStatus(persistedTranslation?.publish_status),
@@ -443,6 +461,7 @@ function getColumnByIdRaw(id) {
         route_path,
         content_model_id,
         dir_name,
+        images,
         detail_rule,
         is_visible,
         legacy_extra,
@@ -504,6 +523,7 @@ function normalizeManualColumnInput(input, options = {}) {
       publish_status: 'published',
       published_at: null,
       is_visible: isVisible,
+      images: serializeColumnImages(input.images ?? existingView.images ?? []),
       legacy_extra: existing?.legacy_extra ?? null,
       sort_order: sortOrder
     };
@@ -530,6 +550,7 @@ function normalizeManualColumnInput(input, options = {}) {
     publish_status: normalizePublishStatus(input.publish_status ?? existing?.publish_status),
     published_at: toNullableString(input.published_at ?? existing?.published_at),
     is_visible: isVisible,
+    images: serializeColumnImages(input.images ?? existingView.images ?? []),
     legacy_extra: existing?.legacy_extra ?? null,
     sort_order: sortOrder
   };
@@ -596,6 +617,7 @@ function normalizeExistingColumnMutationInput(input, existingColumn = null) {
       parent_id: parentId || null,
       content_model_id: contentModelId,
       dir_name: dirName,
+      images: serializeColumnImages(input?.images ?? existing.images ?? []),
       route_path: routePath,
       detail_rule: detailRule,
       sort_order: sortOrder,
@@ -644,6 +666,7 @@ function normalizeColumnTranslations(translations, {
       name: translationName,
       summary: String(value?.summary ?? existingTranslations?.[languageCode]?.summary ?? fallbackBase.summary ?? ''),
       content_html: String(value?.content_html ?? existingTranslations?.[languageCode]?.content_html ?? fallbackBase.content_html ?? ''),
+      template_data_json: normalizeTemplateDataJson(value?.template_data_json ?? value?.template_data ?? existingTranslations?.[languageCode]?.template_data_json ?? existingTranslations?.[languageCode]?.template_data ?? fallbackBase.template_data_json ?? fallbackBase.template_data ?? null),
       seo_title: toNullableString(value?.seo_title ?? existingTranslations?.[languageCode]?.seo_title ?? fallbackBase.seo_title),
       seo_description: toNullableString(value?.seo_description ?? existingTranslations?.[languageCode]?.seo_description ?? fallbackBase.seo_description),
       publish_status: normalizePublishStatus(value?.publish_status ?? existingTranslations?.[languageCode]?.publish_status ?? fallbackBase.publish_status),
@@ -669,6 +692,7 @@ function normalizeColumnTranslations(translations, {
       name: String(fallback?.name || fallback?.title || fallbackBase.name || '').trim(),
       summary: String(fallback?.summary || fallbackBase.summary || ''),
       content_html: String(fallback?.content_html || fallbackBase.content_html || ''),
+      template_data_json: normalizeTemplateDataJson(fallback?.template_data_json ?? fallback?.template_data ?? fallbackBase.template_data_json ?? fallbackBase.template_data ?? null),
       seo_title: toNullableString(fallback?.seo_title || fallbackBase.seo_title),
       seo_description: toNullableString(fallback?.seo_description || fallbackBase.seo_description),
       publish_status: normalizePublishStatus(fallback?.publish_status || fallbackBase.publish_status),
@@ -1021,6 +1045,7 @@ function ensureColumnsTableSchema() {
         route_path TEXT,
         content_model_id INTEGER,
         dir_name TEXT,
+        images TEXT,
         detail_rule TEXT,
         is_visible INTEGER NOT NULL DEFAULT 1,
         sort_order INTEGER NOT NULL DEFAULT 0,
@@ -1032,6 +1057,8 @@ function ensureColumnsTableSchema() {
     return;
   }
 
+  addColumnIfMissing('columns', 'images', 'TEXT');
+
   const columnNames = new Set(queryAll('PRAGMA table_info(columns)').map((column) => String(column.name || '')));
   const requiredColumns = [
     'column_type',
@@ -1039,6 +1066,7 @@ function ensureColumnsTableSchema() {
     'route_path',
     'content_model_id',
     'dir_name',
+    'images',
     'detail_rule',
     'is_visible',
     'sort_order',
@@ -1049,6 +1077,76 @@ function ensureColumnsTableSchema() {
   const missingRequiredColumns = requiredColumns.filter((columnName) => !columnNames.has(columnName));
   if (missingRequiredColumns.length > 0) {
     throw new Error('columns 表结构不符合当前系统要求，请重新初始化数据库');
+  }
+  migrateColumnImagesFromLegacyExtra();
+}
+
+function parseColumnImages(value) {
+  if (!value) {
+    return [];
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.map((item) => String(item || '').trim()).filter(Boolean)
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function serializeColumnImages(value) {
+  const normalized = Array.isArray(value)
+    ? value.map((item) => String(item || '').trim()).filter(Boolean)
+    : [];
+  return JSON.stringify(normalized);
+}
+
+function normalizeTemplateDataJson(value) {
+  if (value == null || value === '') {
+    return null;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    JSON.parse(trimmed);
+    return trimmed;
+  }
+  if (typeof value !== 'object') {
+    throw new Error('template_data_json must be a JSON object or array');
+  }
+  return JSON.stringify(value);
+}
+
+function parseTemplateDataJson(value) {
+  if (!value) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function migrateColumnImagesFromLegacyExtra() {
+  const rows = queryAll(`
+    SELECT id, images, legacy_extra
+    FROM columns
+    WHERE trim(coalesce(images, '')) = ''
+      AND trim(coalesce(legacy_extra, '')) <> ''
+  `);
+
+  for (const row of rows) {
+    const legacyExtra = parseLegacyExtra(row.legacy_extra);
+    const coverImage = String(legacyExtra?.cover_image || '').trim();
+    if (!coverImage) {
+      continue;
+    }
+    execute('UPDATE columns SET images = ? WHERE id = ?', [serializeColumnImages([coverImage]), row.id]);
   }
 }
 
@@ -1061,6 +1159,7 @@ function ensureColumnTranslationsSchema() {
       name TEXT NOT NULL,
       summary TEXT NOT NULL DEFAULT '',
       content_html TEXT NOT NULL DEFAULT '',
+      template_data_json TEXT,
       seo_title TEXT,
       seo_description TEXT,
       publish_status TEXT NOT NULL DEFAULT 'published',
@@ -1073,6 +1172,7 @@ function ensureColumnTranslationsSchema() {
 
   addColumnIfMissing('column_translations', 'summary', "TEXT NOT NULL DEFAULT ''");
   addColumnIfMissing('column_translations', 'content_html', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing('column_translations', 'template_data_json', 'TEXT');
   addColumnIfMissing('column_translations', 'seo_title', 'TEXT');
   addColumnIfMissing('column_translations', 'seo_description', 'TEXT');
   addColumnIfMissing('column_translations', 'publish_status', "TEXT NOT NULL DEFAULT 'published'");

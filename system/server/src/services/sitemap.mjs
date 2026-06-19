@@ -132,7 +132,6 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
 
   addEntry(entries, siteUrl, '/', generatedAt);
   addEntry(entries, siteUrl, '/index.html', generatedAt);
-  addEntry(entries, siteUrl, '/contact.html', generatedAt);
 
   for (const column of columns) {
     const routePath = String(column.route_path || '').trim();

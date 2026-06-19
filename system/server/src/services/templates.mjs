@@ -9,7 +9,7 @@ import { listNews } from './news.mjs';
 import { listColumnCategories, listColumnCategoriesByRoot } from './column-categories.mjs';
 import { buildColumnPublicUrl, resolvePublicSectionContext } from './public-sections.mjs';
 
-export const TEMPLATE_TYPES = ['home', 'list', 'content', 'component'];
+export const TEMPLATE_TYPES = ['home', 'list', 'content', 'single', 'component'];
 export const TEMPLATE_ENGINES = ['tsx'];
 const MAX_TEMPLATE_VERSIONS = 10;
 const CONTENT_TYPE_PRODUCT_ID = 1;
@@ -68,7 +68,7 @@ export function ensureTemplatesSchema() {
       id INTEGER PRIMARY KEY,
       theme_id INTEGER,
       name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'component')),
+      type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'single', 'component')),
       code TEXT NOT NULL,
       engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
       content TEXT NOT NULL DEFAULT '',
@@ -87,7 +87,7 @@ export function ensureTemplatesSchema() {
       theme_id INTEGER NOT NULL,
       target_type TEXT NOT NULL,
       target_id INTEGER,
-      template_type TEXT NOT NULL CHECK (template_type IN ('home', 'list', 'content')),
+      template_type TEXT NOT NULL CHECK (template_type IN ('home', 'list', 'content', 'single')),
       template_id INTEGER NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -816,7 +816,10 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
   }
 
   if (effectiveMode === 'single-page') {
-    const pageTreeRootColumn = getPreviewRootColumnByDriver('page_tree');
+    const pageTreeRootColumn = template.type === 'single'
+      ? getPreviewRootColumnByDriver('single_page')
+      : getPreviewRootColumnByDriver('page_tree');
+    const pageUrlPrefix = template.type === 'single' ? '/example-page.html' : '/about/about-';
     const category = getPreviewColumnCategory({
       rootColumn: pageTreeRootColumn,
       fallbackName: '示例单页栏目',
@@ -827,22 +830,26 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       ...buildPreviewPageContext({
         pageType: 'content',
         title: category.name,
-        url: `/about/about-${category.id}.html`,
-        section: { type: 'corporation', name: '公司栏目', url: '/about/' },
+        url: template.type === 'single' ? '/example-page.html' : `/about/about-${category.id}.html`,
+        section: template.type === 'single'
+          ? { type: 'content', name: '单页栏目', url: '/example-page.html' }
+          : { type: 'corporation', name: '公司栏目', url: '/about/' },
         category,
         content: null,
         breadcrumbItems: [{ label: category.name, url: '' }]
       }),
-      primaryMenuItems: buildPreviewPrimaryMenuItems('corporation'),
+      primaryMenuItems: buildPreviewPrimaryMenuItems(template.type === 'single' ? 'contact' : 'corporation'),
       title: category.name,
       contentHtml: category.content_html || '公司栏目内容预览',
-      secondaryMenuItems: buildPreviewColumnMenuItems({
-        rootColumn: pageTreeRootColumn,
-        activeId: category.id,
-        baseUrl: '/about/',
-        detailPattern: '/about/about-{id}.html',
-        fallbackName: '示例单页栏目'
-      })
+      secondaryMenuItems: template.type === 'single'
+        ? []
+        : buildPreviewColumnMenuItems({
+            rootColumn: pageTreeRootColumn,
+            activeId: category.id,
+            baseUrl: '/about/',
+            detailPattern: '/about/about-{id}.html',
+            fallbackName: '示例单页栏目'
+          })
     };
   }
 
@@ -852,8 +859,8 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       ...buildPreviewPageContext({
         pageType: 'contact',
         title: '联系我们',
-        url: '/contact.html',
-        section: { type: 'content', name: '联系我们', url: '/contact.html' },
+        url: '/contact-us/',
+        section: { type: 'content', name: '联系我们', url: '/contact-us/' },
         category: null,
         content: null,
         breadcrumbItems: [{ label: '联系我们', url: '' }]
@@ -886,6 +893,9 @@ function inferPreviewMode(template) {
   if (template.code === 'content_contact' || code.includes('contact')) {
     return 'contact-page';
   }
+  if (template.type === 'single') {
+    return 'single-page';
+  }
   if (template.type === 'content') {
     return 'single-page';
   }
@@ -902,6 +912,7 @@ function normalizePreviewMode(value) {
     ['service-list', 'knowledge-list'],
     ['service-detail', 'knowledge-detail'],
     ['content', 'single-page'],
+    ['single', 'single-page'],
     ['contact', 'contact-page']
   ]);
   return legacyToGenericMap.get(mode) || mode || 'auto';
@@ -1116,7 +1127,6 @@ function buildPreviewSiteColumns() {
 
   return normalizedRows
     .filter((item) => item.parentId === 0)
-    .filter((item) => item.url !== '/contact.html')
     .map((item) => ({
       ...item,
       children: childrenByParentId.get(item.id) || []
@@ -1497,7 +1507,7 @@ function normalizeBindingTarget(themeId, targetType, targetId, templateType) {
   if (!['site', 'product_category', 'news_category', 'corporation_category', 'content_type', 'column'].includes(normalizedTargetType)) {
     throw new Error('invalid binding target type');
   }
-  if (!['home', 'list', 'content'].includes(templateType)) {
+  if (!['home', 'list', 'content', 'single'].includes(templateType)) {
     throw new Error('invalid binding template type');
   }
 
@@ -1791,6 +1801,7 @@ function ensureTemplateBindingsThemeScope() {
   if (
     String(sql).includes('theme_id INTEGER NOT NULL')
     && String(sql).includes('UNIQUE (theme_id, target_type, target_id, template_type)')
+    && String(sql).includes("CHECK (template_type IN ('home', 'list', 'content', 'single'))")
   ) {
     return;
   }
@@ -1806,7 +1817,7 @@ function ensureTemplateBindingsThemeScope() {
       theme_id INTEGER NOT NULL,
       target_type TEXT NOT NULL,
       target_id INTEGER,
-      template_type TEXT NOT NULL CHECK (template_type IN ('home', 'list', 'content')),
+      template_type TEXT NOT NULL CHECK (template_type IN ('home', 'list', 'content', 'single')),
       template_id INTEGER NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -1849,6 +1860,7 @@ function ensureTemplateCodeThemeScope() {
     String(sql).includes('theme_id INTEGER')
     && String(sql).includes('UNIQUE (theme_id, code)')
     && !String(sql).includes('code TEXT NOT NULL UNIQUE')
+    && String(sql).includes("CHECK (type IN ('home', 'list', 'content', 'single', 'component'))")
   ) {
     return;
   }
@@ -1865,7 +1877,7 @@ function ensureTemplateCodeThemeScope() {
       id INTEGER PRIMARY KEY,
       theme_id INTEGER,
       name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'component')),
+      type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'single', 'component')),
       code TEXT NOT NULL,
       engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
       content TEXT NOT NULL DEFAULT '',
@@ -1906,6 +1918,7 @@ function ensureTemplatesEngineConstraint() {
   if (
     String(sql).includes("DEFAULT 'tsx'")
     && String(sql).includes("CHECK (engine IN ('tsx'))")
+    && String(sql).includes("CHECK (type IN ('home', 'list', 'content', 'single', 'component'))")
   ) {
     return;
   }
@@ -1920,7 +1933,7 @@ function ensureTemplatesEngineConstraint() {
       id INTEGER PRIMARY KEY,
       theme_id INTEGER,
       name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'component')),
+      type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'single', 'component')),
       code TEXT NOT NULL,
       engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
       content TEXT NOT NULL DEFAULT '',

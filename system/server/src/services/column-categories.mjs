@@ -117,6 +117,7 @@ function mapColumnToCategory(column, rootColumn = null) {
       : parentId,
     sort_order: toInteger(column.sort_order, 0),
     dir_name: column.dir_name || null,
+    images: Array.isArray(column.images) ? column.images : [],
     route_path: column.route_path || null,
     detail_rule: column.detail_rule || null,
     summary: column.summary ?? '',

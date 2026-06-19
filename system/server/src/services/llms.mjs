@@ -143,14 +143,6 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     ].filter(Boolean)
   }));
 
-  pages.push(createPage({
-    title: '联系我们',
-    routePath: '/contact.html',
-    section: '核心页面',
-    summary: '联系页面，包含公司联系方式与沟通入口。',
-    contentLines: buildSiteFactLines(site)
-  }));
-
   for (const column of columns) {
     const routePath = String(column.route_path || '').trim();
     if (

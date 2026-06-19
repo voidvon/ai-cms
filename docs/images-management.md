@@ -28,21 +28,17 @@ html/uploads/images/202606/td52-cover-4x3.jpg
 ```text
 html/
 └── uploads/
-    └── images/
-        └── 202606/
-            ├── td52-cover-4x3.jpg
-            └── ...
-
-public/
-└── images/
-    └── global/
-        ├── generic-header-images/
-        ├── dotcom-home/
-        ├── industries/
-        └── ...
+    ├── images/
+    │   ├── 202606/
+    │   │   ├── td52-cover-4x3.jpg
+    │   │   └── ...
+    │   ├── global/
+    │   └── site-wide/
+    └── skin/
+        └── dfpic.gif
 ```
 
-`public/images/global/` 只保留站点通用静态素材；产品内容图片不要再放回 `public/images/global/products/`。
+站点图片现统一收口在 `html/uploads/`。旧的 `public/images/`、`public/skin/` 不再作为图片主存储目录。
 
 ## 数据库存储
 
@@ -62,7 +58,7 @@ public/
 
 - 后台上传接口会按当前月份写入 `html/uploads/images/YYYYMM/`。
 - API 路径包括 `/media/upload` 和旧的 `/api/uploads`。
-- 静态生成会同步并保留 `uploads/`，不会把上传文件清掉。
+- 静态生成会保留 `html/uploads/`，不会把图片文件清掉。
 
 ## 迁移与检查
 
@@ -86,7 +82,7 @@ rg -n "/images/global/products|public/images/global/products" .
 
 ## 注意事项
 
-- 不要手工维护 `public/images/global/products/`。
+- 不要再把图片导回 `public/images/` 或 `public/skin/`。
 - 不要直接批量修改生成后的 `html/*.html` 页面；应修改数据库或服务层后重新生成。
 - `html/uploads/` 是运行数据，发布或清理前需要备份。
 - `.DS_Store` 已加入忽略规则，不应提交。

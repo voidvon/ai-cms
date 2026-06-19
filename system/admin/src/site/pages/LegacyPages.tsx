@@ -189,7 +189,7 @@ ${legacySearchForm()}</div>
 }
 
 export function LegacyContactPage(props: LegacyContactPageProps) {
-  const rightHtml = `<div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> &gt;&gt; <a href="/Contact.html" title="联系我们">联系我们</a> </div>
+  const rightHtml = `<div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> &gt;&gt; <a href="/contact-us/" title="联系我们">联系我们</a> </div>
 	  <div class="page-products">
       <ul class="clearfix">
 <table class="con-add"><tbody><tr><td valign="top">
@@ -303,8 +303,8 @@ function articleSidebar(props: LegacyArticleListPageProps | LegacyArticleDetailP
 ${props.fragments.productsMenuHtml || ''}</td></tr></table><DIV style="clear:both;"></DIV><DIV style="PADDING-TOP:3px"></DIV>
 <table width="165" border="0" align="left" cellpadding="0" cellspacing="0" class="Table_boder"><tr><td width="71" rowspan="3" align="right">
 <img src="../../Skin/blue/Images/service.jpg" width="70" height="130" /></td>
-    <td width="81">&nbsp;<A href="/Contact.html" class="0a">业务联系</A></td></tr><tr>
-  <td height="30">&nbsp;<a href="/Contact.html" class="0a">客服电话</a></td></tr></table>`
+    <td width="81">&nbsp;<A href="/contact-us/" class="0a">业务联系</A></td></tr><tr>
+  <td height="30">&nbsp;<a href="/contact-us/" class="0a">客服电话</a></td></tr></table>`
 }
 
 export function LegacyArticleListPage(props: LegacyArticleListPageProps) {

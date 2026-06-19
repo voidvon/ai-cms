@@ -312,8 +312,8 @@ export default function ColumnsPage() {
         throw new Error('栏目创建失败')
       }
 
-      await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', columnId, 'list', rootCategoryForm.listTemplateId)
-      await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', columnId, 'content', rootCategoryForm.contentTemplateId)
+      await saveRequiredTemplateBinding(selectedThemeId || 0, 'column', columnId, 'list', rootCategoryForm.listTemplateId)
+      await saveRequiredTemplateBinding(selectedThemeId || 0, 'column', columnId, 'content', rootCategoryForm.contentTemplateId)
 
       return response
     },
@@ -331,16 +331,18 @@ export default function ColumnsPage() {
   })
 
   const createManualColumnMutation = useMutation({
-    mutationFn: async ({ value, templateIds }: { value: ManualColumnFormValue; templateIds: { listTemplateId: string; contentTemplateId: string } }) => {
+    mutationFn: async ({ value, templateIds }: { value: ManualColumnFormValue; templateIds: { listTemplateId: string; contentTemplateId: string; singleTemplateId: string } }) => {
       const response = await columnsApi.create(value)
       const columnId = response.data?.id
       if (!columnId) {
         throw new Error('栏目创建失败')
       }
-      if (value.base.column_type !== 'single') {
-        await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', columnId, 'list', templateIds.listTemplateId)
+      if (value.base.column_type === 'single') {
+        await saveRequiredTemplateBinding(selectedThemeId || 0, 'column', columnId, 'single', templateIds.singleTemplateId)
+      } else {
+        await saveRequiredTemplateBinding(selectedThemeId || 0, 'column', columnId, 'list', templateIds.listTemplateId)
+        await saveRequiredTemplateBinding(selectedThemeId || 0, 'column', columnId, 'content', templateIds.contentTemplateId)
       }
-      await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', columnId, 'content', templateIds.contentTemplateId)
       return response
     },
     onSuccess: () => {
@@ -356,14 +358,17 @@ export default function ColumnsPage() {
   })
 
   const updateManualColumnMutation = useMutation({
-    mutationFn: async ({ id, value, templateIds }: { id: number; value: ManualColumnFormValue; templateIds: { listTemplateId: string; contentTemplateId: string } }) => {
+    mutationFn: async ({ id, value, templateIds }: { id: number; value: ManualColumnFormValue; templateIds: { listTemplateId: string; contentTemplateId: string; singleTemplateId: string } }) => {
       const response = await columnsApi.update(id, value)
-      if (value.base.column_type !== 'single') {
-        await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'list', templateIds.listTemplateId, bindings)
+      if (value.base.column_type === 'single') {
+        await saveRequiredTemplateBinding(selectedThemeId || 0, 'column', id, 'single', templateIds.singleTemplateId, bindings)
+        await deleteTemplateBindingIfExists('column', id, 'list', bindings)
+        await deleteTemplateBindingIfExists('column', id, 'content', bindings)
       } else {
-        await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'list', DEFAULT_TEMPLATE_VALUE, bindings)
+        await saveRequiredTemplateBinding(selectedThemeId || 0, 'column', id, 'list', templateIds.listTemplateId, bindings)
+        await saveRequiredTemplateBinding(selectedThemeId || 0, 'column', id, 'content', templateIds.contentTemplateId, bindings)
+        await deleteTemplateBindingIfExists('column', id, 'single', bindings)
       }
-      await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'content', templateIds.contentTemplateId, bindings)
       return response
     },
     onSuccess: () => {
@@ -379,7 +384,7 @@ export default function ColumnsPage() {
   })
 
   const updateColumnMutation = useMutation({
-    mutationFn: async ({ id, value, templateIds }: { id: number; value: ManualColumnFormValue; templateIds: { listTemplateId: string; contentTemplateId: string } }) => {
+    mutationFn: async ({ id, value, templateIds }: { id: number; value: ManualColumnFormValue; templateIds: { listTemplateId: string; contentTemplateId: string; singleTemplateId: string } }) => {
       const response = await columnsApi.update(id, value.base.is_visible !== undefined ? {
         parent_id: value.base.parent_id,
         content_model_id: value.base.content_model_id,
@@ -390,12 +395,15 @@ export default function ColumnsPage() {
         is_visible: value.base.is_visible,
         translations: value.translations,
       } : value)
-      if (value.base.column_type !== 'single') {
-        await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'list', templateIds.listTemplateId, bindings)
+      if (value.base.column_type === 'single') {
+        await saveRequiredTemplateBinding(selectedThemeId || 0, 'column', id, 'single', templateIds.singleTemplateId, bindings)
+        await deleteTemplateBindingIfExists('column', id, 'list', bindings)
+        await deleteTemplateBindingIfExists('column', id, 'content', bindings)
       } else {
-        await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'list', DEFAULT_TEMPLATE_VALUE, bindings)
+        await saveRequiredTemplateBinding(selectedThemeId || 0, 'column', id, 'list', templateIds.listTemplateId, bindings)
+        await saveRequiredTemplateBinding(selectedThemeId || 0, 'column', id, 'content', templateIds.contentTemplateId, bindings)
+        await deleteTemplateBindingIfExists('column', id, 'single', bindings)
       }
-      await saveOptionalTemplateBinding(selectedThemeId || 0, 'column', id, 'content', templateIds.contentTemplateId, bindings)
       return response
     },
     onSuccess: () => {
@@ -437,6 +445,7 @@ export default function ColumnsPage() {
   const contentModels = contentModelsData?.data || []
   const listTemplates = templates.filter((template: Template) => template.type === 'list')
   const contentTemplates = templates.filter((template: Template) => template.type === 'content')
+  const singleTemplates = templates.filter((template: Template) => template.type === 'single')
   const selectedCategoryBindings = selectedColumn
     ? bindings.filter((binding) => binding.target_type === 'column' && binding.target_id === selectedColumn.id)
     : []
@@ -488,6 +497,14 @@ export default function ColumnsPage() {
 
   const handleCreateRootCategory = (event: React.FormEvent) => {
     event.preventDefault()
+    if (rootCategoryForm.listTemplateId === DEFAULT_TEMPLATE_VALUE) {
+      toast.error('请选择列表模板')
+      return
+    }
+    if (rootCategoryForm.contentTemplateId === DEFAULT_TEMPLATE_VALUE) {
+      toast.error('请选择内容模板')
+      return
+    }
     createRootCategoryMutation.mutate()
   }
 
@@ -498,7 +515,7 @@ export default function ColumnsPage() {
     setManualColumnDialogOpen(true)
   }
 
-  const handleSubmitManualColumn = (value: ManualColumnFormValue, templateIds: { listTemplateId: string; contentTemplateId: string }) => {
+  const handleSubmitManualColumn = (value: ManualColumnFormValue, templateIds: { listTemplateId: string; contentTemplateId: string; singleTemplateId: string }) => {
     if (editingColumnTarget) {
       updateColumnMutation.mutate({ id: editingColumnTarget.id, value, templateIds })
       return
@@ -724,6 +741,16 @@ export default function ColumnsPage() {
         binding.target_type === 'column'
         && binding.target_id === selectedEditingColumnId
         && binding.template_type === 'content'
+      ))
+      : null
+  , [selectedEditingColumnId, bindings])
+
+  const selectedManualSingleBinding = useMemo(() =>
+    selectedEditingColumnId
+      ? bindings.find((binding) => (
+        binding.target_type === 'column'
+        && binding.target_id === selectedEditingColumnId
+        && binding.template_type === 'single'
       ))
       : null
   , [selectedEditingColumnId, bindings])
@@ -982,7 +1009,7 @@ export default function ColumnsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={DEFAULT_TEMPLATE_VALUE}>不单独绑定</SelectItem>
+                  <SelectItem value={DEFAULT_TEMPLATE_VALUE}>请选择列表模板</SelectItem>
                   {listTemplates.map((template: Template) => (
                     <SelectItem key={template.id} value={String(template.id)}>
                       {template.name}
@@ -1001,7 +1028,7 @@ export default function ColumnsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value={DEFAULT_TEMPLATE_VALUE}>不单独绑定</SelectItem>
+                  <SelectItem value={DEFAULT_TEMPLATE_VALUE}>请选择内容模板</SelectItem>
                   {contentTemplates.map((template: Template) => (
                     <SelectItem key={template.id} value={String(template.id)}>
                       {template.name}
@@ -1033,8 +1060,10 @@ export default function ColumnsPage() {
         contentModels={contentModels}
         listTemplates={listTemplates}
         contentTemplates={contentTemplates}
+        singleTemplates={singleTemplates}
         initialListTemplateId={selectedManualListBinding?.template_id ? String(selectedManualListBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
         initialContentTemplateId={selectedManualContentBinding?.template_id ? String(selectedManualContentBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
+        initialSingleTemplateId={selectedManualSingleBinding?.template_id ? String(selectedManualSingleBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
         submitting={createManualColumnMutation.isPending || updateManualColumnMutation.isPending || updateColumnMutation.isPending}
         onSubmit={handleSubmitManualColumn}
       />
@@ -1058,7 +1087,7 @@ export default function ColumnsPage() {
         targetType={bindingCategoryTarget?.targetType || 'column'}
         targetId={bindingCategoryTarget?.id}
         targetName={bindingCategoryTarget?.name}
-        templateTypes={bindingCategoryTarget?.renderDriver === 'page_tree' ? ['content'] : ['list', 'content']}
+        templateTypes={bindingCategoryTarget?.renderDriver === 'page_tree' ? ['single'] : ['list', 'content']}
       />
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -1350,6 +1379,7 @@ function CategoryDetailPanel({
   const target = getCategoryTreeTarget(column)
   const listBinding = bindings.find((item) => item.template_type === 'list')
   const contentBinding = bindings.find((item) => item.template_type === 'content')
+  const singleBinding = bindings.find((item) => item.template_type === 'single')
   const detailText = column.column_type === 'single'
     ? (column.route_path || '-')
     : column.column_type === 'link'
@@ -1387,8 +1417,14 @@ function CategoryDetailPanel({
         <div className="space-y-1 text-sm">
           <div className="text-muted-foreground">模板绑定</div>
           <div>主题：{selectedThemeId ? `#${selectedThemeId}` : '未选择'}</div>
-          <div>列表模板：{listBinding?.template_name || listBinding?.template_code || '未绑定'}</div>
-          <div>内容模板：{contentBinding?.template_name || contentBinding?.template_code || '未绑定'}</div>
+          {column.column_type === 'single'
+            ? <div>单页模板：{singleBinding?.template_name || singleBinding?.template_code || '未绑定'}</div>
+            : (
+              <>
+                <div>列表模板：{listBinding?.template_name || listBinding?.template_code || '未绑定'}</div>
+                <div>内容模板：{contentBinding?.template_name || contentBinding?.template_code || '未绑定'}</div>
+              </>
+            )}
         </div>
       </CardContent>
     </Card>
@@ -1483,25 +1519,16 @@ function getColumnDisplayKind(column: Column): ColumnDisplayKind {
   return 'category'
 }
 
-async function saveOptionalTemplateBinding(
+async function saveRequiredTemplateBinding(
   themeId: number,
   targetType: Extract<TemplateBinding['target_type'], 'column'>,
   targetId: number,
-  templateType: Extract<TemplateBinding['template_type'], 'list' | 'content'>,
+  templateType: Extract<TemplateBinding['template_type'], 'list' | 'content' | 'single'>,
   templateId: string,
   bindings: TemplateBinding[] = []
 ) {
-  const existing = bindings.find((binding) => (
-    binding.target_type === targetType
-    && binding.target_id === targetId
-    && binding.template_type === templateType
-  ))
-
   if (templateId === DEFAULT_TEMPLATE_VALUE) {
-    if (existing?.id) {
-      await templatesApi.deleteBinding(existing.id)
-    }
-    return
+    throw new Error(`missing required ${templateType} template binding`)
   }
 
   await templatesApi.saveBinding({
@@ -1511,6 +1538,23 @@ async function saveOptionalTemplateBinding(
     template_type: templateType,
     template_id: Number(templateId),
   })
+}
+
+async function deleteTemplateBindingIfExists(
+  targetType: Extract<TemplateBinding['target_type'], 'column'>,
+  targetId: number,
+  templateType: Extract<TemplateBinding['template_type'], 'list' | 'content' | 'single'>,
+  bindings: TemplateBinding[] = []
+) {
+  const existing = bindings.find((binding) => (
+    binding.target_type === targetType
+    && binding.target_id === targetId
+    && binding.template_type === templateType
+  ))
+
+  if (existing?.id) {
+    await templatesApi.deleteBinding(existing.id)
+  }
 }
 
 function isEditableManualColumn(column: Column) {

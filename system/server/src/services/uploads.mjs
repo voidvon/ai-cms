@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { CONTENT_ROOT } from '../config.mjs';
+import { CONTENT_ROOT, UPLOADS_IMAGES_ROOT } from '../config.mjs';
 
 let migratedUploadIndex = null;
 
@@ -41,7 +41,7 @@ export function normalizeUploadedRelativePath(relativePath) {
     return normalized;
   }
 
-  const contentUploadsRoot = path.resolve(CONTENT_ROOT, 'uploads/images');
+  const contentUploadsRoot = path.resolve(UPLOADS_IMAGES_ROOT);
   if (resolvedFilePath === contentUploadsRoot || !resolvedFilePath.startsWith(`${contentUploadsRoot}${path.sep}`)) {
     return normalized;
   }
@@ -51,7 +51,7 @@ export function normalizeUploadedRelativePath(relativePath) {
 }
 
 function resolveNewUploadCandidates(normalized) {
-  const uploadsRoot = path.resolve(CONTENT_ROOT, 'uploads/images');
+  const uploadsRoot = path.resolve(UPLOADS_IMAGES_ROOT);
   const stripped = normalized.replace(/^\/+/, '');
   const segments = stripped.split('/').filter(Boolean);
 
@@ -110,7 +110,7 @@ function findMigratedUploadByBasename(filename) {
 }
 
 function buildMigratedUploadIndex() {
-  const uploadsRoot = path.resolve(CONTENT_ROOT, 'uploads/images');
+  const uploadsRoot = path.resolve(UPLOADS_IMAGES_ROOT);
   const index = new Map();
 
   if (!fs.existsSync(uploadsRoot)) {

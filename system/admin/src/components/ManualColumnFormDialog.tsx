@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { toast } from 'sonner'
 import type { Column, ColumnTranslation, ContentModel, Template } from '@/types'
 
 export interface ManualColumnFormValue {
@@ -37,10 +38,12 @@ interface ManualColumnFormDialogProps {
   contentModels: ContentModel[]
   listTemplates: Template[]
   contentTemplates: Template[]
+  singleTemplates: Template[]
   initialListTemplateId: string
   initialContentTemplateId: string
+  initialSingleTemplateId: string
   submitting: boolean
-  onSubmit: (value: ManualColumnFormValue, templateIds: { listTemplateId: string; contentTemplateId: string }) => void
+  onSubmit: (value: ManualColumnFormValue, templateIds: { listTemplateId: string; contentTemplateId: string; singleTemplateId: string }) => void
 }
 
 const DEFAULT_TEMPLATE_VALUE = '__default__'
@@ -56,8 +59,10 @@ export default function ManualColumnFormDialog({
   contentModels,
   listTemplates,
   contentTemplates,
+  singleTemplates,
   initialListTemplateId,
   initialContentTemplateId,
+  initialSingleTemplateId,
   submitting,
   onSubmit
 }: ManualColumnFormDialogProps) {
@@ -76,6 +81,7 @@ export default function ManualColumnFormDialog({
   const [translations, setTranslations] = useState<Record<string, ColumnTranslation>>({})
   const [listTemplateId, setListTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
   const [contentTemplateId, setContentTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
+  const [singleTemplateId, setSingleTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
 
   const { data: languagesData } = useQuery({
     queryKey: ['languages'],
@@ -131,6 +137,7 @@ export default function ManualColumnFormDialog({
       })
       setListTemplateId((previous) => previous === (initialListTemplateId || DEFAULT_TEMPLATE_VALUE) ? previous : (initialListTemplateId || DEFAULT_TEMPLATE_VALUE))
       setContentTemplateId((previous) => previous === (initialContentTemplateId || DEFAULT_TEMPLATE_VALUE) ? previous : (initialContentTemplateId || DEFAULT_TEMPLATE_VALUE))
+      setSingleTemplateId((previous) => previous === (initialSingleTemplateId || DEFAULT_TEMPLATE_VALUE) ? previous : (initialSingleTemplateId || DEFAULT_TEMPLATE_VALUE))
       return
     }
 
@@ -155,7 +162,8 @@ export default function ManualColumnFormDialog({
     setActiveLanguage((previous) => previous === defaultLanguageCode ? previous : defaultLanguageCode)
     setListTemplateId((previous) => previous === DEFAULT_TEMPLATE_VALUE ? previous : DEFAULT_TEMPLATE_VALUE)
     setContentTemplateId((previous) => previous === DEFAULT_TEMPLATE_VALUE ? previous : DEFAULT_TEMPLATE_VALUE)
-  }, [open, mode, column?.id, initialKind, initialListTemplateId, initialContentTemplateId, defaultLanguageCode, availableLanguageCodes])
+    setSingleTemplateId((previous) => previous === DEFAULT_TEMPLATE_VALUE ? previous : DEFAULT_TEMPLATE_VALUE)
+  }, [open, mode, column?.id, initialKind, initialListTemplateId, initialContentTemplateId, initialSingleTemplateId, defaultLanguageCode, availableLanguageCodes])
 
   const parentOptions = useMemo(() => {
     return columns.filter((item) => {
@@ -168,12 +176,45 @@ export default function ManualColumnFormDialog({
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
+    const defaultName = String(translations[defaultLanguageCode]?.name || '').trim()
+    if (!defaultName) {
+      toast.error('请输入默认语言的栏目名称')
+      return
+    }
+    if (baseData.column_type === 'single') {
+      if (singleTemplateId === DEFAULT_TEMPLATE_VALUE) {
+        toast.error('请选择单页模板')
+        return
+      }
+    } else {
+      if (listTemplateId === DEFAULT_TEMPLATE_VALUE) {
+        toast.error('请选择列表模板')
+        return
+      }
+      if (contentTemplateId === DEFAULT_TEMPLATE_VALUE) {
+        toast.error('请选择内容模板')
+        return
+      }
+    }
+    for (const [languageCode, translation] of Object.entries(translations)) {
+      const raw = String(translation?.template_data_json || '').trim()
+      if (!raw) {
+        continue
+      }
+      try {
+        JSON.parse(raw)
+      } catch {
+        toast.error(`模板 JSON 数据格式不正确：${languageCode}`)
+        return
+      }
+    }
     onSubmit({
       base: baseData,
       translations,
     }, {
       listTemplateId,
       contentTemplateId,
+      singleTemplateId,
     })
   }
 
@@ -186,6 +227,20 @@ export default function ManualColumnFormDialog({
         ...patch,
       },
     }))
+  }
+
+  const handleFormatTemplateDataJson = (languageCode: string) => {
+    const raw = String(translations[languageCode]?.template_data_json || '').trim()
+    if (!raw) {
+      return
+    }
+    try {
+      const parsed = JSON.parse(raw)
+      setActiveLanguage(languageCode)
+      updateTranslation({ template_data_json: JSON.stringify(parsed, null, 2) })
+    } catch {
+      toast.error(`模板 JSON 数据格式不正确：${languageCode}`)
+    }
   }
 
   return (
@@ -245,16 +300,44 @@ export default function ManualColumnFormDialog({
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor={`manual-column-seo-title_${language.code}`}>SEO 标题</Label>
-                      <Input
-                        id={`manual-column-seo-title_${language.code}`}
-                        value={(translations[language.code] || createEmptyTranslation()).seo_title || ''}
+                      <div className="flex items-center justify-between gap-3">
+                        <Label htmlFor={`manual-column-template-data_${language.code}`}>模板 JSON 数据</Label>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleFormatTemplateDataJson(language.code)}
+                        >
+                          格式化 JSON
+                        </Button>
+                      </div>
+                      <Textarea
+                        id={`manual-column-template-data_${language.code}`}
+                        className="min-h-[180px] font-mono text-xs"
+                        value={(translations[language.code] || createEmptyTranslation()).template_data_json || ''}
                         onChange={(event) => {
                           setActiveLanguage(language.code)
-                          updateTranslation({ seo_title: event.target.value })
+                          updateTranslation({ template_data_json: event.target.value })
                         }}
-                        placeholder="可选"
+                        placeholder={'例如：{\n  "heroTitle": "与我们的专家讨论您的需求",\n  "contacts": []\n}'}
                       />
+                      <div className="text-xs text-muted-foreground">
+                        每种语言可配置一份自定义 JSON。单页模板中可通过 `props.templateData` 读取对象，通过 `props.templateDataJson` 读取原始字符串。
+                      </div>
+                    </div>
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label htmlFor={`manual-column-seo-title_${language.code}`}>SEO 标题</Label>
+                        <Input
+                          id={`manual-column-seo-title_${language.code}`}
+                          value={(translations[language.code] || createEmptyTranslation()).seo_title || ''}
+                          onChange={(event) => {
+                            setActiveLanguage(language.code)
+                            updateTranslation({ seo_title: event.target.value })
+                          }}
+                          placeholder="可选"
+                        />
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={`manual-column-seo-description_${language.code}`}>SEO 描述</Label>
@@ -372,12 +455,30 @@ export default function ManualColumnFormDialog({
                 <div className="space-y-2">
                   <Label>列表模板</Label>
                   <Select value={listTemplateId} onValueChange={setListTemplateId}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={DEFAULT_TEMPLATE_VALUE}>请选择列表模板</SelectItem>
+                    {listTemplates.map((template) => (
+                      <SelectItem key={template.id} value={String(template.id)}>
+                        {template.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : null}
+              {baseData.column_type === 'single' ? (
+                <div className="space-y-2">
+                  <Label>单页模板</Label>
+                  <Select value={singleTemplateId} onValueChange={setSingleTemplateId}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={DEFAULT_TEMPLATE_VALUE}>不单独绑定</SelectItem>
-                      {listTemplates.map((template) => (
+                      <SelectItem value={DEFAULT_TEMPLATE_VALUE}>请选择单页模板</SelectItem>
+                      {singleTemplates.map((template) => (
                         <SelectItem key={template.id} value={String(template.id)}>
                           {template.name}
                         </SelectItem>
@@ -385,23 +486,24 @@ export default function ManualColumnFormDialog({
                     </SelectContent>
                   </Select>
                 </div>
-              ) : null}
-              <div className="space-y-2">
-                <Label>内容模板</Label>
-                <Select value={contentTemplateId} onValueChange={setContentTemplateId}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={DEFAULT_TEMPLATE_VALUE}>不单独绑定</SelectItem>
-                    {contentTemplates.map((template) => (
-                      <SelectItem key={template.id} value={String(template.id)}>
-                        {template.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label>内容模板</Label>
+                  <Select value={contentTemplateId} onValueChange={setContentTemplateId}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value={DEFAULT_TEMPLATE_VALUE}>请选择内容模板</SelectItem>
+                      {contentTemplates.map((template) => (
+                        <SelectItem key={template.id} value={String(template.id)}>
+                          {template.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             {!basicOnly && baseData.column_type === 'link' ? (
@@ -476,6 +578,7 @@ function createEmptyTranslation(patch: Partial<ColumnTranslation> = {}): ColumnT
   return {
     name: '',
     content_html: '',
+    template_data_json: '',
     seo_title: '',
     seo_description: '',
     ...patch,
@@ -498,6 +601,7 @@ function buildInitialTranslations(column: Column, defaultLanguageCode: string, a
     output[defaultLanguageCode] = createEmptyTranslation({
       name: column.name || '',
       content_html: column.content_html || '',
+      template_data_json: column.template_data_json || '',
       seo_title: column.seo_title || '',
       seo_description: column.seo_description || '',
     })

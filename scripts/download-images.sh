@@ -4,14 +4,14 @@
 set -e
 
 BASE_URL="https://www.spiraxsteam.cn"
-PUBLIC_DIR="public"
+UPLOADS_DIR="html/uploads"
 
 echo "开始下载首页所需图片..."
 echo "=========================================="
 
 # 创建必要的目录
-mkdir -p "$PUBLIC_DIR/images/global/generic-header-images"
-mkdir -p "$PUBLIC_DIR/images/global/dotcom-home/hero/q2-2023"
+mkdir -p "$UPLOADS_DIR/images/global/generic-header-images"
+mkdir -p "$UPLOADS_DIR/images/global/dotcom-home/hero/q2-2023"
 
 # 固定图片列表
 declare -a FIXED_IMAGES=(
@@ -28,7 +28,11 @@ echo "【固定图片】下载中..."
 echo "------------------------------------------"
 
 for img_path in "${FIXED_IMAGES[@]}"; do
-  output_file="$PUBLIC_DIR$img_path"
+  if [ "$img_path" = "/logo.svg" ]; then
+    output_file="public/logo.svg"
+  else
+    output_file="$UPLOADS_DIR/images${img_path#/images}"
+  fi
   url="$BASE_URL$img_path"
 
   if [ -f "$output_file" ]; then

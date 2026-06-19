@@ -5,7 +5,7 @@ set -e
 
 SOURCE_REPO="/Volumes/DATA/Space/spirax-global"
 SOURCE_IMG="$SOURCE_REPO/public/images"
-DEST_IMG="html/images"
+DEST_IMG="html/uploads/images"
 
 echo "从源仓库复制图片文件..."
 echo "=========================================="
@@ -24,7 +24,7 @@ mkdir -p "$DEST_IMG/global"
 echo "开始复制..."
 echo "------------------------------------------"
 
-# 复制 global 目录。产品内容图片已统一迁移到 html/uploads/images/YYYYMM/。
+# 复制 global 目录。产品内容图片仍统一迁移到 html/uploads/images/YYYYMM/。
 echo "复制 global/ 目录..."
 rsync -av --progress --exclude "products/" "$SOURCE_IMG/global/" "$DEST_IMG/global/" 2>&1 | grep -E "sending|total size|speedup" || true
 
