@@ -6,7 +6,7 @@ const ADMIN_DEV_SERVER_URL = normalizeDevServerUrl(process.env.ADMIN_DEV_SERVER_
 
 export async function serveStatic(request, reply) {
   const pathname = getPathname(request.url);
-  const rewrittenPathname = rewriteLegacyStaticPath(pathname);
+  const rewrittenPathname = pathname;
 
   if (isUnsafePath(rewrittenPathname)) {
     return false;
@@ -189,32 +189,5 @@ function normalizeDevServerUrl(value) {
 }
 
 function rewriteLegacyStaticPath(pathname) {
-  const normalized = String(pathname || '').replace(/\/{2,}/g, '/');
-
-  if (/^\/img\/css\.css$/i.test(normalized)) {
-    return '/uploads/skin/css.css';
-  }
-  if (/^\/img\/(.+)$/i.test(normalized)) {
-    return normalized.replace(/^\/img\//i, '/uploads/images/');
-  }
-  if (/^\/images\/(.+)$/i.test(normalized)) {
-    return normalized.replace(/^\/images\//i, '/uploads/images/');
-  }
-  if (/^\/js\/(.+)$/i.test(normalized)) {
-    return normalized.replace(/^\/js\//i, '/js/');
-  }
-  if (/^\/js$/i.test(normalized)) {
-    return '/js';
-  }
-  if (/^\/skin\/blue\/images\/(.+)$/i.test(normalized)) {
-    return normalized.replace(/^\/skin\/blue\/images\//i, '/uploads/skin/blue/images/');
-  }
-  if (/^\/skin\/blue\/(.+)$/i.test(normalized)) {
-    return normalized.replace(/^\/skin\/blue\//i, '/uploads/skin/blue/');
-  }
-  if (/^\/skin\/(.+)$/i.test(normalized)) {
-    return normalized.replace(/^\/skin\//i, '/uploads/skin/');
-  }
-
-  return normalized;
+  return String(pathname || '').replace(/\/{2,}/g, '/');
 }

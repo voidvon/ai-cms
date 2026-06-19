@@ -118,20 +118,7 @@ Upload path format (updated 2026-06-14):
 - News images: `/uploads/images/news/` → saved to `html/uploads/images/news/`
 - Rich text images: `/uploads/images/richtext/` → saved to `html/uploads/images/richtext/`
 
-The system maintains backward compatibility for old paths:
-- Old: `/upload/products/` (legacy, still readable)
-- Old: `/uploadfile/produppic/` (legacy, still readable)
-
 ### Image Management
-
-Import product images from spirax-global project:
-```bash
-bash scripts/import-images-from-global.sh
-```
-
-This imports 500+ images from `/Users/yytest/Documents/projects/spirax-global` into `html/uploads/images/global/`, including:
-- Product images (390+ files)
-- Industry, news, contact, and other global images
 
 **Important Notes:**
 - User uploaded and imported images are stored in `html/uploads/`

@@ -2,8 +2,8 @@ import { execute, queryAll, queryOne } from '../db.mjs';
 import { getColumnById } from './columns.mjs';
 import { ensureContentModelStorageSchema, getContentTableName, getTranslationTableName } from './content-model-storage.mjs';
 import { getDefaultLanguage, listLanguages } from './languages.mjs';
+import { normalizeUploadedRelativePath } from './uploads.mjs';
 
-const DEFAULT_PRODUCT_IMAGE = '/skin/dfpic.gif';
 const EMPTY_IMAGE_LIST = '[]';
 
 /**
@@ -560,7 +560,7 @@ function normalizeContentEntryInput(modelCode, input, { existingEntry = null } =
     ? normalizeSingleImage(baseInput.picture ?? baseInput.image ?? existing.picture ?? existing.image)
     : '';
   const primaryImage = modelCode === 'product'
-    ? (normalizeSingleImage(baseInput.primary_image ?? existing.primary_image) || images[0] || DEFAULT_PRODUCT_IMAGE)
+    ? (normalizeSingleImage(baseInput.primary_image ?? existing.primary_image) || images[0] || '')
     : picture;
   const customUrl = normalizeEntryCustomUrl(baseInput.custom_url ?? existing.custom_url);
 
@@ -718,7 +718,9 @@ function buildNameExpr(selectedAlias, defaultAlias) {
 
 function normalizeImageList(value) {
   if (Array.isArray(value)) {
-    return value.map((item) => String(item || '').trim()).filter(Boolean);
+    return value
+      .map((item) => normalizeUploadedRelativePath(String(item || '').trim()))
+      .filter(Boolean);
   }
   if (typeof value !== 'string') {
     return [];
@@ -730,12 +732,17 @@ function normalizeImageList(value) {
   try {
     const parsed = JSON.parse(trimmed);
     if (Array.isArray(parsed)) {
-      return parsed.map((item) => String(item || '').trim()).filter(Boolean);
+      return parsed
+        .map((item) => normalizeUploadedRelativePath(String(item || '').trim()))
+        .filter(Boolean);
     }
   } catch {
     // ignore
   }
-  return trimmed.split(',').map((item) => item.trim()).filter(Boolean);
+  return trimmed
+    .split(',')
+    .map((item) => normalizeUploadedRelativePath(item.trim()))
+    .filter(Boolean);
 }
 
 function normalizeImagesJson(value) {
@@ -744,9 +751,9 @@ function normalizeImagesJson(value) {
 
 function normalizeSingleImage(value) {
   if (Array.isArray(value)) {
-    return String(value[0] || '').trim();
+    return normalizeUploadedRelativePath(String(value[0] || '').trim());
   }
-  return String(value || '').trim();
+  return normalizeUploadedRelativePath(String(value || '').trim());
 }
 
 function normalizeEntryCustomUrl(value) {
@@ -781,9 +788,6 @@ function normalizeEntryCustomUrl(value) {
 function resolvePrimaryImage(modelCode, primaryImage, imagesValue) {
   const images = normalizeImageList(imagesValue);
   const resolved = normalizeSingleImage(primaryImage) || images[0] || '';
-  if (modelCode === 'product') {
-    return resolved || DEFAULT_PRODUCT_IMAGE;
-  }
   return resolved;
 }
 

@@ -1426,6 +1426,262 @@ function buildProductImageGalleryComponent() {
   return `
 import React from 'react';
 
+const PRODUCT_IMAGE_GALLERY_INLINE_SCRIPT = String.raw\`(() => {
+  if (typeof document === 'undefined') {
+    return;
+  }
+
+  function initProductImageGallery(root) {
+    if (!(root instanceof HTMLElement) || root.dataset.galleryInitialized === 'true') {
+      return;
+    }
+
+    const main = root.querySelector('[data-product-gallery-main]');
+    const mainTrack = main?.querySelector('.splide__track');
+    const mainList = main?.querySelector('.splide__list');
+    const slides = Array.from(main?.querySelectorAll('.splide__slide') || []);
+    const prevBtn = main?.querySelector('.splide__arrow--prev');
+    const nextBtn = main?.querySelector('.splide__arrow--next');
+    const thumbSlides = Array.from(root.querySelectorAll('[data-product-gallery-thumbs] .splide__slide'));
+    const thumbButtons = Array.from(root.querySelectorAll('[data-gallery-thumb-index]'));
+
+    if (!(main instanceof HTMLElement) || !(mainTrack instanceof HTMLElement) || !(mainList instanceof HTMLElement) || slides.length === 0) {
+      return;
+    }
+
+    root.dataset.galleryInitialized = 'true';
+
+    const slideWidth = 100 / slides.length;
+    let currentIndex = 0;
+    let touchStartX = 0;
+
+    mainList.style.width = String(slides.length * 100) + '%';
+    mainList.style.transition = 'transform 0.42s ease';
+
+    slides.forEach((slide) => {
+      if (!(slide instanceof HTMLElement)) {
+        return;
+      }
+      slide.style.flex = '0 0 ' + slideWidth + '%';
+      slide.style.maxWidth = slideWidth + '%';
+    });
+
+    function updateControls() {
+      const disabled = slides.length <= 1;
+      if (prevBtn instanceof HTMLButtonElement) {
+        prevBtn.disabled = disabled;
+      }
+      if (nextBtn instanceof HTMLButtonElement) {
+        nextBtn.disabled = disabled;
+      }
+    }
+
+    function syncThumbs(index) {
+      thumbSlides.forEach((slide, slideIndex) => {
+        if (!(slide instanceof HTMLElement)) {
+          return;
+        }
+        slide.classList.toggle('is-active', slideIndex === index);
+      });
+
+      thumbButtons.forEach((button, buttonIndex) => {
+        if (!(button instanceof HTMLButtonElement)) {
+          return;
+        }
+        const active = buttonIndex === index;
+        button.setAttribute('aria-pressed', String(active));
+        button.tabIndex = active ? 0 : -1;
+      });
+
+      const activeThumb = thumbSlides[index];
+      if (activeThumb instanceof HTMLElement) {
+        activeThumb.scrollIntoView({
+          behavior: 'smooth',
+          block: 'nearest',
+          inline: 'center'
+        });
+      }
+    }
+
+    function setActive(index) {
+      if (index < 0 || index >= slides.length) {
+        return;
+      }
+
+      currentIndex = index;
+      mainList.style.transform = 'translateX(-' + (index * slideWidth) + '%)';
+
+      slides.forEach((slide, slideIndex) => {
+        if (!(slide instanceof HTMLElement)) {
+          return;
+        }
+        const active = slideIndex === index;
+        slide.setAttribute('aria-hidden', String(!active));
+      });
+
+      syncThumbs(index);
+      updateControls();
+    }
+
+    function goNext() {
+      setActive((currentIndex + 1) % slides.length);
+    }
+
+    function goPrev() {
+      setActive((currentIndex - 1 + slides.length) % slides.length);
+    }
+
+    thumbButtons.forEach((button, index) => {
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+
+      button.addEventListener('click', () => {
+        setActive(index);
+      });
+    });
+
+    if (prevBtn instanceof HTMLButtonElement) {
+      prevBtn.addEventListener('click', goPrev);
+    }
+    if (nextBtn instanceof HTMLButtonElement) {
+      nextBtn.addEventListener('click', goNext);
+    }
+
+    mainTrack.addEventListener('touchstart', (event) => {
+      touchStartX = event.changedTouches[0]?.screenX || 0;
+    }, { passive: true });
+
+    mainTrack.addEventListener('touchend', (event) => {
+      const touchEndX = event.changedTouches[0]?.screenX || 0;
+      const deltaX = touchStartX - touchEndX;
+
+      if (Math.abs(deltaX) <= 50) {
+        return;
+      }
+
+      if (deltaX > 0) {
+        goNext();
+      } else {
+        goPrev();
+      }
+    }, { passive: true });
+
+    main.addEventListener('keydown', (event) => {
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        goPrev();
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        goNext();
+      }
+    });
+
+    if (!main.hasAttribute('tabindex')) {
+      main.setAttribute('tabindex', '0');
+    }
+
+    setActive(0);
+  }
+
+  const init = () => {
+    document.querySelectorAll('[data-product-image-gallery]').forEach(initProductImageGallery);
+  };
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init, { once: true });
+  } else {
+    init();
+  }
+})();\`;
+
+export const scss = String.raw\`
+.product-image-gallery__main {
+  position: relative;
+}
+
+.product-image-gallery__main .splide__track,
+.product-image-gallery__thumbs .splide__track {
+  overflow: hidden;
+}
+
+.product-image-gallery__main .splide__list,
+.product-image-gallery__thumbs .splide__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.product-image-gallery__main .splide__list {
+  display: flex;
+  will-change: transform;
+}
+
+.product-image-gallery__main .splide__slide {
+  min-width: 0;
+}
+
+.product-image-gallery__main .splide__arrows {
+  pointer-events: none;
+}
+
+.product-image-gallery__main .splide__arrow {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  transform: translateY(-50%);
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.product-image-gallery__main .splide__arrow:disabled {
+  opacity: 0.48;
+  cursor: default;
+}
+
+.product-image-gallery__main .splide__arrow svg {
+  width: 20px;
+  height: 20px;
+}
+
+.product-image-gallery__thumbs .splide__track {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+}
+
+.product-image-gallery__thumbs .splide__list {
+  display: flex;
+  gap: 0.75rem;
+  min-width: max-content;
+}
+
+.product-image-gallery__thumbs .splide__slide {
+  flex: 0 0 5rem;
+  width: 5rem;
+}
+
+.product-image-gallery__thumb-button:focus-visible {
+  outline: 2px solid var(--sg-mid-blue, #477d94);
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .product-image-gallery__thumbs .splide__list {
+    gap: 0.5rem;
+  }
+
+  .product-image-gallery__thumbs .splide__slide {
+    flex-basis: 4.25rem;
+    width: 4.25rem;
+  }
+}
+\`;
+
 export default function Component(props) {
   const images = Array.isArray(props?.images) ? props.images.filter((image) => image?.src) : [];
   const label = props?.label || 'Product image gallery';
@@ -1452,17 +1708,54 @@ export default function Component(props) {
   return (
     <div
       aria-label={label}
-      className="product-image-gallery product-image-gallery--static"
+      className="product-image-gallery product-image-gallery--interactive"
+      data-product-image-gallery=""
     >
-      <section aria-label={label} className="product-image-gallery__main" style={{ display: 'grid', gap: '12px' }}>
-        {images.map((image, index) => (
-          <div className="product-image-gallery__slide-shell" key={image?.src || index}>
-            <div className="product-image-gallery__image-shell">
-              <img alt={image?.alt || title || ''} className="product-image-gallery__image" loading={index === 0 ? 'eager' : 'lazy'} src={image?.src} />
-            </div>
-          </div>
-        ))}
+      <section aria-label={label} className="product-image-gallery__main splide" data-product-gallery-main="">
+        <div className="splide__track">
+          <ul className="splide__list">
+            {images.map((image, index) => (
+              <li className="splide__slide" key={image?.src || index}>
+                <div className="product-image-gallery__image-shell">
+                  <img alt={image?.alt || title || ''} className="product-image-gallery__image" loading={index === 0 ? 'eager' : 'lazy'} src={image?.src} />
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="splide__arrows">
+          <button aria-label="Previous image" className="splide__arrow splide__arrow--prev" type="button">
+            <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+              <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+            </svg>
+          </button>
+          <button aria-label="Next image" className="splide__arrow splide__arrow--next" type="button">
+            <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+              <path d="M9 6l6 6-6 6" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" />
+            </svg>
+          </button>
+        </div>
       </section>
+      <section aria-label={\`\${label} thumbnails\`} className="product-image-gallery__thumbs splide" data-product-gallery-thumbs="">
+        <div className="splide__track">
+          <ul className="splide__list">
+            {images.map((image, index) => (
+              <li className={['splide__slide', index === 0 ? 'is-active' : ''].filter(Boolean).join(' ')} key={\`\${image?.src || ''}-thumb-\${index}\`}>
+                <button
+                  aria-label={\`View image \${index + 1}\`}
+                  aria-pressed={index === 0 ? 'true' : 'false'}
+                  className="product-image-gallery__thumb-button"
+                  data-gallery-thumb-index={index}
+                  type="button"
+                >
+                  <img alt={image?.alt || title || ''} className="product-image-gallery__thumb-image" loading="lazy" src={image?.src} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </section>
+      <script dangerouslySetInnerHTML={{ __html: PRODUCT_IMAGE_GALLERY_INLINE_SCRIPT }} />
     </div>
   );
 }

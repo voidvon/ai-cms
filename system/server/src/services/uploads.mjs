@@ -1,155 +1,86 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { CONTENT_ROOT, UPLOADS_IMAGES_ROOT } from '../config.mjs';
-
-let migratedUploadIndex = null;
+import { CONTENT_ROOT, UPLOADS_IMAGES_ROOT, UPLOADS_PDFS_ROOT, UPLOADS_SKIN_ROOT } from '../config.mjs';
 
 export function resolveUploadedFilePath(relativePath) {
-  const normalized = String(relativePath || '').trim().replaceAll('\\', '/');
+  const normalized = normalizeSupportedUploadPath(relativePath);
   if (!normalized) {
     return null;
   }
 
-  // 新路径：从 html/uploads/images/ 查找
-  const newCandidates = resolveNewUploadCandidates(normalized);
-  for (const candidate of newCandidates) {
-    if (fs.existsSync(candidate)) {
-      return candidate;
-    }
+  const candidate = resolveUploadCandidate(normalized);
+  if (!candidate) {
+    return null;
   }
-
-  const migratedCandidate = resolveMigratedUploadCandidate(normalized);
-  if (migratedCandidate) {
-    return migratedCandidate;
+  if (fs.existsSync(candidate)) {
+    return candidate;
   }
-
-  return newCandidates[0] || null;
+  return candidate;
 }
 
 export function normalizeUploadedRelativePath(relativePath) {
+  return normalizeSupportedUploadPath(relativePath);
+}
+
+export function normalizeLegacyAssetText(value) {
+  const input = String(value ?? '');
+  if (!input) {
+    return input;
+  }
+
+  return input.replace(
+    /https?:\/\/[^/\s"'<>]+\/uploads\/(?:images|skin|pdfs)\/[^\s"'<>)]*|\/uploads\/(?:images|skin|pdfs)\/[^\s"'<>)]*/gi,
+    (matched) => normalizeUploadedRelativePath(matched)
+  );
+}
+
+function resolveUploadCandidate(normalized) {
+  const match = normalized.match(/^\/uploads\/(images|skin|pdfs)\/(.+)$/i);
+  if (!match) {
+    return null;
+  }
+
+  const bucket = String(match[1] || '').toLowerCase();
+  const relativeRest = String(match[2] || '').replace(/^\/+/, '');
+  if (!relativeRest) {
+    return null;
+  }
+
+  const root = bucket === 'images'
+    ? path.resolve(UPLOADS_IMAGES_ROOT)
+    : bucket === 'skin'
+      ? path.resolve(UPLOADS_SKIN_ROOT)
+      : path.resolve(UPLOADS_PDFS_ROOT);
+  const filePath = path.resolve(root, relativeRest);
+  return isInsideUploadsRoot(filePath, root) ? filePath : null;
+}
+
+function isInsideUploadsRoot(filePath, uploadsRoot) {
+  return filePath === uploadsRoot || filePath.startsWith(`${uploadsRoot}${path.sep}`);
+}
+
+function normalizeSupportedUploadPath(relativePath) {
   const normalized = String(relativePath || '').trim().replaceAll('\\', '/');
   if (!normalized) {
     return '';
   }
 
-  if (/^\/uploads\/images\/\d{6}\//i.test(normalized)) {
-    return normalized;
+  const matched = normalized.match(/^https?:\/\/[^/]+(\/uploads\/(?:images|skin|pdfs)\/[^?#]*)([?#].*)?$/i);
+  if (matched) {
+    return canonicalizeUploadsPath(`${matched[1]}${matched[2] || ''}`);
   }
 
-  const resolvedFilePath = resolveUploadedFilePath(normalized);
-  if (!resolvedFilePath) {
-    return normalized;
+  if (!/^\/uploads\/(?:images|skin|pdfs)\//i.test(normalized)) {
+    return '';
   }
 
-  const contentUploadsRoot = path.resolve(UPLOADS_IMAGES_ROOT);
-  if (resolvedFilePath === contentUploadsRoot || !resolvedFilePath.startsWith(`${contentUploadsRoot}${path.sep}`)) {
-    return normalized;
-  }
-
-  const relativeToUploadsRoot = path.relative(contentUploadsRoot, resolvedFilePath).replaceAll(path.sep, '/');
-  return relativeToUploadsRoot ? `/uploads/images/${relativeToUploadsRoot}` : normalized;
+  return canonicalizeUploadsPath(normalized);
 }
 
-function resolveNewUploadCandidates(normalized) {
-  const uploadsRoot = path.resolve(UPLOADS_IMAGES_ROOT);
-  const stripped = normalized.replace(/^\/+/, '');
-  const segments = stripped.split('/').filter(Boolean);
-
-  if (segments.length >= 3 && segments[0].toLowerCase() === 'uploads' && segments[1].toLowerCase() === 'images') {
-    segments[0] = 'uploads';
-    segments[1] = 'images';
-    const filePath = path.resolve(CONTENT_ROOT, segments.join('/'));
-    return isInsideUploadsRoot(filePath, uploadsRoot) ? [filePath] : [];
-  }
-
-  if (segments.length === 1 && /\.[a-z0-9]+$/i.test(segments[0])) {
-    const migratedCandidate = findMigratedUploadByBasename(segments[0]);
-    return migratedCandidate ? [migratedCandidate] : [];
-  }
-
-  return [];
-}
-
-function resolveMigratedUploadCandidate(normalized) {
-  const stripped = normalized.replace(/^\/+/, '');
-  const segments = stripped.split('/').filter(Boolean);
-  if (segments.length === 0) {
-    return null;
-  }
-
-  const firstSegment = segments[0].toLowerCase();
-  const isLegacyImagesPath =
-    firstSegment === 'images'
-    && String(segments[1] || '').toLowerCase() === 'global'
-    && String(segments[2] || '').toLowerCase() === 'products';
-
-  if (!['uploadfile', 'upload', 'aboutuppic'].includes(firstSegment) && !isLegacyImagesPath) {
-    return null;
-  }
-
-  const filename = segments[segments.length - 1];
-  if (!/\.[a-z0-9]+$/i.test(filename)) {
-    return null;
-  }
-
-  return findMigratedUploadByBasename(filename);
-}
-
-function findMigratedUploadByBasename(filename) {
-  const normalizedName = String(filename || '').trim().toLowerCase();
-  if (!normalizedName) {
-    return null;
-  }
-
-  if (!migratedUploadIndex) {
-    migratedUploadIndex = buildMigratedUploadIndex();
-  }
-
-  const matches = migratedUploadIndex.get(normalizedName);
-  return matches?.[0] || null;
-}
-
-function buildMigratedUploadIndex() {
-  const uploadsRoot = path.resolve(UPLOADS_IMAGES_ROOT);
-  const index = new Map();
-
-  if (!fs.existsSync(uploadsRoot)) {
-    return index;
-  }
-
-  const stack = [uploadsRoot];
-  while (stack.length > 0) {
-    const currentDir = stack.pop();
-    let entries = [];
-    try {
-      entries = fs.readdirSync(currentDir, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-
-    for (const entry of entries) {
-      const entryPath = path.join(currentDir, entry.name);
-      if (entry.isDirectory()) {
-        stack.push(entryPath);
-        continue;
-      }
-      if (!entry.isFile()) {
-        continue;
-      }
-
-      const key = entry.name.toLowerCase();
-      const existing = index.get(key);
-      if (existing) {
-        existing.push(entryPath);
-      } else {
-        index.set(key, [entryPath]);
-      }
-    }
-  }
-
-  return index;
-}
-
-function isInsideUploadsRoot(filePath, uploadsRoot) {
-  return filePath === uploadsRoot || filePath.startsWith(`${uploadsRoot}${path.sep}`);
+function canonicalizeUploadsPath(normalized) {
+  const matched = normalized.match(/^([^?#]+)([?#].*)?$/);
+  const pathname = matched?.[1] || normalized;
+  const suffix = matched?.[2] || '';
+  const canonical = pathname.replace(/^\/uploads\/(images|skin|pdfs)\//i, (_, bucket) => `/uploads/${String(bucket).toLowerCase()}/`);
+  return canonical + suffix;
 }

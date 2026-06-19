@@ -10,6 +10,7 @@ export const PUBLIC_ROOT = path.join(PROJECT_ROOT, 'public');
 export const CONTENT_ROOT = path.join(PROJECT_ROOT, 'html');
 export const UPLOADS_ROOT = path.join(CONTENT_ROOT, 'uploads');
 export const UPLOADS_IMAGES_ROOT = path.join(UPLOADS_ROOT, 'images');
+export const UPLOADS_PDFS_ROOT = path.join(UPLOADS_ROOT, 'pdfs');
 export const UPLOADS_SKIN_ROOT = path.join(UPLOADS_ROOT, 'skin');
 export const ADMIN_APP_ROOT = path.join(SYSTEM_ROOT, 'admin');
 export const ADMIN_DIST_ROOT = path.join(ADMIN_APP_ROOT, 'dist');
@@ -29,6 +30,7 @@ export const MIME_TYPES = new Map([
   ['.json', 'application/json; charset=utf-8'],
   ['.txt', 'text/plain; charset=utf-8'],
   ['.xml', 'application/xml; charset=utf-8'],
+  ['.pdf', 'application/pdf'],
   ['.jpg', 'image/jpeg'],
   ['.jpeg', 'image/jpeg'],
   ['.png', 'image/png'],

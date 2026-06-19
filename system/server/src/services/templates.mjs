@@ -8,6 +8,7 @@ import { listProducts } from './products.mjs';
 import { listNews } from './news.mjs';
 import { listColumnCategories, listColumnCategoriesByRoot } from './column-categories.mjs';
 import { buildColumnPublicUrl, resolvePublicSectionContext } from './public-sections.mjs';
+import { normalizeUploadedRelativePath } from './uploads.mjs';
 
 export const TEMPLATE_TYPES = ['home', 'list', 'content', 'single', 'component'];
 export const TEMPLATE_ENGINES = ['tsx'];
@@ -674,7 +675,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         id: item.id,
         name: item.name || '',
         url: `/product/${item.id}.html`,
-        image: item.primary_image || '/skin/dfpic.gif',
+        image: normalizeUploadedRelativePath(String(item.primary_image || '').trim()),
         summary: item.summary || ''
       })),
       pagerHtml: '<div class="page_list">共 8 条信息 1/1 页</div>'
@@ -707,7 +708,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       title: product.name,
       primaryMenuItems: buildPreviewPrimaryMenuItems('product'),
       prodDescription: product.summary || '',
-      image: product.primary_image || '/skin/dfpic.gif',
+      image: normalizeUploadedRelativePath(String(product.primary_image || '').trim()),
       code: product.code || '',
       relatedProductsHtml: buildPreviewProductLinksHtml(4),
       bodyHtml: product.content_html || product.summary || '',
@@ -975,7 +976,7 @@ function getPreviewProduct() {
     summary: '示例产品摘要',
     content_html: '示例产品正文',
     images: [],
-    primary_image: '/skin/dfpic.gif'
+    primary_image: ''
   };
 }
 
@@ -1189,7 +1190,7 @@ function parsePreviewLegacyExtra(value) {
 
 function buildPreviewFeaturedProductsHtml() {
   return getPreviewProducts(8).map((item) => (
-    `<li><img src="${escapeHtml(item.primary_image || '/skin/dfpic.gif')}" width="120" height="120" border="0" alt="${escapeHtml(item.name || '')}"><li><a href="/product/${item.id}.html" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${escapeHtml(item.summary || '')}</li></li>`
+    `<li><img src="${escapeHtml(normalizeUploadedRelativePath(String(item.primary_image || '').trim()))}" width="120" height="120" border="0" alt="${escapeHtml(item.name || '')}"><li><a href="/product/${item.id}.html" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${escapeHtml(item.summary || '')}</li></li>`
   )).join('');
 }
 
@@ -1425,7 +1426,7 @@ function buildTemplateValidationProps(template) {
       name: '示例产品',
       title: '示例标题',
       url: '/detail.html',
-      image: '/skin/dfpic.gif',
+      image: '',
       summary: '示例摘要',
       summaryClassName: '',
       openings: '1',
@@ -1453,7 +1454,7 @@ function buildTemplateValidationProps(template) {
     bigId: 1,
     bigName: '示例父级分类',
     prodDescription: '示例描述',
-    image: '/skin/dfpic.gif',
+    image: '',
     code: 'DEMO',
     section: 'news',
     sectionDir: 'news',

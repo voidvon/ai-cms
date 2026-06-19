@@ -33,7 +33,7 @@ import { ensureTemplatesSchema } from './services/templates.mjs';
 import { listLanguages } from './services/languages.mjs';
 import { escapeHtml } from './utils/html.mjs';
 import { looksLikeLegacyMojibake } from './utils/legacy-text.mjs';
-import { normalizeUploadedRelativePath } from './services/uploads.mjs';
+import { normalizeLegacyAssetText, normalizeUploadedRelativePath } from './services/uploads.mjs';
 import {
   buildSeoMeta,
   buildHreflangLinks,
@@ -917,8 +917,8 @@ function buildLegacyHomePageProps(templateContext) {
         name: item.name || '',
         title: item.name || '',
         url: buildProductUrl(item),
-        image: images[0] || '/skin/dfpic.gif',
-        images: images,
+        image: normalizeUploadedRelativePath(String(images[0] || '').trim()),
+        images: images.map((entry) => normalizeUploadedRelativePath(String(entry || '').trim())).filter(Boolean),
         summary: item.summary || ''
       };
     });
@@ -935,7 +935,7 @@ function buildLegacyHomePageProps(templateContext) {
       id: item.id,
       title: item.title || '',
       url: buildArticleUrl(item, templateContext, newsSection),
-      image: item.picture || '',
+      image: normalizeUploadedRelativePath(String(item.picture || '').trim()),
       summary: resolveRenderableNewsSummary(item),
       date: formatLegacyDateOnly(item.created_at)
     }));
@@ -948,7 +948,7 @@ function buildLegacyHomePageProps(templateContext) {
       id: item.id,
       title: item.title || '',
       url: buildArticleUrl(item, templateContext, serviceSection),
-      image: item.picture || '',
+      image: normalizeUploadedRelativePath(String(item.picture || '').trim()),
       summary: resolveRenderableNewsSummary(item),
       date: formatLegacyDateOnly(item.created_at)
     }));
@@ -1533,7 +1533,7 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
       name: item.name || '',
       title: item.name || '',
       url: buildProductUrl(item),
-      image: item.primary_image || '/skin/dfpic.gif',
+      image: normalizeUploadedRelativePath(String(item.primary_image || '').trim()),
       summary: item.summary || '',
       code: item.code || ''
     })),
@@ -1542,7 +1542,7 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
       title: categoryPageContent?.seo_title || buildSectionSeoTitle(category.name || '产品', templateContext.site),
       description: categoryPageContent?.seo_description || categoryPageContent?.summary || templateContext.site.seo_default_description || category.name || '',
       url: categoryUrl,
-      image: categoryPageData?.mastheadImage || categoryPageData?.heroImage || category.primary_image || '',
+      image: normalizeUploadedRelativePath(String(categoryPageData?.mastheadImage || categoryPageData?.heroImage || category.primary_image || '').trim()),
       site: templateContext.site
     }),
     jsonLd: buildJsonLdOrganization(templateContext.site),
@@ -1642,7 +1642,7 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
     }),
     title: product.name || '',
     prodDescription: product.summary || '',
-    image: product.primary_image || '/skin/dfpic.gif',
+    image: normalizeUploadedRelativePath(String(product.primary_image || '').trim()),
     code: product.code || '',
     relatedProductsHtml: buildLegacyRelatedProducts(relatedProducts),
     bodyHtml: enrichedBody.html,
@@ -1652,7 +1652,7 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
       name: product.name || '',
       code: product.code || '',
       summary: product.summary || '',
-      primaryImage: product.primary_image || '/skin/dfpic.gif',
+      primaryImage: normalizeUploadedRelativePath(String(product.primary_image || '').trim()),
       images: productImages,
       bodyHtml: enrichedBody.html,
       pageData: productPageData,
@@ -1664,7 +1664,7 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
       name: item.name || '',
       title: item.name || '',
       url: buildProductUrl(item),
-      image: item.primary_image || '/skin/dfpic.gif',
+      image: normalizeUploadedRelativePath(String(item.primary_image || '').trim()),
       summary: item.summary || ''
     })),
     secondaryMenuItems: productNavigation.items,
@@ -1754,7 +1754,7 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
       id: item.id,
       title: item.title || '',
       url: buildContentDetailUrlFromColumn(item, category),
-      image: item.picture || '',
+      image: normalizeUploadedRelativePath(String(item.picture || '').trim()),
       summary: resolveRenderableNewsSummary(item),
       date: formatLegacyDateOnly(item.created_at)
     })),
@@ -1841,7 +1841,7 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, sectionCo
       title: item.title || '',
       summary: resolveRenderableNewsSummary(item),
       bodyHtml: normalizeLegacyRichTextHtml(item.content_html, templateContext.site) || '',
-      image: item.picture || '',
+      image: normalizeUploadedRelativePath(String(item.picture || '').trim()),
       date: formatLegacyDateOnly(item.created_at),
       url: articleUrl
     },
@@ -1851,7 +1851,7 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, sectionCo
       url: resolvedSectionConfig.rootColumn
         ? buildContentDetailUrlFromColumn(entry, resolvedSectionConfig.rootColumn)
         : `/news/detail/${normalizeInteger(entry.id, 0)}.html`,
-      image: entry.picture || '',
+      image: normalizeUploadedRelativePath(String(entry.picture || '').trim()),
       summary: resolveRenderableNewsSummary(entry),
       date: formatLegacyDateOnly(entry.created_at)
     })),
@@ -2184,7 +2184,7 @@ function buildLegacySectionRootPageData({
     title: item.title || '',
     description: resolveRenderableNewsSummary(item),
     href: buildArticleUrl(item, templateContext, section),
-    image: item.picture || '',
+    image: normalizeUploadedRelativePath(String(item.picture || '').trim()),
     imageAlt: item.title || '',
     cta: ''
   }));
@@ -2350,7 +2350,7 @@ function normalizeLegacyProductImages(product) {
   if (primaryImage && !images.includes(primaryImage)) {
     return [primaryImage, ...images];
   }
-  return images.length > 0 ? images : [primaryImage || '/skin/dfpic.gif'];
+  return images.length > 0 ? images : [primaryImage].filter(Boolean);
 }
 
 function buildLegacyProductSectionNavigation(html) {
@@ -2426,8 +2426,8 @@ function normalizeLegacyCategoryPageData(value) {
     title: String(value.title || '').trim(),
     summary: String(value.summary || '').trim(),
     pageKind,
-    heroImage: String(value.heroImage || '').trim(),
-    mastheadImage: String(value.mastheadImage || value.heroImage || '').trim(),
+    heroImage: normalizeUploadedRelativePath(String(value.heroImage || '').trim()),
+    mastheadImage: normalizeUploadedRelativePath(String(value.mastheadImage || value.heroImage || '').trim()),
     hero,
     categoryNavTitle: String(value.categoryNavTitle || '').trim(),
     intro: normalizeLegacyLooseParagraphs(value.intro),
@@ -2462,10 +2462,12 @@ function normalizeLegacyCategoryPageData(value) {
     faq: value.faq && typeof value.faq === 'object' ? value.faq : null,
     answerSummary: value.answerSummary && typeof value.answerSummary === 'object' ? value.answerSummary : null,
     technicalReview: value.technicalReview && typeof value.technicalReview === 'object' ? value.technicalReview : null,
-    featureImage: String(value.featureImage || '').trim(),
+    featureImage: normalizeUploadedRelativePath(String(value.featureImage || '').trim()),
     slides: Array.isArray(value.slides) ? value.slides.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
     featureHeading: value.featureHeading && typeof value.featureHeading === 'object' ? value.featureHeading : null,
-    introBlock: value.introBlock && typeof value.introBlock === 'object' ? value.introBlock : (value.intro && typeof value.intro === 'object' && !Array.isArray(value.intro) ? value.intro : null),
+    introBlock: value.introBlock && typeof value.introBlock === 'object'
+      ? value.introBlock
+      : (value.intro && typeof value.intro === 'object' && !Array.isArray(value.intro) ? value.intro : null),
     partnerHeading: value.partnerHeading && typeof value.partnerHeading === 'object' ? value.partnerHeading : null,
     advice: value.advice && typeof value.advice === 'object' ? value.advice : null,
     supportList: value.supportList && typeof value.supportList === 'object' ? value.supportList : null,
@@ -3061,6 +3063,7 @@ function syncStaticSupportAssets(sharedRoot, outputRoot) {
   cleanupObsoleteSharedStaticDirs(resolvedOutputRoot);
   syncSharedStaticDirs(resolvedSharedRoot, resolvedOutputRoot);
   syncSharedUploadAssetDirs(resolvedSharedRoot, resolvedOutputRoot);
+  syncLegacyStaticAliasDirs(resolvedOutputRoot);
   syncSharedStaticRootFiles(resolvedSharedRoot, resolvedOutputRoot);
 }
 
@@ -3089,12 +3092,37 @@ function syncSharedStaticDirs(sharedRoot, outputRoot) {
 function syncSharedUploadAssetDirs(sharedRoot, outputRoot) {
   for (const [sourceName, targetRelativeDir] of SHARED_UPLOAD_ASSET_DIRS) {
     const targetDir = path.join(outputRoot, targetRelativeDir);
+    const sameRootSourceDir = path.join(sharedRoot, targetRelativeDir);
+    const hasExistingTargetAssets = fs.existsSync(targetDir) && directoryHasFiles(targetDir);
+
+    if (hasExistingTargetAssets && path.resolve(sameRootSourceDir) === path.resolve(targetDir)) {
+      continue;
+    }
+
     const sourceDir = [
-      path.join(sharedRoot, targetRelativeDir),
+      sameRootSourceDir,
       path.join(PUBLIC_ROOT, sourceName)
     ].find((candidate) => fs.existsSync(candidate) && path.resolve(candidate) !== path.resolve(targetDir));
 
     if (!sourceDir) {
+      continue;
+    }
+
+    syncDirectory(sourceDir, targetDir);
+  }
+}
+
+function syncLegacyStaticAliasDirs(outputRoot) {
+  const aliasPairs = [
+    [path.join('uploads', 'images'), 'images'],
+    [path.join('uploads', 'images'), 'img'],
+    [path.join('uploads', 'skin'), 'skin']
+  ];
+
+  for (const [sourceRelativeDir, targetRelativeDir] of aliasPairs) {
+    const sourceDir = path.join(outputRoot, sourceRelativeDir);
+    const targetDir = path.join(outputRoot, targetRelativeDir);
+    if (!fs.existsSync(sourceDir)) {
       continue;
     }
 
@@ -3147,6 +3175,28 @@ function copyDirectoryContents(sourceDir, targetDir) {
 
     fs.copyFileSync(sourcePath, targetPath);
   }
+}
+
+function directoryHasFiles(dirPath) {
+  if (!fs.existsSync(dirPath)) {
+    return false;
+  }
+
+  const stack = [dirPath];
+  while (stack.length > 0) {
+    const currentDir = stack.pop();
+    for (const entry of fs.readdirSync(currentDir, { withFileTypes: true })) {
+      const fullPath = path.join(currentDir, entry.name);
+      if (entry.isFile()) {
+        return true;
+      }
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+      }
+    }
+  }
+
+  return false;
 }
 
 function groupBy(items, keyFn) {
@@ -3296,12 +3346,13 @@ function normalizeLegacyRichTextHtml(value, siteConfig = null) {
   let output = html.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
 
   output = normalizeLegacyMetaAttributes(output);
+  output = normalizeLegacyAssetText(output);
 
   return output
     .replace(/href="https?:\/\/\/+"/gi, 'href="/"')
     .replace(/data-ke-src="https?:\/\/\/+"/gi, 'data-ke-src="/"')
     .replace(/https?:\/\/\/+(?=[^/"])/gi, '/')
-    .replace(/(["'(=])(\/(?:UploadFile|uploadfile|upload)\/[^\s"'<>]+)/gi, (_, prefix, relativePath) => {
+    .replace(/(["'(=])(https?:\/\/[^/\s"'<>]+\/uploads\/(?:images|skin|pdfs)\/[^\s"'<>]+|\/uploads\/(?:images|skin|pdfs)\/[^\s"'<>]+)/gi, (_, prefix, relativePath) => {
       return `${prefix}${normalizeUploadedRelativePath(relativePath)}`;
     })
     // 修正产品链接：确保所有 /products/.../slug 格式的链接都有尾部斜杠
