@@ -1689,6 +1689,19 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
   const sectionDir = resolvedSectionConfig.dirName;
   const sectionLabel = resolvedSectionConfig.sectionLabel;
   const sectionPrimaryImage = getPrimaryTemplateImage(resolvedSectionConfig.rootColumn);
+  const categoryPageData = normalizeLegacyCategoryPageData(category?.page_data);
+  const categoryPrimaryImage = getPrimaryTemplateImage(category);
+  const categoryHeroImage = categoryPageData?.mastheadImage
+    || categoryPageData?.heroImage
+    || categoryPrimaryImage
+    || sectionPrimaryImage;
+  const categorySummary = categoryPageData?.hero?.summary
+    || categoryPageData?.summary
+    || category?.summary
+    || category?.seo_description
+    || resolvedSectionConfig.rootColumn?.summary
+    || resolvedSectionConfig.rootColumn?.seo_description
+    || '';
   const categoryPublicId = resolveLegacyCategoryPublicId(category);
   const categoryUrl = buildLegacyNewsCategoryUrl(sectionDir, category);
   return {
@@ -1703,9 +1716,9 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
         name: sectionLabel,
         url: `/${sectionDir}/`,
         images: Array.isArray(resolvedSectionConfig.rootColumn?.images) ? resolvedSectionConfig.rootColumn.images : [],
-        image: sectionPrimaryImage,
-        seoDescription: resolvedSectionConfig.rootColumn?.seo_description || '',
-        description: resolvedSectionConfig.rootColumn?.seo_description || resolvedSectionConfig.rootColumn?.summary || ''
+        image: categoryHeroImage,
+        seoDescription: categorySummary,
+        description: categorySummary
       },
       categoryChain: buildTemplateCategoryChain({
         category,
@@ -1727,6 +1740,9 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
     sectionCategoryHtml: buildLegacyNewsCategoryList(templateContext, sectionDir),
     secondaryMenuItems: buildLegacyNewsMenuItems(templateContext, sectionDir, normalizeInteger(category.id, 0)),
     currentSectionHeroImage: sectionPrimaryImage,
+    currentCategoryDescription: normalizeRenderableLegacyText(categorySummary),
+    currentCategoryPageData: categoryPageData,
+    currentCategoryHeroImage: categoryHeroImage,
     categoryId: categoryPublicId,
     title: category.name || '',
     items: buildLegacyArticleListItems({
@@ -2397,6 +2413,14 @@ function normalizeLegacyCategoryPageData(value) {
 
   const normalizedPageKind = String(value.pageKind || value.kind || '').trim().toLowerCase();
   const pageKind = normalizedPageKind === 'collection' ? 'category' : normalizedPageKind;
+  const hero = value.hero && typeof value.hero === 'object' && !Array.isArray(value.hero)
+    ? {
+        ...value.hero,
+        title: String(value.hero.title || value.title || '').trim(),
+        summary: String(value.hero.summary || value.summary || '').trim(),
+        image: String(value.hero.image || value.mastheadImage || value.heroImage || '').trim()
+      }
+    : null;
 
   return {
     title: String(value.title || '').trim(),
@@ -2404,6 +2428,7 @@ function normalizeLegacyCategoryPageData(value) {
     pageKind,
     heroImage: String(value.heroImage || '').trim(),
     mastheadImage: String(value.mastheadImage || value.heroImage || '').trim(),
+    hero,
     categoryNavTitle: String(value.categoryNavTitle || '').trim(),
     intro: normalizeLegacyLooseParagraphs(value.intro),
     overview: Array.isArray(value.overview) ? value.overview.filter(Boolean).map((item) => String(item).trim()).filter(Boolean) : [],

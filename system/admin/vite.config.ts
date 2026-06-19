@@ -2,6 +2,8 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
 
+const apiProxyTarget = 'http://127.0.0.1:3000'
+
 // https://vite.dev/config/
 export default defineConfig({
   base: '/admin/',
@@ -16,27 +18,27 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',
+        target: apiProxyTarget,
         changeOrigin: true,
       },
       '/admin/api': {
-        target: 'http://localhost:3000',
+        target: apiProxyTarget,
         changeOrigin: true,
       },
       '/admin/build': {
-        target: 'http://localhost:3000',
+        target: apiProxyTarget,
         changeOrigin: true,
       },
       '/UploadFile': {
-        target: 'http://localhost:3000',
+        target: apiProxyTarget,
         changeOrigin: true,
       },
       '/uploadfile': {
-        target: 'http://localhost:3000',
+        target: apiProxyTarget,
         changeOrigin: true,
       },
       '/upload': {
-        target: 'http://localhost:3000',
+        target: apiProxyTarget,
         changeOrigin: true,
       },
     },

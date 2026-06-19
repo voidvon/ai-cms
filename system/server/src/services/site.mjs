@@ -28,9 +28,7 @@ export function getSiteConfig(languageCode = null, options = {}) {
   const translationMap = Object.fromEntries(translations.map((item) => [item.language_code, item]));
   const selectedTranslation = translationMap[selectedLanguage.code];
   const defaultTranslation = translationMap[selectedLanguage.default_code];
-  const fallbackTranslation = hasMultipleEnabledLanguages()
-    ? (selectedTranslation || defaultTranslation || translations[0] || null)
-    : null;
+  const fallbackTranslation = selectedTranslation || defaultTranslation || translations[0] || null;
   const merged = applySiteTranslation(base, fallbackTranslation);
 
   return {
