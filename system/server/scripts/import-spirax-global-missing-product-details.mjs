@@ -119,7 +119,6 @@ for (const definition of missingProductDetails) {
         content_html: parsed.bodyHtml || '',
         keywords: null,
         seo_title: parsed.seoTitle || title,
-        seo_keywords: null,
         seo_description: summary || null,
         publish_status: 'published'
       }

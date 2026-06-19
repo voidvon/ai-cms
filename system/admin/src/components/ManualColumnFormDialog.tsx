@@ -244,31 +244,17 @@ export default function ManualColumnFormDialog({
                         placeholder="请输入单页内容 HTML"
                       />
                     </div>
-                    <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor={`manual-column-seo-title_${language.code}`}>SEO 标题</Label>
-                        <Input
-                          id={`manual-column-seo-title_${language.code}`}
-                          value={(translations[language.code] || createEmptyTranslation()).seo_title || ''}
-                          onChange={(event) => {
-                            setActiveLanguage(language.code)
-                            updateTranslation({ seo_title: event.target.value })
-                          }}
-                          placeholder="可选"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor={`manual-column-seo-keywords_${language.code}`}>SEO 关键词</Label>
-                        <Input
-                          id={`manual-column-seo-keywords_${language.code}`}
-                          value={(translations[language.code] || createEmptyTranslation()).seo_keywords || ''}
-                          onChange={(event) => {
-                            setActiveLanguage(language.code)
-                            updateTranslation({ seo_keywords: event.target.value })
-                          }}
-                          placeholder="可选"
-                        />
-                      </div>
+                    <div className="space-y-2">
+                      <Label htmlFor={`manual-column-seo-title_${language.code}`}>SEO 标题</Label>
+                      <Input
+                        id={`manual-column-seo-title_${language.code}`}
+                        value={(translations[language.code] || createEmptyTranslation()).seo_title || ''}
+                        onChange={(event) => {
+                          setActiveLanguage(language.code)
+                          updateTranslation({ seo_title: event.target.value })
+                        }}
+                        placeholder="可选"
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor={`manual-column-seo-description_${language.code}`}>SEO 描述</Label>
@@ -491,7 +477,6 @@ function createEmptyTranslation(patch: Partial<ColumnTranslation> = {}): ColumnT
     name: '',
     content_html: '',
     seo_title: '',
-    seo_keywords: '',
     seo_description: '',
     ...patch,
   }
@@ -514,7 +499,6 @@ function buildInitialTranslations(column: Column, defaultLanguageCode: string, a
       name: column.name || '',
       content_html: column.content_html || '',
       seo_title: column.seo_title || '',
-      seo_keywords: column.seo_keywords || '',
       seo_description: column.seo_description || '',
     })
   }

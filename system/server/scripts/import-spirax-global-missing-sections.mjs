@@ -457,7 +457,6 @@ for (const definition of singlePages) {
       summary,
       seo_title: seoTitle,
       seo_description: seoDescription || summary,
-      seo_keywords: null,
       keywords: null,
       publish_status: 'published',
       published_at: null,
@@ -477,7 +476,6 @@ for (const definition of singlePages) {
         content_html: bodyHtml,
         keywords: null,
         seo_title: seoTitle,
-        seo_keywords: null,
         seo_description: seoDescription || summary,
         publish_status: 'published',
         published_at: null

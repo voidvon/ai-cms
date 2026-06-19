@@ -664,7 +664,6 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       primaryMenuItems: buildPreviewPrimaryMenuItems('product'),
       bigId: category.parent_id || category.id,
       bigName: category.name,
-      prodKeywords: category.seo_keywords || category.name,
       productsSmallCatHtml: `<span class="abv">【<a href="/valve/${category.id}.html">${escapeHtml(category.name)}</a>】</span>`,
       secondaryMenuItems: buildPreviewColumnMenuItems({
         rootColumn: managedRootColumn,
@@ -707,7 +706,6 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       }),
       title: product.name,
       primaryMenuItems: buildPreviewPrimaryMenuItems('product'),
-      prodKeywords: product.keywords || product.name,
       prodDescription: product.summary || '',
       image: product.primary_image || '/skin/dfpic.gif',
       code: product.code || '',
@@ -808,7 +806,6 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         fallbackName: '示例分类'
       }),
       title: article.title,
-      newsKeywords: article.keywords || article.title,
       newsDescription: article.summary || '',
       typeId: article.column_id || category.id,
       catName: category.name,
@@ -929,7 +926,6 @@ function buildPreviewPageContext({ pageType, title, url, section, category, cont
     url: category.url || url || '',
     parentId: toInteger(category.parent_id, 0),
     parentName: '',
-    seoKeywords: category.seo_keywords || '',
     seoDescription: category.seo_description || ''
   } : null;
   const normalizedItems = [
@@ -968,8 +964,7 @@ function getPreviewProduct() {
     summary: '示例产品摘要',
     content_html: '示例产品正文',
     images: [],
-    primary_image: '/skin/dfpic.gif',
-    keywords: '示例关键词'
+    primary_image: '/skin/dfpic.gif'
   };
 }
 
@@ -985,7 +980,6 @@ function getPreviewArticle() {
     title: '示例文章',
     summary: '示例文章摘要',
     content_html: '示例文章正文',
-    keywords: '示例关键词',
     created_at: new Date().toISOString()
   };
 }
@@ -1023,7 +1017,6 @@ function getPreviewColumnCategory({
       id: toInteger(row.id, 0),
       name: row.name || getPreviewColumnFallback({ fallbackName, fallbackContentHtml }).name,
       parent_id: toInteger(row.parent_id, 0),
-      seo_keywords: row.seo_keywords || row.name || getPreviewColumnFallback({ fallbackName, fallbackContentHtml }).seo_keywords || '',
       seo_description: row.seo_description || getPreviewColumnFallback({ fallbackName, fallbackContentHtml }).seo_description || '',
       content_html: String(row.content_html ?? getPreviewColumnFallback({ fallbackName, fallbackContentHtml }).content_html ?? '')
     };
@@ -1040,7 +1033,6 @@ function getPreviewColumnFallback({
     id: 1,
     name: fallbackName,
     parent_id: 0,
-    seo_keywords: fallbackName,
     seo_description: '',
     content_html: fallbackContentHtml
   };
@@ -1400,11 +1392,11 @@ function buildTemplateValidationProps(template) {
     currentPage: { type: template.type || '', title: template.name || '', url: '/' },
     currentSection: { type: '', name: '', url: '' },
     currentCategory: [
-      { id: 1, type: 'demo', name: '父级分类', url: '/parent.html', parentId: 0, parentName: '', seoKeywords: '', seoDescription: '' },
-      { id: 2, type: 'demo', name: '当前分类', url: '/current.html', parentId: 1, parentName: '父级分类', seoKeywords: '', seoDescription: '' }
+      { id: 1, type: 'demo', name: '父级分类', url: '/parent.html', parentId: 0, parentName: '', seoDescription: '' },
+      { id: 2, type: 'demo', name: '当前分类', url: '/current.html', parentId: 1, parentName: '父级分类', seoDescription: '' }
     ],
-    currentCategoryItem: { id: 2, type: 'demo', name: '当前分类', url: '/current.html', parentId: 1, parentName: '父级分类', seoKeywords: '', seoDescription: '' },
-    parentCategory: { id: 1, type: 'demo', name: '父级分类', url: '/parent.html', parentId: 0, parentName: '', seoKeywords: '', seoDescription: '' },
+    currentCategoryItem: { id: 2, type: 'demo', name: '当前分类', url: '/current.html', parentId: 1, parentName: '父级分类', seoDescription: '' },
+    parentCategory: { id: 1, type: 'demo', name: '父级分类', url: '/parent.html', parentId: 0, parentName: '', seoDescription: '' },
     currentContent: { id: 1, type: 'demo', title: '示例内容', name: '示例内容', url: '/detail.html' },
     breadcrumb: {
       prefixHtml: '<span>当前位置 : </span>',
@@ -1450,7 +1442,6 @@ function buildTemplateValidationProps(template) {
     smallName: '示例分类',
     bigId: 1,
     bigName: '示例父级分类',
-    prodKeywords: '示例关键词',
     prodDescription: '示例描述',
     image: '/skin/dfpic.gif',
     code: 'DEMO',
@@ -1458,7 +1449,6 @@ function buildTemplateValidationProps(template) {
     sectionDir: 'news',
     sectionLabel: '公司新闻',
     categoryId: 1,
-    newsKeywords: '示例关键词',
     newsDescription: '示例描述',
     typeId: 1,
     catName: '示例分类',

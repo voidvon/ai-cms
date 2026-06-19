@@ -155,7 +155,7 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
             <div className="space-y-3">
               <div>
                 <div className="font-medium">语言内容</div>
-                <div className="text-sm text-muted-foreground">当前对标题、摘要、正文和关键词做多语言。</div>
+                <div className="text-sm text-muted-foreground">当前对标题、摘要、正文和 SEO 内容做多语言。</div>
               </div>
               <TabsList className="w-full justify-start">
                 {languages.map((language) => (
@@ -239,18 +239,34 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
                     />
                   </div>
                 ) : null}
-                {isFieldVisible(fieldMap, 'keywords') ? (
+                {isFieldVisible(fieldMap, 'seo_title') ? (
                   <div className="space-y-2">
-                    <Label htmlFor={`keywords_${language.code}`}>{getFieldLabel(fieldMap, 'keywords', '关键词')}</Label>
+                    <Label htmlFor={`seo_title_${language.code}`}>{getFieldLabel(fieldMap, 'seo_title', 'SEO标题')}</Label>
                     <Input
-                      id={`keywords_${language.code}`}
-                      value={(translations[language.code] || createEmptyTranslation()).keywords || ''}
-                      disabled={!isFieldEditable(fieldMap, 'keywords')}
+                      id={`seo_title_${language.code}`}
+                      value={(translations[language.code] || createEmptyTranslation()).seo_title || ''}
+                      disabled={!isFieldEditable(fieldMap, 'seo_title')}
                       onChange={(e) => {
                         setActiveLanguage(language.code)
-                        updateTranslation({ keywords: e.target.value })
+                        updateTranslation({ seo_title: e.target.value })
                       }}
-                      placeholder="请输入关键词"
+                      placeholder="请输入SEO标题"
+                    />
+                  </div>
+                ) : null}
+                {isFieldVisible(fieldMap, 'seo_description') ? (
+                  <div className="space-y-2">
+                    <Label htmlFor={`seo_description_${language.code}`}>{getFieldLabel(fieldMap, 'seo_description', 'SEO描述')}</Label>
+                    <Textarea
+                      id={`seo_description_${language.code}`}
+                      value={(translations[language.code] || createEmptyTranslation()).seo_description || ''}
+                      disabled={!isFieldEditable(fieldMap, 'seo_description')}
+                      onChange={(e) => {
+                        setActiveLanguage(language.code)
+                        updateTranslation({ seo_description: e.target.value })
+                      }}
+                      placeholder="请输入SEO描述"
+                      rows={3}
                     />
                   </div>
                 ) : null}
@@ -360,7 +376,8 @@ function createEmptyTranslation(patch: Partial<NewsTranslation> = {}): NewsTrans
     title: '',
     summary: '',
     content_html: '',
-    keywords: '',
+    seo_title: '',
+    seo_description: '',
     publish_status: 'draft',
     ...patch,
   }
@@ -383,7 +400,8 @@ function buildInitialTranslations(news: News, defaultLanguageCode: string, avail
       title: news.title || '',
       summary: news.summary || '',
       content_html: news.content_html || '',
-      keywords: news.keywords || '',
+      seo_title: news.seo_title || '',
+      seo_description: news.seo_description || '',
       publish_status: 'published',
     })
   }

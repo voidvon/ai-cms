@@ -178,7 +178,6 @@ ${legacySearchForm()}</div>
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
         <title>{props.seoMeta?.openGraph?.title || props.site.web_name || ''}</title>
         {renderSeoHead(props)}
-        <meta name="keywords" content="" />
         <meta httpEquiv="X-UA-Compatible" content="IE=EmulateIE7" />
         <link href="css/webmain.css" rel="stylesheet" type="text/css" />
         <meta content="MSHTML 6.00.2900.3132" name="GENERATOR" />
@@ -219,7 +218,6 @@ ${props.contactTableHtml}</ul><div class="page_list"><div class="list_info"></di
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
         <title>{props.seoMeta?.openGraph?.title || `联系${props.site.web_name || ''}`}</title>
         {renderSeoHead(props)}
-        <meta name="keywords" content="" />
       </>)}
       <body dangerouslySetInnerHTML={raw(cLayoutBody(props, rightHtml, '', 'span'))} />
     </html>
@@ -236,7 +234,6 @@ export function LegacyContentPage(props: LegacyContentPageProps) {
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
         <title>{props.seoMeta?.openGraph?.title || `${props.title || ''}_${props.site.web_name || ''}`}</title>
         {renderSeoHead(props)}
-        <meta name="keywords" content={props.title || ''} />
       </>)}
       <body dangerouslySetInnerHTML={raw(cLayoutBody(props, rightHtml, props.fragments.aboutCategoryHtml || ''))} />
     </html>
@@ -253,7 +250,6 @@ export function LegacyProductListPage(props: LegacyProductListPageProps) {
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
         <title>{`${props.smallName}|${props.smallName}型号|${props.smallName}尺寸|${props.site.web_name || ''}`}</title>
         {renderSeoHead(props)}
-        <meta name="keywords" content={props.prodKeywords} />
         <meta name="description" content={`${props.smallName}制造标准：中国GB、美标API、德标DIN等标准生产。${props.smallName}材质：铜、铸铁、铸钢、不锈钢、低温钢等。连接方式：螺纹、法兰、焊接。驱动方式：手动、气动、电动。拥有顶尖的生产设备和技术工程师，按照各国标准以及各种行业标准生产制造各种阀门。`} />
         <meta httpEquiv="X-UA-Compatible" content="IE=EmulateIE7" />
       </>)}
@@ -281,9 +277,8 @@ export function LegacyProductDetailPage(props: LegacyProductDetailPageProps) {
     <html>
       <head>
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
-        <title>{props.seoMeta?.openGraph?.title || `${props.title}|${props.prodKeywords}`}</title>
+        <title>{props.seoMeta?.openGraph?.title || props.title}</title>
         {renderSeoHead(props)}
-        <meta name="keywords" content={props.prodKeywords} />
         {!props.seoMeta?.basic?.description ? <meta name="description" content={props.prodDescription} /> : null}
         <meta httpEquiv="X-UA-Compatible" content="IE=EmulateIE7" />
         <meta name="classification" content={props.title} />
@@ -331,7 +326,6 @@ ${articleSidebar(props)}</td><td width="${isService ? '821' : '812'}" valign="to
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
         <title>{props.seoMeta?.openGraph?.title || `${props.title || label}_${props.site.web_name || ''}`}</title>
         {renderSeoHead(props)}
-        <meta name="keywords" content={props.title || label} />
         {!props.seoMeta?.basic?.description ? <meta name="description" content={props.title || label} /> : null}
         <meta content="阀门，球阀，闸阀" name="classification" />
         <link href="/img/css.css" type="text/css" rel="stylesheet" />
@@ -361,7 +355,6 @@ ${articleSidebar(props)}</td><td width="812" valign="top" ><table width="812" bo
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
         <title>{props.seoMeta?.openGraph?.title || `${props.title}_${isService ? props.catName : props.site.web_name || ''}`}</title>
         {renderSeoHead(props)}
-        <meta name="keywords" content={`${props.title},${props.newsKeywords}`} />
         {!props.seoMeta?.basic?.description ? <meta name="description" content={props.newsDescription} /> : null}
         <meta content="阀门，球阀，闸阀" name="classification" />
         <link href="/img/css.css" type="text/css" rel="stylesheet" />

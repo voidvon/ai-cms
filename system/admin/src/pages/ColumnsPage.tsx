@@ -1356,7 +1356,6 @@ function CategoryDetailPanel({
       ? (column.custom_url || '-')
       : `栏目ID ${column.id || '-'}`
   const seoSummary = column.seo_description?.trim() || '-'
-  const seoKeywords = column.seo_keywords?.trim() || '-'
   const boundModel = contentModels.find((item) => item.id === column.content_model_id)
   const modelBindingText = boundModel
     ? `${boundModel.name} (#${boundModel.id})`
@@ -1383,7 +1382,6 @@ function CategoryDetailPanel({
         <div className="space-y-1 text-sm">
           <div className="text-muted-foreground">SEO</div>
           <div className="line-clamp-3 break-words">{seoSummary}</div>
-          <div className="line-clamp-2 break-words text-muted-foreground">{seoKeywords}</div>
           <div>语言：{column.current_language_code || '-'}</div>
         </div>
         <div className="space-y-1 text-sm">

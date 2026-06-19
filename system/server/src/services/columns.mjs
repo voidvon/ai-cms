@@ -264,9 +264,7 @@ function hydrateColumns(rows, {
     const displayName = fallbackTranslation?.name || row.name || '';
     const resolvedSummary = fallbackTranslation?.summary ?? '';
     const resolvedContentHtml = fallbackTranslation?.content_html ?? '';
-    const resolvedKeywords = fallbackTranslation?.keywords ?? '';
     const resolvedSeoTitle = fallbackTranslation?.seo_title ?? null;
-    const resolvedSeoKeywords = fallbackTranslation?.seo_keywords ?? null;
     const resolvedSeoDescription = fallbackTranslation?.seo_description ?? null;
     const resolvedPublishStatus = fallbackTranslation?.publish_status ?? 'published';
     const resolvedPublishedAt = fallbackTranslation?.published_at ?? null;
@@ -278,9 +276,7 @@ function hydrateColumns(rows, {
       name: displayName,
       summary: resolvedSummary,
       content_html: resolvedContentHtml,
-      keywords: resolvedKeywords || '',
       seo_title: resolvedSeoTitle ?? null,
-      seo_keywords: resolvedSeoKeywords ?? null,
       seo_description: resolvedSeoDescription ?? null,
       publish_status: resolvedPublishStatus,
       published_at: resolvedPublishedAt,
@@ -310,9 +306,7 @@ function hydrateColumns(rows, {
               title: translation.name,
               summary: translation.summary,
               content_html: translation.content_html,
-              keywords: translation.keywords,
               seo_title: translation.seo_title,
-              seo_keywords: translation.seo_keywords,
               seo_description: translation.seo_description,
               publish_status: translation.publish_status,
               published_at: translation.published_at
@@ -352,9 +346,7 @@ function loadColumnTranslations(columnIds) {
         t.name,
         t.summary,
         t.content_html,
-        t.keywords,
         t.seo_title,
-        t.seo_keywords,
         t.seo_description,
         t.publish_status,
         t.published_at
@@ -377,9 +369,7 @@ function loadColumnTranslations(columnIds) {
       name: row.name || '',
       summary: row.summary || '',
       content_html: row.content_html || '',
-      keywords: row.keywords || '',
       seo_title: row.seo_title || '',
-      seo_keywords: row.seo_keywords || '',
       seo_description: row.seo_description || '',
       publish_status: normalizePublishStatus(row.publish_status),
       published_at: toNullableString(row.published_at)
@@ -407,9 +397,7 @@ function saveColumnTranslations(columnId, translations, now = new Date().toISOSt
           name,
           summary,
           content_html,
-          keywords,
           seo_title,
-          seo_keywords,
           seo_description,
           publish_status,
           published_at,
@@ -420,9 +408,7 @@ function saveColumnTranslations(columnId, translations, now = new Date().toISOSt
           name = excluded.name,
           summary = excluded.summary,
           content_html = excluded.content_html,
-          keywords = excluded.keywords,
           seo_title = excluded.seo_title,
-          seo_keywords = excluded.seo_keywords,
           seo_description = excluded.seo_description,
           publish_status = excluded.publish_status,
           published_at = excluded.published_at,
@@ -434,9 +420,7 @@ function saveColumnTranslations(columnId, translations, now = new Date().toISOSt
         String(persistedTranslation?.name || '').trim(),
         String(persistedTranslation?.summary || ''),
         String(persistedTranslation?.content_html || ''),
-        toNullableString(persistedTranslation?.keywords),
         toNullableString(persistedTranslation?.seo_title),
-        toNullableString(persistedTranslation?.seo_keywords),
         toNullableString(persistedTranslation?.seo_description),
         normalizePublishStatus(persistedTranslation?.publish_status),
         toNullableString(persistedTranslation?.published_at),
@@ -498,10 +482,8 @@ function normalizeManualColumnInput(input, options = {}) {
   const sortOrder = toInteger(input.sort_order ?? existing?.sort_order, 0);
   const isVisible = toBooleanInt(input.is_visible ?? existing?.is_visible, 1);
   const seoTitle = toNullableString(input.seo_title ?? existingView.seo_title);
-  const seoKeywords = toNullableString(input.seo_keywords ?? existingView.seo_keywords);
   const seoDescription = toNullableString(input.seo_description ?? existingView.seo_description);
   const summary = toNullableString(input.summary ?? existingView.summary) || '';
-  const keywords = toNullableString(input.keywords ?? existingView.keywords);
   const contentModelId = normalizeContentModelId(input.content_model_id ?? existing?.content_model_id);
   const detailRule = normalizeColumnDetailRule(input.detail_rule ?? existing?.detail_rule, requestedType);
 
@@ -514,9 +496,7 @@ function normalizeManualColumnInput(input, options = {}) {
       route_path: null,
       content_html: '',
       summary,
-      keywords,
       seo_title: seoTitle,
-      seo_keywords: seoKeywords,
       seo_description: seoDescription,
       content_model_id: null,
       dir_name: null,
@@ -542,9 +522,7 @@ function normalizeManualColumnInput(input, options = {}) {
     route_path: routePath,
     content_html: String(input.content_html ?? existingView.content_html ?? ''),
     summary,
-    keywords,
     seo_title: seoTitle,
-    seo_keywords: seoKeywords,
     seo_description: seoDescription,
     content_model_id: requestedType === 'link' ? null : contentModelId,
     dir_name: normalizeColumnDirName(input.dir_name ?? existing?.dir_name),
@@ -579,9 +557,7 @@ function normalizeManualColumnMutationInput(input, { currentId = 0, existingColu
         name: legacy.name,
         summary: legacy.summary,
         content_html: legacy.content_html,
-        keywords: legacy.keywords,
         seo_title: legacy.seo_title,
-        seo_keywords: legacy.seo_keywords,
         seo_description: legacy.seo_description,
         publish_status: legacy.publish_status,
         published_at: legacy.published_at
@@ -608,9 +584,7 @@ function normalizeExistingColumnMutationInput(input, existingColumn = null) {
       name: String(existing.name || '').trim(),
       summary: String(existing.summary || ''),
       content_html: String(existing.content_html || ''),
-      keywords: String(existing.keywords || ''),
       seo_title: toNullableString(existing.seo_title),
-      seo_keywords: toNullableString(existing.seo_keywords),
       seo_description: toNullableString(existing.seo_description),
       publish_status: normalizePublishStatus(existing.publish_status || 'published'),
       published_at: toNullableString(existing.published_at)
@@ -670,9 +644,7 @@ function normalizeColumnTranslations(translations, {
       name: translationName,
       summary: String(value?.summary ?? existingTranslations?.[languageCode]?.summary ?? fallbackBase.summary ?? ''),
       content_html: String(value?.content_html ?? existingTranslations?.[languageCode]?.content_html ?? fallbackBase.content_html ?? ''),
-      keywords: toNullableString(value?.keywords ?? existingTranslations?.[languageCode]?.keywords ?? fallbackBase.keywords),
       seo_title: toNullableString(value?.seo_title ?? existingTranslations?.[languageCode]?.seo_title ?? fallbackBase.seo_title),
-      seo_keywords: toNullableString(value?.seo_keywords ?? existingTranslations?.[languageCode]?.seo_keywords ?? fallbackBase.seo_keywords),
       seo_description: toNullableString(value?.seo_description ?? existingTranslations?.[languageCode]?.seo_description ?? fallbackBase.seo_description),
       publish_status: normalizePublishStatus(value?.publish_status ?? existingTranslations?.[languageCode]?.publish_status ?? fallbackBase.publish_status),
       published_at: toNullableString(value?.published_at ?? existingTranslations?.[languageCode]?.published_at ?? fallbackBase.published_at)
@@ -684,9 +656,7 @@ function normalizeColumnTranslations(translations, {
       normalized.name
       || normalized.summary
       || normalized.content_html
-      || normalized.keywords
       || normalized.seo_title
-      || normalized.seo_keywords
       || normalized.seo_description
     ) {
       output[languageCode] = normalized;
@@ -699,9 +669,7 @@ function normalizeColumnTranslations(translations, {
       name: String(fallback?.name || fallback?.title || fallbackBase.name || '').trim(),
       summary: String(fallback?.summary || fallbackBase.summary || ''),
       content_html: String(fallback?.content_html || fallbackBase.content_html || ''),
-      keywords: toNullableString(fallback?.keywords || fallbackBase.keywords),
       seo_title: toNullableString(fallback?.seo_title || fallbackBase.seo_title),
-      seo_keywords: toNullableString(fallback?.seo_keywords || fallbackBase.seo_keywords),
       seo_description: toNullableString(fallback?.seo_description || fallbackBase.seo_description),
       publish_status: normalizePublishStatus(fallback?.publish_status || fallbackBase.publish_status),
       published_at: toNullableString(fallback?.published_at || fallbackBase.published_at)
@@ -1093,9 +1061,7 @@ function ensureColumnTranslationsSchema() {
       name TEXT NOT NULL,
       summary TEXT NOT NULL DEFAULT '',
       content_html TEXT NOT NULL DEFAULT '',
-      keywords TEXT,
       seo_title TEXT,
-      seo_keywords TEXT,
       seo_description TEXT,
       publish_status TEXT NOT NULL DEFAULT 'published',
       published_at TEXT,
@@ -1107,9 +1073,7 @@ function ensureColumnTranslationsSchema() {
 
   addColumnIfMissing('column_translations', 'summary', "TEXT NOT NULL DEFAULT ''");
   addColumnIfMissing('column_translations', 'content_html', "TEXT NOT NULL DEFAULT ''");
-  addColumnIfMissing('column_translations', 'keywords', 'TEXT');
   addColumnIfMissing('column_translations', 'seo_title', 'TEXT');
-  addColumnIfMissing('column_translations', 'seo_keywords', 'TEXT');
   addColumnIfMissing('column_translations', 'seo_description', 'TEXT');
   addColumnIfMissing('column_translations', 'publish_status', "TEXT NOT NULL DEFAULT 'published'");
   addColumnIfMissing('column_translations', 'published_at', 'TEXT');

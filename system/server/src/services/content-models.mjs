@@ -27,7 +27,6 @@ const FIELD_LABELS = {
   requirements_html: '具体要求',
   images: '产品图片',
   picture: '图片',
-  keywords: '关键词',
   is_featured_home: '首页推荐',
   is_visible: '显示',
   is_active: '启用',

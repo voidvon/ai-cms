@@ -521,7 +521,6 @@ export function buildManagedCategoryColumnListPages({ outputRoot = DEFAULT_OUTPU
     id: 0,
     name: '产品',
     parent_id: 0,
-    seo_keywords: templateContext.site.web_name || '产品',
     seo_description: templateContext.site.web_name || '产品'
   };
 
@@ -1320,8 +1319,6 @@ function buildLegacySingleColumnPageProps(templateContext, column) {
     contentHtml: normalizeLegacyRichTextHtml(pageContent?.content_html, templateContext.site) || '',
     bodyHtml: normalizeLegacyRichTextHtml(pageContent?.content_html, templateContext.site) || '',
     newsDescription: pageContent?.seo_description || '',
-    newsKeywords: pageContent?.seo_keywords || '',
-    keywords: pageContent?.seo_keywords || '',
     description: pageContent?.seo_description || '',
     seoMeta: buildSeoMeta({
       title: pageContent?.seo_title || buildSectionSeoTitle(column.name, templateContext.site),
@@ -1388,8 +1385,6 @@ function buildLegacySectionRootPageProps({ templateContext, section, allItems, c
     contentHtml: normalizeLegacyRichTextHtml(pageContent?.content_html, templateContext.site) || '',
     bodyHtml: normalizeLegacyRichTextHtml(pageContent?.content_html, templateContext.site) || '',
     newsDescription: pageContent?.seo_description || pageData?.summary || '',
-    newsKeywords: pageContent?.seo_keywords || '',
-    keywords: pageContent?.seo_keywords || '',
     description: pageContent?.seo_description || pageData?.summary || '',
     secondaryMenuItems: buildLegacyNewsMenuItems(templateContext, section.dirName, 0),
     seoMeta: buildSeoMeta({
@@ -1539,7 +1534,6 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
           summary: child.seo_description || ''
         })),
     pagerHtml: buildLegacyProductPager(categoryUrl, pageNumber, pageCount, totalRecords),
-    prodKeywords: categoryPageContent?.seo_keywords || category.name || '',
     seoMeta: buildSeoMeta({
       title: categoryPageContent?.seo_title || buildSectionSeoTitle(category.name || '产品', templateContext.site),
       description: categoryPageContent?.seo_description || categoryPageContent?.summary || templateContext.site.seo_default_description || category.name || '',
@@ -1644,7 +1638,6 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
       ]
     }),
     title: product.name || '',
-    prodKeywords: product.keywords || '',
     prodDescription: product.summary || '',
     image: product.primary_image || '/skin/dfpic.gif',
     code: product.code || '',
@@ -1797,7 +1790,6 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, sectionCo
     sectionCategoryHtml: buildLegacyNewsCategoryList(templateContext, sectionDir),
     secondaryMenuItems: buildLegacyNewsMenuItems(templateContext, sectionDir, normalizeInteger(category?.id, 0)),
     title: item.title || '',
-    newsKeywords: item.keywords || '',
     newsDescription: resolveRenderableNewsSummary(item) || '',
     typeId: normalizeInteger(item.column_id, 0),
     catName: category?.name || '',
@@ -1891,7 +1883,6 @@ function normalizeTemplateCategory(category, options = {}) {
     url: options.url || '',
     parentId: normalizeInteger(category.parent_id, 0),
     parentName: options.parent?.name || '',
-    seoKeywords: category.seo_keywords || '',
     seoDescription: category.seo_description || ''
   };
 }
@@ -2265,11 +2256,6 @@ function resolveLegacyProductCategoryDescription(category) {
   const seoDescription = normalizeRenderableLegacyText(category?.seo_description);
   if (seoDescription && !looksLikeLegacyMojibake(seoDescription)) {
     return truncateRenderableNewsSummary(seoDescription, 96);
-  }
-
-  const keywords = normalizeRenderableLegacyText(category?.seo_keywords);
-  if (keywords && !looksLikeLegacyMojibake(keywords)) {
-    return truncateRenderableNewsSummary(keywords.replace(/[|,，]+/g, ' '), 96);
   }
 
   return '';
@@ -3086,11 +3072,6 @@ function resolveRenderableNewsSummary(item) {
     return truncateRenderableNewsSummary(summary);
   }
 
-  const keywords = normalizeRenderableLegacyText(item?.keywords);
-  if (keywords && !looksLikeLegacyMojibake(keywords)) {
-    return truncateRenderableNewsSummary(keywords);
-  }
-
   const contentSummary = extractRenderableNewsContentSummary(item?.content_html);
   if (contentSummary) {
     return truncateRenderableNewsSummary(contentSummary);
@@ -3211,23 +3192,18 @@ function normalizeLegacyRichTextHtml(value, siteConfig = null) {
 }
 
 function normalizeLegacyMetaAttributes(html) {
-  return html.replace(/<meta\s+name="(keywords|description)"\s+content="([^"]*)"/gi, (_, name, content) => {
-    const sanitized = sanitizeLegacyMetaContent(content, name.toLowerCase());
-    return `<meta name="${name}" content="${escapeHtmlAttribute(sanitized)}"`;
-  });
+  return html
+    .replace(/<meta\s+name="keywords"\s+content="[^"]*"\s*\/?>/gi, '')
+    .replace(/<meta\s+name="description"\s+content="([^"]*)"/gi, (_, content) => {
+      const sanitized = sanitizeLegacyMetaContent(content, 'description');
+      return `<meta name="description" content="${escapeHtmlAttribute(sanitized)}"`;
+    });
 }
 
 function sanitizeLegacyMetaContent(value, type) {
   const normalized = normalizeRenderableLegacyText(value);
   if (!normalized) {
     return '';
-  }
-  if (type === 'keywords') {
-    const parts = normalized
-      .split(/[|,，]+/)
-      .map((item) => normalizeRenderableLegacyText(item))
-      .filter((item) => item && !looksLikeLegacyMojibake(item));
-    return Array.from(new Set(parts)).join(',');
   }
   if (!looksLikeLegacyMojibake(normalized)) {
     return normalized;

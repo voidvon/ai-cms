@@ -112,7 +112,6 @@ export type ProductDetailPageProps = {
   site: SiteConfig
   product: ProductSummary & {
     code?: string | null
-    keywords?: string | null
     content_html?: string | null
   }
   relatedProducts: ProductSummary[]
@@ -135,7 +134,6 @@ export type ArticleDetailPageProps = {
   sectionPath: string
   article: NewsSummary & {
     content_html?: string | null
-    keywords?: string | null
   }
   category?: CategorySummary | null
   previous?: NewsSummary | null
@@ -201,12 +199,10 @@ export type LegacyProductListPageProps = LegacyPageBaseProps & {
   bigName: string
   productsSmallCatHtml: string
   bodyHtml: string
-  prodKeywords: string
 }
 
 export type LegacyProductDetailPageProps = LegacyPageBaseProps & {
   title: string
-  prodKeywords: string
   prodDescription: string
   image: string
   code: string
@@ -224,7 +220,6 @@ export type LegacyArticleListPageProps = LegacyPageBaseProps & {
 export type LegacyArticleDetailPageProps = LegacyPageBaseProps & {
   section: 'news' | 'service'
   title: string
-  newsKeywords: string
   newsDescription: string
   typeId: number
   catName: string

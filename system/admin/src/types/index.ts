@@ -39,7 +39,6 @@ export interface Product {
   content_html?: string;
   images?: string[];
   primary_image?: string;
-  keywords?: string;
   is_featured_home: number;
   is_visible: number;
   sort_order: number;
@@ -53,9 +52,7 @@ export interface ProductTranslation {
   name: string;
   summary?: string;
   content_html?: string;
-  keywords?: string;
   seo_title?: string;
-  seo_keywords?: string;
   seo_description?: string;
   publish_status: PublishStatus;
 }
@@ -75,7 +72,6 @@ export interface News {
   content_html?: string;
   image?: string;
   picture?: string;
-  keywords?: string;
   is_featured?: number;
   is_featured_home?: number;
   sort_order: number;
@@ -90,9 +86,7 @@ export interface NewsTranslation {
   title: string;
   summary?: string;
   content_html?: string;
-  keywords?: string;
   seo_title?: string;
-  seo_keywords?: string;
   seo_description?: string;
   publish_status: PublishStatus;
 }
@@ -111,7 +105,7 @@ export interface ColumnCategory {
   dir_name?: string | null;
   detail_rule?: string | null;
   sort_order: number;
-  seo_keywords?: string;
+  seo_title?: string;
   seo_description?: string;
   current_language_code?: string;
   translations?: Record<string, ColumnCategoryTranslation>;
@@ -119,7 +113,7 @@ export interface ColumnCategory {
 
 export interface ColumnCategoryTranslation {
   name: string;
-  seo_keywords?: string;
+  seo_title?: string;
   seo_description?: string;
 }
 
@@ -250,7 +244,6 @@ export interface Column {
   is_visible?: number;
   content_html?: string;
   seo_title?: string | null;
-  seo_keywords?: string | null;
   seo_description?: string | null;
   sort_order: number;
   model_code?: string | null;
@@ -273,7 +266,6 @@ export interface ColumnTranslation {
   name: string;
   content_html?: string;
   seo_title?: string | null;
-  seo_keywords?: string | null;
   seo_description?: string | null;
 }
 

@@ -165,7 +165,6 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
         summary: column.seo_description || extractPlainText(column.content_html),
         contentLines: [
           column.seo_title ? `SEO 标题：${column.seo_title}` : '',
-          column.seo_keywords ? `SEO 关键词：${normalizeKeywords(column.seo_keywords)}` : '',
           extractPlainText(column.content_html)
         ].filter(Boolean)
       }));
@@ -215,7 +214,6 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
       section: '产品栏目',
       summary: category.seo_description || `产品分类：${category.name}`,
       contentLines: [
-        category.seo_keywords ? `关键词：${normalizeKeywords(category.seo_keywords)}` : '',
         childCategories.length > 0 ? `下级分类：${childCategories.map((item) => item.name).join('、')}` : '',
         categoryProducts.length > 0 ? `示例产品：${categoryProducts.map((item) => item.name).join('、')}` : ''
       ].filter(Boolean)
@@ -236,7 +234,6 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
       contentLines: [
         product.code ? `型号：${product.code}` : '',
         category?.name ? `分类：${category.name}` : '',
-        product.keywords ? `关键词：${normalizeKeywords(product.keywords)}` : '',
         extractPlainText(product.content_html)
       ].filter(Boolean)
     }));
@@ -282,7 +279,6 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
       summary: item.summary || item.title,
       contentLines: [
         category?.name ? `分类：${category.name}` : '',
-        item.keywords ? `关键词：${normalizeKeywords(item.keywords)}` : '',
         extractPlainText(item.content_html)
       ].filter(Boolean)
     }));

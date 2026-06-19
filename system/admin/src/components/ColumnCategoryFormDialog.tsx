@@ -287,15 +287,15 @@ export default function ColumnCategoryFormDialog({
                   {meta.supportsSeo ? (
                     <>
                       <div className="space-y-2">
-                        <Label htmlFor={`seo_keywords_${language.code}`}>SEO关键词</Label>
+                        <Label htmlFor={`seo_title_${language.code}`}>SEO标题</Label>
                         <Input
-                          id={`seo_keywords_${language.code}`}
-                          value={(translations[language.code] || createEmptyTranslation(meta.supportsSeo)).seo_keywords || ''}
+                          id={`seo_title_${language.code}`}
+                          value={(translations[language.code] || createEmptyTranslation(meta.supportsSeo)).seo_title || ''}
                           onChange={(e) => {
                             setActiveLanguage(language.code)
-                            updateTranslation({ seo_keywords: e.target.value })
+                            updateTranslation({ seo_title: e.target.value })
                           }}
-                          placeholder="请输入SEO关键词"
+                          placeholder="请输入SEO标题"
                         />
                       </div>
                       <div className="space-y-2">
@@ -481,7 +481,7 @@ async function saveTemplateBinding(
 function createEmptyTranslation(supportsSeo: boolean, patch: Partial<ColumnCategoryTranslation> = {}): ColumnCategoryTranslation {
   return {
     name: '',
-    ...(supportsSeo ? { seo_keywords: '', seo_description: '' } : {}),
+    ...(supportsSeo ? { seo_title: '', seo_description: '' } : {}),
     ...patch,
   }
 }
@@ -506,7 +506,7 @@ function buildInitialTranslations(
   if (!source[defaultLanguageCode]) {
     output[defaultLanguageCode] = createEmptyTranslation(supportsSeo, {
       name: category.name || '',
-      seo_keywords: category.seo_keywords || '',
+      seo_title: category.seo_title || '',
       seo_description: category.seo_description || '',
     })
   }

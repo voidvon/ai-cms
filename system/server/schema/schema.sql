@@ -27,7 +27,6 @@ CREATE TABLE IF NOT EXISTS products (
   summary TEXT,
   content_html TEXT,
   small_image TEXT,
-  keywords TEXT,
   is_featured_home INTEGER NOT NULL DEFAULT 0,
   is_visible INTEGER NOT NULL DEFAULT 1,
   sort_order INTEGER NOT NULL DEFAULT 0,
@@ -60,7 +59,6 @@ CREATE TABLE IF NOT EXISTS news (
   summary TEXT,
   content_html TEXT,
   picture TEXT,
-  keywords TEXT,
   is_featured_home INTEGER NOT NULL DEFAULT 0,
   created_at TEXT,
   legacy_extra TEXT,
@@ -91,9 +89,7 @@ CREATE TABLE IF NOT EXISTS column_translations (
   name TEXT NOT NULL,
   summary TEXT NOT NULL DEFAULT '',
   content_html TEXT NOT NULL DEFAULT '',
-  keywords TEXT,
   seo_title TEXT,
-  seo_keywords TEXT,
   seo_description TEXT,
   publish_status TEXT NOT NULL DEFAULT 'published',
   published_at TEXT,
@@ -232,7 +228,6 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_products_slug ON products(slug) WHERE slug
 CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(
   name,
   summary,
-  keywords,
   content='products',
   content_rowid='id'
 );
@@ -240,43 +235,42 @@ CREATE VIRTUAL TABLE IF NOT EXISTS products_fts USING fts5(
 CREATE VIRTUAL TABLE IF NOT EXISTS news_fts USING fts5(
   title,
   summary,
-  keywords,
   content='news',
   content_rowid='id'
 );
 
 CREATE TRIGGER IF NOT EXISTS products_ai AFTER INSERT ON products BEGIN
-  INSERT INTO products_fts(rowid, name, summary, keywords)
-  VALUES (new.id, coalesce(new.name, ''), coalesce(new.summary, ''), coalesce(new.keywords, ''));
+  INSERT INTO products_fts(rowid, name, summary)
+  VALUES (new.id, coalesce(new.name, ''), coalesce(new.summary, ''));
 END;
 
 CREATE TRIGGER IF NOT EXISTS products_ad AFTER DELETE ON products BEGIN
-  INSERT INTO products_fts(products_fts, rowid, name, summary, keywords)
-  VALUES('delete', old.id, old.name, old.summary, old.keywords);
+  INSERT INTO products_fts(products_fts, rowid, name, summary)
+  VALUES('delete', old.id, old.name, old.summary);
 END;
 
 CREATE TRIGGER IF NOT EXISTS products_au AFTER UPDATE ON products BEGIN
-  INSERT INTO products_fts(products_fts, rowid, name, summary, keywords)
-  VALUES('delete', old.id, old.name, old.summary, old.keywords);
-  INSERT INTO products_fts(rowid, name, summary, keywords)
-  VALUES (new.id, coalesce(new.name, ''), coalesce(new.summary, ''), coalesce(new.keywords, ''));
+  INSERT INTO products_fts(products_fts, rowid, name, summary)
+  VALUES('delete', old.id, old.name, old.summary);
+  INSERT INTO products_fts(rowid, name, summary)
+  VALUES (new.id, coalesce(new.name, ''), coalesce(new.summary, ''));
 END;
 
 CREATE TRIGGER IF NOT EXISTS news_ai AFTER INSERT ON news BEGIN
-  INSERT INTO news_fts(rowid, title, summary, keywords)
-  VALUES (new.id, coalesce(new.title, ''), coalesce(new.summary, ''), coalesce(new.keywords, ''));
+  INSERT INTO news_fts(rowid, title, summary)
+  VALUES (new.id, coalesce(new.title, ''), coalesce(new.summary, ''));
 END;
 
 CREATE TRIGGER IF NOT EXISTS news_ad AFTER DELETE ON news BEGIN
-  INSERT INTO news_fts(news_fts, rowid, title, summary, keywords)
-  VALUES('delete', old.id, old.title, old.summary, old.keywords);
+  INSERT INTO news_fts(news_fts, rowid, title, summary)
+  VALUES('delete', old.id, old.title, old.summary);
 END;
 
 CREATE TRIGGER IF NOT EXISTS news_au AFTER UPDATE ON news BEGIN
-  INSERT INTO news_fts(news_fts, rowid, title, summary, keywords)
-  VALUES('delete', old.id, old.title, old.summary, old.keywords);
-  INSERT INTO news_fts(rowid, title, summary, keywords)
-  VALUES (new.id, coalesce(new.title, ''), coalesce(new.summary, ''), coalesce(new.keywords, ''));
+  INSERT INTO news_fts(news_fts, rowid, title, summary)
+  VALUES('delete', old.id, old.title, old.summary);
+  INSERT INTO news_fts(rowid, title, summary)
+  VALUES (new.id, coalesce(new.title, ''), coalesce(new.summary, ''));
 END;
 
 INSERT INTO site_config (id)

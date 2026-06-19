@@ -78,7 +78,6 @@ export function searchProductsPaged(rawQuery, { page = 1, limit = 20, languageCo
     ? result.items.filter((item) => (
       String(item.name || '').toLowerCase().includes(normalizedQuery)
       || String(item.summary || '').toLowerCase().includes(normalizedQuery)
-      || String(item.keywords || '').toLowerCase().includes(normalizedQuery)
       || String(item.code || '').toLowerCase().includes(normalizedQuery)
     ))
     : result.items;

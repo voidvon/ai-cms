@@ -121,9 +121,7 @@ function mapColumnToCategory(column, rootColumn = null) {
     detail_rule: column.detail_rule || null,
     summary: column.summary ?? '',
     content_html: column.content_html ?? '',
-    keywords: column.keywords ?? null,
     seo_title: column.seo_title ?? null,
-    seo_keywords: column.seo_keywords ?? null,
     seo_description: column.seo_description ?? null,
     publish_status: column.publish_status ?? 'published',
     published_at: column.published_at ?? null,
@@ -273,9 +271,7 @@ export function createColumnCategory(model, input) {
     [defaultLanguageCode]: {
       name: String(input?.name || '').trim(),
       summary: String(input?.summary || ''),
-      keywords: toNullableString(input?.keywords),
       seo_title: toNullableString(input?.seo_title),
-      seo_keywords: toNullableString(input?.seo_keywords),
       seo_description: toNullableString(input?.seo_description),
       content_html: String(input?.content_html || ''),
       publish_status: String(input?.publish_status || 'published') === 'draft' ? 'draft' : 'published',
@@ -362,9 +358,7 @@ export function createColumnCategoryByRoot(rootColumnId, input) {
     [defaultLanguageCode]: {
       name: String(input?.name || '').trim(),
       summary: String(input?.summary || ''),
-      keywords: toNullableString(input?.keywords),
       seo_title: toNullableString(input?.seo_title),
-      seo_keywords: toNullableString(input?.seo_keywords),
       seo_description: toNullableString(input?.seo_description),
       content_html: String(input?.content_html || ''),
       publish_status: String(input?.publish_status || 'published') === 'draft' ? 'draft' : 'published',
@@ -603,9 +597,7 @@ function normalizeCategoryTranslations(input, existingTranslations, column) {
       name: String(input?.name ?? fallbackTranslation.name ?? column?.name ?? '').trim(),
       summary: String(input?.summary ?? fallbackTranslation.summary ?? column?.summary ?? ''),
       content_html: String(input?.content_html ?? fallbackTranslation.content_html ?? column?.content_html ?? ''),
-      keywords: toNullableString(input?.keywords ?? fallbackTranslation.keywords ?? column?.keywords),
       seo_title: toNullableString(input?.seo_title ?? fallbackTranslation.seo_title ?? column?.seo_title),
-      seo_keywords: toNullableString(input?.seo_keywords ?? fallbackTranslation.seo_keywords ?? column?.seo_keywords),
       seo_description: toNullableString(input?.seo_description ?? fallbackTranslation.seo_description ?? column?.seo_description),
       publish_status: String(input?.publish_status ?? fallbackTranslation.publish_status ?? column?.publish_status ?? 'published') === 'draft'
         ? 'draft'
