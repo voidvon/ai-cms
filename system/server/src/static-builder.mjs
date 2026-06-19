@@ -1214,9 +1214,7 @@ function buildLegacyContactPageProps(templateContext) {
       pageType: 'contact',
       title: '联系我们',
       url: contactUrl,
-      section: { type: 'content', name: '联系我们', url: contactUrl },
-      breadcrumbItems: [{ label: '联系我们' }],
-      breadcrumbOptions: { separatorHtml: ' &gt;&gt; ' }
+      section: { type: 'content', name: '联系我们', url: contactUrl }
     }),
     contactTableHtml: normalizeLegacyRichTextHtml(contactPage?.content_html, templateContext.site) || '',
     seoMeta: buildSeoMeta({
@@ -1254,9 +1252,7 @@ function buildLegacyContentPageProps(templateContext, item) {
       categoryUrl: pageUrl,
       parentCategory,
       parentCategoryType: 'page-tree',
-      parentCategoryUrl: parentCategory ? `/about/about-${normalizeInteger(parentCategory.id, 0)}.html` : '',
-      breadcrumbItems: [{ label: item.name || '' }],
-      breadcrumbOptions: { separatorHtml: ' &gt;&gt; ' }
+      parentCategoryUrl: parentCategory ? `/about/about-${normalizeInteger(parentCategory.id, 0)}.html` : ''
     }),
     title: item.name || '',
     contentHtml: normalizeLegacyRichTextHtml(pageContent?.content_html, templateContext.site) || '',
@@ -1303,9 +1299,7 @@ function buildLegacySingleColumnPageProps(templateContext, column) {
       },
       categoryChain,
       categoryType: 'content',
-      categoryUrl: url,
-      breadcrumbItems: buildLegacyManualColumnBreadcrumbItems(categoryChain),
-      breadcrumbOptions: { separatorHtml: ' &gt;&gt; ' }
+      categoryUrl: url
     }),
     siteColumns: buildLegacySiteColumns(templateContext.columns, {
       activeColumnId: normalizeInteger(column.id, 0),
@@ -1382,9 +1376,7 @@ function buildLegacySectionRootPageProps({ templateContext, section, allItems, c
         url: sectionUrl
       }] : [],
       categoryType: 'section',
-      categoryUrl: sectionUrl,
-      breadcrumbItems: [{ label: section.sectionLabel || pageTitle }],
-      breadcrumbOptions: { homeHref: '/', homeLabel: '首页', prefixHtml: '' }
+      categoryUrl: sectionUrl
     }),
     title: pageTitle,
     section: section.sectionType || 'section',
@@ -1511,8 +1503,7 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
       categoryUrl,
       parentCategory: parent,
       parentCategoryType: 'managed-category',
-      parentCategoryUrl: parent ? buildLegacyProductCategoryUrl(parent, categoryMap) : '',
-      breadcrumbItems: buildLegacyProductBreadcrumbItems(category, parent, categoryMap)
+      parentCategoryUrl: parent ? buildLegacyProductCategoryUrl(parent, categoryMap) : ''
     }),
     smallName: category.name || '',
     bigId: normalizeInteger(parent?.id, category.id),
@@ -1633,12 +1624,7 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
       parentCategoryUrl: parent ? buildLegacyProductCategoryUrl(parent, categoryMap) : '',
       content: product,
       contentType: 'structured-content',
-      contentUrl: productUrl,
-      breadcrumbItems: [
-        { label: rootCategoryName, href: rootCategoryUrl },
-        ...buildLegacyProductCategoryBreadcrumbItems(category, parent, categoryMap),
-        { label: product.name || '' }
-      ]
+      contentUrl: productUrl
     }),
     title: product.name || '',
     prodDescription: product.summary || '',
@@ -1727,12 +1713,7 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
         urlBuilder: (categoryItem) => buildLegacyNewsCategoryUrl(sectionDir, categoryItem)
       }),
       categoryType: 'section',
-      categoryUrl,
-      breadcrumbItems: [
-        { label: sectionLabel, href: `/${sectionDir}/` },
-        { label: category.name || '' }
-      ],
-      breadcrumbOptions: { homeHref: '/', homeLabel: '首页', prefixHtml: '' }
+      categoryUrl
     }),
     section: resolvedSectionConfig.sectionType || 'section',
     sectionDir,
@@ -1818,12 +1799,7 @@ function buildLegacyArticleDetailPageProps({ templateContext, section, sectionCo
       categoryUrl: category ? buildLegacyNewsCategoryUrl(sectionDir, category) : '',
       content: item,
       contentType: 'structured-content',
-      contentUrl: articleUrl,
-      breadcrumbItems: [
-        { label: sectionLabel, href: `/${sectionDir}/` },
-        { label: category?.name || '' }
-      ],
-      breadcrumbOptions: { homeHref: '/', homeLabel: '首页', prefixHtml: '' }
+      contentUrl: articleUrl
     }),
     section: resolvedSectionConfig.sectionType || 'section',
     sectionDir,
@@ -1878,9 +1854,7 @@ function buildLegacyPageContextProps({
   parentCategoryUrl,
   content,
   contentType,
-  contentUrl,
-  breadcrumbItems,
-  breadcrumbOptions
+  contentUrl
 }) {
   return {
     currentPage: {
@@ -1898,8 +1872,7 @@ function buildLegacyPageContextProps({
     currentContent: normalizeTemplateContent(content, {
       type: contentType,
       url: contentUrl
-    }),
-    breadcrumb: buildLegacyBreadcrumbContext(breadcrumbItems, breadcrumbOptions)
+    })
   };
 }
 
@@ -2009,48 +1982,6 @@ function normalizeTemplateContent(content, options = {}) {
   };
 }
 
-function buildLegacyBreadcrumbContext(items, options = {}) {
-  const separatorHtml = options.separatorHtml ?? ' - ';
-  const prefixHtml = options.prefixHtml ?? '<span>当前位置 : </span>';
-  const normalizedItems = [
-    {
-      label: options.homeLabel ?? '公司主页',
-      url: options.homeHref ?? '/index.html'
-    }
-  ];
-
-  for (const item of items || []) {
-    const label = String(item?.label || '').trim();
-    if (!label) {
-      continue;
-    }
-    normalizedItems.push({
-      label,
-      url: item.href || item.url || ''
-    });
-  }
-
-  return {
-    prefixHtml,
-    separatorHtml,
-    html: buildLegacyBreadcrumbHtml(normalizedItems, separatorHtml),
-    items: normalizedItems
-  };
-}
-
-function buildLegacyBreadcrumbHtml(items, separatorHtml) {
-  return items.map((item) => {
-    if (item.url) {
-      return buildLegacyBreadcrumbLink(item.url, item.label);
-    }
-    return escapeHtml(item.label);
-  }).join(separatorHtml);
-}
-
-function buildLegacyBreadcrumbLink(href, label) {
-  return `<a href="${escapeHtmlAttribute(href)}">${escapeHtml(label)}</a>`;
-}
-
 function buildSectionSeoTitle(title, site) {
   const normalizedTitle = String(title || '').trim();
   const siteTitleBase = String(site?.seo_organization_name || site?.company_name || site?.web_name || '').trim();
@@ -2061,30 +1992,6 @@ function buildSectionSeoTitle(title, site) {
     return normalizedTitle;
   }
   return `${normalizedTitle} | ${siteTitleBase}`;
-}
-
-function buildLegacyProductBreadcrumbItems(category, parent, categoryMap = null) {
-  const rootCategory = categoryMap?.get(normalizeInteger(category?.column_semantics?.root_column_id, 0)) || null;
-  const rootLabel = String(rootCategory?.name || '').trim() || '产品';
-  const rootHref = rootCategory ? buildLegacyProductCategoryUrl(rootCategory, categoryMap) : '';
-  const items = [{ label: rootLabel, href: rootHref }];
-  items.push(...buildLegacyProductCategoryBreadcrumbItems(category, parent, categoryMap));
-  return items;
-}
-
-function buildLegacyProductCategoryBreadcrumbItems(category, parent, categoryMap = null) {
-  const items = [];
-  const parentName = String(parent?.name || '').trim();
-  const categoryName = String(category?.name || '').trim();
-
-  if (parentName && parentName !== '产品') {
-    items.push({ label: parentName, href: buildLegacyProductCategoryUrl(parent, categoryMap) });
-  }
-  if (categoryName && categoryName !== '产品' && categoryName !== parentName) {
-    items.push({ label: categoryName, href: buildLegacyProductCategoryUrl(category, categoryMap) });
-  }
-
-  return items;
 }
 
 function buildLegacyProductCategoryUrl(category, categoryMap = null) {
@@ -2552,17 +2459,6 @@ function normalizeLegacyLooseParagraphs(value) {
   }
 
   return String(value || '').trim() ? [String(value).trim()] : [];
-}
-
-function buildLegacyManualColumnBreadcrumbItems(categoryChain) {
-  const normalizedChain = normalizeTemplateCategoryChain(categoryChain);
-  if (normalizedChain.length === 0) {
-    return [];
-  }
-  return normalizedChain.map((item, index) => ({
-    label: item.name || '',
-    href: index < normalizedChain.length - 1 ? item.url || '' : ''
-  }));
 }
 
 function buildLegacyProductListItems(pageItems) {

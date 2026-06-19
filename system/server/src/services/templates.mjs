@@ -655,11 +655,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         url: `/valve/${category.id}.html`,
         section: { type: 'product', name: '产品', url: '/valve/' },
         category,
-        content: null,
-        breadcrumbItems: [
-          { label: '产品', url: '/valve/' },
-          { label: category.name, url: '' }
-        ]
+        content: null
       }),
       smallName: category.name,
       primaryMenuItems: buildPreviewPrimaryMenuItems('product'),
@@ -698,12 +694,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         url: `/product/${product.id}.html`,
         section: { type: 'product', name: '产品', url: '/valve/' },
         category,
-        content: { id: product.id, title: product.name, name: product.name, type: 'product', url: `/product/${product.id}.html` },
-        breadcrumbItems: [
-          { label: '产品', url: '/valve/' },
-          { label: category.name, url: `/valve/${category.id}.html` },
-          { label: product.name, url: '' }
-        ]
+        content: { id: product.id, title: product.name, name: product.name, type: 'product', url: `/product/${product.id}.html` }
       }),
       title: product.name,
       primaryMenuItems: buildPreviewPrimaryMenuItems('product'),
@@ -735,11 +726,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         url: `/${sectionConfig.sectionDir}/${category.id}.html`,
         section: { type: sectionConfig.sectionType, name: sectionConfig.sectionLabel, url: `/${sectionConfig.sectionDir}/` },
         category,
-        content: null,
-        breadcrumbItems: [
-          { label: sectionConfig.sectionLabel, url: `/${sectionConfig.sectionDir}/` },
-          { label: category.name, url: '' }
-        ]
+        content: null
       }),
       section: sectionConfig.sectionType,
       primaryMenuItems: buildPreviewPrimaryMenuItems(sectionConfig.sectionType),
@@ -788,12 +775,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
           name: article.title,
           type: sectionConfig.contentType,
           url: `/${sectionConfig.sectionDir}/detail/${article.id}.html`
-        },
-        breadcrumbItems: [
-          { label: sectionConfig.sectionLabel, url: `/${sectionConfig.sectionDir}/` },
-          { label: category.name, url: `/${sectionConfig.sectionDir}/${category.id}.html` },
-          { label: article.title, url: '' }
-        ]
+        }
       }),
       section: sectionConfig.sectionType,
       primaryMenuItems: buildPreviewPrimaryMenuItems(sectionConfig.sectionType),
@@ -836,8 +818,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
           ? { type: 'content', name: '单页栏目', url: '/example-page.html' }
           : { type: 'corporation', name: '公司栏目', url: '/about/' },
         category,
-        content: null,
-        breadcrumbItems: [{ label: category.name, url: '' }]
+        content: null
       }),
       primaryMenuItems: buildPreviewPrimaryMenuItems(template.type === 'single' ? 'contact' : 'corporation'),
       title: category.name,
@@ -863,8 +844,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         url: '/contact-us/',
         section: { type: 'content', name: '联系我们', url: '/contact-us/' },
         category: null,
-        content: null,
-        breadcrumbItems: [{ label: '联系我们', url: '' }]
+        content: null
       }),
       primaryMenuItems: buildPreviewPrimaryMenuItems('contact'),
       contactTableHtml: '<table><tr><td>电话</td><td>021-00000000</td></tr><tr><td>地址</td><td>示例地址</td></tr></table>'
@@ -930,7 +910,7 @@ function ensurePreviewBaseHref(html) {
   return markup;
 }
 
-function buildPreviewPageContext({ pageType, title, url, section, category, content, breadcrumbItems }) {
+function buildPreviewPageContext({ pageType, title, url, section, category, content }) {
   const normalizedCategory = category ? {
     id: toInteger(category.id, 0),
     type: section?.type || '',
@@ -940,10 +920,6 @@ function buildPreviewPageContext({ pageType, title, url, section, category, cont
     parentName: '',
     seoDescription: category.seo_description || ''
   } : null;
-  const normalizedItems = [
-    { label: '公司主页', url: '/index.html' },
-    ...(breadcrumbItems || [])
-  ];
 
   return {
     currentPage: { type: pageType || '', title: title || '', url: url || '' },
@@ -957,13 +933,7 @@ function buildPreviewPageContext({ pageType, title, url, section, category, cont
       title: content.title || content.name || '',
       name: content.name || content.title || '',
       url: content.url || ''
-    } : null,
-    breadcrumb: {
-      prefixHtml: '<span>当前位置 : </span>',
-      separatorHtml: ' - ',
-      html: normalizedItems.map((item) => item.url ? `<a href="${escapeHtml(item.url)}">${escapeHtml(item.label)}</a>` : escapeHtml(item.label)).join(' - '),
-      items: normalizedItems
-    }
+    } : null
   };
 }
 
@@ -1409,15 +1379,6 @@ function buildTemplateValidationProps(template) {
     currentCategoryItem: { id: 2, type: 'demo', name: '当前分类', url: '/current.html', parentId: 1, parentName: '父级分类', seoDescription: '' },
     parentCategory: { id: 1, type: 'demo', name: '父级分类', url: '/parent.html', parentId: 0, parentName: '', seoDescription: '' },
     currentContent: { id: 1, type: 'demo', title: '示例内容', name: '示例内容', url: '/detail.html' },
-    breadcrumb: {
-      prefixHtml: '<span>当前位置 : </span>',
-      separatorHtml: ' - ',
-      html: '<a href="/index.html">公司主页</a> - 示例内容',
-      items: [
-        { label: '公司主页', url: '/index.html' },
-        { label: '示例内容', url: '' }
-      ]
-    },
     siteColumns: buildPreviewSiteColumns(),
     component: () => null,
     primaryMenuItems: buildPreviewPrimaryMenuItems('home'),
