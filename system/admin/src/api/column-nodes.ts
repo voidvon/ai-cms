@@ -1,17 +1,17 @@
 import apiClient from './client'
 import type { ApiResponse, ColumnNode } from '@/types'
 
-interface BaseCategoryParams {
+interface BaseColumnNodeParams {
   language?: string
 }
 
-interface AdminCategoryParams extends BaseCategoryParams {
+interface AdminColumnNodeParams extends BaseColumnNodeParams {
   parentId?: number
   page?: number
   limit?: number
 }
 
-interface CategoryGetParams extends BaseCategoryParams {
+interface ColumnNodeGetParams extends BaseColumnNodeParams {
   include_translations?: number | boolean
 }
 
@@ -23,38 +23,38 @@ function withRootColumnId<T extends object | undefined>(rootColumnId: number, pa
 }
 
 export const columnNodesApi = {
-  list: async <T extends ColumnNode = ColumnNode>(rootColumnId: number, params?: BaseCategoryParams) => {
-    const response = await apiClient.get<ApiResponse<T[]>>('/column-categories', { params: withRootColumnId(rootColumnId, params) })
+  list: async <T extends ColumnNode = ColumnNode>(rootColumnId: number, params?: BaseColumnNodeParams) => {
+    const response = await apiClient.get<ApiResponse<T[]>>('/column-nodes', { params: withRootColumnId(rootColumnId, params) })
     return response.data
   },
 
-  listAdmin: async <T extends ColumnNode = ColumnNode>(rootColumnId: number, params?: AdminCategoryParams) => {
-    const response = await apiClient.get<ApiResponse<T[]>>('/column-categories/admin', { params: withRootColumnId(rootColumnId, params) })
+  listAdmin: async <T extends ColumnNode = ColumnNode>(rootColumnId: number, params?: AdminColumnNodeParams) => {
+    const response = await apiClient.get<ApiResponse<T[]>>('/column-nodes/admin', { params: withRootColumnId(rootColumnId, params) })
     return response.data
   },
 
-  listOptions: async <T extends ColumnNode = ColumnNode>(rootColumnId: number, params?: BaseCategoryParams) => {
-    const response = await apiClient.get<ApiResponse<T[]>>('/column-categories/options', { params: withRootColumnId(rootColumnId, params) })
+  listOptions: async <T extends ColumnNode = ColumnNode>(rootColumnId: number, params?: BaseColumnNodeParams) => {
+    const response = await apiClient.get<ApiResponse<T[]>>('/column-nodes/options', { params: withRootColumnId(rootColumnId, params) })
     return response.data
   },
 
-  get: async <T extends ColumnNode = ColumnNode>(rootColumnId: number, id: number, params?: CategoryGetParams) => {
-    const response = await apiClient.get<ApiResponse<T>>(`/column-categories/${id}`, { params: withRootColumnId(rootColumnId, params) })
+  get: async <T extends ColumnNode = ColumnNode>(rootColumnId: number, id: number, params?: ColumnNodeGetParams) => {
+    const response = await apiClient.get<ApiResponse<T>>(`/column-nodes/${id}`, { params: withRootColumnId(rootColumnId, params) })
     return response.data
   },
 
   create: async <T extends ColumnNode = ColumnNode>(rootColumnId: number, data: Partial<T>) => {
-    const response = await apiClient.post<ApiResponse<T>>(`/column-categories?rootColumnId=${encodeURIComponent(rootColumnId)}`, data)
+    const response = await apiClient.post<ApiResponse<T>>(`/column-nodes?rootColumnId=${encodeURIComponent(rootColumnId)}`, data)
     return response.data
   },
 
   update: async <T extends ColumnNode = ColumnNode>(rootColumnId: number, id: number, data: Partial<T>) => {
-    const response = await apiClient.put<ApiResponse<T>>(`/column-categories/${id}?rootColumnId=${encodeURIComponent(rootColumnId)}`, data)
+    const response = await apiClient.put<ApiResponse<T>>(`/column-nodes/${id}?rootColumnId=${encodeURIComponent(rootColumnId)}`, data)
     return response.data
   },
 
   delete: async (rootColumnId: number, id: number) => {
-    const response = await apiClient.delete<ApiResponse<void>>(`/column-categories/${id}?rootColumnId=${encodeURIComponent(rootColumnId)}`)
+    const response = await apiClient.delete<ApiResponse<void>>(`/column-nodes/${id}?rootColumnId=${encodeURIComponent(rootColumnId)}`)
     return response.data
   },
 }

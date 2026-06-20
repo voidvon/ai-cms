@@ -315,7 +315,7 @@ export function LegacyArticleListPage(props: LegacyArticleListPageProps) {
 ${articleSidebar(props)}</td><td width="${isService ? '821' : '812'}" valign="top" ><table width="100%" border="0" align="right" cellpadding="0" cellspacing="0"><tr>
 <td width="5"><img src="/Skin/blue/Images/menu_left.jpg" width="5" height="29" /></td><td width="${isService ? '25' : '28'}" align="right" background="/Skin/blue/Images/menu_bg.jpg" class="F_a Font-Weight">
 <img src="/Skin/blue/Images/index_01.jpg" width="12" height="5" /></td>
-<td width="${isService ? '393' : '395'}" background="/Skin/blue/Images/menu_bg.jpg" class="F_a Font-Weight">&nbsp; <A href="/" class="F_a">首页</A> - <A href="/${dir}/" class="F_a">${label}</A> - <A href="${html(props.categoryId)}.html" class="F_a">${html(props.title)}</A></td>
+<td width="${isService ? '393' : '395'}" background="/Skin/blue/Images/menu_bg.jpg" class="F_a Font-Weight">&nbsp; <A href="/" class="F_a">首页</A> - <A href="/${dir}/" class="F_a">${label}</A> - <A href="${html(props.columnId)}.html" class="F_a">${html(props.title)}</A></td>
 <td width="${isService ? '393' : '395'}" background="/Skin/blue/Images/menu_bg.jpg" class="F_a Font-Weight"></td>
 <td width="6"><img src="/Skin/blue/Images/menu_right.jpg" width="5" height="29" /></td></tr><tr><td height="${isService ? '814' : '465'}" colspan="5" valign="top" class="${isService ? 'Right_dasheds_line' : 'in4'}">
 <div align="left"><table width="${isService ? '814' : '810'}" height="58" border="0" align="center" cellpadding="0" cellspacing="0"><tr><td width="814">${props.bodyHtml} </td></tr></table></div></td>
@@ -343,7 +343,7 @@ export function LegacyArticleDetailPage(props: LegacyArticleDetailPageProps) {
   const body = `${props.fragments.topHtml || ''}<table width="972" border="0" align="center" cellpadding="0" cellspacing="0"><tr><td width="173" height="239" valign="top">
 ${articleSidebar(props)}</td><td width="812" valign="top" ><table width="812" border="0" align="right" cellpadding="0" cellspacing="0"><tr>
 <td width="${isService ? '409' : '7'}" height="25" ${isService ? 'valign="middle"' : ''} background="../../Skin/blue/Images/news_news.jpg"></td><td width="${isService ? '415' : '817'}" align="${isService ? 'left' : 'center'}"><div align="${isService ? 'left' : 'center'}">
-<A href="/" class="Font_000000_B_a">首页</A> - <A href="/${dir}/" class="Font_000000_B_a">${label}</A> - <A href="/${dir}/${html(props.typeId)}.html" class="Font_000000_B_a">${html(props.catName)}</A></div>
+<A href="/" class="Font_000000_B_a">首页</A> - <A href="/${dir}/" class="Font_000000_B_a">${label}</A> - <A href="/${dir}/${html(props.columnId)}.html" class="Font_000000_B_a">${html(props.columnName)}</A></div>
 </td></tr><tr><td colspan="2" valign="top"><table width="${isService ? '98%' : '97%'}" border="0" align="center" cellpadding="0" cellspacing="0">
 <tr><td height="40" align="center" class="Font-Weight Font_Size ${isService ? 'in6' : 'in4'}">${html(props.title)}</td></tr><tr><td height="${isService ? '31' : '74'}" align="left" valign="top" class="news_sp ${isService ? 'in6' : 'in4'}">
 <p>${props.bodyHtml}&nbsp;</p></td>
@@ -353,7 +353,7 @@ ${articleSidebar(props)}</td><td width="812" valign="top" ><table width="812" bo
     <html xmlns="http://www.w3.org/1999/xhtml">
       <head>
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
-        <title>{props.seoMeta?.openGraph?.title || `${props.title}_${isService ? props.catName : props.site.web_name || ''}`}</title>
+        <title>{props.seoMeta?.openGraph?.title || `${props.title}_${isService ? props.columnName : props.site.web_name || ''}`}</title>
         {renderSeoHead(props)}
         {!props.seoMeta?.basic?.description ? <meta name="description" content={props.newsDescription} /> : null}
         <meta content="阀门，球阀，闸阀" name="classification" />

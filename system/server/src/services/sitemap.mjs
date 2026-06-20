@@ -9,7 +9,7 @@ import {
   isColumnUnderRoot
 } from './column-tree.mjs';
 import {
-  resolveLegacyCategoryPublicId,
+  resolveLegacyColumnPublicId,
   resolvePublicSectionContext
 } from './public-sections.mjs';
 import {
@@ -77,7 +77,7 @@ export function getSitemapDiagnostics({ generatedAt = new Date().toISOString(), 
   const products = listProducts({ visibleOnly: true, limit: 10000, languageCode });
   const columns = listColumns({ languageCode });
   const pageTreeRoot = getRootColumnByDriver(columns, 'page_tree');
-  const pageTreeCategories = pageTreeRoot ? listColumnNodesByRoot(pageTreeRoot.id, { languageCode }) : [];
+  const pageTreeColumns = pageTreeRoot ? listColumnNodesByRoot(pageTreeRoot.id, { languageCode }) : [];
 
   return {
     generated_at: generatedAt,
@@ -92,7 +92,7 @@ export function getSitemapDiagnostics({ generatedAt = new Date().toISOString(), 
     warnings: buildDiagnosticWarnings({
       siteUrl,
       products,
-      corporationCategories: pageTreeCategories
+      corporationColumns: pageTreeColumns
     }),
     chunk_files: chunks.map((chunk, index) => ({
       file_name: `sitemap-${index + 1}.xml`,
@@ -110,24 +110,24 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   const entries = new Map();
   const columns = listColumns({ languageCode });
   const publicSections = resolvePublicSectionContext(columns);
-  const managedCategoryRoot = getRootColumnByDriver(columns, 'managed_category');
-  const productCategories = managedCategoryRoot ? listColumnNodesByRoot(managedCategoryRoot.id, { languageCode }) : [];
+  const managedColumnRoot = getRootColumnByDriver(columns, 'managed_column');
+  const productCategories = managedColumnRoot ? listColumnNodesByRoot(managedColumnRoot.id, { languageCode }) : [];
   const newsCategories = publicSections.newsSections.flatMap((section) => (
     listColumnNodesByRoot(section.rootColumnId, { languageCode })
   ));
   const products = listProducts({ visibleOnly: true, limit: 10000, languageCode });
   const newsItems = listNews({ limit: 10000, languageCode });
   const pageTreeRoot = getRootColumnByDriver(columns, 'page_tree');
-  const pageTreeCategories = pageTreeRoot ? listColumnNodesByRoot(pageTreeRoot.id, { languageCode }) : [];
-  const productCountByCategory = buildDescendantProductCountMap(productCategories, products);
-  const latestProductDateByCategory = buildDescendantLatestDateMap(productCategories, products, generatedAt);
-  const newsCountByCategory = buildCountMap(newsItems, (item) => toInteger(item.column_id, 0));
-  const latestNewsDateByCategory = buildLatestDateMap(newsItems, (item) => toInteger(item.column_id, 0), 'created_at', generatedAt);
-  const corporationLatestDateById = buildCorporationLatestDateMap(pageTreeCategories, generatedAt);
-  const productCategoryMap = new Map(productCategories.map((item) => [toInteger(item.id, 0), item]));
+  const pageTreeColumns = pageTreeRoot ? listColumnNodesByRoot(pageTreeRoot.id, { languageCode }) : [];
+  const productCountByColumn = buildDescendantProductCountMap(productCategories, products);
+  const latestProductDateByColumn = buildDescendantLatestDateMap(productCategories, products, generatedAt);
+  const newsCountByColumn = buildCountMap(newsItems, (item) => toInteger(item.column_id, 0));
+  const latestNewsDateByColumn = buildLatestDateMap(newsItems, (item) => toInteger(item.column_id, 0), 'created_at', generatedAt);
+  const corporationLatestDateById = buildCorporationLatestDateMap(pageTreeColumns, generatedAt);
+  const productColumnMap = new Map(productCategories.map((item) => [toInteger(item.id, 0), item]));
   const columnMap = new Map(columns.map((col) => [toInteger(col.id, 0), col]));
-  const corporationIndexId = pageTreeCategories.find((item) => toInteger(item.parent_id, 0) === 0)?.id
-    ?? pageTreeCategories[0]?.id
+  const corporationIndexId = pageTreeColumns.find((item) => toInteger(item.parent_id, 0) === 0)?.id
+    ?? pageTreeColumns[0]?.id
     ?? null;
 
   addEntry(entries, siteUrl, '/', generatedAt);
@@ -147,7 +147,7 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   if (corporationIndexId != null) {
     addEntry(entries, siteUrl, '/about/index.html', corporationLatestDateById.get(toInteger(corporationIndexId, 0)) || generatedAt);
   }
-  for (const item of pageTreeCategories) {
+  for (const item of pageTreeColumns) {
     const id = toInteger(item.id, 0);
     if (id > 0) {
       addEntry(entries, siteUrl, `/about/about-${id}.html`, corporationLatestDateById.get(id) || item.updated_at || generatedAt);
@@ -159,16 +159,16 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
     addSectionEntries({
       entries,
       siteUrl,
-      categories: newsCategories.filter((item) => (
+      columns: newsCategories.filter((item) => (
         toInteger(item.parent_id, 0) === 0
         && String(item.route_path || '').trim().startsWith(sectionRootPath)
         && toInteger(item.id, 0) !== toInteger(section.rootColumnId, 0)
       )),
       itemsPerPage: NEWS_LIST_PAGE_SIZE,
       sectionDir: section.dirName,
-      getCategoryPublicId: (category) => resolveLegacyCategoryPublicId(category),
-      getItemCount: (categoryId) => newsCountByCategory.get(categoryId) || 0,
-      getLastmod: (categoryId) => latestNewsDateByCategory.get(categoryId) || generatedAt
+      getColumnPublicId: (columnNode) => resolveLegacyColumnPublicId(columnNode),
+      getItemCount: (columnId) => newsCountByColumn.get(columnId) || 0,
+      getLastmod: (columnId) => latestNewsDateByColumn.get(columnId) || generatedAt
     });
   }
 
@@ -180,27 +180,27 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
     }
   }
 
-  for (const category of productCategories) {
-    const categoryId = toInteger(category.id, 0);
-    if (categoryId <= 0) {
+  for (const columnNode of productCategories) {
+    const columnNodeId = toInteger(columnNode.id, 0);
+    if (columnNodeId <= 0) {
       continue;
     }
-    const total = productCountByCategory.get(categoryId) || 0;
+    const total = productCountByColumn.get(columnNodeId) || 0;
     const pageCount = Math.max(Math.ceil(total / PRODUCT_LIST_PAGE_SIZE), 1);
-    const lastmod = latestProductDateByCategory.get(categoryId) || generatedAt;
-    const publicCategoryUrl = buildProductColumnPublicUrl(category, productCategoryMap);
-    addEntry(entries, siteUrl, publicCategoryUrl, lastmod);
+    const lastmod = latestProductDateByColumn.get(columnNodeId) || generatedAt;
+    const publicColumnUrl = buildProductColumnPublicUrl(columnNode, productColumnMap);
+    addEntry(entries, siteUrl, publicColumnUrl, lastmod);
     for (let pageNumber = 2; pageNumber <= pageCount; pageNumber += 1) {
-      addEntry(entries, siteUrl, `${publicCategoryUrl}index-${pageNumber}.html`, lastmod);
+      addEntry(entries, siteUrl, `${publicColumnUrl}index-${pageNumber}.html`, lastmod);
     }
   }
 
   for (const product of products) {
-    const category = productCategoryMap.get(toInteger(product.column_id, 0));
-    const categoryPath = category ? buildColumnSlugPath(category, productCategoryMap) : null;
+    const columnNode = productColumnMap.get(toInteger(product.column_id, 0));
+    const columnPath = columnNode ? buildColumnSlugPath(columnNode, productColumnMap) : null;
     const column = columnMap.get(toInteger(product.column_id, 0));
     if (column) {
-      addEntry(entries, siteUrl, buildContentDetailUrlFromColumn(product, column, categoryPath), product.updated_at || generatedAt);
+      addEntry(entries, siteUrl, buildContentDetailUrlFromColumn(product, column, columnPath), product.updated_at || generatedAt);
     }
   }
 
@@ -217,32 +217,32 @@ function getRootColumnByDriver(columns, renderDriver) {
 function addSectionEntries({
   entries,
   siteUrl,
-  categories,
+  columns,
   itemsPerPage,
   sectionDir,
-  getCategoryPublicId = (category) => toInteger(category.id, 0),
+  getColumnPublicId = (columnNode) => toInteger(columnNode.id, 0),
   getItemCount,
   getLastmod
 }) {
-  if (categories.length > 0) {
-    addEntry(entries, siteUrl, `/${sectionDir}/index.html`, getLastmod(toInteger(categories[0].id, 0)));
+  if (columns.length > 0) {
+    addEntry(entries, siteUrl, `/${sectionDir}/index.html`, getLastmod(toInteger(columns[0].id, 0)));
   }
 
-  for (const [index, category] of categories.entries()) {
-    const categoryId = toInteger(category.id, 0);
-    const publicCategoryId = getCategoryPublicId(category);
-    const total = getItemCount(categoryId);
+  for (const [index, columnNode] of columns.entries()) {
+    const columnNodeId = toInteger(columnNode.id, 0);
+    const publicColumnId = getColumnPublicId(columnNode);
+    const total = getItemCount(columnNodeId);
     const pageCount = Math.max(Math.ceil(total / itemsPerPage), 1);
-    const lastmod = getLastmod(categoryId);
+    const lastmod = getLastmod(columnNodeId);
 
-    addEntry(entries, siteUrl, `/${sectionDir}/${publicCategoryId}.html`, lastmod);
-    addEntry(entries, siteUrl, `/${sectionDir}/${publicCategoryId}-1.html`, lastmod);
+    addEntry(entries, siteUrl, `/${sectionDir}/${publicColumnId}.html`, lastmod);
+    addEntry(entries, siteUrl, `/${sectionDir}/${publicColumnId}-1.html`, lastmod);
     if (index === 0) {
       addEntry(entries, siteUrl, `/${sectionDir}/`, lastmod);
     }
 
     for (let pageNumber = 2; pageNumber <= pageCount; pageNumber += 1) {
-      addEntry(entries, siteUrl, `/${sectionDir}/${publicCategoryId}-${pageNumber}.html`, lastmod);
+      addEntry(entries, siteUrl, `/${sectionDir}/${publicColumnId}-${pageNumber}.html`, lastmod);
     }
   }
 }
@@ -301,36 +301,36 @@ function toSitemapDate(value) {
   return date.toISOString();
 }
 
-function buildDescendantProductCountMap(categories, products) {
+function buildDescendantProductCountMap(columns, products) {
   const childrenByParent = new Map();
-  for (const category of categories) {
-    const parentId = toInteger(category.parent_id, 0);
+  for (const columnNode of columns) {
+    const parentId = toInteger(columnNode.parent_id, 0);
     if (!childrenByParent.has(parentId)) {
       childrenByParent.set(parentId, []);
     }
-    childrenByParent.get(parentId).push(category);
+    childrenByParent.get(parentId).push(columnNode);
   }
 
   const directCount = buildCountMap(products, (item) => toInteger(item.column_id, 0));
   const result = new Map();
 
-  function countCategory(categoryId) {
-    if (result.has(categoryId)) {
-      return result.get(categoryId);
+  function countColumn(columnNodeId) {
+    if (result.has(columnNodeId)) {
+      return result.get(columnNodeId);
     }
 
-    let total = directCount.get(categoryId) || 0;
-    for (const child of childrenByParent.get(categoryId) || []) {
-      total += countCategory(toInteger(child.id, 0));
+    let total = directCount.get(columnNodeId) || 0;
+    for (const child of childrenByParent.get(columnNodeId) || []) {
+      total += countColumn(toInteger(child.id, 0));
     }
 
-    result.set(categoryId, total);
+    result.set(columnNodeId, total);
     return total;
   }
 
   result.set(0, products.length);
-  for (const category of categories) {
-    countCategory(toInteger(category.id, 0));
+  for (const columnNode of columns) {
+    countColumn(toInteger(columnNode.id, 0));
   }
   return result;
 }
@@ -357,83 +357,83 @@ function buildLatestDateMap(items, keyFn, dateField, fallbackDate) {
   return latest;
 }
 
-function buildDescendantLatestDateMap(categories, products, fallbackDate) {
+function buildDescendantLatestDateMap(columns, products, fallbackDate) {
   const childrenByParent = new Map();
-  for (const category of categories) {
-    const parentId = toInteger(category.parent_id, 0);
+  for (const columnNode of columns) {
+    const parentId = toInteger(columnNode.parent_id, 0);
     if (!childrenByParent.has(parentId)) {
       childrenByParent.set(parentId, []);
     }
-    childrenByParent.get(parentId).push(category);
+    childrenByParent.get(parentId).push(columnNode);
   }
 
   const directLatest = new Map();
   for (const product of products) {
-    const categoryId = toInteger(product.column_id, 0);
+    const columnId = toInteger(product.column_id, 0);
     const current = toSitemapDate(product.updated_at || fallbackDate);
-    const previous = directLatest.get(categoryId);
+    const previous = directLatest.get(columnId);
     if (!previous || current > previous) {
-      directLatest.set(categoryId, current);
+      directLatest.set(columnId, current);
     }
   }
 
   const result = new Map();
-  function resolveLatest(categoryId) {
-    if (result.has(categoryId)) {
-      return result.get(categoryId);
+  function resolveLatest(columnNodeId) {
+    if (result.has(columnNodeId)) {
+      return result.get(columnNodeId);
     }
 
-    let latest = directLatest.get(categoryId) || null;
-    for (const child of childrenByParent.get(categoryId) || []) {
+    let latest = directLatest.get(columnNodeId) || null;
+    for (const child of childrenByParent.get(columnNodeId) || []) {
       const childLatest = resolveLatest(toInteger(child.id, 0));
       if (childLatest && (!latest || childLatest > latest)) {
         latest = childLatest;
       }
     }
 
-    result.set(categoryId, latest || toSitemapDate(fallbackDate));
-    return result.get(categoryId);
+    result.set(columnNodeId, latest || toSitemapDate(fallbackDate));
+    return result.get(columnNodeId);
   }
 
   resolveLatest(0);
-  for (const category of categories) {
-    resolveLatest(toInteger(category.id, 0));
+  for (const columnNode of columns) {
+    resolveLatest(toInteger(columnNode.id, 0));
   }
   return result;
 }
 
-function buildCorporationLatestDateMap(categories, fallbackDate) {
-  const categoryMap = new Map(categories.map((item) => [toInteger(item.id, 0), item]));
+function buildCorporationLatestDateMap(columns, fallbackDate) {
+  const columnMap = new Map(columns.map((item) => [toInteger(item.id, 0), item]));
   const childrenByParent = new Map();
-  for (const category of categories) {
-    const parentId = toInteger(category.parent_id, 0);
+  for (const columnNode of columns) {
+    const parentId = toInteger(columnNode.parent_id, 0);
     if (!childrenByParent.has(parentId)) {
       childrenByParent.set(parentId, []);
     }
-    childrenByParent.get(parentId).push(category);
+    childrenByParent.get(parentId).push(columnNode);
   }
 
   const result = new Map();
-  function resolveLatest(categoryId) {
-    if (result.has(categoryId)) {
-      return result.get(categoryId);
+  function resolveLatest(columnId) {
+    if (result.has(columnId)) {
+      return result.get(columnId);
     }
 
-    const currentCategory = categoryMap.get(categoryId) || null;
-    let latest = currentCategory ? toSitemapDate(currentCategory.updated_at || fallbackDate) : null;
-    for (const child of childrenByParent.get(categoryId) || []) {
+    const currentColumn = columnMap.get(columnId) || null;
+    let latest = currentColumn ? toSitemapDate(currentColumn.updated_at || fallbackDate) : null;
+    for (const child of childrenByParent.get(columnId) || []) {
       const childLatest = resolveLatest(toInteger(child.id, 0));
       if (childLatest && (!latest || childLatest > latest)) {
         latest = childLatest;
       }
     }
 
-    result.set(categoryId, latest || toSitemapDate(fallbackDate));
-    return result.get(categoryId);
+    result.set(columnId, latest || toSitemapDate(fallbackDate));
+    return result.get(columnId);
   }
 
-  for (const category of categories) {
-    resolveLatest(toInteger(category.id, 0));
+  for (const columnNode of columns) {
+    resolveLatest(toInteger(columnNode.id, 0));
   }
   return result;
 }
@@ -450,7 +450,7 @@ function renderSitemapIndexXml(files) {
   )).join('\n')}\n</sitemapindex>\n`;
 }
 
-function buildDiagnosticWarnings({ siteUrl, products, corporationCategories }) {
+function buildDiagnosticWarnings({ siteUrl, products, corporationColumns }) {
   const warnings = [];
 
   if (!siteUrl) {
@@ -471,7 +471,7 @@ function buildDiagnosticWarnings({ siteUrl, products, corporationCategories }) {
     });
   }
 
-  const corporationMissingUpdatedAt = corporationCategories.filter((item) => !String(item.updated_at || '').trim());
+  const corporationMissingUpdatedAt = corporationColumns.filter((item) => !String(item.updated_at || '').trim());
   if (corporationMissingUpdatedAt.length > 0) {
     warnings.push({
       level: 'warning',

@@ -116,9 +116,9 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
 
   const columns = listColumns({ languageCode });
   const publicSections = resolvePublicSectionContext(columns);
-  const managedCategoryRoot = getRootColumnByDriver(columns, 'managed_category');
+  const managedColumnRoot = getRootColumnByDriver(columns, 'managed_column');
   const pageTreeRoot = getRootColumnByDriver(columns, 'page_tree');
-  const productCategories = managedCategoryRoot ? listColumnNodesByRoot(managedCategoryRoot.id, { languageCode }) : [];
+  const productCategories = managedColumnRoot ? listColumnNodesByRoot(managedColumnRoot.id, { languageCode }) : [];
   const newsCategories = publicSections.newsSections.flatMap((section) => (
     listColumnNodesByRoot(section.rootColumnId, { languageCode })
   ));
@@ -193,34 +193,34 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     routePath: '/products/',
     section: '产品栏目',
     summary: '产品分类导航与产品列表入口。',
-    contentLines: buildCategorySampleLines(productCategories)
+    contentLines: buildColumnSampleLines(productCategories)
   }));
 
   for (const columnNode of productCategories) {
     const columnNodeId = toInteger(columnNode.id, 0);
-    const childCategories = productCategories.filter((item) => toInteger(item.parent_id, 0) === columnNodeId);
-    const categoryProducts = products.filter((item) => toInteger(item.column_id, 0) === columnNodeId).slice(0, MAX_LIST_SAMPLE_ITEMS);
+    const childColumns = productCategories.filter((item) => toInteger(item.parent_id, 0) === columnNodeId);
+    const columnProducts = products.filter((item) => toInteger(item.column_id, 0) === columnNodeId).slice(0, MAX_LIST_SAMPLE_ITEMS);
     pages.push(createPage({
       title: columnNode.name,
       routePath: buildProductColumnPublicUrl(columnNode, productCategoriesById),
       section: '产品栏目',
       summary: columnNode.seo_description || `产品分类：${columnNode.name}`,
       contentLines: [
-        childCategories.length > 0 ? `下级分类：${childCategories.map((item) => item.name).join('、')}` : '',
-        categoryProducts.length > 0 ? `示例产品：${categoryProducts.map((item) => item.name).join('、')}` : ''
+        childColumns.length > 0 ? `下级分类：${childColumns.map((item) => item.name).join('、')}` : '',
+        columnProducts.length > 0 ? `示例产品：${columnProducts.map((item) => item.name).join('、')}` : ''
       ].filter(Boolean)
     }));
   }
 
   for (const product of products) {
     const columnNode = productCategoriesById.get(toInteger(product.column_id, 0));
-    const categoryPath = columnNode ? buildColumnSlugPath(columnNode, productCategoriesById) : null;
+    const columnPath = columnNode ? buildColumnSlugPath(columnNode, productCategoriesById) : null;
     const column = columnMap.get(toInteger(product.column_id, 0));
     if (!column) continue;
 
     pages.push(createPage({
       title: product.name,
-      routePath: buildContentDetailUrlFromColumn(product, column, categoryPath),
+      routePath: buildContentDetailUrlFromColumn(product, column, columnPath),
       section: '产品详情',
       summary: product.summary || `产品详情：${product.name}`,
       contentLines: [
@@ -233,17 +233,17 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
 
   // 为每个新闻类栏目生成列表页
   for (const section of publicSections.newsSections) {
-    const rootCategories = newsCategories.filter((item) => toInteger(item.parent_id, 0) === section.rootColumnId);
+    const rootColumns = newsCategories.filter((item) => toInteger(item.parent_id, 0) === section.rootColumnId);
 
     pages.push(createPage({
       title: section.sectionLabel,
       routePath: `/${section.dirName}/index.html`,
       section: `${section.sectionLabel}栏目`,
       summary: `${section.sectionLabel}分类与文章入口。`,
-      contentLines: buildCategorySampleLines(rootCategories)
+      contentLines: buildColumnSampleLines(rootColumns)
     }));
 
-    for (const columnNode of rootCategories) {
+    for (const columnNode of rootColumns) {
       const columnNodeId = toInteger(columnNode.id, 0);
       const items = newsItems.filter((item) => toInteger(item.column_id, 0) === columnNodeId).slice(0, MAX_LIST_SAMPLE_ITEMS);
       pages.push(createPage({
@@ -477,8 +477,8 @@ function buildAddressFact(site) {
   return site.company_address ? `地址：${site.company_address}` : '';
 }
 
-function buildCategorySampleLines(categories) {
-  const names = categories.slice(0, MAX_LIST_SAMPLE_ITEMS).map((item) => item.name).filter(Boolean);
+function buildColumnSampleLines(columns) {
+  const names = columns.slice(0, MAX_LIST_SAMPLE_ITEMS).map((item) => item.name).filter(Boolean);
   return names.length > 0 ? [`示例分类：${names.join('、')}`] : [];
 }
 

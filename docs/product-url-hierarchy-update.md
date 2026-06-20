@@ -307,7 +307,7 @@ const categoryMap = new Map(
 在产品列表模板 `spirax_product_list.tsx` 中，渲染逻辑是：
 
 ```javascript
-const categoryMainSource = pageCards.length > 0 ? pageCards : (productItems.length > 0 ? productItems : listItems);
+const columnMainSource = pageCards.length > 0 ? pageCards : (productItems.length > 0 ? productItems : listItems);
 ```
 
 如果 `pageData.cards` 有数据，它会**优先使用**，而不是使用我们动态生成的 `productCardItems`。

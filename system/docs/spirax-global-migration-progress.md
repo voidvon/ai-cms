@@ -182,7 +182,7 @@
 
 已完成的能力补齐：
 
-- `currentCategoryPageData` 注入到单页模板上下文
+- `currentColumnPageData` 注入到单页模板上下文
 - 单页模板已支持渲染以下结构化数据：
   - `hero`
   - `heroImage`

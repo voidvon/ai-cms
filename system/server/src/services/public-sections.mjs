@@ -4,9 +4,9 @@ import { resolveRelativePublicPath } from './column-paths.mjs';
 const SERVICE_SECTION_PATTERN = /(service|services|support|knowledge|learn|training|服务|知识|学习|培训)/i;
 const NEWS_SECTION_PATTERN = /(news|article|articles|insight|updates|新闻|资讯|动态)/i;
 
-export function resolveLegacyCategoryPublicId(category) {
+export function resolveLegacyColumnPublicId(columnNode) {
   // 公共栏目标识统一直接使用栏目 ID
-  return String(toInteger(category?.id, 0));
+  return String(toInteger(columnNode?.id, 0));
 }
 
 export function resolvePublicSectionContext(columns) {
@@ -27,7 +27,7 @@ export function resolvePublicSectionContext(columns) {
     usedDirNames.add(dirName);
     rootSections.push({
       rootColumnId: toInteger(root.id, 0),
-      publicRootId: resolveLegacyCategoryPublicId(root),
+      publicRootId: resolveLegacyColumnPublicId(root),
       dirName,
       sectionType: SERVICE_SECTION_PATTERN.test(dirName) ? 'service' : 'news',
       sectionLabel: String(root.name || '').trim() || (SERVICE_SECTION_PATTERN.test(dirName) ? '服务' : '公司新闻'),
@@ -51,7 +51,7 @@ export function resolvePublicSectionContext(columns) {
 
   return {
     allById,
-    productRootColumnId: findRootColumnId(rows, { renderDriver: 'managed_category' }),
+    productRootColumnId: findRootColumnId(rows, { renderDriver: 'managed_column' }),
     corporationRootColumnId: findRootColumnId(rows, { renderDriver: 'page_tree' }),
     newsTree,
     newsSections: rootSections,
@@ -77,10 +77,10 @@ export function buildColumnPublicUrl(column, publicSections) {
   const relativeCustomUrl = String(column.custom_url || '').trim();
   const columnType = String(column.column_type || '');
   const renderDriver = String(column.column_semantics?.render_driver || '');
-  if (renderDriver === 'managed_category' && toInteger(column.parent_id, 0) === 0) {
+  if (renderDriver === 'managed_column' && toInteger(column.parent_id, 0) === 0) {
     return '/products/';
   }
-  if (renderDriver === 'managed_category') {
+  if (renderDriver === 'managed_column') {
     return '';
   }
   if (renderDriver === 'section') {
@@ -165,7 +165,7 @@ function resolveNewsSectionDirName(root, index, usedDirNames) {
 }
 
 function reserveDirName(candidate, usedDirNames, root) {
-  const base = sanitizeDirName(candidate) || `news-${resolveLegacyCategoryPublicId(root)}`;
+  const base = sanitizeDirName(candidate) || `news-${resolveLegacyColumnPublicId(root)}`;
   if (!usedDirNames.has(base)) {
     return base;
   }

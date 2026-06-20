@@ -96,7 +96,7 @@ export function searchAllContentPaged(rawQuery, {
         score: Number(item.search_score || 0),
         url: buildSearchResultUrl(modelCode, item, { columnMap, productCategoryMap, publicSections }),
         cover_image: resolveResultCoverImage(modelCode, item),
-        category_name: item.category_name || '',
+        column_name: item.column_name || '',
         created_at: item.created_at || '',
         updated_at: item.updated_at || ''
       });
@@ -221,7 +221,7 @@ function buildWeightedSearchFields(modelCode, item, title) {
     { name: 'seo_title', value: item.seo_title },
     { name: 'seo_description', value: item.seo_description },
     { name: 'code', value: item.code },
-    { name: 'category_name', value: item.category_name }
+    { name: 'column_name', value: item.column_name }
   ];
   return fields;
 }
@@ -247,7 +247,7 @@ function getFieldWeight(fieldName) {
   if (fieldName === 'code') return 260;
   if (fieldName === 'name' || fieldName === 'title') return 220;
   if (fieldName === 'summary') return 120;
-  if (fieldName === 'category_name') return 80;
+  if (fieldName === 'column_name') return 80;
   if (fieldName === 'seo_title') return 70;
   if (fieldName === 'seo_description') return 50;
   if (fieldName === 'content_html') return 40;

@@ -100,7 +100,7 @@ export function listContentEntries(modelCode, {
         coalesce(t.seo_description, dt.seo_description) AS seo_description,
         coalesce(t.publish_status, dt.publish_status, 'published') AS translation_publish_status,
         ${getTranslationCreatedAtExpr('t', 'dt', 'e')} AS translation_created_at,
-        coalesce(tc.name, dtc.name, '') AS category_name,
+        coalesce(tc.name, dtc.name, '') AS column_name,
         coalesce(l.code, dl.code, ?) AS current_language_code
       FROM ${quoteIdentifier(tableName)} e
       LEFT JOIN ${quoteIdentifier(translationTableName)} t ON t.entry_id = e.id AND t.language_id = ?
@@ -196,7 +196,7 @@ export function listContentEntriesPaged(modelCode, {
         coalesce(t.seo_description, dt.seo_description) AS seo_description,
         coalesce(t.publish_status, dt.publish_status, 'published') AS translation_publish_status,
         ${getTranslationCreatedAtExpr('t', 'dt', 'e')} AS translation_created_at,
-        coalesce(tc.name, dtc.name, '') AS category_name,
+        coalesce(tc.name, dtc.name, '') AS column_name,
         coalesce(l.code, dl.code, ?) AS current_language_code
       FROM ${quoteIdentifier(tableName)} e
       LEFT JOIN ${quoteIdentifier(translationTableName)} t ON t.entry_id = e.id AND t.language_id = ?
@@ -260,7 +260,7 @@ export function getContentEntryById(modelCode, id, {
         coalesce(t.seo_description, dt.seo_description) AS seo_description,
         coalesce(t.publish_status, dt.publish_status, 'published') AS translation_publish_status,
         ${getTranslationCreatedAtExpr('t', 'dt', 'e')} AS translation_created_at,
-        coalesce(tc.name, dtc.name, '') AS category_name,
+        coalesce(tc.name, dtc.name, '') AS column_name,
         coalesce(l.code, dl.code, ?) AS current_language_code
       FROM ${quoteIdentifier(tableName)} e
       LEFT JOIN ${quoteIdentifier(translationTableName)} t ON t.entry_id = e.id AND t.language_id = ?
@@ -682,7 +682,7 @@ function mapEntryRow(modelCode, row) {
     is_visible: toBooleanInt(row.is_visible, 1),
     is_featured_home: toBooleanInt(row.is_featured_home, 0),
     sort_order: toInteger(row.sort_order, 0),
-    category_name: row.category_name || undefined,
+    column_name: row.column_name || undefined,
     current_language_code: row.current_language_code,
     created_at: row.created_at,
     updated_at: row.updated_at

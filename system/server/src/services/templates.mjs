@@ -850,9 +850,9 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
     };
   }
 
-  if (effectiveMode === 'category-list') {
-    const managedRootColumn = getPreviewRootColumnByDriver('managed_category');
-    const category = getPreviewColumnNode({
+  if (effectiveMode === 'column-list') {
+    const managedRootColumn = getPreviewRootColumnByDriver('managed_column');
+    const columnNode = getPreviewColumnNode({
       rootColumn: managedRootColumn,
       fallbackName: '示例列表栏目'
     });
@@ -860,21 +860,21 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
     return {
       ...props,
       ...buildPreviewPageContext({
-        pageType: 'category-list',
-        title: category.name,
-        url: `/valve/${category.id}.html`,
+        pageType: 'column-list',
+        title: columnNode.name,
+        url: `/valve/${columnNode.id}.html`,
         section: { type: 'product', name: '产品', url: '/valve/' },
-        category,
+        column: columnNode,
         content: null
       }),
-      smallName: category.name,
+      smallName: columnNode.name,
       primaryMenuItems: buildPreviewPrimaryMenuItems('product'),
-      bigId: category.parent_id || category.id,
-      bigName: category.name,
-      productsSmallCatHtml: `<span class="abv">【<a href="/valve/${category.id}.html">${escapeHtml(category.name)}</a>】</span>`,
+      bigId: columnNode.parent_id || columnNode.id,
+      bigName: columnNode.name,
+      productsSmallCatHtml: `<span class="abv">【<a href="/valve/${columnNode.id}.html">${escapeHtml(columnNode.name)}</a>】</span>`,
       secondaryMenuItems: buildPreviewColumnMenuItems({
         rootColumn: managedRootColumn,
-        category,
+        column: columnNode,
         baseUrl: '/valve/'
       }),
       items: products.map((item) => ({
@@ -890,8 +890,8 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
 
   if (effectiveMode === 'content-detail') {
     const product = getPreviewProduct();
-    const managedRootColumn = getPreviewRootColumnByDriver('managed_category');
-    const category = getPreviewColumnNode({
+    const managedRootColumn = getPreviewRootColumnByDriver('managed_column');
+    const columnNode = getPreviewColumnNode({
       rootColumn: managedRootColumn,
       id: product.column_id,
       fallbackName: '示例列表栏目'
@@ -904,7 +904,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         title: product.name,
         url: productUrl,
         section: { type: 'product', name: '产品', url: '/valve/' },
-        category,
+        column: columnNode,
         content: { id: product.id, title: product.name, name: product.name, type: 'product', url: productUrl }
       }),
       title: product.name,
@@ -916,7 +916,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       bodyHtml: product.content_html || product.summary || '',
       secondaryMenuItems: buildPreviewColumnMenuItems({
         rootColumn: managedRootColumn,
-        category,
+        column: columnNode,
         baseUrl: '/valve/'
       })
     };
@@ -924,7 +924,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
 
   if (effectiveMode === 'section-list' || effectiveMode === 'knowledge-list') {
     const sectionConfig = buildPreviewArticleSectionConfig(effectiveMode, template);
-    const category = getPreviewColumnNode({
+    const columnNode = getPreviewColumnNode({
       rootColumnId: sectionConfig.rootId,
       fallbackName: '示例信息栏目'
     });
@@ -933,25 +933,25 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       ...props,
       ...buildPreviewPageContext({
         pageType: sectionConfig.pageType,
-        title: category.name,
-        url: `/${sectionConfig.sectionDir}/${category.id}.html`,
+        title: columnNode.name,
+        url: `/${sectionConfig.sectionDir}/${columnNode.id}.html`,
         section: { type: sectionConfig.sectionType, name: sectionConfig.sectionLabel, url: `/${sectionConfig.sectionDir}/` },
-        category,
+        column: columnNode,
         content: null
       }),
       section: sectionConfig.sectionType,
       primaryMenuItems: buildPreviewPrimaryMenuItems(sectionConfig.sectionType),
       sectionDir: sectionConfig.sectionDir,
       sectionLabel: sectionConfig.sectionLabel,
-      sectionCategoryHtml: `<a href="/${sectionConfig.sectionDir}/${category.id}.html">${escapeHtml(category.name)}</a>`,
+      sectionCategoryHtml: `<a href="/${sectionConfig.sectionDir}/${columnNode.id}.html">${escapeHtml(columnNode.name)}</a>`,
       secondaryMenuItems: buildPreviewColumnMenuItems({
         rootColumnId: sectionConfig.rootId,
         dirName: sectionConfig.sectionDir,
-        activeId: category.id,
+        activeId: columnNode.id,
         fallbackName: '示例分类'
       }),
-      categoryId: category.id,
-      title: category.name,
+      columnId: columnNode.id,
+      title: columnNode.name,
       items: articles.map((item) => ({
         id: item.id,
         title: item.title || '',
@@ -967,7 +967,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
   if (effectiveMode === 'section-detail' || effectiveMode === 'knowledge-detail') {
     const sectionConfig = buildPreviewArticleSectionConfig(effectiveMode, template);
     const article = getPreviewArticle();
-    const category = getPreviewColumnNode({
+    const columnNode = getPreviewColumnNode({
       rootColumnId: sectionConfig.rootId,
       id: article.column_id,
       fallbackName: '示例信息栏目'
@@ -979,7 +979,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         title: article.title,
         url: `/${sectionConfig.sectionDir}/detail/${article.id}.html`,
         section: { type: sectionConfig.sectionType, name: sectionConfig.sectionLabel, url: `/${sectionConfig.sectionDir}/` },
-        category,
+        column: columnNode,
         content: {
           id: article.id,
           title: article.title,
@@ -992,17 +992,17 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       primaryMenuItems: buildPreviewPrimaryMenuItems(sectionConfig.sectionType),
       sectionDir: sectionConfig.sectionDir,
       sectionLabel: sectionConfig.sectionLabel,
-      sectionCategoryHtml: `<a href="/${sectionConfig.sectionDir}/${category.id}.html">${escapeHtml(category.name)}</a>`,
+      sectionCategoryHtml: `<a href="/${sectionConfig.sectionDir}/${columnNode.id}.html">${escapeHtml(columnNode.name)}</a>`,
       secondaryMenuItems: buildPreviewColumnMenuItems({
         rootColumnId: sectionConfig.rootId,
         dirName: sectionConfig.sectionDir,
-        activeId: category.id,
+        activeId: columnNode.id,
         fallbackName: '示例分类'
       }),
       title: article.title,
       newsDescription: article.summary || '',
-      typeId: article.column_id || category.id,
-      catName: category.name,
+      columnId: article.column_id || columnNode.id,
+      columnName: columnNode.name,
       bodyHtml: article.content_html || article.summary || '',
       previousHtml: '<span class="Font_2e4690_a">没有上一篇</span>',
       nextHtml: '<span class="Font_2e4690_a">没有下一篇</span>'
@@ -1014,7 +1014,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       ? getPreviewRootColumnByDriver('single_page')
       : getPreviewRootColumnByDriver('page_tree');
     const pageUrlPrefix = template.type === 'single' ? '/example-page.html' : '/about/about-';
-    const category = getPreviewColumnNode({
+    const columnNode = getPreviewColumnNode({
       rootColumn: pageTreeRootColumn,
       fallbackName: '示例单页栏目',
       fallbackContentHtml: '单页栏目内容预览'
@@ -1023,22 +1023,22 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       ...props,
       ...buildPreviewPageContext({
         pageType: 'content',
-        title: category.name,
-        url: template.type === 'single' ? '/example-page.html' : `/about/about-${category.id}.html`,
+        title: columnNode.name,
+        url: template.type === 'single' ? '/example-page.html' : `/about/about-${columnNode.id}.html`,
         section: template.type === 'single'
           ? { type: 'content', name: '单页栏目', url: '/example-page.html' }
           : { type: 'corporation', name: '公司栏目', url: '/about/' },
-        category,
+        column: columnNode,
         content: null
       }),
       primaryMenuItems: buildPreviewPrimaryMenuItems(template.type === 'single' ? 'contact' : 'corporation'),
-      title: category.name,
-      contentHtml: category.content_html || '公司栏目内容预览',
+      title: columnNode.name,
+      contentHtml: columnNode.content_html || '公司栏目内容预览',
       secondaryMenuItems: template.type === 'single'
         ? []
         : buildPreviewColumnMenuItems({
             rootColumn: pageTreeRootColumn,
-            activeId: category.id,
+            activeId: columnNode.id,
             baseUrl: '/about/',
             detailPattern: '/about/about-{id}.html',
             fallbackName: '示例单页栏目'
@@ -1054,7 +1054,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         title: '联系我们',
         url: '/contact-us/',
         section: { type: 'content', name: '联系我们', url: '/contact-us/' },
-        category: null,
+        column: null,
         content: null
       }),
       primaryMenuItems: buildPreviewPrimaryMenuItems('contact'),
@@ -1071,7 +1071,7 @@ function inferPreviewMode(template) {
     return 'home';
   }
   if (template.code === 'list_product' || (template.type === 'list' && code.includes('product'))) {
-    return 'category-list';
+    return 'column-list';
   }
   if (template.code === 'list_article' || (template.type === 'list' && (code.includes('article') || code.includes('news') || code.includes('service')))) {
     return code.includes('service') ? 'knowledge-list' : 'section-list';
@@ -1097,7 +1097,7 @@ function inferPreviewMode(template) {
 function normalizePreviewMode(value) {
   const mode = String(value || 'auto').trim();
   const legacyToGenericMap = new Map([
-    ['product-list', 'category-list'],
+    ['product-list', 'column-list'],
     ['product-detail', 'content-detail'],
     ['article-list', 'section-list'],
     ['article-detail', 'section-detail'],
@@ -1121,23 +1121,23 @@ function ensurePreviewBaseHref(html) {
   return markup;
 }
 
-function buildPreviewPageContext({ pageType, title, url, section, category, content }) {
-  const normalizedCategory = category ? {
-    id: toInteger(category.id, 0),
+function buildPreviewPageContext({ pageType, title, url, section, column, content }) {
+  const normalizedColumn = column ? {
+    id: toInteger(column.id, 0),
     type: section?.type || '',
-    name: category.name || '',
-    url: category.url || url || '',
-    parentId: toInteger(category.parent_id, 0),
+    name: column.name || '',
+    url: column.url || url || '',
+    parentId: toInteger(column.parent_id, 0),
     parentName: '',
-    seoDescription: category.seo_description || ''
+    seoDescription: column.seo_description || ''
   } : null;
 
   return {
     currentPage: { type: pageType || '', title: title || '', url: url || '' },
     currentSection: section ? { type: section.type || '', name: section.name || '', url: section.url || '' } : null,
-    currentCategory: normalizedCategory ? [normalizedCategory] : [],
-    currentCategoryItem: normalizedCategory,
-    parentCategory: null,
+    currentColumn: normalizedColumn ? [normalizedColumn] : [],
+    currentColumnItem: normalizedColumn,
+    parentColumn: null,
     currentContent: content ? {
       id: toInteger(content.id, 0),
       type: content.type || '',
@@ -1340,10 +1340,10 @@ function buildPreviewColumnMenuItems(options = {}) {
   const rows = resolvedRootColumnId > 0
     ? listColumnNodesByRoot(resolvedRootColumnId).filter((item) => toInteger(item.parent_id, 0) === 0)
     : [];
-  const currentCategory = options.category || null;
+  const currentColumn = options.column || null;
   const fallbackItem = {
-    id: options.activeId || currentCategory?.id || 1,
-    name: options.fallbackName || currentCategory?.name || '示例栏目'
+    id: options.activeId || currentColumn?.id || 1,
+    name: options.fallbackName || currentColumn?.name || '示例栏目'
   };
   const items = rows.length > 0 ? rows : [fallbackItem];
   const baseUrl = String(options.baseUrl || '').trim();
@@ -1354,7 +1354,7 @@ function buildPreviewColumnMenuItems(options = {}) {
     url: detailPattern
       ? detailPattern.replace('{id}', String(toInteger(item.id, 0)))
       : `${baseUrl}${toInteger(item.id, 0)}.html`,
-    active: toInteger(item.id, 0) === toInteger(options.activeId, currentCategory?.id || 0)
+    active: toInteger(item.id, 0) === toInteger(options.activeId, currentColumn?.id || 0)
   }));
 }
 
@@ -1519,15 +1519,15 @@ function pickPreviewComponentContextProps(source) {
     'fragments',
     'currentPage',
     'currentSection',
-    'currentCategory',
-    'currentCategoryItem',
-    'parentCategory',
+    'currentColumn',
+    'currentColumnItem',
+    'parentColumn',
     'currentContent',
     'currentProduct',
     'currentArticle',
-    'currentCategoryDescription',
-    'currentCategoryPageData',
-    'currentCategoryHeroImage',
+    'currentColumnDescription',
+    'currentColumnPageData',
+    'currentColumnHeroImage',
     'currentProductPageData',
     'sectionNavItems',
     'seoMeta',
@@ -1790,12 +1790,12 @@ function buildTemplateValidationProps(template) {
     },
     currentPage: { type: template.type || '', title: template.name || '', url: '/' },
     currentSection: { type: '', name: '', url: '' },
-    currentCategory: [
+    currentColumn: [
       { id: 1, type: 'demo', name: '父级分类', url: '/parent.html', parentId: 0, parentName: '', seoDescription: '' },
       { id: 2, type: 'demo', name: '当前分类', url: '/current.html', parentId: 1, parentName: '父级分类', seoDescription: '' }
     ],
-    currentCategoryItem: { id: 2, type: 'demo', name: '当前分类', url: '/current.html', parentId: 1, parentName: '父级分类', seoDescription: '' },
-    parentCategory: { id: 1, type: 'demo', name: '父级分类', url: '/parent.html', parentId: 0, parentName: '', seoDescription: '' },
+    currentColumnItem: { id: 2, type: 'demo', name: '当前分类', url: '/current.html', parentId: 1, parentName: '父级分类', seoDescription: '' },
+    parentColumn: { id: 1, type: 'demo', name: '父级分类', url: '/parent.html', parentId: 0, parentName: '', seoDescription: '' },
     currentContent: { id: 1, type: 'demo', title: '示例内容', name: '示例内容', url: '/detail.html' },
     siteColumns: buildPreviewSiteColumns(),
     component: () => null,
@@ -1838,10 +1838,9 @@ function buildTemplateValidationProps(template) {
     section: 'news',
     sectionDir: 'news',
     sectionLabel: '公司新闻',
-    categoryId: 1,
+    columnId: 1,
     newsDescription: '示例描述',
-    typeId: 1,
-    catName: '示例分类',
+    columnName: '示例分类',
     address: '上海',
     openings: '1',
     requirementsHtml: '',
@@ -1884,7 +1883,7 @@ function normalizeBindingInput(input) {
 function normalizeBindingTarget(themeId, targetType, targetId, templateType) {
   const normalizedThemeId = resolveThemeId(themeId);
   const normalizedTargetType = String(targetType || '').trim().toLowerCase();
-  if (!['site', 'product_category', 'news_category', 'corporation_category', 'content_type', 'column'].includes(normalizedTargetType)) {
+  if (!['site', 'content_type', 'column'].includes(normalizedTargetType)) {
     throw new Error('invalid binding target type');
   }
   if (!['home', 'list', 'content', 'single'].includes(templateType)) {

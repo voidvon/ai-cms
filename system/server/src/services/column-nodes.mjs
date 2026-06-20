@@ -69,7 +69,7 @@ function getRootColumnNodeContext(rootColumnId, languageCode = null) {
   }
 
   const renderDriver = String(rootColumn?.column_semantics?.render_driver || '').trim();
-  if (!['managed_category', 'section', 'page_tree'].includes(renderDriver)) {
+  if (!['managed_column', 'section', 'page_tree'].includes(renderDriver)) {
     throw new Error('当前栏目不支持分类管理');
   }
 
@@ -149,16 +149,16 @@ function resolveColumnNodeByIdInRoot(rootColumnId, id, languageCode = null) {
   )) || null;
 }
 
-function resolveParentColumnId(model, parentCategoryId, languageCode = null) {
-  const safeParentId = toInteger(parentCategoryId, 0);
+function resolveParentColumnId(model, parentColumnNodeId, languageCode = null) {
+  const safeParentId = toInteger(parentColumnNodeId, 0);
   if (safeParentId <= 0) {
     return toInteger(getModelRootColumn(model, { languageCode })?.id, 0) || null;
   }
   return toInteger(resolveColumnNodeById(model, safeParentId, languageCode)?.id, 0) || null;
 }
 
-function resolveParentColumnIdInRoot(rootContext, parentCategoryId, currentColumnId = 0, languageCode = null) {
-  const safeParentId = toInteger(parentCategoryId, 0);
+function resolveParentColumnIdInRoot(rootContext, parentColumnNodeId, currentColumnId = 0, languageCode = null) {
+  const safeParentId = toInteger(parentColumnNodeId, 0);
   const safeCurrentColumnId = toInteger(currentColumnId, 0);
 
   if (safeCurrentColumnId > 0 && safeCurrentColumnId === rootContext.rootColumnId) {

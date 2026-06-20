@@ -110,9 +110,9 @@ const jobMeta = meta['5'] || {}
 | `currentPage.title` | string | 当前页面标题 |
 | `currentPage.url` | string | 当前页面 URL |
 | `currentSection` | object \| null | 当前站点板块，如产品、新闻、招聘 |
-| `currentCategory` | array | 当前分类路径数组，从父级到当前分类 |
-| `currentCategoryItem` | object \| null | 当前分类路径的最后一级 |
-| `parentCategory` | object \| null | 当前分类父级 |
+| `currentColumn` | array | 当前栏目路径数组，从父级到当前栏目 |
+| `currentColumnItem` | object \| null | 当前栏目路径的最后一级 |
+| `parentColumn` | object \| null | 当前栏目父级 |
 | `currentContent` | object \| null | 当前内容对象的摘要信息 |
 | `breadcrumb` | object | 面包屑上下文 |
 
@@ -392,15 +392,15 @@ export default function Breadcrumb({ breadcrumb, Raw }) {
 }
 ```
 
-如需完整分类路径，可读取 `currentCategory`：
+如需完整栏目路径，可读取 `currentColumn`：
 
 ```tsx
-export default function CategoryPath({ currentCategory = [] }) {
+export default function ColumnPath({ currentColumn = [] }) {
   return (
     <ol>
-      {currentCategory.map((category) => (
-        <li key={category.id}>
-          {category.url ? <a href={category.url}>{category.name}</a> : category.name}
+      {currentColumn.map((column) => (
+        <li key={column.id}>
+          {column.url ? <a href={column.url}>{column.name}</a> : column.name}
         </li>
       ))}
     </ol>
@@ -427,4 +427,3 @@ TSX 模板推荐直接使用 `items.map(...)`，逻辑更清晰：
   <Raw key={item.id} html={component('article_list_item', { item })} />
 ))}
 ```
-

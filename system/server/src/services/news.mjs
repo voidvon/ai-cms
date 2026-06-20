@@ -36,7 +36,6 @@ export function listNews({ featured = false, limit = 20, languageCode = null } =
 export function listNewsAdmin({
   page = 1,
   limit = 15,
-  categoryId = null,
   columnId = null,
   includeDescendants = false,
   languageCode = null
@@ -45,7 +44,7 @@ export function listNewsAdmin({
   const result = listContentEntriesPaged('news', {
     page,
     limit,
-    columnId: columnId ?? categoryId,
+    columnId,
     includeDescendants,
     visibleOnly: false,
     languageCode

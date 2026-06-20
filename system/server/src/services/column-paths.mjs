@@ -221,7 +221,7 @@ function ensureTrailingSlash(value) {
   return normalized.endsWith('/') ? normalized : `${normalized}/`;
 }
 
-function resolveManagedColumnRoot(columnNode, categoryMap = null) {
+function resolveManagedColumnRoot(columnNode, columnMap = null) {
   if (!columnNode) {
     return null;
   }
@@ -232,11 +232,11 @@ function resolveManagedColumnRoot(columnNode, categoryMap = null) {
     return columnNode;
   }
 
-  if (categoryMap && rootColumnId > 0) {
-    return categoryMap.get(rootColumnId) || null;
+  if (columnMap && rootColumnId > 0) {
+    return columnMap.get(rootColumnId) || null;
   }
 
-  if (!categoryMap) {
+  if (!columnMap) {
     return null;
   }
 
@@ -252,7 +252,7 @@ function resolveManagedColumnRoot(columnNode, categoryMap = null) {
     if (parentId <= 0) {
       return current;
     }
-    current = categoryMap.get(parentId) || null;
+    current = columnMap.get(parentId) || null;
   }
 
   return null;

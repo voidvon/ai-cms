@@ -32,7 +32,7 @@ const TemplateCodeEditor = lazy(() => import('@/components/TemplateCodeEditor').
 const previewModes = [
   { value: 'auto', label: '自动场景' },
   { value: 'home', label: '首页' },
-  { value: 'category-list', label: '列表栏目' },
+  { value: 'column-list', label: '列表栏目' },
   { value: 'content-detail', label: '内容详情' },
   { value: 'section-list', label: '信息列表' },
   { value: 'section-detail', label: '信息详情' },

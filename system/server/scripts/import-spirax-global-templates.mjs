@@ -147,9 +147,9 @@ function buildTemplates() {
   const productUiCss = readSourceCss([
     'src/components/shared/ui/ui.css',
   ]);
-  const productPagesSourceCss = readSourceCss([
+  const productPagesSourceCss = normalizeProductColumnCss(readSourceCss([
     'src/components/templates/ProductPages/ProductPages.css',
-  ]);
+  ]));
   const productPageCssPartitions = partitionCssByTargets(productPagesSourceCss, {
     productTopPanel: [
       'product-top-panel__',
@@ -166,7 +166,7 @@ function buildTemplates() {
       '.tab__header',
     ],
     productSideNav: [
-      'product-category-sidebar',
+      'product-column-sidebar',
     ],
     productOverview: [
       'product-overview__',
@@ -367,7 +367,7 @@ function buildTemplates() {
   ]);
   const productTemplateCss = joinCssSources([
     productUiCss,
-    productPageCssPartitions.localCss,
+    normalizeProductColumnCss(productPageCssPartitions.localCss),
   ]);
   const newsSourceCss = readSourceCss([
     'src/components/templates/NewsPages/NewsPages.base.css',
@@ -494,7 +494,7 @@ function buildTemplates() {
       sort_order: 8,
       content: buildProductTopPanelComponent(),
       tsx_source: buildProductTopPanelComponent(),
-      css_source: productPageCssPartitions.productTopPanel,
+      css_source: normalizeProductColumnCss(productPageCssPartitions.productTopPanel),
     },
     {
       code: 'spirax_copy_section',
@@ -519,7 +519,7 @@ function buildTemplates() {
       sort_order: 11,
       content: buildProductDownloadGroupsComponent(),
       tsx_source: buildProductDownloadGroupsComponent(),
-      css_source: productPageCssPartitions.productDownloadGroups,
+      css_source: normalizeProductColumnCss(productPageCssPartitions.productDownloadGroups),
     },
     {
       code: 'spirax_feature_cards',
@@ -535,7 +535,7 @@ function buildTemplates() {
       sort_order: 13,
       content: buildProductSideNavComponent(),
       tsx_source: buildProductSideNavComponent(),
-      css_source: productPageCssPartitions.productSideNav,
+      css_source: normalizeProductColumnCss(productPageCssPartitions.productSideNav),
     },
     {
       code: 'spirax_product_overview',
@@ -544,7 +544,7 @@ function buildTemplates() {
       sort_order: 13,
       content: buildProductOverviewComponent(),
       tsx_source: buildProductOverviewComponent(),
-      css_source: productPageCssPartitions.productOverview,
+      css_source: normalizeProductColumnCss(productPageCssPartitions.productOverview),
     },
     {
       code: 'spirax_benefit_blocks',
@@ -569,7 +569,7 @@ function buildTemplates() {
       sort_order: 16,
       content: buildPromoBannerComponent(),
       tsx_source: buildPromoBannerComponent(),
-      css_source: productPageCssPartitions.promoBanner,
+      css_source: normalizeProductColumnCss(productPageCssPartitions.promoBanner),
     },
     {
       code: 'spirax_home',
@@ -964,6 +964,12 @@ function joinCssSources(parts) {
     .join('\n\n');
 }
 
+function normalizeProductColumnCss(cssText) {
+  return String(cssText || '')
+    .replace(/product-[^-]+-layout/g, 'product-column-layout')
+    .replace(/product-[^-]+-sidebar/g, 'product-column-sidebar');
+}
+
 function extractTemplateSourceParts(content) {
   const source = String(content ?? '');
   const match = source.match(/export const (?:scss|css)\s*=\s*String\.raw`([\s\S]*?)`;\s*/);
@@ -1151,7 +1157,7 @@ function renderFooterLinks(columns = []) {
   });
 }
 
-export default function Template({ site, siteColumns = [], currentPage, currentContent, currentCategory, currentSection, children, slots = {}, component }) {
+export default function Template({ site, siteColumns = [], currentPage, currentContent, currentColumn, currentSection, children, slots = {}, component }) {
   const pageTitle = currentPage?.title ? \`\${currentPage.title} - \${site?.web_name || ''}\` : (site?.web_name || '');
   const isHomePage = currentPage?.type === 'home' || currentPage?.url === '/' || currentPage?.url === '/index.html';
   const utilityItems = [
@@ -1164,7 +1170,7 @@ export default function Template({ site, siteColumns = [], currentPage, currentC
     ? component('spirax_breadcrumbs', {
         ariaLabel: '面包屑导航',
         currentContent,
-        currentCategory,
+        currentColumn,
         currentSection,
         homeHref: '/',
         includeItemsWrapper: false,
@@ -1372,23 +1378,23 @@ import React from 'react';
 export const scss = String.raw\`${cssText.replace(/`/g, '\\`')}\`;
 
 export default function Template(props) {
-  const pageData = props.currentCategoryPageData || props.pageData || {};
+  const pageData = props.currentColumnPageData || props.pageData || {};
   const normalizedPageKind = String(pageData?.pageKind || pageData?.kind || '').trim().toLowerCase();
   const productRoot = normalizedPageKind === 'root';
-  const categoryLandingPage = normalizedPageKind === 'category';
+  const columnLandingPage = normalizedPageKind === 'column';
   const pageCards = Array.isArray(pageData?.cards) ? pageData.cards.filter(Boolean) : [];
   const pageModels = Array.isArray(pageData?.models) ? pageData.models.filter(Boolean) : [];
   const productItems = Array.isArray(props.productCardItems) ? props.productCardItems.filter(Boolean) : [];
   const listItems = Array.isArray(props.items) ? props.items.filter(Boolean) : [];
-  const categoryMainSource = pageCards.length > 0 ? pageCards : (productItems.length > 0 ? productItems : listItems);
+  const columnMainSource = pageCards.length > 0 ? pageCards : (productItems.length > 0 ? productItems : listItems);
   const hasTopPanel = Boolean(pageData?.topPanel && typeof pageData.topPanel === 'object');
-  const terminalCategoryPage = hasTopPanel || pageModels.length > 0;
+  const terminalColumnPage = hasTopPanel || pageModels.length > 0;
   const siblingItems = Array.isArray(props.secondaryMenuItems) ? props.secondaryMenuItems.filter(Boolean) : [];
-  const currentCategory = props.currentCategoryItem || {};
-  const parentCategory = props.parentCategory || null;
-  const currentRouteUrl = currentCategory?.url || '';
-  const hasParentCategory = Boolean(parentCategory?.url || parentCategory?.name);
-  const normalizedCategoryNavItems = siblingItems.map((item) => ({
+  const currentColumn = props.currentColumn || {};
+  const parentColumn = props.parentColumn || null;
+  const currentRouteUrl = currentColumn?.url || '';
+  const hasParentColumn = Boolean(parentColumn?.url || parentColumn?.name);
+  const normalizedColumnNavItems = siblingItems.map((item) => ({
     title: item?.title || item?.label || '',
     description: item?.description || item?.summary || '',
     image: item?.image || '',
@@ -1397,17 +1403,17 @@ export default function Template(props) {
     active: Boolean(item?.active) || (item?.url || item?.href || '') === currentRouteUrl,
     ctaLabel: item?.ctaLabel || ''
   }));
-  const categorySidebar = normalizedCategoryNavItems.length > 0 ? props.component('spirax_product_side_nav', {
-    secondaryMenuItems: normalizedCategoryNavItems,
+  const columnSidebar = normalizedColumnNavItems.length > 0 ? props.component('spirax_product_side_nav', {
+    secondaryMenuItems: normalizedColumnNavItems,
     secondaryMenuTitle: props.secondaryMenuTitle,
     secondaryMenuParentUrl: props.secondaryMenuParentUrl
   }) : null;
-  const modelsSidebar = normalizedCategoryNavItems.length > 0 ? props.component('spirax_product_side_nav', {
-    secondaryMenuItems: normalizedCategoryNavItems,
-    secondaryMenuTitle: hasParentCategory ? (parentCategory?.name || props.secondaryMenuTitle) : props.secondaryMenuTitle,
-    secondaryMenuParentUrl: hasParentCategory ? (parentCategory?.url || '') : props.secondaryMenuParentUrl
+  const modelsSidebar = normalizedColumnNavItems.length > 0 ? props.component('spirax_product_side_nav', {
+    secondaryMenuItems: normalizedColumnNavItems,
+    secondaryMenuTitle: hasParentColumn ? (parentColumn?.name || props.secondaryMenuTitle) : props.secondaryMenuTitle,
+    secondaryMenuParentUrl: hasParentColumn ? (parentColumn?.url || '') : props.secondaryMenuParentUrl
   }) : null;
-  const showLegacyPager = !categoryLandingPage && !terminalCategoryPage && Boolean(props.pagerHtml);
+  const showLegacyPager = !columnLandingPage && !terminalColumnPage && Boolean(props.pagerHtml);
   const introSection = props.component('spirax_copy_section', {
     paragraphs: Array.isArray(pageData?.intro) ? pageData.intro : [],
     sectionClassName: 'intro-text-section bg--white',
@@ -1422,14 +1428,14 @@ export default function Template(props) {
   const overviewSection = props.component('spirax_product_overview', {
     title: '概览',
     paragraphs: Array.isArray(pageData?.overview) ? pageData.overview : [],
-    componentId: \`product-overview-\${props.bigId || props.currentCategoryItem?.id || 'category'}\`,
+    componentId: \`product-overview-\${props.bigId || props.currentColumn?.id || 'column'}\`,
     showAllLabel: '展开全部',
     collapseLabel: '收起'
   });
   const masthead = props.component('spirax_short_masthead', {
     title: pageData?.title || props.smallName || props.title,
-    summary: pageData?.summary || props.currentCategoryDescription || props.currentCategoryItem?.seoDescription || '',
-    image: pageData?.mastheadImage || props.currentCategoryHeroImage || '',
+    summary: pageData?.summary || props.currentColumnDescription || props.currentColumn?.seoDescription || '',
+    image: pageData?.mastheadImage || props.currentColumnHeroImage || '',
     imageAlt: pageData?.title || props.smallName || props.title || '',
     className: 'short-masthead'
   });
@@ -1443,17 +1449,17 @@ export default function Template(props) {
   const topPanel = hasTopPanel ? props.component('spirax_product_top_panel', {
     product: {
       title: pageData?.title || props.smallName || props.title || '',
-      summary: pageData?.summary || props.currentCategoryDescription || '',
-      primaryImage: pageData?.mastheadImage || props.currentCategoryHeroImage || '',
+      summary: pageData?.summary || props.currentColumnDescription || '',
+      primaryImage: pageData?.mastheadImage || props.currentColumnHeroImage || '',
       images: Array.isArray(pageData?.topPanel?.images) ? pageData.topPanel.images : []
     },
     title: pageData?.title || props.smallName || props.title || '',
-    image: pageData?.mastheadImage || props.currentCategoryHeroImage || '',
+    image: pageData?.mastheadImage || props.currentColumnHeroImage || '',
     topPanel: pageData?.topPanel || null,
     quickFactsTitle: 'Quick facts'
   }) : null;
   const cards = props.component('product_card_grid', {
-    cards: categoryMainSource.map((item) => ({
+    cards: columnMainSource.map((item) => ({
       title: item?.name || item?.title || '',
       description: item?.summary || item?.description || '',
       image: item?.image || '',
@@ -1489,9 +1495,9 @@ export default function Template(props) {
     sections: Array.isArray(pageData?.supplementalSections) ? pageData.supplementalSections : []
   });
   const sectionNavItems = Array.isArray(props.sectionNavItems) ? props.sectionNavItems.filter(Boolean) : [];
-  const bodySection = !categoryLandingPage && Boolean(props.bodyHtml)
+  const bodySection = !columnLandingPage && Boolean(props.bodyHtml)
     ? (
-      terminalCategoryPage ? (
+      terminalColumnPage ? (
         <section className="bg--white product-detail__body-section">
           <div className="wrapper wrapper--pad-l">
             <div className="product-detail__body-shell">
@@ -1536,12 +1542,12 @@ export default function Template(props) {
       {overviewSection}
       {bodySection}
 
-      {categoryMainSource.length > 0 ? (
-        <section className={(productRoot || categoryMainSource.some((item) => item?.image)) ? 'bg--light-blue' : 'bg--white'}>
+      {columnMainSource.length > 0 ? (
+        <section className={(productRoot || columnMainSource.some((item) => item?.image)) ? 'bg--light-blue' : 'bg--white'}>
           <div className="wrapper wrapper--pad-l">
-            <div className="product-category-layout__shell">
-              {categorySidebar}
-              <div className="product-category-layout__main">
+            <div className="product-column-layout__shell">
+              {columnSidebar}
+              <div className="product-column-layout__main">
                 {cards}
                 {showLegacyPager ? <div className="legacy-pager" dangerouslySetInnerHTML={{ __html: props.pagerHtml }} /> : null}
               </div>
@@ -1553,9 +1559,9 @@ export default function Template(props) {
       {pageModels.length > 0 ? (
         <section className="bg--light-blue">
           <div className="wrapper wrapper--pad-l">
-            <div className="product-category-layout__shell">
+            <div className="product-column-layout__shell">
               {modelsSidebar}
-              <div className="product-category-layout__main">
+              <div className="product-column-layout__main">
                 {modelsSection}
               </div>
             </div>
@@ -1610,20 +1616,20 @@ export default function Component(props) {
   const eyebrowLink = props.secondaryMenuParentUrl || '';
 
   return (
-    <aside className="product-category-sidebar">
-      <div className="product-category-sidebar__inner">
-        <p className="product-category-sidebar__eyebrow">
-          {eyebrowLink ? <a className="product-category-sidebar__eyebrow-link" href={eyebrowLink}>{eyebrow}</a> : eyebrow}
+    <aside className="product-column-sidebar">
+      <div className="product-column-sidebar__inner">
+        <p className="product-column-sidebar__eyebrow">
+          {eyebrowLink ? <a className="product-column-sidebar__eyebrow-link" href={eyebrowLink}>{eyebrow}</a> : eyebrow}
         </p>
-        <nav className="product-category-sidebar__nav">
-          <ul className="product-category-sidebar__list">
+        <nav className="product-column-sidebar__nav">
+          <ul className="product-column-sidebar__list">
             {items.map((item, index) => (
-              <li className="product-category-sidebar__item" key={item?.url || item?.href || item?.title || item?.label || index}>
+              <li className="product-column-sidebar__item" key={item?.url || item?.href || item?.title || item?.label || index}>
                 <a
                   aria-current={item?.active ? 'page' : undefined}
                   className={[
-                    'product-category-sidebar__link',
-                    item?.image ? 'product-category-sidebar__link--with-image' : '',
+                    'product-column-sidebar__link',
+                    item?.image ? 'product-column-sidebar__link--with-image' : '',
                     item?.active ? 'is-active' : ''
                   ].filter(Boolean).join(' ')}
                   href={item?.url || item?.href || '#'}
@@ -1631,17 +1637,17 @@ export default function Component(props) {
                   {item?.image ? (
                     <img
                       alt={item?.imageAlt || item?.title || item?.label || ''}
-                      className="product-category-sidebar__image"
+                      className="product-column-sidebar__image"
                       height="72"
                       loading="lazy"
                       src={item.image}
                       width="72"
                     />
                   ) : null}
-                  <span className="product-category-sidebar__content">
-                    <span className="product-category-sidebar__title">{item?.title || item?.label || ''}</span>
-                    {item?.description ? <span className="product-category-sidebar__desc">{item.description}</span> : null}
-                    {item?.ctaLabel ? <span className="product-category-sidebar__cta">{item.ctaLabel}</span> : null}
+                  <span className="product-column-sidebar__content">
+                    <span className="product-column-sidebar__title">{item?.title || item?.label || ''}</span>
+                    {item?.description ? <span className="product-column-sidebar__desc">{item.description}</span> : null}
+                    {item?.ctaLabel ? <span className="product-column-sidebar__cta">{item.ctaLabel}</span> : null}
                   </span>
                 </a>
               </li>
@@ -2318,7 +2324,7 @@ export default function Component(props) {
     includeItemsWrapper = true,
     items = [],
     currentContent = null,
-    currentCategory = [],
+    currentColumn = [],
     currentSection = null,
     tag = 'div'
   } = props || {};
@@ -2336,8 +2342,8 @@ export default function Component(props) {
   const sectionName = String(currentSection?.name || '').trim();
   const sectionUrl = String(currentSection?.url || '').trim();
   const sectionType = String(currentSection?.type || '').trim().toLowerCase();
-  const categoryItems = Array.isArray(currentCategory)
-    ? currentCategory
+  const columnItems = Array.isArray(currentColumn)
+    ? currentColumn
         .filter((item) => item && String(item?.name || item?.label || '').trim())
         .map((item) => ({
           href: String(item?.url || item?.href || '').trim(),
@@ -2348,12 +2354,12 @@ export default function Component(props) {
 
   const shouldIncludeSection = Boolean(sectionName)
     && (
-      categoryItems.length === 0
+      columnItems.length === 0
       || !['content', 'page-tree'].includes(sectionType)
     );
   const derivedItems = [
     ...(shouldIncludeSection ? [{ label: sectionName, href: sectionUrl }] : []),
-    ...categoryItems,
+    ...columnItems,
     ...(contentTitle ? [{ label: contentTitle, href: '', current: true }] : [])
   ];
 
@@ -3378,7 +3384,7 @@ export default function Template(props) {
   const article = props.currentArticle || props.currentContent || {};
   const relatedItems = Array.isArray(props.relatedArticleItems) ? props.relatedArticleItems : [];
   const masthead = props.component('spirax_short_masthead', {
-    eyebrow: props.currentCategoryItem?.name || 'News',
+    eyebrow: props.currentColumn?.name || 'News',
     title: article.title || props.title,
     className: 'short-masthead'
   });
@@ -3499,7 +3505,7 @@ function buildContentPageTemplate() {
 import React from 'react';
 
 export default function Template(props) {
-  const pageData = props.currentCategoryPageData || props.pageData || {};
+  const pageData = props.currentColumnPageData || props.pageData || {};
   const pageKind = String(pageData?.pageKind || '').trim().toLowerCase();
   const cards = Array.isArray(pageData.cards) ? pageData.cards : [];
   const items = Array.isArray(pageData.items) ? pageData.items : [];
@@ -3520,7 +3526,7 @@ export default function Template(props) {
   const introTitle = pageData?.introBlock?.title || pageData?.hero?.title || '';
   const introAction = pageData?.introBlock?.action && typeof pageData.introBlock.action === 'object' ? pageData.introBlock.action : null;
   const heroTitle = pageData?.hero?.title || props.title;
-  const heroImage = pageData?.hero?.image || pageData.heroImage || pageData.mastheadImage || props.currentCategoryHeroImage || '';
+  const heroImage = pageData?.hero?.image || pageData.heroImage || pageData.mastheadImage || props.currentColumnHeroImage || '';
   const summary = pageData?.hero?.summary || pageData.summary || props.newsDescription || '';
   const featureImage = pageData?.featureImage || '';
   const promo = pageData?.promo && typeof pageData.promo === 'object' ? pageData.promo : null;

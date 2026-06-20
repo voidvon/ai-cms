@@ -46,7 +46,7 @@ export interface Product {
   is_featured_home: number;
   is_visible: number;
   sort_order: number;
-  category_name?: string;
+  column_name?: string;
   current_language_code?: string;
   translation_statuses?: ProductTranslationStatus[];
   translations?: Record<string, ProductTranslation>;
@@ -86,7 +86,7 @@ export interface News {
   is_featured_home?: number;
   sort_order: number;
   created_at: string;
-  category_name?: string;
+  column_name?: string;
   current_language_code?: string;
   translation_statuses?: NewsTranslationStatus[];
   translations?: Record<string, NewsTranslation>;
@@ -162,7 +162,7 @@ export interface Template {
 export interface TemplateBinding {
   id: number;
   theme_id?: number;
-  target_type: 'site' | 'product_category' | 'news_category' | 'corporation_category' | 'content_type' | 'column';
+  target_type: 'site' | 'content_type' | 'column';
   target_id?: number | null;
   template_type: 'home' | 'list' | 'content' | 'single';
   template_id: number;

@@ -17,7 +17,7 @@ function resolveRootColumnId(request) {
 }
 
 export default async function columnNodesRoutes(app) {
-  app.get('/column-categories', async (request, reply) => {
+  app.get('/column-nodes', async (request, reply) => {
     try {
       const rootColumnId = resolveRootColumnId(request);
       const { language, lang } = request.query;
@@ -28,7 +28,7 @@ export default async function columnNodesRoutes(app) {
     }
   });
 
-  app.get('/column-categories/options', async (request, reply) => {
+  app.get('/column-nodes/options', async (request, reply) => {
     try {
       const rootColumnId = resolveRootColumnId(request);
       const { language, lang } = request.query;
@@ -39,7 +39,7 @@ export default async function columnNodesRoutes(app) {
     }
   });
 
-  app.get('/column-categories/admin', {
+  app.get('/column-nodes/admin', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
     try {
@@ -66,7 +66,7 @@ export default async function columnNodesRoutes(app) {
     }
   });
 
-  app.get('/column-categories/:id', {
+  app.get('/column-nodes/:id', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
     try {
@@ -88,7 +88,7 @@ export default async function columnNodesRoutes(app) {
     }
   });
 
-  app.post('/column-categories', {
+  app.post('/column-nodes', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
     try {
@@ -101,7 +101,7 @@ export default async function columnNodesRoutes(app) {
     }
   });
 
-  app.put('/column-categories/:id', {
+  app.put('/column-nodes/:id', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
     try {
@@ -118,7 +118,7 @@ export default async function columnNodesRoutes(app) {
     }
   });
 
-  app.delete('/column-categories/:id', {
+  app.delete('/column-nodes/:id', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
     try {

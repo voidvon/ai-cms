@@ -36,7 +36,6 @@ export function listProducts({ featured = false, visibleOnly = true, limit = 20,
 export function listProductsAdmin({
   page = 1,
   limit = 50,
-  categoryId = null,
   columnId = null,
   includeDescendants = false,
   languageCode = null
@@ -45,7 +44,7 @@ export function listProductsAdmin({
   return listContentEntriesPaged('product', {
     page,
     limit,
-    columnId: columnId ?? categoryId,
+    columnId,
     includeDescendants,
     visibleOnly: false,
     languageCode

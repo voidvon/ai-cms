@@ -33,7 +33,7 @@ const FORM_META_BY_DRIVER: Record<string, {
   supportsListTemplate: boolean
   supportsSeo: boolean
 }> = {
-  managed_category: {
+  managed_column: {
     title: '栏目分类',
     description: '填写列表型栏目分类信息',
     dirPlaceholder: 'steam-traps',

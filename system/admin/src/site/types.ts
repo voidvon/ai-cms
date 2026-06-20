@@ -129,7 +129,7 @@ export type ArticleDetailPageProps = {
   article: NewsSummary & {
     content_html?: string | null
   }
-  category?: ColumnSummary | null
+  column?: ColumnSummary | null
   previous?: NewsSummary | null
   next?: NewsSummary | null
 }
@@ -206,7 +206,7 @@ export type LegacyProductDetailPageProps = LegacyPageBaseProps & {
 
 export type LegacyArticleListPageProps = LegacyPageBaseProps & {
   section: 'news' | 'service'
-  categoryId: number
+  columnId: number
   title: string
   bodyHtml: string
 }
@@ -215,8 +215,8 @@ export type LegacyArticleDetailPageProps = LegacyPageBaseProps & {
   section: 'news' | 'service'
   title: string
   newsDescription: string
-  typeId: number
-  catName: string
+  columnId: number
+  columnName: string
   bodyHtml: string
   previousHtml: string
   nextHtml: string

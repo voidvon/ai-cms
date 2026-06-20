@@ -1225,7 +1225,7 @@ function ProductTable({
                 </div>
               </TableCell>
               <TableCell>{product.code || '-'}</TableCell>
-              <TableCell>{product.category_name || product.column_id || '-'}</TableCell>
+              <TableCell>{product.column_name || product.column_id || '-'}</TableCell>
               <TableCell>
                 <div className="flex flex-wrap gap-1">
                   {(product.translation_statuses || []).length === 0 ? (
@@ -1338,7 +1338,7 @@ function NewsTable({
             <TableRow key={item.id}>
               <TableCell>{item.id}</TableCell>
               <TableCell className="font-medium">{item.title}</TableCell>
-              <TableCell>{item.category_name || item.column_id || '-'}</TableCell>
+              <TableCell>{item.column_name || item.column_id || '-'}</TableCell>
               <TableCell>
                 <div className="flex flex-wrap gap-1">
                   {(item.translation_statuses || []).length === 0 ? (
@@ -1639,7 +1639,7 @@ function isEditableManualColumn(column: Column) {
 function getColumnNodeTarget(column: Column): ColumnNodeTarget {
   const renderDriver = String(column.column_semantics?.render_driver || '')
   const rootColumnId = Number(column.column_semantics?.root_column_id || column.id || 0)
-  if (!rootColumnId || !['managed_category', 'section', 'page_tree'].includes(renderDriver)) {
+  if (!rootColumnId || !['managed_column', 'section', 'page_tree'].includes(renderDriver)) {
     return null
   }
   return {

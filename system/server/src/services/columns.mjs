@@ -786,7 +786,7 @@ function inferColumnSemantics(row, rowById, semanticsById, modelCode) {
     const resolvedPath = String(resolveColumnResolvedRoutePath(row, null, rowById) || '').trim();
     const hasDetailRule = Boolean(toNullableString(row?.detail_rule));
     renderDriver = resolvedPath.startsWith('/products/')
-      ? 'managed_category'
+      ? 'managed_column'
       : hasDetailRule
         ? 'section'
         : 'collection';
