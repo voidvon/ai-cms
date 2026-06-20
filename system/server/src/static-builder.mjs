@@ -4,7 +4,7 @@ import { CONTENT_ROOT, PUBLIC_ROOT } from './config.mjs';
 import { getDb, queryAll } from './db.mjs';
 import { createCmsTemplateRuntime } from './cms-template-runtime.mjs';
 import { listColumns } from './services/columns.mjs';
-import { listColumnCategories, listColumnCategoriesByRoot } from './services/column-categories.mjs';
+import { listColumnNodes, listColumnNodesByRoot } from './services/column-nodes.mjs';
 import {
   buildColumnTreeIndex,
   getDescendantColumnIds,
@@ -22,8 +22,8 @@ import {
 } from './services/public-sections.mjs';
 import {
   buildRelativeCategoryPathFromRoutePath,
-  buildCategorySlugPath,
-  buildProductCategoryPublicUrl,
+  buildColumnSlugPath,
+  buildProductColumnPublicUrl,
   resolveColumnRouteOutputPath,
   buildContentDetailUrlFromColumn,
   buildContentDetailPathFromColumn
@@ -66,7 +66,7 @@ function setGlobalCategorySlugMap(categories) {
   // 为每个分类构建完整的目录路径
   globalCategorySlugMap = new Map(
     categories.map(cat => {
-      const slugPath = buildCategorySlugPath(cat, globalCategoryMap);
+      const slugPath = buildColumnSlugPath(cat, globalCategoryMap);
       return [normalizeInteger(cat.id, 0), slugPath.join('/')];
     })
   );
@@ -117,7 +117,7 @@ function getManagedCategoryRootOutputDir(rootColumn) {
 }
 
 function listNewsCategories({ languageCode = null } = {}) {
-  return listColumnCategories('news', { languageCode });
+  return listColumnNodes('news', { languageCode });
 }
 
 function getSectionTopLevelCategories(templateContext, section) {
@@ -673,7 +673,7 @@ export function buildManagedCategoryContentPages({ outputRoot = DEFAULT_OUTPUT_R
       renderGroup
     });
 
-    const categorySlugPath = category ? buildCategorySlugPath(category, categoryMap) : null;
+    const categorySlugPath = category ? buildColumnSlugPath(category, categoryMap) : null;
     const outputPath = buildContentDetailPathFromColumn(product, category, categorySlugPath);
 
     writeTextFile(outputRoot, outputPath, html, templateContext.site);
@@ -866,16 +866,16 @@ function getLegacyTemplateContext(languageCode = null) {
   const managedCategoryRoot = columns.find((item) => item?.column_semantics?.is_root && String(item?.column_semantics?.render_driver || '') === 'managed_category') || null;
   const pageTreeRoot = columns.find((item) => item?.column_semantics?.is_root && String(item?.column_semantics?.render_driver || '') === 'page_tree') || null;
   const rawProductCategories = managedCategoryRoot
-    ? listColumnCategoriesByRoot(managedCategoryRoot.id, { languageCode }).slice().sort(compareCategoryOrder)
-    : listColumnCategories('product', { languageCode }).slice().sort(compareCategoryOrder);
+    ? listColumnNodesByRoot(managedCategoryRoot.id, { languageCode }).slice().sort(compareCategoryOrder)
+    : listColumnNodes('product', { languageCode }).slice().sort(compareCategoryOrder);
   const productCategories = filterManagedRootCategory(rawProductCategories, managedCategoryRoot);
   const newsCategories = publicSections.newsSections
-    .flatMap((section) => listColumnCategoriesByRoot(section.rootColumnId, { languageCode }))
+    .flatMap((section) => listColumnNodesByRoot(section.rootColumnId, { languageCode }))
     .slice()
     .sort(compareCategoryOrder);
   const pageTreeCategories = pageTreeRoot
-    ? listColumnCategoriesByRoot(pageTreeRoot.id, { languageCode }).slice().sort(compareCategoryOrder)
-    : listColumnCategories('corporation', { languageCode }).slice().sort(compareCategoryOrder);
+    ? listColumnNodesByRoot(pageTreeRoot.id, { languageCode }).slice().sort(compareCategoryOrder)
+    : listColumnNodes('corporation', { languageCode }).slice().sort(compareCategoryOrder);
 
   return {
     site,
@@ -2204,7 +2204,7 @@ function buildSectionSeoTitle(title, site) {
 }
 
 function buildLegacyProductCategoryUrl(category, categoryMap = null) {
-  return buildProductCategoryPublicUrl(category, categoryMap);
+  return buildProductColumnPublicUrl(category, categoryMap);
 }
 
 function normalizeLegacyTemplateMarkup(value, site) {
@@ -2730,7 +2730,7 @@ function writeProductCategoryPageSet({
   const rootOutputDir = getManagedCategoryRootOutputDir(rootColumn);
   const isRootCategory = normalizeInteger(rootColumn?.id, 0) === categoryId;
   let categorySlugPath = categoryId > 0 && category.dir_name && categoryMap
-    ? buildCategorySlugPath(category, categoryMap)
+    ? buildColumnSlugPath(category, categoryMap)
     : [];
   const rootDirName = String(rootColumn?.dir_name || '').trim();
   if (rootDirName && categorySlugPath[0] === rootDirName) {

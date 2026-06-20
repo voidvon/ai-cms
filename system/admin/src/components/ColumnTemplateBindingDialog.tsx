@@ -10,7 +10,7 @@ import type { Template, TemplateBinding } from '@/types'
 
 const DEFAULT_VALUE = '__default__'
 
-interface CategoryTemplateBindingDialogProps {
+interface ColumnTemplateBindingDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   targetType: TemplateBinding['target_type']
@@ -19,14 +19,14 @@ interface CategoryTemplateBindingDialogProps {
   templateTypes: TemplateBinding['template_type'][]
 }
 
-export default function CategoryTemplateBindingDialog({
+export default function ColumnTemplateBindingDialog({
   open,
   onOpenChange,
   targetType,
   targetId,
   targetName,
   templateTypes,
-}: CategoryTemplateBindingDialogProps) {
+}: ColumnTemplateBindingDialogProps) {
   const queryClient = useQueryClient()
   const [selectedTemplates, setSelectedTemplates] = useState<Record<string, string>>({})
   const { data: selectedThemeData } = useQuery({

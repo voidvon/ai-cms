@@ -71,7 +71,7 @@ export type NewsSummary = {
   created_at?: string | null
 }
 
-export type CategorySummary = {
+export type ColumnSummary = {
   id: number
   name?: string | null
   parent_id?: number | null
@@ -98,7 +98,7 @@ export type ProductListPageProps = {
   site: SiteConfig
   title: string
   products: ProductSummary[]
-  categories: CategorySummary[]
+  categories: ColumnSummary[]
   pagination: Pagination
 }
 
@@ -117,7 +117,7 @@ export type ArticleListPageProps = {
   sectionLabel: string
   sectionPath: string
   articles: NewsSummary[]
-  categories: CategorySummary[]
+  categories: ColumnSummary[]
   pagination: Pagination
 }
 
@@ -129,7 +129,7 @@ export type ArticleDetailPageProps = {
   article: NewsSummary & {
     content_html?: string | null
   }
-  category?: CategorySummary | null
+  category?: ColumnSummary | null
   previous?: NewsSummary | null
   next?: NewsSummary | null
 }

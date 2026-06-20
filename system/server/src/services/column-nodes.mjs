@@ -2,9 +2,9 @@ import {
   createManualColumn,
   deleteManualColumn,
   ensureColumnsSchema,
-  getCategoryRootColumn,
+  getModelRootColumn,
   getColumnById,
-  listCategoryColumns,
+  listModelColumns,
   listColumns,
   updateManualColumn,
   updateColumnRecord
@@ -49,7 +49,7 @@ function slugifyName(value, fallback) {
   return normalized || fallback;
 }
 
-function getCategoryConfig(model) {
+function getModelColumnConfig(model) {
   if (model === 'product') {
     return { columnType: 'list', contentModelCode: 'product', rootBasePath: '/products/' };
   }
@@ -62,7 +62,7 @@ function getCategoryConfig(model) {
   throw new Error(`unsupported model: ${model}`);
 }
 
-function getRootCategoryContext(rootColumnId, languageCode = null) {
+function getRootColumnNodeContext(rootColumnId, languageCode = null) {
   const rootColumn = getColumnById(rootColumnId, { languageCode, includeTranslations: true });
   if (!rootColumn) {
     throw new Error('栏目不存在');
@@ -90,7 +90,7 @@ function getRootCategoryContext(rootColumnId, languageCode = null) {
 }
 
 function isModelColumn(column, model) {
-  const config = getCategoryConfig(model);
+  const config = getModelColumnConfig(model);
   return String(column?.column_type || '') === config.columnType
     && String(column?.model_code || '') === (config.contentModelCode || 'corporation');
 }
@@ -105,7 +105,7 @@ function isColumnInRootCategoryTree(column, rootContext) {
     && String(column?.column_type || '') === rootContext.columnType;
 }
 
-function mapColumnToCategory(column, rootColumn = null) {
+function mapColumnToNode(column, rootColumn = null) {
   const parentId = toInteger(column.parent_id, 0);
   const translations = column.translations || {};
   return {
@@ -134,15 +134,15 @@ function mapColumnToCategory(column, rootColumn = null) {
   };
 }
 
-function resolveCategoryColumnById(model, id, languageCode = null) {
+function resolveColumnNodeById(model, id, languageCode = null) {
   return listColumns({ languageCode, includeTranslations: true }).find((item) => (
     isModelColumn(item, model)
     && toInteger(item.id, 0) === toInteger(id, 0)
   )) || null;
 }
 
-function resolveCategoryColumnByIdInRoot(rootColumnId, id, languageCode = null) {
-  const rootContext = getRootCategoryContext(rootColumnId, languageCode);
+function resolveColumnNodeByIdInRoot(rootColumnId, id, languageCode = null) {
+  const rootContext = getRootColumnNodeContext(rootColumnId, languageCode);
   return listColumns({ languageCode, includeTranslations: true }).find((item) => (
     isColumnInRootCategoryTree(item, rootContext)
     && toInteger(item.id, 0) === toInteger(id, 0)
@@ -152,9 +152,9 @@ function resolveCategoryColumnByIdInRoot(rootColumnId, id, languageCode = null) 
 function resolveParentColumnId(model, parentCategoryId, languageCode = null) {
   const safeParentId = toInteger(parentCategoryId, 0);
   if (safeParentId <= 0) {
-    return toInteger(getCategoryRootColumn(model, { languageCode })?.id, 0) || null;
+    return toInteger(getModelRootColumn(model, { languageCode })?.id, 0) || null;
   }
-  return toInteger(resolveCategoryColumnById(model, safeParentId, languageCode)?.id, 0) || null;
+  return toInteger(resolveColumnNodeById(model, safeParentId, languageCode)?.id, 0) || null;
 }
 
 function resolveParentColumnIdInRoot(rootContext, parentCategoryId, currentColumnId = 0, languageCode = null) {
@@ -173,10 +173,10 @@ function resolveParentColumnIdInRoot(rootContext, parentCategoryId, currentColum
     return rootContext.rootColumnId;
   }
 
-  return toInteger(resolveCategoryColumnByIdInRoot(rootContext.rootColumnId, safeParentId, languageCode)?.id, 0) || null;
+  return toInteger(resolveColumnNodeByIdInRoot(rootContext.rootColumnId, safeParentId, languageCode)?.id, 0) || null;
 }
 
-function buildCategoryOptions(items) {
+function buildColumnNodeOptions(items) {
   const childrenByParent = new Map();
   for (const item of items) {
     const parentId = toInteger(item.parent_id, 0);
@@ -197,22 +197,22 @@ function buildCategoryOptions(items) {
   return options;
 }
 
-export function listColumnCategories(model, { languageCode = null } = {}) {
+export function listColumnNodes(model, { languageCode = null } = {}) {
   ensureColumnsSchema();
-  const rootColumn = getCategoryRootColumn(model, { languageCode });
-  return listCategoryColumns(model, { languageCode }).map((item) => mapColumnToCategory(item, rootColumn));
+  const rootColumn = getModelRootColumn(model, { languageCode });
+  return listModelColumns(model, { languageCode }).map((item) => mapColumnToNode(item, rootColumn));
 }
 
-export function listColumnCategoriesByRoot(rootColumnId, { languageCode = null } = {}) {
+export function listColumnNodesByRoot(rootColumnId, { languageCode = null } = {}) {
   ensureColumnsSchema();
-  const rootContext = getRootCategoryContext(rootColumnId, languageCode);
+  const rootContext = getRootColumnNodeContext(rootColumnId, languageCode);
   return listColumns({ languageCode, includeTranslations: true })
     .filter((item) => isColumnInRootCategoryTree(item, rootContext))
-    .map((item) => mapColumnToCategory(item, rootContext.rootColumn));
+    .map((item) => mapColumnToNode(item, rootContext.rootColumn));
 }
 
 export function listColumnCategoriesAdmin(model, { parentId = 0, page = 1, limit = 50, languageCode = null } = {}) {
-  const items = listColumnCategories(model, { languageCode }).filter((item) => toInteger(item.parent_id, 0) === toInteger(parentId, 0));
+  const items = listColumnNodes(model, { languageCode }).filter((item) => toInteger(item.parent_id, 0) === toInteger(parentId, 0));
   const safeLimit = Math.min(Math.max(toInteger(limit, 50), 1), 200);
   const safePage = Math.max(toInteger(page, 1), 1);
   const offset = (safePage - 1) * safeLimit;
@@ -227,43 +227,43 @@ export function listColumnCategoriesAdmin(model, { parentId = 0, page = 1, limit
   };
 }
 
-export function listColumnCategoryOptions(model, { languageCode = null } = {}) {
-  return buildCategoryOptions(listColumnCategories(model, { languageCode }));
+export function listColumnNodeOptions(model, { languageCode = null } = {}) {
+  return buildColumnNodeOptions(listColumnNodes(model, { languageCode }));
 }
 
-export function listColumnCategoryOptionsByRoot(rootColumnId, { languageCode = null } = {}) {
-  return buildCategoryOptions(listColumnCategoriesByRoot(rootColumnId, { languageCode }));
+export function listColumnNodeOptionsByRoot(rootColumnId, { languageCode = null } = {}) {
+  return buildColumnNodeOptions(listColumnNodesByRoot(rootColumnId, { languageCode }));
 }
 
-export function getColumnCategoryById(model, id, { languageCode = null, includeTranslations = false } = {}) {
-  const rootColumn = getCategoryRootColumn(model, { languageCode });
-  const column = resolveCategoryColumnById(model, id, languageCode);
+export function getColumnNodeById(model, id, { languageCode = null, includeTranslations = false } = {}) {
+  const rootColumn = getModelRootColumn(model, { languageCode });
+  const column = resolveColumnNodeById(model, id, languageCode);
   if (!column) {
     return null;
   }
-  const item = mapColumnToCategory(column, rootColumn);
+  const item = mapColumnToNode(column, rootColumn);
   if (!includeTranslations) {
     delete item.translations;
   }
   return item;
 }
 
-export function getColumnCategoryByIdInRoot(rootColumnId, id, { languageCode = null, includeTranslations = false } = {}) {
-  const rootContext = getRootCategoryContext(rootColumnId, languageCode);
-  const column = resolveCategoryColumnByIdInRoot(rootContext.rootColumnId, id, languageCode);
+export function getColumnNodeByIdInRoot(rootColumnId, id, { languageCode = null, includeTranslations = false } = {}) {
+  const rootContext = getRootColumnNodeContext(rootColumnId, languageCode);
+  const column = resolveColumnNodeByIdInRoot(rootContext.rootColumnId, id, languageCode);
   if (!column) {
     return null;
   }
-  const item = mapColumnToCategory(column, rootContext.rootColumn);
+  const item = mapColumnToNode(column, rootContext.rootColumn);
   if (!includeTranslations) {
     delete item.translations;
   }
   return item;
 }
 
-export function createColumnCategory(model, input) {
+export function createColumnNode(model, input) {
   ensureColumnsSchema();
-  const config = getCategoryConfig(model);
+  const config = getModelColumnConfig(model);
   const parentColumnId = resolveParentColumnId(model, input?.base?.parent_id ?? input?.parent_id);
   const parentColumn = parentColumnId ? getColumnById(parentColumnId, { includeTranslations: true }) : null;
   const defaultLanguageCode = getDefaultLanguage()?.code || 'zh-CN';
@@ -282,7 +282,7 @@ export function createColumnCategory(model, input) {
     ? Number(getContentModelByCode(config.contentModelCode)?.id || 0) || null
     : null;
   const dirName = normalizeDirName(input?.base?.dir_name ?? input?.dir_name) || slugifyName(defaultTranslation?.name, `${model}-${Date.now()}`);
-  const initialRoutePath = buildCategoryRoutePath({
+  const initialRoutePath = buildColumnNodeRoutePath({
     model,
     dirName,
     parentColumn,
@@ -305,7 +305,7 @@ export function createColumnCategory(model, input) {
     translations
   });
 
-  const finalRoutePath = buildCategoryRoutePath({
+  const finalRoutePath = buildColumnNodeRoutePath({
     model,
     dirName,
     parentColumn: parentColumnId ? getColumnById(parentColumnId, { includeTranslations: true }) : null,
@@ -342,12 +342,12 @@ export function createColumnCategory(model, input) {
     });
   }
 
-  return getColumnCategoryById(model, column.id, { includeTranslations: true });
+  return getColumnNodeById(model, column.id, { includeTranslations: true });
 }
 
-export function createColumnCategoryByRoot(rootColumnId, input) {
+export function createColumnNodeByRoot(rootColumnId, input) {
   ensureColumnsSchema();
-  const rootContext = getRootCategoryContext(rootColumnId);
+  const rootContext = getRootColumnNodeContext(rootColumnId);
   const parentColumnId = resolveParentColumnIdInRoot(rootContext, input?.base?.parent_id ?? input?.parent_id);
   const parentColumn = parentColumnId ? getColumnById(parentColumnId, { includeTranslations: true }) : null;
   const defaultLanguageCode = getDefaultLanguage()?.code || 'zh-CN';
@@ -363,7 +363,7 @@ export function createColumnCategoryByRoot(rootColumnId, input) {
   };
   const defaultTranslation = translations[defaultLanguageCode] || Object.values(translations)[0] || {};
   const dirName = normalizeDirName(input?.base?.dir_name ?? input?.dir_name) || slugifyName(defaultTranslation?.name, `column-${Date.now()}`);
-  const initialRoutePath = buildCategoryRoutePath({
+  const initialRoutePath = buildColumnNodeRoutePath({
     rootContext,
     dirName,
     parentColumn,
@@ -388,7 +388,7 @@ export function createColumnCategoryByRoot(rootColumnId, input) {
     translations
   });
 
-  const finalRoutePath = buildCategoryRoutePath({
+  const finalRoutePath = buildColumnNodeRoutePath({
     rootContext,
     dirName,
     parentColumn: parentColumnId ? getColumnById(parentColumnId, { includeTranslations: true }) : null,
@@ -425,26 +425,26 @@ export function createColumnCategoryByRoot(rootColumnId, input) {
     });
   }
 
-  return getColumnCategoryByIdInRoot(rootContext.rootColumnId, column.id, { includeTranslations: true });
+  return getColumnNodeByIdInRoot(rootContext.rootColumnId, column.id, { includeTranslations: true });
 }
 
-export function updateColumnCategory(model, id, input) {
-  const column = resolveCategoryColumnById(model, id);
+export function updateColumnNode(model, id, input) {
+  const column = resolveColumnNodeById(model, id);
   if (!column) {
     return null;
   }
-  const config = getCategoryConfig(model);
+  const config = getModelColumnConfig(model);
   const parentColumnId = resolveParentColumnId(model, input?.base?.parent_id ?? input?.parent_id);
   const parentColumn = parentColumnId ? getColumnById(parentColumnId, { includeTranslations: true }) : null;
   const existingTranslations = column.translations || {};
-  const translations = normalizeCategoryTranslations(input, existingTranslations, column);
+  const translations = normalizeColumnNodeTranslations(input, existingTranslations, column);
   const contentModelId = config.contentModelCode
     ? Number(getContentModelByCode(config.contentModelCode)?.id || 0) || null
     : null;
   const dirName = normalizeDirName(input?.base?.dir_name ?? input?.dir_name ?? column.dir_name)
     || normalizeDirName(column.dir_name)
     || slugifyName(column.name, `${model}-${column.id}`);
-  const routePath = buildCategoryRoutePath({
+  const routePath = buildColumnNodeRoutePath({
     model,
     dirName,
     parentColumn,
@@ -481,12 +481,12 @@ export function updateColumnCategory(model, id, input) {
     });
   }
 
-  return getColumnCategoryById(model, id, { includeTranslations: true });
+  return getColumnNodeById(model, id, { includeTranslations: true });
 }
 
-export function updateColumnCategoryInRoot(rootColumnId, id, input) {
-  const rootContext = getRootCategoryContext(rootColumnId);
-  const column = resolveCategoryColumnByIdInRoot(rootContext.rootColumnId, id);
+export function updateColumnNodeInRoot(rootColumnId, id, input) {
+  const rootContext = getRootColumnNodeContext(rootColumnId);
+  const column = resolveColumnNodeByIdInRoot(rootContext.rootColumnId, id);
   if (!column) {
     return null;
   }
@@ -497,11 +497,11 @@ export function updateColumnCategoryInRoot(rootColumnId, id, input) {
   );
   const parentColumn = parentColumnId ? getColumnById(parentColumnId, { includeTranslations: true }) : null;
   const existingTranslations = column.translations || {};
-  const translations = normalizeCategoryTranslations(input, existingTranslations, column);
+  const translations = normalizeColumnNodeTranslations(input, existingTranslations, column);
   const dirName = normalizeDirName(input?.base?.dir_name ?? input?.dir_name ?? column.dir_name)
     || normalizeDirName(column.dir_name)
     || slugifyName(column.name, `column-${column.id}`);
-  const routePath = buildCategoryRoutePath({
+  const routePath = buildColumnNodeRoutePath({
     rootContext,
     dirName,
     parentColumn,
@@ -538,11 +538,11 @@ export function updateColumnCategoryInRoot(rootColumnId, id, input) {
     });
   }
 
-  return getColumnCategoryByIdInRoot(rootContext.rootColumnId, id, { includeTranslations: true });
+  return getColumnNodeByIdInRoot(rootContext.rootColumnId, id, { includeTranslations: true });
 }
 
-export function deleteColumnCategory(model, id) {
-  const column = resolveCategoryColumnById(model, id);
+export function deleteColumnNode(model, id) {
+  const column = resolveColumnNodeById(model, id);
   if (!column) {
     return null;
   }
@@ -553,12 +553,12 @@ export function deleteColumnCategory(model, id) {
   }
 
   deleteManualColumn(column.id);
-  return mapColumnToCategory(column, getCategoryRootColumn(model));
+  return mapColumnToNode(column, getModelRootColumn(model));
 }
 
-export function deleteColumnCategoryInRoot(rootColumnId, id) {
-  const rootContext = getRootCategoryContext(rootColumnId);
-  const column = resolveCategoryColumnByIdInRoot(rootContext.rootColumnId, id);
+export function deleteColumnNodeInRoot(rootColumnId, id) {
+  const rootContext = getRootColumnNodeContext(rootColumnId);
+  const column = resolveColumnNodeByIdInRoot(rootContext.rootColumnId, id);
   if (!column) {
     return null;
   }
@@ -572,10 +572,10 @@ export function deleteColumnCategoryInRoot(rootColumnId, id) {
   }
 
   deleteManualColumn(column.id);
-  return mapColumnToCategory(column, rootContext.rootColumn);
+  return mapColumnToNode(column, rootContext.rootColumn);
 }
 
-function normalizeCategoryTranslations(input, existingTranslations, column) {
+function normalizeColumnNodeTranslations(input, existingTranslations, column) {
   if (input?.translations) {
     return input.translations;
   }
@@ -598,7 +598,7 @@ function normalizeCategoryTranslations(input, existingTranslations, column) {
   };
 }
 
-function buildCategoryRoutePath({
+function buildColumnNodeRoutePath({
   model,
   rootContext = null,
   dirName,
@@ -607,7 +607,7 @@ function buildCategoryRoutePath({
   columnType,
   fallbackName
 }) {
-  const config = rootContext || getCategoryConfig(model);
+  const config = rootContext || getModelColumnConfig(model);
   const fallbackKey = rootContext?.rootColumnId
     ? `column-${rootContext.rootColumnId}`
     : model;

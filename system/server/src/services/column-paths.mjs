@@ -5,9 +5,9 @@ function toInteger(value, fallback = 0) {
   return Number.isNaN(parsed) ? fallback : parsed;
 }
 
-export function buildCategorySlugPath(category, categoryMap) {
+export function buildColumnSlugPath(column, columnMap) {
   const dirNames = [];
-  let current = category;
+  let current = column;
 
   while (current && current.dir_name) {
     dirNames.unshift(current.dir_name);
@@ -15,13 +15,13 @@ export function buildCategorySlugPath(category, categoryMap) {
     if (parentId === 0) {
       break;
     }
-    current = categoryMap.get(parentId);
+    current = columnMap.get(parentId);
   }
 
   return dirNames;
 }
 
-export function buildCategorySlugPathFromColumnIdMap(columnId, rowById) {
+export function buildColumnSlugPathFromColumnIdMap(columnId, rowById) {
   const safeColumnId = toInteger(columnId, 0);
   if (safeColumnId <= 0) {
     return [];
@@ -48,20 +48,20 @@ export function buildCategorySlugPathFromColumnIdMap(columnId, rowById) {
   return segments;
 }
 
-export function buildProductCategoryPublicUrl(category, categoryMap = null) {
-  const explicitRoutePath = String(category?.route_path || '').trim();
-  const id = toInteger(category?.id, 0);
-  const rootCategory = resolveManagedCategoryRoot(category, categoryMap);
-  const rootRoutePath = String(rootCategory?.route_path || '').trim();
+export function buildProductColumnPublicUrl(column, columnMap = null) {
+  const explicitRoutePath = String(column?.route_path || '').trim();
+  const id = toInteger(column?.id, 0);
+  const rootColumn = resolveManagedColumnRoot(column, columnMap);
+  const rootRoutePath = String(rootColumn?.route_path || '').trim();
   const baseRoutePath = ensureTrailingSlash(rootRoutePath || '/');
 
   if (explicitRoutePath) {
     return explicitRoutePath;
   }
 
-  if (category?.dir_name && categoryMap) {
-    let slugPath = buildCategorySlugPath(category, categoryMap);
-    const rootDirName = String(rootCategory?.dir_name || '').trim();
+  if (column?.dir_name && columnMap) {
+    let slugPath = buildColumnSlugPath(column, columnMap);
+    const rootDirName = String(rootColumn?.dir_name || '').trim();
     if (rootDirName && slugPath[0] === rootDirName) {
       slugPath = slugPath.slice(1);
     }
@@ -75,17 +75,17 @@ export function buildProductCategoryPublicUrl(category, categoryMap = null) {
     : normalizePublicCustomUrl(`${baseRoutePath}${id}.html`);
 }
 
-function buildContentDetailPublicUrl({ entry, categoryPath = null, detailRule = null, sectionRoot = '/', legacyFallback = '' }) {
+function buildContentDetailPublicUrl({ entry, columnPath = null, detailRule = null, sectionRoot = '/', legacyFallback = '' }) {
   const customUrl = normalizeEntryCustomUrl(entry?.custom_url);
   if (customUrl) {
-    return resolveEntryCustomPublicUrl(customUrl, categoryPath, sectionRoot);
+    return resolveEntryCustomPublicUrl(customUrl, columnPath, sectionRoot);
   }
 
-  if (Array.isArray(categoryPath)) {
-    categoryPath = categoryPath.join('/');
+  if (Array.isArray(columnPath)) {
+    columnPath = columnPath.join('/');
   }
 
-  const normalizedCategoryPath = String(categoryPath || '').trim().replace(/^\/+|\/+$/g, '');
+  const normalizedColumnPath = String(columnPath || '').trim().replace(/^\/+|\/+$/g, '');
   const id = toInteger(entry?.id, 0);
   const normalizedRule = String(detailRule || '').trim();
 
@@ -93,23 +93,23 @@ function buildContentDetailPublicUrl({ entry, categoryPath = null, detailRule = 
     return `${ensureTrailingSlash(sectionRoot)}${id}.html`;
   }
   if (normalizedRule === '{id}/index.html') {
-    if (normalizedCategoryPath) {
-      return `${ensureTrailingSlash(sectionRoot)}${normalizedCategoryPath}/${id}/`;
+    if (normalizedColumnPath) {
+      return `${ensureTrailingSlash(sectionRoot)}${normalizedColumnPath}/${id}/`;
     }
     return `${ensureTrailingSlash(sectionRoot)}${id}/`;
   }
   if (normalizedRule === 'detail/{id}.html') {
     return `${ensureTrailingSlash(sectionRoot)}detail/${id}.html`;
   }
-  if (normalizedRule === '{id}.html' && normalizedCategoryPath) {
-    return `${ensureTrailingSlash(sectionRoot)}${normalizedCategoryPath}/${id}.html`;
+  if (normalizedRule === '{id}.html' && normalizedColumnPath) {
+    return `${ensureTrailingSlash(sectionRoot)}${normalizedColumnPath}/${id}.html`;
   }
-  if (normalizedRule === '{id}/index.html' && normalizedCategoryPath) {
-    return `${ensureTrailingSlash(sectionRoot)}${normalizedCategoryPath}/${id}/`;
+  if (normalizedRule === '{id}/index.html' && normalizedColumnPath) {
+    return `${ensureTrailingSlash(sectionRoot)}${normalizedColumnPath}/${id}/`;
   }
   if (normalizedRule && !normalizedRule.includes('{')) {
-    if (normalizedCategoryPath) {
-      return normalizePublicCustomUrl(`/${trimSlashes(sectionRoot)}/${normalizedCategoryPath}/${trimSlashes(normalizedRule)}`);
+    if (normalizedColumnPath) {
+      return normalizePublicCustomUrl(`/${trimSlashes(sectionRoot)}/${normalizedColumnPath}/${trimSlashes(normalizedRule)}`);
     }
     return normalizePublicCustomUrl(`/${trimSlashes(sectionRoot)}/${trimSlashes(normalizedRule)}`);
   }
@@ -117,19 +117,19 @@ function buildContentDetailPublicUrl({ entry, categoryPath = null, detailRule = 
 }
 
 /**
- * @deprecated 使用 buildContentDetailPathFromColumn(product, column, categoryPath) 代替
+ * @deprecated 使用 buildContentDetailPathFromColumn(product, column, columnPath) 代替
  * 此函数硬编码了 products 目录，不支持栏目配置驱动
  */
-function buildContentDetailOutputPath({ entry, categoryPath = null, detailRule = null, sectionRoot = '', legacyFallback = '' }) {
+function buildContentDetailOutputPath({ entry, columnPath = null, detailRule = null, sectionRoot = '', legacyFallback = '' }) {
   const customUrl = normalizeEntryCustomUrl(entry?.custom_url);
   if (customUrl) {
-    return resolveEntryCustomOutputPath(customUrl, categoryPath, sectionRoot);
+    return resolveEntryCustomOutputPath(customUrl, columnPath, sectionRoot);
   }
 
-  if (Array.isArray(categoryPath)) {
-    categoryPath = categoryPath.filter(Boolean);
+  if (Array.isArray(columnPath)) {
+    columnPath = columnPath.filter(Boolean);
   } else {
-    categoryPath = String(categoryPath || '')
+    columnPath = String(columnPath || '')
       .split('/')
       .map((segment) => segment.trim())
       .filter(Boolean);
@@ -142,8 +142,8 @@ function buildContentDetailOutputPath({ entry, categoryPath = null, detailRule =
     return path.join(sectionRoot, `${id}.html`);
   }
   if (normalizedRule === '{id}/index.html') {
-    if (categoryPath.length > 0) {
-      return path.join(sectionRoot, ...categoryPath, String(id), 'index.html');
+    if (columnPath.length > 0) {
+      return path.join(sectionRoot, ...columnPath, String(id), 'index.html');
     }
     return path.join(sectionRoot, String(id), 'index.html');
   }
@@ -151,8 +151,8 @@ function buildContentDetailOutputPath({ entry, categoryPath = null, detailRule =
     return path.join(sectionRoot, 'detail', `${id}.html`);
   }
   if (normalizedRule && !normalizedRule.includes('{')) {
-    if (categoryPath.length > 0) {
-      return path.join(sectionRoot, ...categoryPath, ...trimSlashes(normalizedRule).split('/'));
+    if (columnPath.length > 0) {
+      return path.join(sectionRoot, ...columnPath, ...trimSlashes(normalizedRule).split('/'));
     }
     return path.join(sectionRoot, ...trimSlashes(normalizedRule).split('/'));
   }
@@ -221,15 +221,15 @@ function ensureTrailingSlash(value) {
   return normalized.endsWith('/') ? normalized : `${normalized}/`;
 }
 
-function resolveManagedCategoryRoot(category, categoryMap = null) {
-  if (!category) {
+function resolveManagedColumnRoot(columnNode, categoryMap = null) {
+  if (!columnNode) {
     return null;
   }
 
-  const currentId = toInteger(category?.id, 0);
-  const rootColumnId = toInteger(category?.column_semantics?.root_column_id, 0);
+  const currentId = toInteger(columnNode?.id, 0);
+  const rootColumnId = toInteger(columnNode?.column_semantics?.root_column_id, 0);
   if (currentId > 0 && rootColumnId > 0 && currentId === rootColumnId) {
-    return category;
+    return columnNode;
   }
 
   if (categoryMap && rootColumnId > 0) {
@@ -240,7 +240,7 @@ function resolveManagedCategoryRoot(category, categoryMap = null) {
     return null;
   }
 
-  let current = category;
+  let current = columnNode;
   const visited = new Set();
   while (current) {
     const id = toInteger(current?.id, 0);
@@ -263,58 +263,58 @@ function normalizeEntryCustomUrl(value) {
   return normalized || null;
 }
 
-function resolveEntryCustomPublicUrl(customUrl, categoryPath, sectionRoot) {
-  const parentPath = buildCategoryBasePublicPath(categoryPath, sectionRoot);
+function resolveEntryCustomPublicUrl(customUrl, columnPath, sectionRoot) {
+  const parentPath = buildColumnBasePublicPath(columnPath, sectionRoot);
   return resolveRelativePublicPath(customUrl, parentPath);
 }
 
-function resolveEntryCustomOutputPath(customUrl, categoryPath, sectionRoot) {
-  const parentPath = buildCategoryBaseOutputPath(categoryPath, sectionRoot);
+function resolveEntryCustomOutputPath(customUrl, columnPath, sectionRoot) {
+  const parentPath = buildColumnBaseOutputPath(columnPath, sectionRoot);
   return resolveRelativeOutputPath(customUrl, parentPath);
 }
 
-function buildCategoryBasePublicPath(categoryPath, sectionRoot) {
+function buildColumnBasePublicPath(columnPath, sectionRoot) {
   const normalizedSectionRoot = ensureTrailingSlash(sectionRoot);
-  if (Array.isArray(categoryPath)) {
-    const normalizedSegments = categoryPath.map((segment) => String(segment || '').trim()).filter(Boolean);
+  if (Array.isArray(columnPath)) {
+    const normalizedSegments = columnPath.map((segment) => String(segment || '').trim()).filter(Boolean);
     if (normalizedSegments.length > 0) {
-      const normalizedCategoryPath = normalizedSegments.join('/');
-      if (trimSlashes(normalizedSectionRoot).endsWith(normalizedCategoryPath)) {
+      const normalizedColumnPath = normalizedSegments.join('/');
+      if (trimSlashes(normalizedSectionRoot).endsWith(normalizedColumnPath)) {
         return normalizedSectionRoot;
       }
-      return `${normalizedSectionRoot}${normalizedCategoryPath}/`;
+      return `${normalizedSectionRoot}${normalizedColumnPath}/`;
     }
   } else {
-    const normalizedCategoryPath = trimSlashes(categoryPath);
-    if (normalizedCategoryPath) {
-      if (trimSlashes(normalizedSectionRoot).endsWith(normalizedCategoryPath)) {
+    const normalizedColumnPath = trimSlashes(columnPath);
+    if (normalizedColumnPath) {
+      if (trimSlashes(normalizedSectionRoot).endsWith(normalizedColumnPath)) {
         return normalizedSectionRoot;
       }
-      return `${normalizedSectionRoot}${normalizedCategoryPath}/`;
+      return `${normalizedSectionRoot}${normalizedColumnPath}/`;
     }
   }
 
   return normalizedSectionRoot;
 }
 
-function buildCategoryBaseOutputPath(categoryPath, sectionRoot) {
+function buildColumnBaseOutputPath(columnPath, sectionRoot) {
   const normalizedSectionRoot = trimSlashes(sectionRoot);
-  if (Array.isArray(categoryPath)) {
-    const normalizedSegments = categoryPath.map((segment) => String(segment || '').trim()).filter(Boolean);
+  if (Array.isArray(columnPath)) {
+    const normalizedSegments = columnPath.map((segment) => String(segment || '').trim()).filter(Boolean);
     if (normalizedSegments.length > 0) {
-      const normalizedCategoryPath = normalizedSegments.join('/');
-      if (normalizedSectionRoot.endsWith(normalizedCategoryPath)) {
+      const normalizedColumnPath = normalizedSegments.join('/');
+      if (normalizedSectionRoot.endsWith(normalizedColumnPath)) {
         return normalizedSectionRoot;
       }
       return path.join(normalizedSectionRoot, ...normalizedSegments);
     }
   } else {
-    const normalizedCategoryPath = trimSlashes(categoryPath);
-    if (normalizedCategoryPath) {
-      if (normalizedSectionRoot.endsWith(normalizedCategoryPath)) {
+    const normalizedColumnPath = trimSlashes(columnPath);
+    if (normalizedColumnPath) {
+      if (normalizedSectionRoot.endsWith(normalizedColumnPath)) {
         return normalizedSectionRoot;
       }
-      return path.join(normalizedSectionRoot, ...normalizedCategoryPath.split('/'));
+      return path.join(normalizedSectionRoot, ...normalizedColumnPath.split('/'));
     }
   }
 
@@ -344,17 +344,17 @@ function trimSlashes(value) {
  * 从栏目配置构建内容详情页公开URL（统一函数，替代按模型的硬编码函数）
  * @param {Object} entry - 内容条目（包含 id, custom_url 等）
  * @param {Object} column - 栏目配置（包含 route_path, detail_rule 等）
- * @param {Array|null} categoryPath - 分类路径（可选）
+ * @param {Array|null} columnPath - 分类路径（可选）
  * @returns {string} 公开URL
  */
-export function buildContentDetailUrlFromColumn(entry, column, categoryPath = null) {
+export function buildContentDetailUrlFromColumn(entry, column, columnPath = null) {
   const sectionRoot = String(column?.route_path || '').trim() || '/';
   const detailRule = String(column?.detail_rule || '').trim();
   const entryId = toInteger(entry?.id, 0);
 
   return buildContentDetailPublicUrl({
     entry,
-    categoryPath,
+    columnPath,
     detailRule,
     sectionRoot,
     legacyFallback: `${sectionRoot}detail/${entryId}.html`
@@ -365,10 +365,10 @@ export function buildContentDetailUrlFromColumn(entry, column, categoryPath = nu
  * 从栏目配置构建内容详情页输出路径（统一函数，替代按模型的硬编码函数）
  * @param {Object} entry - 内容条目
  * @param {Object} column - 栏目配置
- * @param {Array|null} categoryPath - 分类路径（可选）
+ * @param {Array|null} columnPath - 分类路径（可选）
  * @returns {string} 文件系统路径
  */
-export function buildContentDetailPathFromColumn(entry, column, categoryPath = null) {
+export function buildContentDetailPathFromColumn(entry, column, columnPath = null) {
   const routePath = String(column?.route_path || '').trim() || '/';
   const sectionRoot = trimSlashes(routePath);
   const detailRule = String(column?.detail_rule || '').trim();
@@ -376,7 +376,7 @@ export function buildContentDetailPathFromColumn(entry, column, categoryPath = n
 
   return buildContentDetailOutputPath({
     entry,
-    categoryPath,
+    columnPath,
     detailRule,
     sectionRoot,
     legacyFallback: path.join(sectionRoot, 'detail', `${entryId}.html`)

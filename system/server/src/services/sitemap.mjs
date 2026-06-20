@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getSiteConfig } from './site.mjs';
 import { ensureColumnsSchema, listColumns } from './columns.mjs';
-import { listColumnCategoriesByRoot } from './column-categories.mjs';
+import { listColumnNodesByRoot } from './column-nodes.mjs';
 import {
   buildColumnTreeIndex,
   getDescendantColumnIds,
@@ -13,8 +13,8 @@ import {
   resolvePublicSectionContext
 } from './public-sections.mjs';
 import {
-  buildCategorySlugPath,
-  buildProductCategoryPublicUrl,
+  buildColumnSlugPath,
+  buildProductColumnPublicUrl,
   buildContentDetailUrlFromColumn
 } from './column-paths.mjs';
 import { ensureProductsSchema, listProducts } from './products.mjs';
@@ -77,7 +77,7 @@ export function getSitemapDiagnostics({ generatedAt = new Date().toISOString(), 
   const products = listProducts({ visibleOnly: true, limit: 10000, languageCode });
   const columns = listColumns({ languageCode });
   const pageTreeRoot = getRootColumnByDriver(columns, 'page_tree');
-  const pageTreeCategories = pageTreeRoot ? listColumnCategoriesByRoot(pageTreeRoot.id, { languageCode }) : [];
+  const pageTreeCategories = pageTreeRoot ? listColumnNodesByRoot(pageTreeRoot.id, { languageCode }) : [];
 
   return {
     generated_at: generatedAt,
@@ -111,14 +111,14 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   const columns = listColumns({ languageCode });
   const publicSections = resolvePublicSectionContext(columns);
   const managedCategoryRoot = getRootColumnByDriver(columns, 'managed_category');
-  const productCategories = managedCategoryRoot ? listColumnCategoriesByRoot(managedCategoryRoot.id, { languageCode }) : [];
+  const productCategories = managedCategoryRoot ? listColumnNodesByRoot(managedCategoryRoot.id, { languageCode }) : [];
   const newsCategories = publicSections.newsSections.flatMap((section) => (
-    listColumnCategoriesByRoot(section.rootColumnId, { languageCode })
+    listColumnNodesByRoot(section.rootColumnId, { languageCode })
   ));
   const products = listProducts({ visibleOnly: true, limit: 10000, languageCode });
   const newsItems = listNews({ limit: 10000, languageCode });
   const pageTreeRoot = getRootColumnByDriver(columns, 'page_tree');
-  const pageTreeCategories = pageTreeRoot ? listColumnCategoriesByRoot(pageTreeRoot.id, { languageCode }) : [];
+  const pageTreeCategories = pageTreeRoot ? listColumnNodesByRoot(pageTreeRoot.id, { languageCode }) : [];
   const productCountByCategory = buildDescendantProductCountMap(productCategories, products);
   const latestProductDateByCategory = buildDescendantLatestDateMap(productCategories, products, generatedAt);
   const newsCountByCategory = buildCountMap(newsItems, (item) => toInteger(item.column_id, 0));
@@ -188,7 +188,7 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
     const total = productCountByCategory.get(categoryId) || 0;
     const pageCount = Math.max(Math.ceil(total / PRODUCT_LIST_PAGE_SIZE), 1);
     const lastmod = latestProductDateByCategory.get(categoryId) || generatedAt;
-    const publicCategoryUrl = buildProductCategoryPublicUrl(category, productCategoryMap);
+    const publicCategoryUrl = buildProductColumnPublicUrl(category, productCategoryMap);
     addEntry(entries, siteUrl, publicCategoryUrl, lastmod);
     for (let pageNumber = 2; pageNumber <= pageCount; pageNumber += 1) {
       addEntry(entries, siteUrl, `${publicCategoryUrl}index-${pageNumber}.html`, lastmod);
@@ -197,7 +197,7 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
 
   for (const product of products) {
     const category = productCategoryMap.get(toInteger(product.column_id, 0));
-    const categoryPath = category ? buildCategorySlugPath(category, productCategoryMap) : null;
+    const categoryPath = category ? buildColumnSlugPath(category, productCategoryMap) : null;
     const column = columnMap.get(toInteger(product.column_id, 0));
     if (column) {
       addEntry(entries, siteUrl, buildContentDetailUrlFromColumn(product, column, categoryPath), product.updated_at || generatedAt);

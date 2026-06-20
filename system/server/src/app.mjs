@@ -61,7 +61,7 @@ export async function createApp(options = {}) {
   await app.register(import('./routes/auth.mjs'), { prefix: '/admin' });
   await app.register(import('./routes/api/search.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/products.mjs'), { prefix: '/api' });
-  await app.register(import('./routes/api/column-categories.mjs'), { prefix: '/api' });
+  await app.register(import('./routes/api/column-nodes.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/news.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/template-variants.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/templates.mjs'), { prefix: '/api' });

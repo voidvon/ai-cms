@@ -1,5 +1,5 @@
 import apiClient from './client'
-import type { ApiResponse, ColumnCategory } from '@/types'
+import type { ApiResponse, ColumnNode } from '@/types'
 
 interface BaseCategoryParams {
   language?: string
@@ -22,33 +22,33 @@ function withRootColumnId<T extends object | undefined>(rootColumnId: number, pa
   }
 }
 
-export const columnCategoriesApi = {
-  list: async <T extends ColumnCategory = ColumnCategory>(rootColumnId: number, params?: BaseCategoryParams) => {
+export const columnNodesApi = {
+  list: async <T extends ColumnNode = ColumnNode>(rootColumnId: number, params?: BaseCategoryParams) => {
     const response = await apiClient.get<ApiResponse<T[]>>('/column-categories', { params: withRootColumnId(rootColumnId, params) })
     return response.data
   },
 
-  listAdmin: async <T extends ColumnCategory = ColumnCategory>(rootColumnId: number, params?: AdminCategoryParams) => {
+  listAdmin: async <T extends ColumnNode = ColumnNode>(rootColumnId: number, params?: AdminCategoryParams) => {
     const response = await apiClient.get<ApiResponse<T[]>>('/column-categories/admin', { params: withRootColumnId(rootColumnId, params) })
     return response.data
   },
 
-  listOptions: async <T extends ColumnCategory = ColumnCategory>(rootColumnId: number, params?: BaseCategoryParams) => {
+  listOptions: async <T extends ColumnNode = ColumnNode>(rootColumnId: number, params?: BaseCategoryParams) => {
     const response = await apiClient.get<ApiResponse<T[]>>('/column-categories/options', { params: withRootColumnId(rootColumnId, params) })
     return response.data
   },
 
-  get: async <T extends ColumnCategory = ColumnCategory>(rootColumnId: number, id: number, params?: CategoryGetParams) => {
+  get: async <T extends ColumnNode = ColumnNode>(rootColumnId: number, id: number, params?: CategoryGetParams) => {
     const response = await apiClient.get<ApiResponse<T>>(`/column-categories/${id}`, { params: withRootColumnId(rootColumnId, params) })
     return response.data
   },
 
-  create: async <T extends ColumnCategory = ColumnCategory>(rootColumnId: number, data: Partial<T>) => {
+  create: async <T extends ColumnNode = ColumnNode>(rootColumnId: number, data: Partial<T>) => {
     const response = await apiClient.post<ApiResponse<T>>(`/column-categories?rootColumnId=${encodeURIComponent(rootColumnId)}`, data)
     return response.data
   },
 
-  update: async <T extends ColumnCategory = ColumnCategory>(rootColumnId: number, id: number, data: Partial<T>) => {
+  update: async <T extends ColumnNode = ColumnNode>(rootColumnId: number, id: number, data: Partial<T>) => {
     const response = await apiClient.put<ApiResponse<T>>(`/column-categories/${id}?rootColumnId=${encodeURIComponent(rootColumnId)}`, data)
     return response.data
   },

@@ -71,12 +71,12 @@ export function getColumnById(id, { languageCode = null, includeTranslations = t
   return hydrateColumns([row], { languageCode, includeTranslations })[0] || null;
 }
 
-export function listCategoryColumns(model, { languageCode = null } = {}) {
+export function listModelColumns(model, { languageCode = null } = {}) {
   return listColumns({ languageCode, includeTranslations: true }).filter((item) => isColumnInModelTree(item, model));
 }
 
-export function getCategoryRootColumn(model, { languageCode = null } = {}) {
-  return listCategoryColumns(model, { languageCode }).find((item) => toInteger(item.parent_id, 0) <= 0) || null;
+export function getModelRootColumn(model, { languageCode = null } = {}) {
+  return listModelColumns(model, { languageCode }).find((item) => toInteger(item.parent_id, 0) <= 0) || null;
 }
 
 export function createManualColumn(input) {

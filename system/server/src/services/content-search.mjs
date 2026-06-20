@@ -1,8 +1,8 @@
 import { listSearchableFieldNames } from './content-model-fields.mjs';
 import { listContentEntriesPaged } from './content-entries.mjs';
 import { ensureContentModelStorageSchema } from './content-model-storage.mjs';
-import { listColumns, listCategoryColumns } from './columns.mjs';
-import { buildCategorySlugPath, buildContentDetailUrlFromColumn } from './column-paths.mjs';
+import { listColumns, listModelColumns } from './columns.mjs';
+import { buildColumnSlugPath, buildContentDetailUrlFromColumn } from './column-paths.mjs';
 import { resolvePublicSectionContext } from './public-sections.mjs';
 
 export function searchContentEntriesPaged(modelCode, rawQuery, {
@@ -72,7 +72,7 @@ export function searchAllContentPaged(rawQuery, {
   ));
   const columns = listColumns({ languageCode, includeTranslations: true });
   const productCategoryMap = new Map(
-    listCategoryColumns('product', { languageCode }).map((item) => [Number(item.id || 0), item])
+    listModelColumns('product', { languageCode }).map((item) => [Number(item.id || 0), item])
   );
   const columnMap = new Map(columns.map((item) => [Number(item.id || 0), item]));
   const publicSections = resolvePublicSectionContext(columns);
@@ -143,9 +143,9 @@ function buildSearchResultUrl(modelCode, item, context) {
     if (!column) {
       return `/products/${Number(item.id || 0)}.html`;
     }
-    const category = context.productCategoryMap.get(Number(item.column_id || 0));
-    const categoryPath = category ? buildCategorySlugPath(category, context.productCategoryMap) : null;
-    return buildContentDetailUrlFromColumn(item, column, categoryPath);
+    const columnTreeNode = context.productCategoryMap.get(Number(item.column_id || 0));
+    const columnPath = columnTreeNode ? buildColumnSlugPath(columnTreeNode, context.productCategoryMap) : null;
+    return buildContentDetailUrlFromColumn(item, column, columnPath);
   }
 
   if (modelCode === 'news') {

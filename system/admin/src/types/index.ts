@@ -109,7 +109,7 @@ export interface NewsTranslationStatus {
   has_content: boolean;
 }
 
-export interface ColumnCategory {
+export interface ColumnNode {
   id: number;
   column_id?: number;
   name: string;
@@ -121,14 +121,17 @@ export interface ColumnCategory {
   seo_title?: string;
   seo_description?: string;
   current_language_code?: string;
-  translations?: Record<string, ColumnCategoryTranslation>;
+  translations?: Record<string, ColumnNodeTranslation>;
 }
 
-export interface ColumnCategoryTranslation {
+export interface ColumnNodeTranslation {
   name: string;
   seo_title?: string;
   seo_description?: string;
 }
+
+
+
 
 export interface TemplateVariant {
   id: number;

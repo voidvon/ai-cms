@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getSiteConfig } from './site.mjs';
 import { ensureColumnsSchema, listColumns } from './columns.mjs';
-import { listColumnCategoriesByRoot } from './column-categories.mjs';
+import { listColumnNodesByRoot } from './column-nodes.mjs';
 import {
   buildColumnTreeIndex,
   isColumnUnderRoot
@@ -13,8 +13,8 @@ import {
   resolvePublicSectionContext
 } from './public-sections.mjs';
 import {
-  buildCategorySlugPath,
-  buildProductCategoryPublicUrl,
+  buildColumnSlugPath,
+  buildProductColumnPublicUrl,
   buildContentDetailUrlFromColumn
 } from './column-paths.mjs';
 
@@ -118,13 +118,13 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   const publicSections = resolvePublicSectionContext(columns);
   const managedCategoryRoot = getRootColumnByDriver(columns, 'managed_category');
   const pageTreeRoot = getRootColumnByDriver(columns, 'page_tree');
-  const productCategories = managedCategoryRoot ? listColumnCategoriesByRoot(managedCategoryRoot.id, { languageCode }) : [];
+  const productCategories = managedCategoryRoot ? listColumnNodesByRoot(managedCategoryRoot.id, { languageCode }) : [];
   const newsCategories = publicSections.newsSections.flatMap((section) => (
-    listColumnCategoriesByRoot(section.rootColumnId, { languageCode })
+    listColumnNodesByRoot(section.rootColumnId, { languageCode })
   ));
   const products = listProducts({ visibleOnly: true, limit: 10000, languageCode });
   const newsItems = listNews({ limit: 10000, languageCode });
-  const pageTreeCategories = pageTreeRoot ? listColumnCategoriesByRoot(pageTreeRoot.id, { languageCode }) : [];
+  const pageTreeCategories = pageTreeRoot ? listColumnNodesByRoot(pageTreeRoot.id, { languageCode }) : [];
 
   const productCategoriesById = new Map(productCategories.map((item) => [toInteger(item.id, 0), item]));
   const newsCategoriesById = new Map(newsCategories.map((item) => [toInteger(item.id, 0), item]));
@@ -196,15 +196,15 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     contentLines: buildCategorySampleLines(productCategories)
   }));
 
-  for (const category of productCategories) {
-    const categoryId = toInteger(category.id, 0);
-    const childCategories = productCategories.filter((item) => toInteger(item.parent_id, 0) === categoryId);
-    const categoryProducts = products.filter((item) => toInteger(item.column_id, 0) === categoryId).slice(0, MAX_LIST_SAMPLE_ITEMS);
+  for (const columnNode of productCategories) {
+    const columnNodeId = toInteger(columnNode.id, 0);
+    const childCategories = productCategories.filter((item) => toInteger(item.parent_id, 0) === columnNodeId);
+    const categoryProducts = products.filter((item) => toInteger(item.column_id, 0) === columnNodeId).slice(0, MAX_LIST_SAMPLE_ITEMS);
     pages.push(createPage({
-      title: category.name,
-      routePath: buildProductCategoryPublicUrl(category, productCategoriesById),
+      title: columnNode.name,
+      routePath: buildProductColumnPublicUrl(columnNode, productCategoriesById),
       section: '产品栏目',
-      summary: category.seo_description || `产品分类：${category.name}`,
+      summary: columnNode.seo_description || `产品分类：${columnNode.name}`,
       contentLines: [
         childCategories.length > 0 ? `下级分类：${childCategories.map((item) => item.name).join('、')}` : '',
         categoryProducts.length > 0 ? `示例产品：${categoryProducts.map((item) => item.name).join('、')}` : ''
@@ -213,8 +213,8 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   }
 
   for (const product of products) {
-    const category = productCategoriesById.get(toInteger(product.column_id, 0));
-    const categoryPath = category ? buildCategorySlugPath(category, productCategoriesById) : null;
+    const columnNode = productCategoriesById.get(toInteger(product.column_id, 0));
+    const categoryPath = columnNode ? buildColumnSlugPath(columnNode, productCategoriesById) : null;
     const column = columnMap.get(toInteger(product.column_id, 0));
     if (!column) continue;
 
@@ -225,7 +225,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
       summary: product.summary || `产品详情：${product.name}`,
       contentLines: [
         product.code ? `型号：${product.code}` : '',
-        category?.name ? `分类：${category.name}` : '',
+        columnNode?.name ? `分类：${columnNode.name}` : '',
         extractPlainText(product.content_html)
       ].filter(Boolean)
     }));
@@ -243,21 +243,21 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
       contentLines: buildCategorySampleLines(rootCategories)
     }));
 
-    for (const category of rootCategories) {
-      const categoryId = toInteger(category.id, 0);
-      const items = newsItems.filter((item) => toInteger(item.column_id, 0) === categoryId).slice(0, MAX_LIST_SAMPLE_ITEMS);
+    for (const columnNode of rootCategories) {
+      const columnNodeId = toInteger(columnNode.id, 0);
+      const items = newsItems.filter((item) => toInteger(item.column_id, 0) === columnNodeId).slice(0, MAX_LIST_SAMPLE_ITEMS);
       pages.push(createPage({
-        title: category.name,
-        routePath: `/${section.dirName}/${categoryId}.html`,
+        title: columnNode.name,
+        routePath: `/${section.dirName}/${columnNodeId}.html`,
         section: `${section.sectionLabel}栏目`,
-        summary: `${section.sectionLabel}分类：${category.name}`,
+        summary: `${section.sectionLabel}分类：${columnNode.name}`,
         contentLines: items.length > 0 ? [`示例文章：${items.map((item) => item.title).join('、')}`] : []
       }));
     }
   }
 
   for (const item of newsItems) {
-    const category = newsCategoriesById.get(toInteger(item.column_id, 0));
+    const columnNode = newsCategoriesById.get(toInteger(item.column_id, 0));
     const columnId = toInteger(item.column_id, 0);
     const section = publicSections.getNewsSectionByColumnId(columnId);
     if (!section?.rootColumn) {
@@ -270,7 +270,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
       section: `${section.sectionLabel}详情`,
       summary: item.summary || item.title,
       contentLines: [
-        category?.name ? `分类：${category.name}` : '',
+        columnNode?.name ? `分类：${columnNode.name}` : '',
         extractPlainText(item.content_html)
       ].filter(Boolean)
     }));

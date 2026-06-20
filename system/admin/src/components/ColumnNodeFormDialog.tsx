@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { columnCategoriesApi } from '@/api/column-categories'
+import { columnNodesApi } from '@/api/column-nodes'
 import { templateVariantsApi, templatesApi } from '@/api/advanced'
 import { languagesApi } from '@/api/languages'
 import { Button } from '@/components/ui/button'
@@ -12,15 +12,15 @@ import { Textarea } from '@/components/ui/textarea'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import type { Column, ColumnCategory, ColumnCategoryTranslation, TemplateBinding } from '@/types'
+import type { Column, ColumnNode, ColumnNodeTranslation, TemplateBinding } from '@/types'
 
 const DEFAULT_TEMPLATE_VALUE = '__default__'
 
-interface ColumnCategoryFormDialogProps {
+interface ColumnNodeFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   rootColumn: Column | null
-  category?: ColumnCategory
+  node?: ColumnNode
   currentParentId?: number
   mode: 'create' | 'edit'
 }
@@ -59,14 +59,14 @@ const FORM_META_BY_DRIVER: Record<string, {
   },
 }
 
-export default function ColumnCategoryFormDialog({
+export default function ColumnNodeFormDialog({
   open,
   onOpenChange,
   rootColumn,
-  category,
+  node,
   currentParentId = 0,
   mode,
-}: ColumnCategoryFormDialogProps) {
+}: ColumnNodeFormDialogProps) {
   const renderDriver = String(rootColumn?.column_semantics?.render_driver || '')
   const rootColumnId = Number(rootColumn?.column_semantics?.root_column_id || rootColumn?.id || 0)
   const meta = FORM_META_BY_DRIVER[renderDriver] || FORM_META_BY_DRIVER.section
@@ -81,7 +81,7 @@ export default function ColumnCategoryFormDialog({
     sort_order: 0,
   })
   const [singleName, setSingleName] = useState('')
-  const [translations, setTranslations] = useState<Record<string, ColumnCategoryTranslation>>({})
+  const [translations, setTranslations] = useState<Record<string, ColumnNodeTranslation>>({})
   const [listTemplateId, setListTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
   const [contentTemplateId, setContentTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
   const [singleTemplateId, setSingleTemplateId] = useState(DEFAULT_TEMPLATE_VALUE)
@@ -92,16 +92,16 @@ export default function ColumnCategoryFormDialog({
     enabled: open && !isSinglePageTree,
   })
 
-  const { data: categoriesData } = useQuery({
-    queryKey: ['column-categories', rootColumnId, 'options'],
-    queryFn: () => columnCategoriesApi.listOptions(rootColumnId),
+  const { data: nodesData } = useQuery({
+    queryKey: ['column-nodes', rootColumnId, 'options'],
+    queryFn: () => columnNodesApi.listOptions(rootColumnId),
     enabled: open && rootColumnId > 0,
   })
 
-  const { data: categoryDetailData } = useQuery({
-    queryKey: ['column-categories', rootColumnId, 'detail', category?.id, open],
-    queryFn: () => columnCategoriesApi.get(rootColumnId, category!.id, { include_translations: 1 }),
-    enabled: open && mode === 'edit' && Boolean(category?.id) && rootColumnId > 0,
+  const { data: nodeDetailData } = useQuery({
+    queryKey: ['column-nodes', rootColumnId, 'detail', node?.id, open],
+    queryFn: () => columnNodesApi.get(rootColumnId, node!.id, { include_translations: 1 }),
+    enabled: open && mode === 'edit' && Boolean(node?.id) && rootColumnId > 0,
   })
 
   const { data: selectedThemeData } = useQuery({
@@ -120,7 +120,7 @@ export default function ColumnCategoryFormDialog({
   const { data: bindingsData } = useQuery({
     queryKey: ['template-bindings', selectedThemeId ?? 0],
     queryFn: () => templatesApi.listBindings(selectedThemeId),
-    enabled: open && Boolean(selectedThemeId) && mode === 'edit' && Boolean(category?.id),
+    enabled: open && Boolean(selectedThemeId) && mode === 'edit' && Boolean(node?.id),
   })
 
   const languages = useMemo(() => languagesData?.data || [], [languagesData?.data])
@@ -128,7 +128,7 @@ export default function ColumnCategoryFormDialog({
   const availableLanguageCodes = useMemo(() => languages.map((item) => item.code), [languages])
 
   useEffect(() => {
-    const source = mode === 'edit' ? (categoryDetailData?.data || category) : null
+    const source = mode === 'edit' ? (nodeDetailData?.data || node) : null
     if (source && mode === 'edit') {
       setBaseData({
         parent_id: source.parent_id || 0,
@@ -177,7 +177,7 @@ export default function ColumnCategoryFormDialog({
       setContentTemplateId(DEFAULT_TEMPLATE_VALUE)
       setSingleTemplateId(DEFAULT_TEMPLATE_VALUE)
     }
-  }, [category, categoryDetailData?.data, mode, currentParentId, isSinglePageTree, defaultLanguageCode, availableLanguageCodes.join('|'), bindingsData?.data, meta.supportsSeo])
+  }, [node, nodeDetailData?.data, mode, currentParentId, isSinglePageTree, defaultLanguageCode, availableLanguageCodes.join('|'), bindingsData?.data, meta.supportsSeo])
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -194,20 +194,20 @@ export default function ColumnCategoryFormDialog({
             translations,
           }
       if (mode === 'create') {
-        const response = await columnCategoriesApi.create(rootColumnId, payload)
-        const categoryId = response.data?.id
-        if (!categoryId) {
-          throw new Error('分类创建失败')
+        const response = await columnNodesApi.create(rootColumnId, payload)
+        const nodeId = response.data?.id
+        if (!nodeId) {
+          throw new Error('栏目创建失败')
         }
-        await saveTemplateBindings(selectedThemeId, categoryId, listTemplateId, contentTemplateId, singleTemplateId, bindingsData?.data || [], meta.supportsListTemplate, isSinglePageTree)
+        await saveTemplateBindings(selectedThemeId, nodeId, listTemplateId, contentTemplateId, singleTemplateId, bindingsData?.data || [], meta.supportsListTemplate, isSinglePageTree)
         return response
       }
-      const response = await columnCategoriesApi.update(rootColumnId, category!.id, payload)
-      await saveTemplateBindings(selectedThemeId, category!.id, listTemplateId, contentTemplateId, singleTemplateId, bindingsData?.data || [], meta.supportsListTemplate, isSinglePageTree)
+      const response = await columnNodesApi.update(rootColumnId, node!.id, payload)
+      await saveTemplateBindings(selectedThemeId, node!.id, listTemplateId, contentTemplateId, singleTemplateId, bindingsData?.data || [], meta.supportsListTemplate, isSinglePageTree)
       return response
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['column-categories'] })
+      queryClient.invalidateQueries({ queryKey: ['column-nodes'] })
       queryClient.invalidateQueries({ queryKey: ['columns'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
       queryClient.invalidateQueries({ queryKey: ['news'] })
@@ -232,7 +232,7 @@ export default function ColumnCategoryFormDialog({
         return
       }
     } else if (!String(translations[defaultLanguageCode]?.name || '').trim()) {
-      toast.error('请输入默认语言的分类名称')
+      toast.error('请输入默认语言的栏目名称')
       return
     } else if (meta.supportsListTemplate && listTemplateId === DEFAULT_TEMPLATE_VALUE) {
       toast.error('请选择列表模板')
@@ -244,7 +244,7 @@ export default function ColumnCategoryFormDialog({
     mutation.mutate()
   }
 
-  const updateTranslation = (patch: Partial<ColumnCategoryTranslation>) => {
+  const updateTranslation = (patch: Partial<ColumnNodeTranslation>) => {
     setTranslations((previous) => ({
       ...previous,
       [activeLanguage]: {
@@ -255,12 +255,12 @@ export default function ColumnCategoryFormDialog({
     }))
   }
 
-  const categoryOptions = categoriesData?.data || []
+  const nodeOptions = nodesData?.data || []
   const templates = templatesData?.data || []
   const listTemplates = templates.filter((item) => item.type === 'list')
   const contentTemplates = templates.filter((item) => item.type === 'content')
   const singleTemplates = templates.filter((item) => item.type === 'single')
-  const isEditingWithoutCategory = mode === 'edit' && !category
+  const isEditingWithoutNode = mode === 'edit' && !node
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -277,7 +277,7 @@ export default function ColumnCategoryFormDialog({
               <div className="space-y-3">
                 <div>
                   <div className="font-medium">语言内容</div>
-                  <div className="text-sm text-muted-foreground">分类树结构共用，分类名称按语言维护。</div>
+                  <div className="text-sm text-muted-foreground">栏目树结构共用，栏目名称按语言维护。</div>
                 </div>
                 <TabsList className="w-full justify-start">
                   {languages.map((language) => (
@@ -292,7 +292,7 @@ export default function ColumnCategoryFormDialog({
               {languages.map((language) => (
                 <TabsContent key={language.id} value={language.code}>
                   <div className="space-y-2">
-                    <Label htmlFor={`name_${language.code}`}>分类名称 {language.code === defaultLanguageCode ? '*' : ''}</Label>
+                    <Label htmlFor={`name_${language.code}`}>栏目名称 {language.code === defaultLanguageCode ? '*' : ''}</Label>
                     <Input
                       id={`name_${language.code}`}
                       value={(translations[language.code] || createEmptyTranslation(meta.supportsSeo)).name || ''}
@@ -300,7 +300,7 @@ export default function ColumnCategoryFormDialog({
                         setActiveLanguage(language.code)
                         updateTranslation({ name: e.target.value })
                       }}
-                      placeholder="请输入分类名称"
+                      placeholder="请输入栏目名称"
                     />
                   </div>
                   {meta.supportsSeo ? (
@@ -353,7 +353,7 @@ export default function ColumnCategoryFormDialog({
               <div className="text-sm text-muted-foreground">这些字段不区分语言，所有语言共用同一份数据。</div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="parent_id">父分类</Label>
+              <Label htmlFor="parent_id">父栏目</Label>
               <Select
                 value={baseData.parent_id.toString()}
                 onValueChange={(value) => setBaseData({ ...baseData, parent_id: parseInt(value, 10) })}
@@ -362,10 +362,10 @@ export default function ColumnCategoryFormDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="0">顶级分类</SelectItem>
-                  {categoryOptions.map((cat: any) => (
-                    <SelectItem key={cat.id} value={cat.id.toString()}>
-                      {'　'.repeat(cat.depth || 0)}{cat.name}
+                  <SelectItem value="0">顶级栏目</SelectItem>
+                  {nodeOptions.map((item: any) => (
+                    <SelectItem key={item.id} value={item.id.toString()}>
+                      {'　'.repeat(item.depth || 0)}{item.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -475,7 +475,7 @@ export default function ColumnCategoryFormDialog({
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               取消
             </Button>
-            <Button type="submit" disabled={mutation.isPending || isEditingWithoutCategory}>
+            <Button type="submit" disabled={mutation.isPending || isEditingWithoutNode}>
               {mutation.isPending ? '提交中...' : '确定'}
             </Button>
           </DialogFooter>
@@ -541,7 +541,7 @@ async function deleteTemplateBindingIfExists(
   }
 }
 
-function createEmptyTranslation(supportsSeo: boolean, patch: Partial<ColumnCategoryTranslation> = {}): ColumnCategoryTranslation {
+function createEmptyTranslation(supportsSeo: boolean, patch: Partial<ColumnNodeTranslation> = {}): ColumnNodeTranslation {
   return {
     name: '',
     ...(supportsSeo ? { seo_title: '', seo_description: '' } : {}),
@@ -550,13 +550,13 @@ function createEmptyTranslation(supportsSeo: boolean, patch: Partial<ColumnCateg
 }
 
 function buildInitialTranslations(
-  category: ColumnCategory,
+  node: ColumnNode,
   defaultLanguageCode: string,
   availableLanguageCodes: string[],
   supportsSeo: boolean,
 ) {
-  const source = category.translations || {}
-  const output: Record<string, ColumnCategoryTranslation> = {}
+  const source = node.translations || {}
+  const output: Record<string, ColumnNodeTranslation> = {}
 
   for (const code of availableLanguageCodes) {
     output[code] = createEmptyTranslation(supportsSeo, source[code] || {})
@@ -568,9 +568,9 @@ function buildInitialTranslations(
 
   if (!source[defaultLanguageCode]) {
     output[defaultLanguageCode] = createEmptyTranslation(supportsSeo, {
-      name: category.name || '',
-      seo_title: category.seo_title || '',
-      seo_description: category.seo_description || '',
+      name: node.name || '',
+      seo_title: node.seo_title || '',
+      seo_description: node.seo_description || '',
     })
   }
 

@@ -1,12 +1,12 @@
 import { requireAuth } from '../../middleware/auth.mjs';
 import {
-  createColumnCategoryByRoot,
-  deleteColumnCategoryInRoot,
-  getColumnCategoryByIdInRoot,
-  listColumnCategoriesByRoot,
-  listColumnCategoryOptionsByRoot,
-  updateColumnCategoryInRoot
-} from '../../services/column-categories.mjs';
+  createColumnNodeByRoot,
+  deleteColumnNodeInRoot,
+  getColumnNodeByIdInRoot,
+  listColumnNodesByRoot,
+  listColumnNodeOptionsByRoot,
+  updateColumnNodeInRoot
+} from '../../services/column-nodes.mjs';
 
 function resolveRootColumnId(request) {
   const value = Number.parseInt(String(request?.query?.rootColumnId || request?.query?.root_column_id || '').trim(), 10);
@@ -16,12 +16,12 @@ function resolveRootColumnId(request) {
   return value;
 }
 
-export default async function columnCategoriesRoutes(app) {
+export default async function columnNodesRoutes(app) {
   app.get('/column-categories', async (request, reply) => {
     try {
       const rootColumnId = resolveRootColumnId(request);
       const { language, lang } = request.query;
-      return { success: true, data: listColumnCategoriesByRoot(rootColumnId, { languageCode: language ?? lang }) };
+      return { success: true, data: listColumnNodesByRoot(rootColumnId, { languageCode: language ?? lang }) };
     } catch (error) {
       reply.code(400);
       return { success: false, message: error.message };
@@ -32,7 +32,7 @@ export default async function columnCategoriesRoutes(app) {
     try {
       const rootColumnId = resolveRootColumnId(request);
       const { language, lang } = request.query;
-      return { success: true, data: listColumnCategoryOptionsByRoot(rootColumnId, { languageCode: language ?? lang }) };
+      return { success: true, data: listColumnNodeOptionsByRoot(rootColumnId, { languageCode: language ?? lang }) };
     } catch (error) {
       reply.code(400);
       return { success: false, message: error.message };
@@ -45,7 +45,7 @@ export default async function columnCategoriesRoutes(app) {
     try {
       const rootColumnId = resolveRootColumnId(request);
       const { parentId, page, limit, language, lang } = request.query;
-      const items = listColumnCategoriesByRoot(rootColumnId, { languageCode: language ?? lang })
+      const items = listColumnNodesByRoot(rootColumnId, { languageCode: language ?? lang })
         .filter((item) => Number(item.parent_id || 0) === (parentId ? parseInt(parentId, 10) : 0));
       const safeLimit = Math.min(Math.max(parentId ? parseInt(String(limit || 50), 10) : parseInt(String(limit || 50), 10), 1), 200);
       const safePage = Math.max(parseInt(String(page || 1), 10), 1);
@@ -76,12 +76,12 @@ export default async function columnCategoriesRoutes(app) {
         languageCode: language ?? lang,
         includeTranslations: include_translations === '1' || include_translations === 'true' || includeTranslations === '1' || includeTranslations === 'true'
       };
-      const category = getColumnCategoryByIdInRoot(rootColumnId, request.params.id, queryOptions);
-      if (!category) {
+      const node = getColumnNodeByIdInRoot(rootColumnId, request.params.id, queryOptions);
+      if (!node) {
         reply.code(404);
         return { success: false, message: '分类不存在' };
       }
-      return { success: true, data: category };
+      return { success: true, data: node };
     } catch (error) {
       reply.code(400);
       return { success: false, message: error.message };
@@ -93,8 +93,8 @@ export default async function columnCategoriesRoutes(app) {
   }, async (request, reply) => {
     try {
       const rootColumnId = resolveRootColumnId(request);
-      const category = createColumnCategoryByRoot(rootColumnId, request.body || {});
-      return { success: true, data: category };
+      const node = createColumnNodeByRoot(rootColumnId, request.body || {});
+      return { success: true, data: node };
     } catch (error) {
       reply.code(400);
       return { success: false, message: error.message };
@@ -106,12 +106,12 @@ export default async function columnCategoriesRoutes(app) {
   }, async (request, reply) => {
     try {
       const rootColumnId = resolveRootColumnId(request);
-      const category = updateColumnCategoryInRoot(rootColumnId, request.params.id, request.body || {});
-      if (!category) {
+      const node = updateColumnNodeInRoot(rootColumnId, request.params.id, request.body || {});
+      if (!node) {
         reply.code(404);
         return { success: false, message: '分类不存在' };
       }
-      return { success: true, data: category };
+      return { success: true, data: node };
     } catch (error) {
       reply.code(400);
       return { success: false, message: error.message };
@@ -123,8 +123,8 @@ export default async function columnCategoriesRoutes(app) {
   }, async (request, reply) => {
     try {
       const rootColumnId = resolveRootColumnId(request);
-      const category = deleteColumnCategoryInRoot(rootColumnId, request.params.id);
-      if (!category) {
+      const node = deleteColumnNodeInRoot(rootColumnId, request.params.id);
+      if (!node) {
         reply.code(404);
         return { success: false, message: '分类不存在' };
       }

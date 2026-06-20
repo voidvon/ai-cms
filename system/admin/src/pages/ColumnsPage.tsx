@@ -2,7 +2,7 @@ import { Suspense, lazy, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { contentModelsApi, templateVariantsApi, templatesApi } from '@/api/advanced'
-import { columnCategoriesApi } from '@/api/column-categories'
+import { columnNodesApi } from '@/api/column-nodes'
 import { columnsApi } from '@/api/columns'
 import { languagesApi } from '@/api/languages'
 import { newsApi } from '@/api/news'
@@ -36,12 +36,12 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
-import type { Column, ColumnCategory, ContentModel, News, Product, Template, TemplateBinding } from '@/types'
+import type { Column, ColumnNode, ContentModel, News, Product, Template, TemplateBinding } from '@/types'
 import type { ManualColumnFormValue } from '@/components/ManualColumnFormDialog'
 
 const DEFAULT_TEMPLATE_VALUE = '__default__'
-const CategoryTemplateBindingDialog = lazy(() => import('@/components/CategoryTemplateBindingDialog'))
-const ColumnCategoryFormDialog = lazy(() => import('@/components/ColumnCategoryFormDialog'))
+const ColumnTemplateBindingDialog = lazy(() => import('@/components/ColumnTemplateBindingDialog'))
+const ColumnNodeFormDialog = lazy(() => import('@/components/ColumnNodeFormDialog'))
 const ManualColumnFormDialog = lazy(() => import('@/components/ManualColumnFormDialog'))
 const NewsFormDialog = lazy(() => import('@/components/NewsFormDialog'))
 const ProductFormDialog = lazy(() => import('@/components/ProductFormDialog'))
@@ -55,7 +55,7 @@ type DeleteTarget =
   | { type: 'news'; id: number }
   | null
 
-type EditingCategoryTarget =
+type EditingNodeTarget =
   | { rootColumnId: number; id: number }
   | null
 
@@ -63,7 +63,7 @@ type EditingColumnTarget =
   | Column
   | null
 
-type CategoryTreeTarget = {
+type ColumnNodeTarget = {
   id: number
   columnId: number
   rootColumnId: number
@@ -72,7 +72,7 @@ type CategoryTreeTarget = {
   renderDriver: string
 } | null
 
-interface RootCategoryForm {
+interface RootColumnNodeForm {
   name: string
   contentModelId: string
   dirName: string
@@ -83,10 +83,10 @@ interface RootCategoryForm {
 }
 
 type ManualColumnKind = 'link' | 'single'
-type ColumnDisplayKind = 'category' | ManualColumnKind
+type ColumnDisplayKind = 'node' | ManualColumnKind
 
 const COLUMN_KIND_META: Record<ColumnDisplayKind, { label: string; createLabel: string; showTreeBadge: boolean }> = {
-  category: {
+  node: {
     label: '栏目',
     createLabel: '新增栏目',
     showTreeBadge: false,
@@ -120,16 +120,16 @@ export default function ColumnsPage() {
   const [editingNews, setEditingNews] = useState<News | undefined>()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null)
-  const [categoryFormOpen, setCategoryFormOpen] = useState(false)
-  const [categoryFormMode, setCategoryFormMode] = useState<'create' | 'edit'>('edit')
-  const [editingCategoryTarget, setEditingCategoryTarget] = useState<EditingCategoryTarget>(null)
+  const [nodeFormOpen, setNodeFormOpen] = useState(false)
+  const [nodeFormMode, setNodeFormMode] = useState<'create' | 'edit'>('edit')
+  const [editingNodeTarget, setEditingNodeTarget] = useState<EditingNodeTarget>(null)
   const [editingColumnTarget, setEditingColumnTarget] = useState<EditingColumnTarget>(null)
-  const [creatingCategoryTarget, setCreatingCategoryTarget] = useState<CategoryTreeTarget>(null)
-  const [bindingCategoryTarget, setBindingCategoryTarget] = useState<CategoryTreeTarget>(null)
-  const [categoryDeleteDialogOpen, setCategoryDeleteDialogOpen] = useState(false)
-  const [deletingCategoryTarget, setDeletingCategoryTarget] = useState<CategoryTreeTarget>(null)
-  const [rootCategoryDialogOpen, setRootCategoryDialogOpen] = useState(false)
-  const [rootCategoryForm, setRootCategoryForm] = useState<RootCategoryForm>({
+  const [creatingNodeTarget, setCreatingNodeTarget] = useState<ColumnNodeTarget>(null)
+  const [bindingNodeTarget, setBindingNodeTarget] = useState<ColumnNodeTarget>(null)
+  const [nodeDeleteDialogOpen, setNodeDeleteDialogOpen] = useState(false)
+  const [deletingNodeTarget, setDeletingNodeTarget] = useState<ColumnNodeTarget>(null)
+  const [rootNodeDialogOpen, setRootNodeDialogOpen] = useState(false)
+  const [rootNodeForm, setRootNodeForm] = useState<RootColumnNodeForm>({
     name: '',
     contentModelId: '',
     dirName: '',
@@ -160,22 +160,22 @@ export default function ColumnsPage() {
   })
   const selectedThemeId = selectedThemeData?.data?.id
 
-  const { data: editingCategoryData } = useQuery({
-    queryKey: ['column-categories', editingCategoryTarget?.rootColumnId, 'detail', editingCategoryTarget?.id],
-    queryFn: () => columnCategoriesApi.get(editingCategoryTarget!.rootColumnId, editingCategoryTarget!.id),
-    enabled: categoryFormOpen && categoryFormMode === 'edit' && Boolean(editingCategoryTarget?.rootColumnId) && Boolean(editingCategoryTarget?.id),
+  const { data: editingNodeData } = useQuery({
+    queryKey: ['column-nodes', editingNodeTarget?.rootColumnId, 'detail', editingNodeTarget?.id],
+    queryFn: () => columnNodesApi.get(editingNodeTarget!.rootColumnId, editingNodeTarget!.id),
+    enabled: nodeFormOpen && nodeFormMode === 'edit' && Boolean(editingNodeTarget?.rootColumnId) && Boolean(editingNodeTarget?.id),
   })
 
   const { data: templatesData } = useQuery({
     queryKey: ['templates', selectedThemeId ?? 0],
     queryFn: () => templatesApi.list(undefined, selectedThemeId),
-    enabled: (rootCategoryDialogOpen || manualColumnDialogOpen || Boolean(bindingCategoryTarget)) && Boolean(selectedThemeId),
+    enabled: (rootNodeDialogOpen || manualColumnDialogOpen || Boolean(bindingNodeTarget)) && Boolean(selectedThemeId),
   })
 
   const { data: bindingsData } = useQuery({
     queryKey: ['template-bindings', selectedThemeId ?? 0],
     queryFn: () => templatesApi.listBindings(selectedThemeId),
-    enabled: (manualColumnDialogOpen || Boolean(bindingCategoryTarget)) && Boolean(selectedThemeId),
+    enabled: (manualColumnDialogOpen || Boolean(bindingNodeTarget)) && Boolean(selectedThemeId),
   })
   const { data: contentModelsData } = useQuery({
     queryKey: ['content-models'],
@@ -202,9 +202,9 @@ export default function ColumnsPage() {
   const isManualLinkColumn = selectedColumnType === 'link'
   const isManualSingleColumn = selectedColumnType === 'single' && selectedRenderDriver !== 'page_tree'
   const isManualColumn = isManualLinkColumn || isManualSingleColumn
-  const categoryFormRootColumnId = editingCategoryTarget?.rootColumnId || creatingCategoryTarget?.rootColumnId || 0
-  const categoryFormRootColumn = categoryFormRootColumnId
-    ? columns.find((item) => item.id === categoryFormRootColumnId) || null
+  const nodeFormRootColumnId = editingNodeTarget?.rootColumnId || creatingNodeTarget?.rootColumnId || 0
+  const nodeFormRootColumn = nodeFormRootColumnId
+    ? columns.find((item) => item.id === nodeFormRootColumnId) || null
     : null
 
   const { data: productsData, isLoading: productsLoading } = useQuery({
@@ -259,37 +259,37 @@ export default function ColumnsPage() {
     },
   })
 
-  const deleteCategoryMutation = useMutation({
-    mutationFn: ({ rootColumnId, id }: { rootColumnId: number; id: number }) => columnCategoriesApi.delete(rootColumnId, id),
+  const deleteNodeMutation = useMutation({
+    mutationFn: ({ rootColumnId, id }: { rootColumnId: number; id: number }) => columnNodesApi.delete(rootColumnId, id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['column-categories'] })
+      queryClient.invalidateQueries({ queryKey: ['column-nodes'] })
       queryClient.invalidateQueries({ queryKey: ['columns'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
       queryClient.invalidateQueries({ queryKey: ['news'] })
       queryClient.invalidateQueries({ queryKey: ['template-bindings'] })
       toast.success('删除成功')
-      if (deletingCategoryTarget?.columnId === selectedColumn?.id) {
+      if (deletingNodeTarget?.columnId === selectedColumn?.id) {
         setSearchParams({})
       }
-      setCategoryDeleteDialogOpen(false)
-      setDeletingCategoryTarget(null)
+      setNodeDeleteDialogOpen(false)
+      setDeletingNodeTarget(null)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || '删除失败')
     },
   })
 
-  const createRootCategoryMutation = useMutation({
+  const createRootNodeMutation = useMutation({
     mutationFn: async () => {
-      const name = rootCategoryForm.name.trim()
+      const name = rootNodeForm.name.trim()
       if (!name) {
         throw new Error('请输入栏目名称')
       }
-      const contentModelId = Number.parseInt(rootCategoryForm.contentModelId, 10)
+      const contentModelId = Number.parseInt(rootNodeForm.contentModelId, 10)
       if (!contentModelId) {
         throw new Error('请选择内容模型')
       }
-      const routePath = rootCategoryForm.routePath.trim()
+      const routePath = rootNodeForm.routePath.trim()
       if (!routePath) {
         throw new Error('请输入访问路径')
       }
@@ -300,9 +300,9 @@ export default function ColumnsPage() {
           column_type: 'list',
           content_model_id: contentModelId,
           custom_url: '',
-          dir_name: rootCategoryForm.dirName.trim(),
+          dir_name: rootNodeForm.dirName.trim(),
           route_path: routePath,
-          detail_rule: rootCategoryForm.detailRule.trim() || '{id}.html',
+          detail_rule: rootNodeForm.detailRule.trim() || '{id}.html',
           sort_order: 0,
           is_visible: 1,
         },
@@ -317,18 +317,18 @@ export default function ColumnsPage() {
         throw new Error('栏目创建失败')
       }
 
-      await saveRequiredTemplateBinding(selectedThemeId || 0, 'column', columnId, 'list', rootCategoryForm.listTemplateId)
-      await saveRequiredTemplateBinding(selectedThemeId || 0, 'column', columnId, 'content', rootCategoryForm.contentTemplateId)
+      await saveRequiredTemplateBinding(selectedThemeId || 0, 'column', columnId, 'list', rootNodeForm.listTemplateId)
+      await saveRequiredTemplateBinding(selectedThemeId || 0, 'column', columnId, 'content', rootNodeForm.contentTemplateId)
 
       return response
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['columns'] })
-      queryClient.invalidateQueries({ queryKey: ['column-categories'] })
+      queryClient.invalidateQueries({ queryKey: ['column-nodes'] })
       queryClient.invalidateQueries({ queryKey: ['template-bindings'] })
       toast.success('栏目已创建')
-      setRootCategoryDialogOpen(false)
-      resetRootCategoryForm()
+      setRootNodeDialogOpen(false)
+      resetRootNodeForm()
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || error.message || '创建失败')
@@ -452,7 +452,7 @@ export default function ColumnsPage() {
   const listTemplates = templates.filter((template: Template) => template.type === 'list')
   const contentTemplates = templates.filter((template: Template) => template.type === 'content')
   const singleTemplates = templates.filter((template: Template) => template.type === 'single')
-  const selectedCategoryBindings = selectedColumn
+  const selectedNodeBindings = selectedColumn
     ? bindings.filter((binding) => binding.target_type === 'column' && binding.target_id === selectedColumn.id)
     : []
 
@@ -461,20 +461,20 @@ export default function ColumnsPage() {
     setSearchParams({ columnId: String(column.id) })
   }
 
-  const handleCreateChildCategory = (column: Column) => {
-    const target = getCategoryTreeTarget(column)
+  const handleCreateChildNode = (column: Column) => {
+    const target = getColumnNodeTarget(column)
     if (!target) {
       return
     }
 
-    setCategoryFormMode('create')
-    setCreatingCategoryTarget(target)
-    setEditingCategoryTarget(null)
-    setCategoryFormOpen(true)
+    setNodeFormMode('create')
+    setCreatingNodeTarget(target)
+    setEditingNodeTarget(null)
+    setNodeFormOpen(true)
   }
 
-  const resetRootCategoryForm = () => {
-    setRootCategoryForm({
+  const resetRootNodeForm = () => {
+    setRootNodeForm({
       name: '',
       contentModelId: '',
       dirName: '',
@@ -485,10 +485,10 @@ export default function ColumnsPage() {
     })
   }
 
-  const handleRootCategoryDialogOpenChange = (open: boolean) => {
-    setRootCategoryDialogOpen(open)
+  const handleRootNodeDialogOpenChange = (open: boolean) => {
+    setRootNodeDialogOpen(open)
     if (!open) {
-      resetRootCategoryForm()
+      resetRootNodeForm()
     }
   }
 
@@ -501,17 +501,17 @@ export default function ColumnsPage() {
     }
   }
 
-  const handleCreateRootCategory = (event: React.FormEvent) => {
+  const handleCreateRootNode = (event: React.FormEvent) => {
     event.preventDefault()
-    if (rootCategoryForm.listTemplateId === DEFAULT_TEMPLATE_VALUE) {
+    if (rootNodeForm.listTemplateId === DEFAULT_TEMPLATE_VALUE) {
       toast.error('请选择列表模板')
       return
     }
-    if (rootCategoryForm.contentTemplateId === DEFAULT_TEMPLATE_VALUE) {
+    if (rootNodeForm.contentTemplateId === DEFAULT_TEMPLATE_VALUE) {
       toast.error('请选择内容模板')
       return
     }
-    createRootCategoryMutation.mutate()
+    createRootNodeMutation.mutate()
   }
 
   const handleCreateManualColumn = (kind: ManualColumnKind) => {
@@ -545,51 +545,51 @@ export default function ColumnsPage() {
     setManualColumnDeleteDialogOpen(true)
   }
 
-  const handleEditColumnCategory = (column: Column) => {
-    const target = getCategoryTreeTarget(column)
+  const handleEditColumnNode = (column: Column) => {
+    const target = getColumnNodeTarget(column)
     if (!target) {
       return
     }
 
-    setCategoryFormMode('edit')
-    setCreatingCategoryTarget(null)
+    setNodeFormMode('edit')
+    setCreatingNodeTarget(null)
     setEditingColumnTarget(null)
-    setEditingCategoryTarget({ rootColumnId: target.rootColumnId, id: target.id })
-    setCategoryFormOpen(true)
+    setEditingNodeTarget({ rootColumnId: target.rootColumnId, id: target.id })
+    setNodeFormOpen(true)
   }
 
   const handleTemplateBinding = (column: Column) => {
-    const target = getCategoryTreeTarget(column)
+    const target = getColumnNodeTarget(column)
     if (target) {
-      setBindingCategoryTarget(target)
+      setBindingNodeTarget(target)
     }
   }
 
-  const handleDeleteColumnCategory = (column: Column) => {
-    const target = getCategoryTreeTarget(column)
+  const handleDeleteColumnNode = (column: Column) => {
+    const target = getColumnNodeTarget(column)
     if (target) {
-      setDeletingCategoryTarget(target)
-      setCategoryDeleteDialogOpen(true)
+      setDeletingNodeTarget(target)
+      setNodeDeleteDialogOpen(true)
     }
   }
 
-  const handleCategoryFormOpenChange = (open: boolean) => {
-    setCategoryFormOpen(open)
+  const handleNodeFormOpenChange = (open: boolean) => {
+    setNodeFormOpen(open)
     if (!open) {
-      setEditingCategoryTarget(null)
-      setCreatingCategoryTarget(null)
+      setEditingNodeTarget(null)
+      setCreatingNodeTarget(null)
       queryClient.invalidateQueries({ queryKey: ['columns'] })
       queryClient.invalidateQueries({ queryKey: ['products'] })
       queryClient.invalidateQueries({ queryKey: ['news'] })
-      queryClient.invalidateQueries({ queryKey: ['column-categories'] })
+      queryClient.invalidateQueries({ queryKey: ['column-nodes'] })
     }
   }
 
-  const confirmDeleteCategory = () => {
-    if (!deletingCategoryTarget) {
+  const confirmDeleteNode = () => {
+    if (!deletingNodeTarget) {
       return
     }
-    deleteCategoryMutation.mutate({ rootColumnId: deletingCategoryTarget.rootColumnId, id: deletingCategoryTarget.id })
+    deleteNodeMutation.mutate({ rootColumnId: deletingNodeTarget.rootColumnId, id: deletingNodeTarget.id })
   }
 
   const renderColumnTreeAction = (item: TreeItemData<Column>) => {
@@ -598,9 +598,9 @@ export default function ColumnsPage() {
       return null
     }
 
-    const categoryTarget = getCategoryTreeTarget(column)
+    const nodeTarget = getColumnNodeTarget(column)
     const canEditManualColumn = isEditableManualColumn(column)
-    const hasActions = canEditManualColumn || Boolean(categoryTarget)
+    const hasActions = canEditManualColumn || Boolean(nodeTarget)
 
     return (
       <DropdownMenu>
@@ -624,14 +624,14 @@ export default function ColumnsPage() {
             </DropdownMenuItem>
           ) : null}
 
-          {categoryTarget ? (
-            <DropdownMenuItem onSelect={() => handleCreateChildCategory(column)}>
+          {nodeTarget ? (
+            <DropdownMenuItem onSelect={() => handleCreateChildNode(column)}>
               <Plus className="size-4" />
               添加子栏目
             </DropdownMenuItem>
           ) : null}
 
-          {categoryTarget && canEditManualColumn ? <DropdownMenuSeparator /> : null}
+          {nodeTarget && canEditManualColumn ? <DropdownMenuSeparator /> : null}
 
           {canEditManualColumn ? (
             <DropdownMenuItem onSelect={() => handleEditManualColumn(column)}>
@@ -640,21 +640,21 @@ export default function ColumnsPage() {
             </DropdownMenuItem>
           ) : null}
 
-          {categoryTarget ? (
-            <DropdownMenuItem onSelect={() => handleEditColumnCategory(column)}>
+          {nodeTarget ? (
+            <DropdownMenuItem onSelect={() => handleEditColumnNode(column)}>
               <Pencil className="size-4" />
               编辑栏目
             </DropdownMenuItem>
           ) : null}
 
-          {categoryTarget ? (
+          {nodeTarget ? (
             <DropdownMenuItem onSelect={() => handleTemplateBinding(column)}>
               <LayoutTemplate className="size-4" />
               模板绑定
             </DropdownMenuItem>
           ) : null}
 
-          {(canEditManualColumn || categoryTarget) ? <DropdownMenuSeparator /> : null}
+          {(canEditManualColumn || nodeTarget) ? <DropdownMenuSeparator /> : null}
 
           {canEditManualColumn ? (
             <DropdownMenuItem
@@ -666,10 +666,10 @@ export default function ColumnsPage() {
             </DropdownMenuItem>
           ) : null}
 
-          {categoryTarget ? (
+          {nodeTarget ? (
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
-              onSelect={() => handleDeleteColumnCategory(column)}
+              onSelect={() => handleDeleteColumnNode(column)}
             >
               <Trash2 className="size-4" />
               删除栏目
@@ -777,9 +777,9 @@ export default function ColumnsPage() {
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setRootCategoryDialogOpen(true)}>
+                <DropdownMenuItem onSelect={() => setRootNodeDialogOpen(true)}>
                   <Plus className="size-4" />
-                  {COLUMN_KIND_META.category.createLabel}
+                  {COLUMN_KIND_META.node.createLabel}
                 </DropdownMenuItem>
                 <DropdownMenuItem onSelect={() => handleCreateManualColumn('link')}>
                   <Plus className="size-4" />
@@ -825,9 +825,9 @@ export default function ColumnsPage() {
         </div>
         <div className="mt-4 min-h-0 flex flex-1 flex-col">
           {selectedColumn && !isManualColumn ? (
-            <CategoryDetailPanel
+            <ColumnNodeDetailPanel
               column={selectedColumn}
-              bindings={selectedCategoryBindings}
+              bindings={selectedNodeBindings}
               contentModels={contentModels}
               selectedThemeId={selectedThemeId}
             />
@@ -951,27 +951,27 @@ export default function ColumnsPage() {
         </Suspense>
       ) : null}
 
-      <Dialog open={rootCategoryDialogOpen} onOpenChange={handleRootCategoryDialogOpenChange}>
+      <Dialog open={rootNodeDialogOpen} onOpenChange={handleRootNodeDialogOpenChange}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>新增一级栏目</DialogTitle>
             <DialogDescription>创建一个列表式栏目根节点，用于承载分类树和内容列表。</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreateRootCategory} className="space-y-4">
+          <form onSubmit={handleCreateRootNode} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="root-category-name">栏目名称 *</Label>
+              <Label htmlFor="root-column-name">栏目名称 *</Label>
               <Input
-                id="root-category-name"
-                value={rootCategoryForm.name}
-                onChange={(event) => setRootCategoryForm({ ...rootCategoryForm, name: event.target.value })}
+                id="root-column-name"
+                value={rootNodeForm.name}
+                onChange={(event) => setRootNodeForm({ ...rootNodeForm, name: event.target.value })}
                 placeholder="请输入栏目名称"
               />
             </div>
             <div className="space-y-2">
               <Label>内容模型</Label>
               <Select
-                value={rootCategoryForm.contentModelId}
-                onValueChange={(value) => setRootCategoryForm({ ...rootCategoryForm, contentModelId: value })}
+                value={rootNodeForm.contentModelId}
+                onValueChange={(value) => setRootNodeForm({ ...rootNodeForm, contentModelId: value })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -987,38 +987,38 @@ export default function ColumnsPage() {
             </div>
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="root-category-dir-name">目录名</Label>
+                <Label htmlFor="root-column-dir-name">目录名</Label>
                 <Input
-                  id="root-category-dir-name"
-                  value={rootCategoryForm.dirName}
-                  onChange={(event) => setRootCategoryForm({ ...rootCategoryForm, dirName: event.target.value })}
+                  id="root-column-dir-name"
+                  value={rootNodeForm.dirName}
+                  onChange={(event) => setRootNodeForm({ ...rootNodeForm, dirName: event.target.value })}
                   placeholder="catalog"
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="root-category-route-path">访问路径 *</Label>
+                <Label htmlFor="root-column-route-path">访问路径 *</Label>
                 <Input
-                  id="root-category-route-path"
-                  value={rootCategoryForm.routePath}
-                  onChange={(event) => setRootCategoryForm({ ...rootCategoryForm, routePath: event.target.value })}
+                  id="root-column-route-path"
+                  value={rootNodeForm.routePath}
+                  onChange={(event) => setRootNodeForm({ ...rootNodeForm, routePath: event.target.value })}
                   placeholder="/catalog/"
                 />
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="root-category-detail-rule">内容页规则</Label>
+              <Label htmlFor="root-column-detail-rule">内容页规则</Label>
               <Input
-                id="root-category-detail-rule"
-                value={rootCategoryForm.detailRule}
-                onChange={(event) => setRootCategoryForm({ ...rootCategoryForm, detailRule: event.target.value })}
+                id="root-column-detail-rule"
+                value={rootNodeForm.detailRule}
+                onChange={(event) => setRootNodeForm({ ...rootNodeForm, detailRule: event.target.value })}
                 placeholder="{id}.html"
               />
             </div>
             <div className="space-y-2">
               <Label>列表模板</Label>
               <Select
-                value={rootCategoryForm.listTemplateId}
-                onValueChange={(value) => setRootCategoryForm({ ...rootCategoryForm, listTemplateId: value })}
+                value={rootNodeForm.listTemplateId}
+                onValueChange={(value) => setRootNodeForm({ ...rootNodeForm, listTemplateId: value })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -1036,8 +1036,8 @@ export default function ColumnsPage() {
             <div className="space-y-2">
               <Label>内容模板</Label>
               <Select
-                value={rootCategoryForm.contentTemplateId}
-                onValueChange={(value) => setRootCategoryForm({ ...rootCategoryForm, contentTemplateId: value })}
+                value={rootNodeForm.contentTemplateId}
+                onValueChange={(value) => setRootNodeForm({ ...rootNodeForm, contentTemplateId: value })}
               >
                 <SelectTrigger>
                   <SelectValue />
@@ -1053,11 +1053,11 @@ export default function ColumnsPage() {
               </Select>
             </div>
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => handleRootCategoryDialogOpenChange(false)}>
+              <Button type="button" variant="outline" onClick={() => handleRootNodeDialogOpenChange(false)}>
                 取消
               </Button>
-              <Button type="submit" disabled={createRootCategoryMutation.isPending}>
-                {createRootCategoryMutation.isPending ? '创建中...' : '确定'}
+              <Button type="submit" disabled={createRootNodeMutation.isPending}>
+                {createRootNodeMutation.isPending ? '创建中...' : '确定'}
               </Button>
             </DialogFooter>
         </form>
@@ -1087,32 +1087,32 @@ export default function ColumnsPage() {
         </Suspense>
       ) : null}
 
-      {categoryFormOpen && categoryFormRootColumn ? (
+      {nodeFormOpen && nodeFormRootColumn ? (
         <Suspense fallback={<DialogFallback />}>
-          <ColumnCategoryFormDialog
-            open={categoryFormOpen}
-            onOpenChange={handleCategoryFormOpenChange}
-            rootColumn={categoryFormRootColumn}
-            category={categoryFormMode === 'edit' ? editingCategoryData?.data as ColumnCategory | undefined : undefined}
-            currentParentId={categoryFormMode === 'create' ? creatingCategoryTarget?.id || 0 : 0}
-            mode={categoryFormMode}
+          <ColumnNodeFormDialog
+            open={nodeFormOpen}
+            onOpenChange={handleNodeFormOpenChange}
+            rootColumn={nodeFormRootColumn}
+            node={nodeFormMode === 'edit' ? editingNodeData?.data as ColumnNode | undefined : undefined}
+            currentParentId={nodeFormMode === 'create' ? creatingNodeTarget?.id || 0 : 0}
+            mode={nodeFormMode}
           />
         </Suspense>
       ) : null}
 
-      {bindingCategoryTarget ? (
+      {bindingNodeTarget ? (
         <Suspense fallback={<DialogFallback />}>
-          <CategoryTemplateBindingDialog
-            open={Boolean(bindingCategoryTarget)}
+          <ColumnTemplateBindingDialog
+            open={Boolean(bindingNodeTarget)}
             onOpenChange={(open) => {
               if (!open) {
-                setBindingCategoryTarget(null)
+                setBindingNodeTarget(null)
               }
             }}
-            targetType={bindingCategoryTarget.targetType}
-            targetId={bindingCategoryTarget.id}
-            targetName={bindingCategoryTarget.name}
-            templateTypes={bindingCategoryTarget.renderDriver === 'page_tree' ? ['single'] : ['list', 'content']}
+            targetType={bindingNodeTarget.targetType}
+            targetId={bindingNodeTarget.id}
+            targetName={bindingNodeTarget.name}
+            templateTypes={bindingNodeTarget.renderDriver === 'page_tree' ? ['single'] : ['list', 'content']}
           />
         </Suspense>
       ) : null}
@@ -1132,19 +1132,19 @@ export default function ColumnsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <AlertDialog open={categoryDeleteDialogOpen} onOpenChange={setCategoryDeleteDialogOpen}>
+      <AlertDialog open={nodeDeleteDialogOpen} onOpenChange={setNodeDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>确认删除栏目</AlertDialogTitle>
             <AlertDialogDescription>
-              确定要删除「{deletingCategoryTarget?.name}」吗？此操作无法撤销；如果该栏目下有子栏目或内容，删除可能会失败。
+              确定要删除「{deletingNodeTarget?.name}」吗？此操作无法撤销；如果该栏目下有子栏目或内容，删除可能会失败。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>取消</AlertDialogCancel>
             <AlertDialogAction
-              onClick={confirmDeleteCategory}
-              disabled={deleteCategoryMutation.isPending}
+              onClick={confirmDeleteNode}
+              disabled={deleteNodeMutation.isPending}
             >
               确定
             </AlertDialogAction>
@@ -1440,7 +1440,7 @@ function ManualColumnPanel({
   )
 }
 
-function CategoryDetailPanel({
+function ColumnNodeDetailPanel({
   column,
   bindings,
   contentModels,
@@ -1451,7 +1451,7 @@ function CategoryDetailPanel({
   contentModels: ContentModel[]
   selectedThemeId?: number
 }) {
-  const target = getCategoryTreeTarget(column)
+  const target = getColumnNodeTarget(column)
   const listBinding = bindings.find((item) => item.template_type === 'list')
   const contentBinding = bindings.find((item) => item.template_type === 'content')
   const singleBinding = bindings.find((item) => item.template_type === 'single')
@@ -1591,7 +1591,7 @@ function getColumnDisplayKind(column: Column): ColumnDisplayKind {
   if (column.column_type === 'link') {
     return 'link'
   }
-  return 'category'
+  return 'node'
 }
 
 async function saveRequiredTemplateBinding(
@@ -1636,7 +1636,7 @@ function isEditableManualColumn(column: Column) {
   return column.column_type === 'link' || (column.column_type === 'single' && String(column.column_semantics?.render_driver || '') !== 'page_tree')
 }
 
-function getCategoryTreeTarget(column: Column): CategoryTreeTarget {
+function getColumnNodeTarget(column: Column): ColumnNodeTarget {
   const renderDriver = String(column.column_semantics?.render_driver || '')
   const rootColumnId = Number(column.column_semantics?.root_column_id || column.id || 0)
   if (!rootColumnId || !['managed_category', 'section', 'page_tree'].includes(renderDriver)) {

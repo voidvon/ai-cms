@@ -6,7 +6,7 @@ import { escapeHtml } from '../utils/html.mjs';
 import { listColumns } from './columns.mjs';
 import { listProducts } from './products.mjs';
 import { listNews } from './news.mjs';
-import { listColumnCategories, listColumnCategoriesByRoot } from './column-categories.mjs';
+import { listColumnNodes, listColumnNodesByRoot } from './column-nodes.mjs';
 import { buildColumnPublicUrl, resolvePublicSectionContext } from './public-sections.mjs';
 import { buildContentDetailUrlFromColumn } from './column-paths.mjs';
 import { normalizeUploadedRelativePath } from './uploads.mjs';
@@ -852,7 +852,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
 
   if (effectiveMode === 'category-list') {
     const managedRootColumn = getPreviewRootColumnByDriver('managed_category');
-    const category = getPreviewColumnCategory({
+    const category = getPreviewColumnNode({
       rootColumn: managedRootColumn,
       fallbackName: '示例列表栏目'
     });
@@ -891,7 +891,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
   if (effectiveMode === 'content-detail') {
     const product = getPreviewProduct();
     const managedRootColumn = getPreviewRootColumnByDriver('managed_category');
-    const category = getPreviewColumnCategory({
+    const category = getPreviewColumnNode({
       rootColumn: managedRootColumn,
       id: product.column_id,
       fallbackName: '示例列表栏目'
@@ -924,7 +924,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
 
   if (effectiveMode === 'section-list' || effectiveMode === 'knowledge-list') {
     const sectionConfig = buildPreviewArticleSectionConfig(effectiveMode, template);
-    const category = getPreviewColumnCategory({
+    const category = getPreviewColumnNode({
       rootColumnId: sectionConfig.rootId,
       fallbackName: '示例信息栏目'
     });
@@ -967,7 +967,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
   if (effectiveMode === 'section-detail' || effectiveMode === 'knowledge-detail') {
     const sectionConfig = buildPreviewArticleSectionConfig(effectiveMode, template);
     const article = getPreviewArticle();
-    const category = getPreviewColumnCategory({
+    const category = getPreviewColumnNode({
       rootColumnId: sectionConfig.rootId,
       id: article.column_id,
       fallbackName: '示例信息栏目'
@@ -1014,7 +1014,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       ? getPreviewRootColumnByDriver('single_page')
       : getPreviewRootColumnByDriver('page_tree');
     const pageUrlPrefix = template.type === 'single' ? '/example-page.html' : '/about/about-';
-    const category = getPreviewColumnCategory({
+    const category = getPreviewColumnNode({
       rootColumn: pageTreeRootColumn,
       fallbackName: '示例单页栏目',
       fallbackContentHtml: '单页栏目内容预览'
@@ -1189,7 +1189,7 @@ function getPreviewRootColumnByDriver(renderDriver) {
   )) || null;
 }
 
-function getPreviewColumnCategory({
+function getPreviewColumnNode({
   rootColumn = null,
   rootColumnId = null,
   id = null,
@@ -1198,7 +1198,7 @@ function getPreviewColumnCategory({
 } = {}) {
   const resolvedRootColumnId = toInteger(rootColumnId || rootColumn?.id, 0);
   const rows = resolvedRootColumnId > 0
-    ? listColumnCategoriesByRoot(resolvedRootColumnId)
+    ? listColumnNodesByRoot(resolvedRootColumnId)
     : [];
   const row = id
     ? rows.find((item) => toInteger(item.id, 0) === toInteger(id, 0))
@@ -1338,7 +1338,7 @@ function resolvePreviewSections() {
 function buildPreviewColumnMenuItems(options = {}) {
   const resolvedRootColumnId = toInteger(options.rootColumnId || options.rootColumn?.id, 0);
   const rows = resolvedRootColumnId > 0
-    ? listColumnCategoriesByRoot(resolvedRootColumnId).filter((item) => toInteger(item.parent_id, 0) === 0)
+    ? listColumnNodesByRoot(resolvedRootColumnId).filter((item) => toInteger(item.parent_id, 0) === 0)
     : [];
   const currentCategory = options.category || null;
   const fallbackItem = {
