@@ -10,6 +10,7 @@ interface RichTextEditorProps {
   placeholder?: string
   uploadPurpose?: MediaPurpose
   className?: string
+  readOnly?: boolean
 }
 
 function normalizeEditorHtml(value: string) {
@@ -23,6 +24,7 @@ export default function RichTextEditor({
   placeholder = '请输入内容',
   uploadPurpose = 'richtext_image',
   className = '',
+  readOnly = false,
 }: RichTextEditorProps) {
   const mountRef = useRef<HTMLDivElement | null>(null)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -53,6 +55,7 @@ export default function RichTextEditor({
 
     const quill = new Quill(editorHost, {
       theme: 'snow',
+      readOnly,
       placeholder,
       modules: {
         toolbar: {
@@ -66,7 +69,7 @@ export default function RichTextEditor({
           ],
           handlers: {
             image: () => {
-              if (isUploadingRef.current) {
+              if (isUploadingRef.current || readOnly) {
                 return
               }
               fileInputRef.current?.click()
@@ -94,7 +97,11 @@ export default function RichTextEditor({
         mountRef.current.innerHTML = ''
       }
     }
-  }, [placeholder])
+  }, [placeholder, readOnly])
+
+  useEffect(() => {
+    quillRef.current?.enable(!readOnly)
+  }, [readOnly])
 
   useEffect(() => {
     const quill = quillRef.current
@@ -160,6 +167,7 @@ export default function RichTextEditor({
         accept="image/*"
         multiple
         className="hidden"
+        disabled={readOnly}
         onChange={handleFileChange}
       />
       <div ref={mountRef} />

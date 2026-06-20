@@ -68,7 +68,6 @@ export default function ProductFormDialog({ open, onOpenChange, product, mode, d
     && item.column_type === 'list'
   ))
   const fieldMap = mapFieldsByName(productModel?.fields || [])
-  const currentTranslation = translations[activeLanguage] || createEmptyTranslation()
 
   useEffect(() => {
     const source = mode === 'edit' ? (productDetailData?.data || product) : null

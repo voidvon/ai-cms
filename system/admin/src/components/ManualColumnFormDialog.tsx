@@ -91,7 +91,6 @@ export default function ManualColumnFormDialog({
   const languages = languagesData?.data || []
   const defaultLanguageCode = languages.find((item) => item.is_default === 1)?.code || 'zh-CN'
   const availableLanguageCodes = useMemo(() => languages.map((item) => item.code), [languages])
-  const currentTranslation = translations[activeLanguage] || createEmptyTranslation()
   const basicOnly = forceBasicOnly || (mode === 'edit' && column?.column_type === 'list')
   const detailRuleOptions = basicOnly
     ? (
@@ -115,7 +114,7 @@ export default function ManualColumnFormDialog({
     }
 
     if (mode === 'edit' && column) {
-      const nextBaseData = {
+      const nextBaseData: ManualColumnFormValue['base'] = {
         parent_id: Number(column.parent_id || 0),
         column_type: column.column_type === 'single' ? 'single' : (column.column_type === 'list' ? 'list' : 'link'),
         content_model_id: Number(column.content_model_id || 0),
@@ -141,7 +140,7 @@ export default function ManualColumnFormDialog({
       return
     }
 
-    const nextBaseData = {
+    const nextBaseData: ManualColumnFormValue['base'] = {
       parent_id: 0,
       column_type: initialKind,
       content_model_id: 0,

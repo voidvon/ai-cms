@@ -516,7 +516,7 @@ async function saveTemplateBinding(
   targetId: number,
   templateType: 'list' | 'content' | 'single',
   templateId: string,
-  bindings: TemplateBinding[],
+  _bindings: TemplateBinding[],
 ) {
   if (templateId === DEFAULT_TEMPLATE_VALUE) {
     throw new Error(`missing required ${templateType} template binding`)

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Ellipsis, Pencil, Plus, Trash2 } from 'lucide-react'
 import { templateVariantsApi, templatesApi } from '@/api/advanced'
@@ -23,10 +23,11 @@ import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, Sele
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tree, type TreeItemData, type TreeMoveParams } from '@/components/ui/tree'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { TemplateCodeEditor } from '@/components/TemplateCodeEditor'
 import { TemplateVariableReference } from '@/components/TemplateVariableReference'
 import { toast } from 'sonner'
 import type { Template, TemplateVariant, TemplateVersion } from '@/types'
+
+const TemplateCodeEditor = lazy(() => import('@/components/TemplateCodeEditor').then((module) => ({ default: module.TemplateCodeEditor })))
 
 const previewModes = [
   { value: 'auto', label: '自动场景' },
@@ -49,9 +50,19 @@ const templateTypeLabelMap: Record<Template['type'], string> = {
   component: '组件模板',
 }
 
+function EditorFallback({ className }: { className?: string }) {
+  return (
+    <div className={className}>
+      <div className="flex min-h-[420px] items-center justify-center rounded-md border border-input bg-background text-sm text-muted-foreground">
+        编辑器加载中...
+      </div>
+    </div>
+  )
+}
+
 type TemplateForm = Pick<
   Template,
-  'name' | 'code' | 'type' | 'engine' | 'tsx_source' | 'css_source' | 'global_css_source' | 'sort_order'
+  'name' | 'code' | 'type' | 'engine' | 'tsx_source' | 'css_source' | 'sort_order'
 >
 
 type EditorTarget = {
@@ -93,7 +104,6 @@ export default function TemplateVariantsPage() {
     engine: 'tsx',
     tsx_source: '',
     css_source: '',
-    global_css_source: '',
     sort_order: 0,
   })
   const { data: themesData, isLoading: isThemesLoading, error: themesError } = useQuery({
@@ -259,7 +269,6 @@ export default function TemplateVariantsPage() {
         engine: 'tsx',
         tsx_source: '',
         css_source: '',
-        global_css_source: '',
         sort_order: 0,
       })
       return
@@ -271,7 +280,6 @@ export default function TemplateVariantsPage() {
       engine: selectedTemplate.engine || 'tsx',
       tsx_source: selectedTemplate.tsx_source || '',
       css_source: selectedTemplate.css_source || '',
-      global_css_source: selectedTemplate.global_css_source || '',
       sort_order: selectedTemplate.sort_order || 0,
     })
   }, [selectedTemplate])
@@ -348,7 +356,6 @@ export default function TemplateVariantsPage() {
         engine: 'tsx',
         tsx_source: 'export default function Template() {\n  return <div>新模板</div>\n}\n',
         css_source: '',
-        global_css_source: '',
         status: 'published',
         sort_order: templateCount + 1,
       })
@@ -396,7 +403,6 @@ export default function TemplateVariantsPage() {
           '',
         ].join('\n'),
         css_source: ['.component-root {', '  display: block;', '}', ''].join('\n'),
-        global_css_source: '',
         sort_order: themeComponentTemplates.length + 1,
       })
       if (!created.data?.id) {
@@ -552,7 +558,6 @@ export default function TemplateVariantsPage() {
           engine: response.data.engine || 'tsx',
           tsx_source: response.data.tsx_source || '',
           css_source: response.data.css_source || '',
-          global_css_source: response.data.global_css_source || '',
           sort_order: response.data.sort_order || 0,
         })
       }
@@ -849,41 +854,31 @@ export default function TemplateVariantsPage() {
                         <TabsList className="justify-start">
                           <TabsTrigger value="tsx">模板内容</TabsTrigger>
                           <TabsTrigger value="css">模板样式</TabsTrigger>
-                          <TabsTrigger value="global-css">全局样式</TabsTrigger>
                         </TabsList>
                       </div>
                       <TabsContent value="tsx" className="mt-0 flex-1 p-3">
-                        <TemplateCodeEditor
-                          id="template-content"
-                          value={formData.tsx_source || ''}
-                          onChange={(tsx_source) => setFormData((current) => ({ ...current, tsx_source }))}
-                          placeholder="输入 TSX 模板内容"
-                          height="100%"
-                          className="h-full min-h-[420px]"
-                        />
+                        <Suspense fallback={<EditorFallback className="h-full min-h-[420px]" />}>
+                          <TemplateCodeEditor
+                            id="template-content"
+                            value={formData.tsx_source || ''}
+                            onChange={(tsx_source) => setFormData((current) => ({ ...current, tsx_source }))}
+                            placeholder="输入 TSX 模板内容"
+                            height="100%"
+                            className="h-full min-h-[420px]"
+                          />
+                        </Suspense>
                       </TabsContent>
                       <TabsContent value="css" className="mt-0 flex-1 p-3">
-                        <TemplateCodeEditor
-                          id="template-css"
-                          value={formData.css_source || ''}
-                          onChange={(css_source) => setFormData((current) => ({ ...current, css_source }))}
-                          placeholder="输入当前模板的局部样式"
-                          height="100%"
-                          className="h-full min-h-[420px]"
-                        />
-                      </TabsContent>
-                      <TabsContent value="global-css" className="mt-0 flex-1 p-3">
-                        <div className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
-                          此区域样式会进入全站公共 CSS，影响当前主题下所有页面。
-                        </div>
-                        <TemplateCodeEditor
-                          id="template-global-css"
-                          value={formData.global_css_source || ''}
-                          onChange={(global_css_source) => setFormData((current) => ({ ...current, global_css_source }))}
-                          placeholder="输入需要进入全站公共包的样式"
-                          height="100%"
-                          className="h-full min-h-[380px]"
-                        />
+                        <Suspense fallback={<EditorFallback className="h-full min-h-[420px]" />}>
+                          <TemplateCodeEditor
+                            id="template-css"
+                            value={formData.css_source || ''}
+                            onChange={(css_source) => setFormData((current) => ({ ...current, css_source }))}
+                            placeholder="输入当前模板的局部样式"
+                            height="100%"
+                            className="h-full min-h-[420px]"
+                          />
+                        </Suspense>
                       </TabsContent>
                     </Tabs>
                     <div className="min-h-0 overflow-auto">
@@ -1065,7 +1060,6 @@ function buildTemplatePayload(formData: TemplateForm): TemplateForm {
     ...formData,
     tsx_source: formData.tsx_source || '',
     css_source: formData.css_source || '',
-    global_css_source: formData.global_css_source || '',
   }
 }
 
@@ -1290,35 +1284,29 @@ function TemplateVersionCodeDialog({
               <TabsList className="justify-start">
                 <TabsTrigger value="tsx">模板内容</TabsTrigger>
                 <TabsTrigger value="css">模板样式</TabsTrigger>
-                <TabsTrigger value="global-css">全局样式</TabsTrigger>
               </TabsList>
             </div>
             <TabsContent value="tsx" className="mt-0 flex-1 p-3">
-              <TemplateCodeEditor
-                value={version?.tsx_source || ''}
-                onChange={() => {}}
-                readOnly
-                height="100%"
-                className="h-full min-h-[420px]"
-              />
+              <Suspense fallback={<EditorFallback className="h-full min-h-[420px]" />}>
+                <TemplateCodeEditor
+                  value={version?.tsx_source || ''}
+                  onChange={() => {}}
+                  readOnly
+                  height="100%"
+                  className="h-full min-h-[420px]"
+                />
+              </Suspense>
             </TabsContent>
             <TabsContent value="css" className="mt-0 flex-1 p-3">
-              <TemplateCodeEditor
-                value={version?.css_source || ''}
-                onChange={() => {}}
-                readOnly
-                height="100%"
-                className="h-full min-h-[420px]"
-              />
-            </TabsContent>
-            <TabsContent value="global-css" className="mt-0 flex-1 p-3">
-              <TemplateCodeEditor
-                value={version?.global_css_source || ''}
-                onChange={() => {}}
-                readOnly
-                height="100%"
-                className="h-full min-h-[420px]"
-              />
+              <Suspense fallback={<EditorFallback className="h-full min-h-[420px]" />}>
+                <TemplateCodeEditor
+                  value={version?.css_source || ''}
+                  onChange={() => {}}
+                  readOnly
+                  height="100%"
+                  className="h-full min-h-[420px]"
+                />
+              </Suspense>
             </TabsContent>
           </Tabs>
         </div>

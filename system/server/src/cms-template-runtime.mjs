@@ -1,5 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { transform as transformCss } from 'lightningcss';
+import { createHash } from 'node:crypto';
+import { transformSync as transformJs } from 'esbuild';
 import { getSelectedTemplateVariant, listSelectedThemePublishedComponents, listThemeVariantTemplates } from './services/template-variants.mjs';
 import { resolvePublishedTemplate } from './services/templates.mjs';
 import { createTsxTemplateElement, renderTsxTemplate } from './tsx-template-renderer.mjs';
@@ -13,7 +16,10 @@ export function createCmsTemplateRuntime({
   expandLegacyCommonPlaceholders
 }) {
   const registeredStyleTemplates = new Map();
-  const pageTemplateStyleUsage = new Map();
+  const renderGroupStyleUsage = new Map();
+  const entryTemplateDependencyUsage = new Map();
+  const registeredScriptAssets = new Map();
+  let publishedTemplateMapCache = null;
 
   function renderCmsSitePage(pageName, props, templateContext, options = {}) {
     const templateCode = templateByPage[pageName];
@@ -28,6 +34,13 @@ export function createCmsTemplateRuntime({
     if (!template?.tsx_source) {
       throw new Error(`Published CMS template is missing: ${templateCode || pageName}`);
     }
+
+    const renderGroup = resolveRenderGroup(options.renderGroup, {
+      pageName,
+      entryTemplateCode: template.code,
+      templateType
+    });
+    ensureRenderGroupStyleUsage(template, renderGroup);
 
     const styleTemplates = new Map();
     let html = '';
@@ -46,7 +59,7 @@ export function createCmsTemplateRuntime({
 
     return injectPageAssets(html, {
       templateCode: template.code,
-      styleTemplates,
+      renderGroup,
       props
     });
   }
@@ -74,30 +87,25 @@ export function createCmsTemplateRuntime({
   }
 
   function registerTemplateStyleAsset(template, styleTemplates = null) {
-    const asset = buildStandaloneStyleAsset(template.css_source || '', template.code);
+    const asset = buildTemplateStyleAsset(template);
     if (!asset) {
-      return;
-    }
-    registeredStyleTemplates.set(asset.code, asset);
-    if (styleTemplates) {
-      styleTemplates.set(asset.code, asset);
-    }
-  }
-
-  function buildStandaloneStyleAsset(styleSource, templateCode) {
-    const normalizedStyleSource = String(styleSource || '').trim();
-    if (!normalizedStyleSource) {
       return null;
     }
-    return getTsxTemplateStyleAsset(buildStyleCarrierSource(normalizedStyleSource), {
-      templateCode
-    });
+    if (!registeredStyleTemplates.has(asset.code)) {
+      registeredStyleTemplates.set(asset.code, asset);
+    }
+    const registeredAsset = registeredStyleTemplates.get(asset.code);
+    if (styleTemplates) {
+      styleTemplates.set(registeredAsset.code, registeredAsset);
+    }
+    return registeredAsset;
   }
 
-  function injectPageAssets(html, { templateCode, styleTemplates, props }) {
+  function injectPageAssets(html, { templateCode, renderGroup, props }) {
     const withSeoHead = injectSeoHead(html, props);
-    const withStyles = injectStylesheetLinks(withSeoHead, templateCode, styleTemplates);
-    return injectGlobalInteractionScript(withStyles);
+    const withStyles = injectStylesheetLinks(withSeoHead, templateCode, renderGroup);
+    const withRuntimePlaceholder = injectGlobalInteractionScript(withStyles);
+    return injectInlineScriptAssetPlaceholders(withRuntimePlaceholder);
   }
 
   function injectSeoHead(html, props = {}) {
@@ -220,15 +228,15 @@ export function createCmsTemplateRuntime({
       .join(' ');
   }
 
-  function injectStylesheetLinks(html, templateCode, styleTemplates) {
+  function injectStylesheetLinks(html, templateCode, renderGroup) {
     const normalizedTemplateCode = sanitizeTemplateCode(templateCode);
     if (!normalizedTemplateCode) {
       return html;
     }
 
-    registerPageTemplateStyleUsage(normalizedTemplateCode, styleTemplates || new Map());
     const linkHtml = `<!--cms-tsx-styles:${encodeRuntimePlaceholder({
-      pageTemplateCode: normalizedTemplateCode
+      pageTemplateCode: normalizedTemplateCode,
+      renderGroupKey: renderGroup?.key || ''
     })}-->`;
 
     if (/<\/head>/i.test(html)) {
@@ -238,11 +246,69 @@ export function createCmsTemplateRuntime({
   }
 
   function injectGlobalInteractionScript(html) {
-    const scriptHtml = `<script>${GLOBAL_INTERACTION_SCRIPT}</script>`;
+    const scriptHtml = buildExternalScriptPlaceholder({
+      scriptSource: GLOBAL_INTERACTION_SCRIPT,
+      assetCode: 'global-interaction',
+      attrs: { defer: true }
+    });
     if (/<\/body>/i.test(html)) {
       return html.replace(/<\/body>/i, `${scriptHtml}\n</body>`);
     }
     return `${html}\n${scriptHtml}`;
+  }
+
+  function injectInlineScriptAssetPlaceholders(html) {
+    return String(html || '').replace(
+      /<script\b(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/gi,
+      (match, rawAttrs = '', scriptContent = '') => {
+        const attrs = parseScriptAttributes(rawAttrs);
+        const scriptType = String(attrs.type || '').trim().toLowerCase();
+        if (scriptType === 'application/ld+json') {
+          return match;
+        }
+
+        const normalizedScriptContent = String(scriptContent || '').trim();
+        if (!normalizedScriptContent) {
+          return '';
+        }
+
+        return buildExternalScriptPlaceholder({
+          scriptSource: normalizedScriptContent,
+          assetCode: attrs['data-asset-code'] || '',
+          attrs
+        });
+      }
+    );
+  }
+
+  function buildExternalScriptPlaceholder({ scriptSource, assetCode = '', attrs = {} }) {
+    const asset = registerScriptAsset(scriptSource, assetCode, attrs);
+    return `<!--cms-tsx-script:${encodeRuntimePlaceholder({
+      assetCode: asset.code,
+      attrs: asset.attrs
+    })}-->`;
+  }
+
+  function registerScriptAsset(scriptSource, assetCode = '', attrs = {}) {
+    const normalizedScriptSource = String(scriptSource || '').trim();
+    if (!normalizedScriptSource) {
+      return null;
+    }
+
+    const normalizedCodeBase = sanitizeTemplateCode(assetCode) || `script_${createHash('sha256').update(normalizedScriptSource).digest('hex').slice(0, 12)}`;
+    const contentHash = createHash('sha256').update(normalizedScriptSource).digest('hex').slice(0, 12);
+    const code = `${normalizedCodeBase}_${contentHash}`;
+    const normalizedAttrs = normalizeScriptAttributes(attrs);
+
+    if (!registeredScriptAssets.has(code)) {
+      registeredScriptAssets.set(code, {
+        code,
+        attrs: normalizedAttrs,
+        jsText: normalizedScriptSource
+      });
+    }
+
+    return registeredScriptAssets.get(code);
   }
   function renderCmsTemplate(content, props, templateContext, options = {}) {
     const components = buildCmsComponentMap(templateContext);
@@ -269,8 +335,7 @@ export function createCmsTemplateRuntime({
         code: item.code || '',
         engine: item.engine || 'tsx',
         tsx_source: item.tsx_source || '',
-        css_source: item.css_source || '',
-        global_css_source: item.global_css_source || ''
+        css_source: item.css_source || ''
       });
     }
 
@@ -379,11 +444,11 @@ export function createCmsTemplateRuntime({
 
   function buildRegisteredTsxAssets(outputRoot) {
     buildRegisteredTsxStyleAssets(outputRoot);
+    buildRegisteredTsxScriptAssets(outputRoot);
   }
 
   function buildRegisteredTsxStyleAssets(outputRoot) {
-    const globalStyleTemplates = buildPublishedGlobalStyleAssets();
-    if (registeredStyleTemplates.size === 0 && globalStyleTemplates.size === 0 && pageTemplateStyleUsage.size === 0) {
+    if (registeredStyleTemplates.size === 0 && renderGroupStyleUsage.size === 0) {
       return;
     }
 
@@ -391,9 +456,8 @@ export function createCmsTemplateRuntime({
     fs.mkdirSync(dirPath, { recursive: true });
 
     const bundlePlan = buildStyleBundlePlan({
-      pageTemplateStyleUsage,
-      registeredStyleTemplates,
-      globalStyleTemplates
+      renderGroupStyleUsage,
+      registeredStyleTemplates
     });
 
     try {
@@ -401,21 +465,117 @@ export function createCmsTemplateRuntime({
       replaceStyleRuntimePlaceholders(outputRoot, bundlePlan, templateClientAssetDir);
     } finally {
       registeredStyleTemplates.clear();
-      pageTemplateStyleUsage.clear();
+      renderGroupStyleUsage.clear();
+      entryTemplateDependencyUsage.clear();
+      publishedTemplateMapCache = null;
     }
   }
 
-  function registerPageTemplateStyleUsage(templateCode, styleTemplates) {
-    if (!pageTemplateStyleUsage.has(templateCode)) {
-      pageTemplateStyleUsage.set(templateCode, new Set());
+  function buildRegisteredTsxScriptAssets(outputRoot) {
+    if (registeredScriptAssets.size === 0) {
+      return;
     }
-    const usage = pageTemplateStyleUsage.get(templateCode);
-    for (const code of styleTemplates.keys()) {
-      const normalizedCode = sanitizeTemplateCode(code);
-      if (normalizedCode) {
-        usage.add(normalizedCode);
+
+    const dirPath = path.resolve(outputRoot, templateClientAssetDir);
+    fs.mkdirSync(dirPath, { recursive: true });
+
+    try {
+      writeScriptAssets(dirPath, registeredScriptAssets);
+      replaceScriptRuntimePlaceholders(outputRoot, templateClientAssetDir, registeredScriptAssets);
+    } finally {
+      registeredScriptAssets.clear();
+    }
+  }
+
+  function ensureRenderGroupStyleUsage(entryTemplate, renderGroup) {
+    if (!renderGroup?.key || renderGroupStyleUsage.has(renderGroup.key)) {
+      return;
+    }
+
+    const styleCodes = analyzeEntryTemplateStyleCodes(entryTemplate);
+    renderGroupStyleUsage.set(renderGroup.key, {
+      ...renderGroup,
+      styleCodes: new Set(styleCodes)
+    });
+  }
+
+  function analyzeEntryTemplateStyleCodes(entryTemplate) {
+    const cacheKey = sanitizeTemplateCode(entryTemplate?.code);
+    if (!cacheKey) {
+      return [];
+    }
+    if (entryTemplateDependencyUsage.has(cacheKey)) {
+      return entryTemplateDependencyUsage.get(cacheKey);
+    }
+
+    const templatesByCode = getPublishedTemplateMap();
+    const styleCodes = new Set();
+    const visited = new Set();
+
+    const visitTemplate = (template) => {
+      const normalizedTemplateCode = sanitizeTemplateCode(template?.code);
+      if (!normalizedTemplateCode || visited.has(normalizedTemplateCode)) {
+        return;
+      }
+      visited.add(normalizedTemplateCode);
+
+      const asset = registerTemplateStyleAsset(template);
+      if (asset?.code) {
+        styleCodes.add(asset.code);
+      }
+
+      for (const componentCode of extractLiteralComponentReferences(template?.tsx_source || '')) {
+        const component = templatesByCode.get(componentCode);
+        if (component?.tsx_source) {
+          visitTemplate(component);
+        }
+      }
+    };
+
+    visitTemplate(entryTemplate);
+
+    const resolvedCodes = Array.from(styleCodes.values()).sort();
+    entryTemplateDependencyUsage.set(cacheKey, resolvedCodes);
+    return resolvedCodes;
+  }
+
+  function getPublishedTemplateMap() {
+    if (publishedTemplateMapCache) {
+      return publishedTemplateMapCache;
+    }
+
+    const selectedTheme = getSelectedTemplateVariant();
+    const nextMap = new Map();
+    if (selectedTheme?.id) {
+      for (const item of listThemeVariantTemplates(selectedTheme.id, { publishedOnly: true })) {
+        nextMap.set(sanitizeTemplateCode(item.code), {
+          code: item.code || '',
+          type: item.type || '',
+          engine: item.engine || 'tsx',
+          tsx_source: item.published_tsx_source ?? item.tsx_source ?? '',
+          css_source: item.published_css_source ?? item.css_source ?? ''
+        });
       }
     }
+
+    publishedTemplateMapCache = nextMap;
+    return publishedTemplateMapCache;
+  }
+
+  function resolveRenderGroup(input, context = {}) {
+    const pageKind = sanitizeTemplateCode(input?.pageKind) || inferPageKind(context.pageName, context.templateType);
+    const columnKind = sanitizeTemplateCode(input?.columnKind) || 'generic';
+    const entryTemplateCode = sanitizeTemplateCode(context.entryTemplateCode);
+    const familyKey = sanitizeTemplateCode(input?.familyKey) || sanitizeTemplateCode([pageKind, columnKind].filter(Boolean).join('-')) || pageKind || entryTemplateCode || 'default';
+    const key = sanitizeTemplateCode(input?.key) || sanitizeTemplateCode([familyKey, entryTemplateCode].filter(Boolean).join('-')) || entryTemplateCode || pageKind || 'default';
+
+    return {
+      key,
+      pageKind,
+      columnKind,
+      familyKey,
+      entryTemplateCode
+    };
   }
 
   return {
@@ -965,11 +1125,55 @@ function stringifyTemplateValue(value) {
 }
 
 function mergeComponentProps(baseProps, extraProps) {
-  const { children: _children, slots: _slots, ...restBaseProps } = baseProps || {};
+  const componentContext = pickComponentContextProps(baseProps);
   return {
-    ...restBaseProps,
+    ...componentContext,
     ...(extraProps || {})
   };
+}
+
+function pickComponentContextProps(source) {
+  if (!source || typeof source !== 'object') {
+    return {};
+  }
+
+  const keys = [
+    'site',
+    'siteColumns',
+    'utilityColumns',
+    'footerColumns',
+    'footerProductCategories',
+    'fragments',
+    'currentPage',
+    'currentSection',
+    'currentCategory',
+    'currentCategoryItem',
+    'parentCategory',
+    'currentContent',
+    'currentProduct',
+    'currentArticle',
+    'currentCategoryDescription',
+    'currentCategoryPageData',
+    'currentCategoryHeroImage',
+    'currentProductPageData',
+    'sectionNavItems',
+    'seoMeta',
+    'jsonLd',
+    'faviconLinks',
+    'themeColorMetas',
+    'hreflangLinks',
+    'component',
+    'raw',
+    'Raw'
+  ];
+
+  const next = {};
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      next[key] = source[key];
+    }
+  }
+  return next;
 }
 
 function sanitizeTemplateCode(value) {
@@ -984,6 +1188,48 @@ function encodeRuntimePlaceholder(payload) {
   return encodeURIComponent(JSON.stringify(payload || {}));
 }
 
+function parseScriptAttributes(rawAttrs = '') {
+  const attributes = {};
+  const source = String(rawAttrs || '');
+  const attrPattern = /([:@A-Za-z0-9_-]+)(?:\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/g;
+  let match = null;
+  while ((match = attrPattern.exec(source))) {
+    const key = String(match[1] || '').trim();
+    if (!key) {
+      continue;
+    }
+    const value = match[3] ?? match[4] ?? match[5] ?? true;
+    attributes[key] = value;
+  }
+  return attributes;
+}
+
+function normalizeScriptAttributes(attrs = {}) {
+  const next = {};
+  for (const [key, rawValue] of Object.entries(attrs || {})) {
+    const normalizedKey = String(key || '').trim().toLowerCase();
+    if (!normalizedKey || normalizedKey === 'src' || normalizedKey === 'data-asset-code') {
+      continue;
+    }
+    if (normalizedKey === 'type' && String(rawValue || '').trim().toLowerCase() === 'text/javascript') {
+      continue;
+    }
+    next[normalizedKey] = rawValue;
+  }
+  return next;
+}
+
+function renderScriptTagAttributes(attrs = {}) {
+  return Object.entries(attrs)
+    .filter(([, value]) => value !== false && value !== null && value !== undefined && value !== '')
+    .map(([key, value]) => (
+      value === true
+        ? key
+        : `${key}="${escapeHtml(String(value))}"`
+    ))
+    .join(' ');
+}
+
 function decodeRuntimePlaceholder(serialized) {
   try {
     return JSON.parse(decodeURIComponent(String(serialized || '')));
@@ -992,28 +1238,36 @@ function decodeRuntimePlaceholder(serialized) {
   }
 }
 
-function buildStyleBundlePlan({ pageTemplateStyleUsage, registeredStyleTemplates, globalStyleTemplates }) {
-  const sharedBundle = buildBundleStyleAssets(
-    'shared',
-    Array.from(globalStyleTemplates.keys()).sort(),
-    globalStyleTemplates
-  );
+function buildStyleBundlePlan({ renderGroupStyleUsage, registeredStyleTemplates }) {
+  const styleUsageStats = buildStyleUsageStats(renderGroupStyleUsage);
+  const styleAssignments = assignStyleBundles(styleUsageStats);
+  const bundles = buildStyleBundlesFromAssignments(styleAssignments, registeredStyleTemplates);
+  const renderGroupBundles = new Map();
 
-  const pageBundles = new Map();
-  for (const [pageTemplateCode, styleCodes] of pageTemplateStyleUsage.entries()) {
-    const bundle = buildBundleStyleAssets(
-      `page-${pageTemplateCode}`,
-      Array.from(styleCodes.values()),
-      registeredStyleTemplates
-    );
-    if (bundle) {
-      pageBundles.set(pageTemplateCode, bundle);
+  for (const [renderGroupKey, usage] of renderGroupStyleUsage.entries()) {
+    const orderedBundleCodes = [];
+    const pushBundleCode = (bundleCode) => {
+      const normalizedCode = sanitizeTemplateCode(bundleCode);
+      if (!normalizedCode || orderedBundleCodes.includes(normalizedCode) || !bundles.has(normalizedCode)) {
+        return;
+      }
+      orderedBundleCodes.push(normalizedCode);
+    };
+
+    for (const styleCode of usage.styleCodes.values()) {
+      const assignment = styleAssignments.get(styleCode);
+      if (!assignment) {
+        continue;
+      }
+      pushBundleCode(assignment.bundleCode);
     }
+
+    renderGroupBundles.set(renderGroupKey, orderedBundleCodes);
   }
 
   return {
-    sharedBundle,
-    pageBundles
+    bundles,
+    renderGroupBundles
   };
 }
 
@@ -1023,7 +1277,7 @@ function buildBundleStyleAssets(bundleCode, styleCodes, registeredStyleTemplates
     .filter(Boolean)
     .map((asset) => ({
       code: asset.code,
-      cssText: asset.cssText
+      cssText: minifyStyleAssetCss(asset.cssText, bundleCode, asset.code)
     }));
 
   if (assets.length === 0) {
@@ -1037,20 +1291,63 @@ function buildBundleStyleAssets(bundleCode, styleCodes, registeredStyleTemplates
 }
 
 function writeBundledStyleAssets(dirPath, bundlePlan) {
-  const bundles = [];
-  if (bundlePlan.sharedBundle) {
-    bundles.push(bundlePlan.sharedBundle);
-  }
-  for (const bundle of bundlePlan.pageBundles.values()) {
-    bundles.push(bundle);
-  }
-
-  for (const bundle of bundles) {
+  for (const bundle of bundlePlan.bundles.values()) {
     const cssText = bundle.assets
       .map((asset) => String(asset.cssText || '').trim())
       .filter(Boolean)
-      .join('\n\n');
-    fs.writeFileSync(path.join(dirPath, `${bundle.code}.css`), cssText ? `${cssText}\n` : '', 'utf8');
+      .join('');
+    fs.writeFileSync(path.join(dirPath, `${bundle.code}.css`), cssText, 'utf8');
+  }
+}
+
+function writeScriptAssets(dirPath, scriptAssets) {
+  for (const asset of scriptAssets.values()) {
+    const outputText = minifyScriptAssetJs(asset.jsText, asset.code);
+    fs.writeFileSync(path.join(dirPath, `${asset.code}.js`), outputText, 'utf8');
+  }
+}
+
+function minifyStyleAssetCss(cssText, bundleCode, assetCode) {
+  const normalizedCssText = String(cssText || '').trim();
+  if (!normalizedCssText) {
+    return '';
+  }
+
+  try {
+    const result = transformCss({
+      filename: `${sanitizeTemplateCode(bundleCode) || 'bundle'}-${sanitizeTemplateCode(assetCode) || 'asset'}.css`,
+      code: Buffer.from(normalizedCssText),
+      minify: true
+    });
+    return Buffer.from(result.code).toString('utf8');
+  } catch (error) {
+    console.warn(
+      `[cms-template-runtime] Failed to minify CSS asset "${assetCode}" in bundle "${bundleCode}", using original CSS:`,
+      error.message || error
+    );
+    return normalizedCssText;
+  }
+}
+
+function minifyScriptAssetJs(jsText, assetCode) {
+  const normalizedJsText = String(jsText || '').trim();
+  if (!normalizedJsText) {
+    return '';
+  }
+
+  try {
+    const result = transformJs(normalizedJsText, {
+      loader: 'js',
+      minify: true,
+      legalComments: 'none'
+    });
+    return String(result.code || '').trim() || normalizedJsText;
+  } catch (error) {
+    console.warn(
+      `[cms-template-runtime] Failed to minify JS asset "${assetCode}", using original JS:`,
+      error.message || error
+    );
+    return normalizedJsText;
   }
 }
 
@@ -1059,18 +1356,12 @@ function replaceStyleRuntimePlaceholders(outputRoot, bundlePlan, templateClientA
     const source = fs.readFileSync(filePath, 'utf8');
     const next = source.replace(/<!--cms-tsx-styles:([\s\S]*?)-->/g, (_, encodedPayload) => {
       const payload = decodeRuntimePlaceholder(encodedPayload);
-      if (!payload?.pageTemplateCode) {
+      if (!payload?.renderGroupKey) {
         return '';
       }
 
-      const runtimeParts = [];
-      const pageBundle = bundlePlan.pageBundles.get(payload.pageTemplateCode) || null;
-      if (bundlePlan.sharedBundle) {
-        runtimeParts.push(`<link rel="stylesheet" href="/${templateClientAssetDir}/${bundlePlan.sharedBundle.code}.css">`);
-      }
-      if (pageBundle) {
-        runtimeParts.push(`<link rel="stylesheet" href="/${templateClientAssetDir}/${pageBundle.code}.css">`);
-      }
+      const bundleCodes = bundlePlan.renderGroupBundles.get(payload.renderGroupKey) || [];
+      const runtimeParts = bundleCodes.map((bundleCode) => `<link rel="stylesheet" href="/${templateClientAssetDir}/${bundleCode}.css">`);
 
       return runtimeParts.join('\n');
     });
@@ -1081,23 +1372,28 @@ function replaceStyleRuntimePlaceholders(outputRoot, bundlePlan, templateClientA
   }
 }
 
-function buildPublishedGlobalStyleAssets() {
-  const selectedTheme = getSelectedTemplateVariant();
-  if (!selectedTheme?.id) {
-    return new Map();
-  }
+function replaceScriptRuntimePlaceholders(outputRoot, templateClientAssetDir, scriptAssets) {
+  for (const filePath of listHtmlFiles(outputRoot)) {
+    const source = fs.readFileSync(filePath, 'utf8');
+    const next = source.replace(/<!--cms-tsx-script:([\s\S]*?)-->/g, (_, encodedPayload) => {
+      const payload = decodeRuntimePlaceholder(encodedPayload);
+      const assetCode = sanitizeTemplateCode(payload?.assetCode);
+      if (!assetCode || !scriptAssets.has(assetCode)) {
+        return '';
+      }
 
-  const assets = new Map();
-  for (const template of listThemeVariantTemplates(selectedTheme.id, { publishedOnly: true })) {
-    const asset = buildStandaloneStyleAsset(
-      template.published_global_css_source ?? template.global_css_source ?? '',
-      `${template.code}_global`
-    );
-    if (asset) {
-      assets.set(asset.code, asset);
+      const asset = scriptAssets.get(assetCode);
+      const attrs = renderScriptTagAttributes({
+        ...asset.attrs,
+        src: `/${templateClientAssetDir}/${asset.code}.js`
+      });
+      return attrs ? `<script ${attrs}></script>` : `<script src="/${templateClientAssetDir}/${asset.code}.js"></script>`;
+    });
+
+    if (next !== source) {
+      fs.writeFileSync(filePath, next, 'utf8');
     }
   }
-  return assets;
 }
 
 function buildStandaloneStyleAsset(styleSource, templateCode) {
@@ -1119,6 +1415,156 @@ function buildStyleCarrierSource(styleSource) {
     '}',
     ''
   ].join('\n');
+}
+
+function buildTemplateStyleAsset(template) {
+  if (!template) {
+    return null;
+  }
+  const styleSource = mergeTemplateStyleSources(template);
+  if (!styleSource) {
+    return null;
+  }
+  return buildStandaloneStyleAsset(styleSource, template.code);
+}
+
+function mergeTemplateStyleSources(template) {
+  const segments = [
+    String(template?.css_source || '').trim()
+  ].filter(Boolean);
+
+  if (segments.length === 0) {
+    return '';
+  }
+  return segments.join('\n');
+}
+
+function inferPageKind(pageName, templateType) {
+  const normalizedPageName = String(pageName || '').trim().toLowerCase();
+  if (normalizedPageName.includes('home')) {
+    return 'home';
+  }
+  if (normalizedPageName.includes('list')) {
+    return 'list';
+  }
+  if (normalizedPageName.includes('detail')) {
+    return 'detail';
+  }
+  if (String(templateType || '').trim().toLowerCase() === 'single') {
+    return 'single-page';
+  }
+  return sanitizeTemplateCode(templateType) || 'generic';
+}
+
+function buildStyleUsageStats(renderGroupStyleUsage) {
+  const stats = new Map();
+  const allRenderGroups = Array.from(renderGroupStyleUsage.values());
+  const totalRenderGroupCount = allRenderGroups.length;
+
+  for (const usage of allRenderGroups) {
+    for (const styleCode of usage.styleCodes.values()) {
+      if (!stats.has(styleCode)) {
+        stats.set(styleCode, {
+          styleCode,
+          totalRenderGroupCount: 0,
+          renderGroupKeys: new Set(),
+          entryTemplateCodes: new Set(),
+          familyKeys: new Set()
+        });
+      }
+
+      const item = stats.get(styleCode);
+      item.renderGroupKeys.add(usage.key);
+      item.totalRenderGroupCount += 1;
+      if (usage.entryTemplateCode) {
+        item.entryTemplateCodes.add(usage.entryTemplateCode);
+      }
+      if (usage.familyKey) {
+        item.familyKeys.add(usage.familyKey);
+      }
+    }
+  }
+
+  for (const item of stats.values()) {
+    item.allRenderGroupCount = totalRenderGroupCount;
+  }
+
+  return stats;
+}
+
+function assignStyleBundles(styleUsageStats) {
+  const assignments = new Map();
+
+  for (const stat of styleUsageStats.values()) {
+    const renderGroupCount = stat.renderGroupKeys.size;
+    const totalRenderGroupCount = stat.allRenderGroupCount || 0;
+    const entryTemplateCount = stat.entryTemplateCodes.size;
+    const familyCount = stat.familyKeys.size;
+
+    let layer = 'group-only';
+    let bundleCode = `group-${Array.from(stat.renderGroupKeys.values()).sort()[0] || 'default'}`;
+
+    if (totalRenderGroupCount > 0 && renderGroupCount === totalRenderGroupCount) {
+      layer = 'site-shared';
+      bundleCode = 'site-shared';
+    } else if (entryTemplateCount === 1 && renderGroupCount >= 2) {
+      layer = 'template-shared';
+      bundleCode = `template-${Array.from(stat.entryTemplateCodes.values())[0]}`;
+    } else if (familyCount === 1 && renderGroupCount >= 2) {
+      layer = 'family-shared';
+      bundleCode = `family-${Array.from(stat.familyKeys.values())[0]}`;
+    }
+
+    assignments.set(stat.styleCode, {
+      styleCode: stat.styleCode,
+      layer,
+      bundleCode: sanitizeTemplateCode(bundleCode)
+    });
+  }
+
+  return assignments;
+}
+
+function buildStyleBundlesFromAssignments(styleAssignments, registeredStyleTemplates) {
+  const bundleStyles = new Map();
+
+  for (const assignment of styleAssignments.values()) {
+    if (!bundleStyles.has(assignment.bundleCode)) {
+      bundleStyles.set(assignment.bundleCode, []);
+    }
+    bundleStyles.get(assignment.bundleCode).push(assignment.styleCode);
+  }
+
+  const bundles = new Map();
+  for (const [bundleCode, styleCodes] of bundleStyles.entries()) {
+    const bundle = buildBundleStyleAssets(bundleCode, styleCodes.sort(), registeredStyleTemplates);
+    if (bundle) {
+      bundles.set(bundle.code, bundle);
+    }
+  }
+
+  return bundles;
+}
+
+function extractLiteralComponentReferences(content) {
+  const refs = new Set();
+  const source = String(content || '');
+  const patterns = [
+    /#component\(\s*["']([A-Za-z0-9_-]+)["']\s*\)#/g,
+    /\bcomponent\(\s*["']([A-Za-z0-9_-]+)["']/g
+  ];
+
+  for (const pattern of patterns) {
+    let match = null;
+    while ((match = pattern.exec(source)) !== null) {
+      const normalizedCode = sanitizeTemplateCode(match[1]);
+      if (normalizedCode) {
+        refs.add(normalizedCode);
+      }
+    }
+  }
+
+  return Array.from(refs.values());
 }
 
 function escapeTemplateLiteral(value) {

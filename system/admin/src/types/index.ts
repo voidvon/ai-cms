@@ -37,6 +37,8 @@ export interface Product {
   code?: string;
   summary?: string;
   content_html?: string;
+  seo_title?: string;
+  seo_description?: string;
   template_data_json?: string | null;
   template_data?: Record<string, unknown> | null;
   images?: string[];
@@ -74,6 +76,8 @@ export interface News {
   title: string;
   summary?: string;
   content_html?: string;
+  seo_title?: string;
+  seo_description?: string;
   template_data_json?: string | null;
   template_data?: Record<string, unknown> | null;
   image?: string;
@@ -143,10 +147,8 @@ export interface Template {
   engine: 'tsx';
   tsx_source: string;
   css_source: string;
-  global_css_source: string;
   published_tsx_source?: string | null;
   published_css_source?: string | null;
-  published_global_css_source?: string | null;
   status: 'draft' | 'published';
   is_default: number;
   sort_order: number;
@@ -196,7 +198,6 @@ export interface TemplateVersion {
   engine: Template['engine'];
   tsx_source: string;
   css_source: string;
-  global_css_source: string;
   note?: string | null;
   created_at?: string;
 }
@@ -352,7 +353,7 @@ export interface MediaAsset {
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
-  items?: T[];
+  items?: T extends Array<infer Item> ? Item[] : T[];
   pagination?: PaginationInfo;
   message?: string;
 }

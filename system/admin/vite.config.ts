@@ -31,4 +31,45 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) {
+            return undefined
+          }
+
+          if (id.includes('@uiw/react-codemirror') || id.includes('@codemirror/')) {
+            return 'editor'
+          }
+
+          if (id.includes('/quill/') || id.includes('quill/dist/')) {
+            return 'richtext'
+          }
+
+          if (id.includes('@tanstack/react-query')) {
+            return 'react-query'
+          }
+
+          if (id.includes('react-router-dom') || id.includes('react-dom') || id.includes('react')) {
+            return 'react-core'
+          }
+
+          if (
+            id.includes('@radix-ui/') ||
+            id.includes('lucide-react') ||
+            id.includes('class-variance-authority') ||
+            id.includes('clsx') ||
+            id.includes('tailwind-merge') ||
+            id.includes('sonner') ||
+            id.includes('next-themes')
+          ) {
+            return 'ui-kit'
+          }
+
+          return 'vendor'
+        },
+      },
+    },
+  },
 })

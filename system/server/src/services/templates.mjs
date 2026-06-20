@@ -28,10 +28,8 @@ const TEMPLATE_SELECT_FIELDS = `
   engine,
   tsx_source,
   css_source,
-  global_css_source,
   published_tsx_source,
   published_css_source,
-  published_global_css_source,
   status,
   is_default,
   sort_order,
@@ -46,7 +44,6 @@ const TEMPLATE_VERSION_SELECT_FIELDS = `
   engine,
   tsx_source,
   css_source,
-  global_css_source,
   note,
   created_at
 `;
@@ -61,10 +58,8 @@ const TEMPLATES_TABLE_SCHEMA = `
     engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
     tsx_source TEXT NOT NULL DEFAULT '',
     css_source TEXT NOT NULL DEFAULT '',
-    global_css_source TEXT NOT NULL DEFAULT '',
     published_tsx_source TEXT,
     published_css_source TEXT,
-    published_global_css_source TEXT,
     status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
     is_default INTEGER NOT NULL DEFAULT 0,
     sort_order INTEGER NOT NULL DEFAULT 0,
@@ -82,7 +77,6 @@ const TEMPLATE_VERSIONS_TABLE_SCHEMA = `
     engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
     tsx_source TEXT NOT NULL DEFAULT '',
     css_source TEXT NOT NULL DEFAULT '',
-    global_css_source TEXT NOT NULL DEFAULT '',
     note TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
@@ -145,10 +139,8 @@ export function ensureTemplatesSchema() {
       engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
       tsx_source TEXT NOT NULL DEFAULT '',
       css_source TEXT NOT NULL DEFAULT '',
-      global_css_source TEXT NOT NULL DEFAULT '',
       published_tsx_source TEXT,
       published_css_source TEXT,
-      published_global_css_source TEXT,
       status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
       is_default INTEGER NOT NULL DEFAULT 0,
       sort_order INTEGER NOT NULL DEFAULT 0,
@@ -177,7 +169,6 @@ export function ensureTemplatesSchema() {
       engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
       tsx_source TEXT NOT NULL DEFAULT '',
       css_source TEXT NOT NULL DEFAULT '',
-      global_css_source TEXT NOT NULL DEFAULT '',
       note TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
@@ -188,15 +179,12 @@ export function ensureTemplatesSchema() {
   addColumnIfMissing('templates', 'engine', "TEXT NOT NULL DEFAULT 'tsx'");
   addColumnIfMissing('templates', 'tsx_source', "TEXT NOT NULL DEFAULT ''");
   addColumnIfMissing('templates', 'css_source', "TEXT NOT NULL DEFAULT ''");
-  addColumnIfMissing('templates', 'global_css_source', "TEXT NOT NULL DEFAULT ''");
   addColumnIfMissing('templates', 'published_tsx_source', 'TEXT');
   addColumnIfMissing('templates', 'published_css_source', 'TEXT');
-  addColumnIfMissing('templates', 'published_global_css_source', 'TEXT');
   addColumnIfMissing('template_bindings', 'theme_id', 'INTEGER');
   addColumnIfMissing('template_versions', 'engine', "TEXT NOT NULL DEFAULT 'tsx'");
   addColumnIfMissing('template_versions', 'tsx_source', "TEXT NOT NULL DEFAULT ''");
   addColumnIfMissing('template_versions', 'css_source', "TEXT NOT NULL DEFAULT ''");
-  addColumnIfMissing('template_versions', 'global_css_source', "TEXT NOT NULL DEFAULT ''");
   ensureTemplateThemeOwnership();
   ensureTemplateBindingsThemeValues();
   ensureTemplateCodeThemeScope();
@@ -205,6 +193,8 @@ export function ensureTemplatesSchema() {
   ensureTemplateVersionsEngineConstraint();
   ensureTemplateBindingsThemeScope();
   reconcileThemeOwnedTemplateAssets();
+  collapseLegacyGlobalCssSources();
+  ensureSingleCssSourceSchema();
 
   getDb().exec(`
     CREATE INDEX IF NOT EXISTS idx_templates_theme_type_sort ON templates(theme_id, type, sort_order, id);
@@ -351,10 +341,8 @@ export function listPublishedComponents() {
         engine,
         tsx_source,
         css_source,
-        global_css_source,
         published_tsx_source,
-        published_css_source,
-        published_global_css_source
+        published_css_source
       FROM templates
       WHERE type = 'component' AND status = 'published' ${whereTheme}
       ORDER BY sort_order ASC, id ASC
@@ -475,17 +463,15 @@ export function createTemplate(input) {
         engine,
         tsx_source,
         css_source,
-        global_css_source,
         published_tsx_source,
         published_css_source,
-        published_global_css_source,
         status,
         is_default,
         sort_order,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       payload.theme_id,
@@ -495,10 +481,8 @@ export function createTemplate(input) {
       payload.engine,
       payload.tsx_source,
       payload.css_source,
-      payload.global_css_source,
       payload.status === 'published' ? payload.tsx_source : null,
       payload.status === 'published' ? payload.css_source : null,
-      payload.status === 'published' ? payload.global_css_source : null,
       payload.status,
       payload.is_default,
       payload.sort_order,
@@ -528,7 +512,6 @@ export function updateTemplate(id, input) {
         engine = ?,
         tsx_source = ?,
         css_source = ?,
-        global_css_source = ?,
         is_default = ?,
         sort_order = ?,
         updated_at = ?
@@ -542,7 +525,6 @@ export function updateTemplate(id, input) {
       payload.engine,
       payload.tsx_source,
       payload.css_source,
-      payload.global_css_source,
       payload.is_default,
       payload.sort_order,
       new Date().toISOString(),
@@ -560,7 +542,7 @@ export function publishTemplate(id, note = null) {
   validateTemplateForPublish(existing);
 
   const nextVersion = (queryOne('SELECT coalesce(max(version_no), 0) + 1 AS next_version FROM template_versions WHERE template_id = ?', [id])?.next_version) || 1;
-  if (existing.published_tsx_source != null || existing.published_css_source != null || existing.published_global_css_source != null) {
+  if (existing.published_tsx_source != null || existing.published_css_source != null) {
     execute(
       `
         INSERT INTO template_versions (
@@ -569,11 +551,10 @@ export function publishTemplate(id, note = null) {
           engine,
           tsx_source,
           css_source,
-          global_css_source,
           note,
           created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `,
       [
         id,
@@ -581,7 +562,6 @@ export function publishTemplate(id, note = null) {
         existing.engine || 'tsx',
         existing.published_tsx_source || '',
         existing.published_css_source || '',
-        existing.published_global_css_source || '',
         note || '发布前版本',
         new Date().toISOString()
       ]
@@ -596,7 +576,6 @@ export function publishTemplate(id, note = null) {
       SET
         published_tsx_source = ?,
         published_css_source = ?,
-        published_global_css_source = ?,
         status = 'published',
         updated_at = ?
       WHERE id = ?
@@ -604,7 +583,6 @@ export function publishTemplate(id, note = null) {
     [
       existing.tsx_source || '',
       existing.css_source || '',
-      existing.global_css_source || '',
       now,
       id
     ]
@@ -668,8 +646,7 @@ export function restoreTemplateVersion(templateId, versionId) {
     ...template,
     engine: version.engine || template.engine || 'tsx',
     tsx_source: version.tsx_source || '',
-    css_source: version.css_source || '',
-    global_css_source: version.global_css_source || ''
+    css_source: version.css_source || ''
   });
   return publishTemplate(updated.id, `恢复版本 #${version.version_no}`);
 }
@@ -772,17 +749,6 @@ export function validateTemplateForPublish(template) {
     errors.push(`TSX 编译或渲染失败：${formatTemplateValidationError(error)}`);
   }
 
-  try {
-    const globalStyleSource = String(normalizedTemplate.global_css_source || '').trim();
-    if (globalStyleSource) {
-      getTsxTemplateStyleAsset(buildStyleCarrierSource(globalStyleSource), {
-        templateCode: `${normalizedTemplate.code}_global`
-      });
-    }
-  } catch (error) {
-    errors.push(`全局样式编译失败：${formatTemplateValidationError(error)}`);
-  }
-
   if (errors.length > 0) {
     throw new Error(`模板发布校验失败：${errors.join('；')}`);
   }
@@ -797,14 +763,11 @@ export function renderTemplatePreview(input) {
   const components = buildPreviewComponentMap(template);
   const props = buildTemplatePreviewProps(template, input?.preview_context);
   const previewState = {
-    styleAssets: new Map(),
-    globalStyleAssets: new Map()
+    styleAssets: new Map()
   };
-  collectPreviewStandaloneStyle(template.global_css_source || '', `${template.code}_global`, previewState.globalStyleAssets);
   const html = ensurePreviewBaseHref(injectPreviewTsxStyles(
     renderPreviewTemplate(template, props, components, 0, previewState),
-    previewState.styleAssets,
-    previewState.globalStyleAssets
+    previewState.styleAssets
   ));
   return { html };
 }
@@ -822,8 +785,7 @@ function buildPreviewComponentMap(currentTemplate) {
       code: hydrated.code,
       engine: hydrated.engine || 'tsx',
       tsx_source: hydrated.tsx_source || '',
-      css_source: hydrated.css_source || '',
-      global_css_source: hydrated.global_css_source || ''
+      css_source: hydrated.css_source || ''
     });
   }
 
@@ -832,8 +794,7 @@ function buildPreviewComponentMap(currentTemplate) {
       code: currentTemplate.code,
       engine: currentTemplate.engine,
       tsx_source: currentTemplate.tsx_source || '',
-      css_source: currentTemplate.css_source || '',
-      global_css_source: currentTemplate.global_css_source || ''
+      css_source: currentTemplate.css_source || ''
     });
   }
 
@@ -858,7 +819,6 @@ function normalizeTemplateInput(input) {
   const theme_id = resolveThemeId(input.theme_id);
   const tsxSource = String(input.tsx_source ?? '');
   const cssSource = String(input.css_source ?? '');
-  const globalCssSource = String(input.global_css_source ?? '');
   return {
     theme_id,
     name,
@@ -867,7 +827,6 @@ function normalizeTemplateInput(input) {
     engine,
     tsx_source: tsxSource,
     css_source: cssSource,
-    global_css_source: globalCssSource,
     status: input.status === 'published' ? 'published' : 'draft',
     is_default: 0,
     sort_order: toInteger(input.sort_order, 0)
@@ -1443,7 +1402,6 @@ function formatPreviewDate(value) {
 
 function renderPreviewTemplate(template, props, components, depth, previewState) {
   collectPreviewTemplateStyle(template, previewState);
-  collectPreviewStandaloneStyle(template.global_css_source || '', `${template.code}_global`, previewState.globalStyleAssets);
   return renderTsxTemplate(template.tsx_source || '', props, {
     templateCode: template.code,
     componentResolver: ({ code, props: extraProps, helpers }) => {
@@ -1468,7 +1426,6 @@ function renderPreviewComponentElement(code, components, props, depth, previewSt
     return null;
   }
   collectPreviewTemplateStyle(component, previewState);
-  collectPreviewStandaloneStyle(component.global_css_source || '', `${component.code}_global`, previewState.globalStyleAssets);
   return createTsxTemplateElement(component.tsx_source || '', props, {
     templateCode: component.code,
     componentResolver: ({ code: nestedCode, props: nestedProps, helpers: nestedHelpers }) => {
@@ -1493,7 +1450,6 @@ function renderPreviewComponentMarkup(code, components, props, depth, previewSta
     return `<!-- missing component: ${escapeHtml(code)} -->`;
   }
   collectPreviewTemplateStyle(component, previewState);
-  collectPreviewStandaloneStyle(component.global_css_source || '', `${component.code}_global`, previewState.globalStyleAssets);
   return renderTsxTemplate(component.tsx_source || '', props, {
     templateCode: component.code,
     componentResolver: ({ code: nestedCode, props: nestedProps, helpers }) => {
@@ -1525,16 +1481,13 @@ function collectPreviewTemplateStyle(template, previewState) {
   previewState.styleAssets.set(asset.code, asset);
 }
 
-function injectPreviewTsxStyles(html, styleAssets, globalStyleAssets = new Map()) {
-  const allAssets = [
-    ...Array.from(globalStyleAssets?.values?.() || []),
-    ...Array.from(styleAssets?.values?.() || [])
-  ];
+function injectPreviewTsxStyles(html, styleAssets) {
+  const assets = Array.from(styleAssets?.values?.() || []);
 
-  if (allAssets.length === 0) {
+  if (assets.length === 0) {
     return html;
   }
-  const styleHtml = allAssets
+  const styleHtml = assets
     .map((asset) => `<style data-cms-template-style="${escapeHtml(asset.code)}">\n${asset.cssText}\n</style>`)
     .join('\n');
 
@@ -1544,28 +1497,56 @@ function injectPreviewTsxStyles(html, styleAssets, globalStyleAssets = new Map()
   return `${styleHtml}\n${html}`;
 }
 
-function collectPreviewStandaloneStyle(styleSource, templateCode, targetMap) {
-  if (!(targetMap instanceof Map)) {
-    return;
-  }
-  const normalizedStyleSource = String(styleSource || '').trim();
-  if (!normalizedStyleSource) {
-    return;
-  }
-  const asset = getTsxTemplateStyleAsset(buildStyleCarrierSource(normalizedStyleSource), {
-    templateCode
-  });
-  if (asset) {
-    targetMap.set(asset.code, asset);
-  }
-}
-
 function mergePreviewComponentProps(baseProps, extraProps) {
-  const { children: _children, slots: _slots, ...restBaseProps } = baseProps || {};
+  const restBaseProps = pickPreviewComponentContextProps(baseProps);
   return {
     ...restBaseProps,
     ...(extraProps || {})
   };
+}
+
+function pickPreviewComponentContextProps(source) {
+  if (!source || typeof source !== 'object') {
+    return {};
+  }
+
+  const keys = [
+    'site',
+    'siteColumns',
+    'utilityColumns',
+    'footerColumns',
+    'footerProductCategories',
+    'fragments',
+    'currentPage',
+    'currentSection',
+    'currentCategory',
+    'currentCategoryItem',
+    'parentCategory',
+    'currentContent',
+    'currentProduct',
+    'currentArticle',
+    'currentCategoryDescription',
+    'currentCategoryPageData',
+    'currentCategoryHeroImage',
+    'currentProductPageData',
+    'sectionNavItems',
+    'seoMeta',
+    'jsonLd',
+    'faviconLinks',
+    'themeColorMetas',
+    'hreflangLinks',
+    'component',
+    'raw',
+    'Raw'
+  ];
+
+  const next = {};
+  for (const key of keys) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      next[key] = source[key];
+    }
+  }
+  return next;
 }
 
 function getTemplateByCode(code, themeId = null) {
@@ -1599,10 +1580,8 @@ function hydrateTemplateRecord(row) {
     ...row,
     tsx_source: String(row.tsx_source ?? ''),
     css_source: String(row.css_source ?? ''),
-    global_css_source: String(row.global_css_source ?? ''),
     published_tsx_source: row.published_tsx_source == null ? null : String(row.published_tsx_source ?? ''),
-    published_css_source: row.published_css_source == null ? null : String(row.published_css_source ?? ''),
-    published_global_css_source: row.published_global_css_source == null ? null : String(row.published_global_css_source ?? '')
+    published_css_source: row.published_css_source == null ? null : String(row.published_css_source ?? '')
   };
 }
 
@@ -1614,8 +1593,7 @@ function hydratePublishedTemplateRecord(row) {
   return {
     ...template,
     tsx_source: template.published_tsx_source ?? template.tsx_source,
-    css_source: template.published_css_source ?? template.css_source,
-    global_css_source: template.published_global_css_source ?? template.global_css_source
+    css_source: template.published_css_source ?? template.css_source
   };
 }
 
@@ -1626,8 +1604,7 @@ function hydrateTemplateVersionRecord(row) {
   return {
     ...row,
     tsx_source: String(row.tsx_source ?? ''),
-    css_source: String(row.css_source ?? ''),
-    global_css_source: String(row.global_css_source ?? '')
+    css_source: String(row.css_source ?? '')
   };
 }
 
@@ -1637,6 +1614,115 @@ function buildTemplateStyleSource(template) {
   }
   const cssSource = String(template.css_source ?? '');
   return cssSource ? buildStyleCarrierSource(cssSource) : '';
+}
+
+function collapseLegacyGlobalCssSources() {
+  const templateColumns = new Set(queryAll('PRAGMA table_info(templates)').map((column) => String(column.name || '')));
+  const versionColumns = new Set(queryAll('PRAGMA table_info(template_versions)').map((column) => String(column.name || '')));
+
+  const hasTemplateGlobalCssColumns = templateColumns.has('global_css_source') && templateColumns.has('published_global_css_source');
+  const hasVersionGlobalCssColumn = versionColumns.has('global_css_source');
+
+  if (!hasTemplateGlobalCssColumns && !hasVersionGlobalCssColumn) {
+    return;
+  }
+
+  const templateRows = queryAll(`
+    SELECT id, css_source, global_css_source, published_css_source, published_global_css_source
+    FROM templates
+    WHERE trim(coalesce(global_css_source, '')) <> ''
+       OR trim(coalesce(published_global_css_source, '')) <> ''
+  `);
+
+  if (hasTemplateGlobalCssColumns) {
+    for (const row of templateRows) {
+      const nextCssSource = mergeTemplateCssSources(row.css_source, row.global_css_source);
+      const nextPublishedCssSource = mergeTemplateCssSources(row.published_css_source, row.published_global_css_source);
+      execute(
+        `
+          UPDATE templates
+          SET css_source = ?, global_css_source = '', published_css_source = ?, published_global_css_source = ''
+          WHERE id = ?
+        `,
+        [nextCssSource, nextPublishedCssSource || null, row.id]
+      );
+    }
+  }
+
+  if (hasVersionGlobalCssColumn) {
+    const versionRows = queryAll(`
+      SELECT id, css_source, global_css_source
+      FROM template_versions
+      WHERE trim(coalesce(global_css_source, '')) <> ''
+    `);
+
+    for (const row of versionRows) {
+      const nextCssSource = mergeTemplateCssSources(row.css_source, row.global_css_source);
+      execute(
+        `
+          UPDATE template_versions
+          SET css_source = ?, global_css_source = ''
+          WHERE id = ?
+        `,
+        [nextCssSource, row.id]
+      );
+    }
+  }
+}
+
+function ensureSingleCssSourceSchema() {
+  const templateColumns = queryAll('PRAGMA table_info(templates)');
+  const versionColumns = queryAll('PRAGMA table_info(template_versions)');
+  const templatesNeedRebuild = templateColumns.some((column) => (
+    column.name === 'global_css_source' || column.name === 'published_global_css_source'
+  ));
+  const versionsNeedRebuild = versionColumns.some((column) => column.name === 'global_css_source');
+
+  if (!templatesNeedRebuild && !versionsNeedRebuild) {
+    return;
+  }
+
+  getDb().exec(`
+    PRAGMA foreign_keys = OFF;
+    BEGIN TRANSACTION;
+  `);
+
+  if (templatesNeedRebuild) {
+    getDb().exec(`
+      ALTER TABLE templates RENAME TO templates__old_single_css_migration;
+      ${TEMPLATES_TABLE_SCHEMA}
+
+      INSERT INTO templates (
+        id, theme_id, name, type, code, engine, tsx_source, css_source, published_tsx_source, published_css_source, status, is_default, sort_order, created_at, updated_at
+      )
+      SELECT
+        id, theme_id, name, type, code, coalesce(engine, 'tsx'), tsx_source, css_source, published_tsx_source, published_css_source, status, is_default, sort_order, created_at, updated_at
+      FROM templates__old_single_css_migration;
+
+      DROP TABLE templates__old_single_css_migration;
+    `);
+  }
+
+  if (versionsNeedRebuild) {
+    getDb().exec(`
+      ALTER TABLE template_versions RENAME TO template_versions__old_single_css_migration;
+      ${TEMPLATE_VERSIONS_TABLE_SCHEMA}
+
+      INSERT INTO template_versions (
+        id, template_id, version_no, engine, tsx_source, css_source, note, created_at
+      )
+      SELECT
+        id, template_id, version_no, coalesce(engine, 'tsx'), tsx_source, css_source, note, created_at
+      FROM template_versions__old_single_css_migration;
+
+      DROP TABLE template_versions__old_single_css_migration;
+    `);
+  }
+
+  getDb().exec(`
+    COMMIT;
+    PRAGMA foreign_keys = ON;
+  `);
 }
 
 function buildStyleCarrierSource(styleSource) {
@@ -2144,10 +2230,10 @@ function ensureTemplateCodeThemeScope() {
     ${TEMPLATES_TABLE_SCHEMA}
 
     INSERT INTO templates (
-      id, theme_id, name, type, code, engine, tsx_source, css_source, global_css_source, published_tsx_source, published_css_source, published_global_css_source, status, is_default, sort_order, created_at, updated_at
+      id, theme_id, name, type, code, engine, tsx_source, css_source, published_tsx_source, published_css_source, status, is_default, sort_order, created_at, updated_at
     )
     SELECT
-      id, theme_id, name, type, code, 'tsx', tsx_source, css_source, global_css_source, published_tsx_source, published_css_source, published_global_css_source, status, is_default, sort_order, created_at, updated_at
+      id, theme_id, name, type, code, 'tsx', tsx_source, css_source, published_tsx_source, published_css_source, status, is_default, sort_order, created_at, updated_at
     FROM templates__old_theme_code_scope;
 
     DROP TABLE templates__old_theme_code_scope;
@@ -2184,10 +2270,10 @@ function ensureTemplatesEngineConstraint() {
     ${TEMPLATES_TABLE_SCHEMA}
 
     INSERT INTO templates (
-      id, theme_id, name, type, code, engine, tsx_source, css_source, global_css_source, published_tsx_source, published_css_source, published_global_css_source, status, is_default, sort_order, created_at, updated_at
+      id, theme_id, name, type, code, engine, tsx_source, css_source, published_tsx_source, published_css_source, status, is_default, sort_order, created_at, updated_at
     )
     SELECT
-      id, theme_id, name, type, code, 'tsx', tsx_source, css_source, global_css_source, published_tsx_source, published_css_source, published_global_css_source, status, is_default, sort_order, created_at, updated_at
+      id, theme_id, name, type, code, 'tsx', tsx_source, css_source, published_tsx_source, published_css_source, status, is_default, sort_order, created_at, updated_at
     FROM templates__old_engine_check;
 
     DROP TABLE templates__old_engine_check;
@@ -2304,10 +2390,10 @@ function ensureTemplateVersionsForeignKey() {
     ${TEMPLATE_VERSIONS_TABLE_SCHEMA}
 
     INSERT INTO template_versions (
-      id, template_id, version_no, engine, tsx_source, css_source, global_css_source, note, created_at
+      id, template_id, version_no, engine, tsx_source, css_source, note, created_at
     )
     SELECT
-      id, template_id, version_no, 'tsx', tsx_source, css_source, global_css_source, note, created_at
+      id, template_id, version_no, 'tsx', tsx_source, css_source, note, created_at
     FROM template_versions__old_fk_fix;
 
     DROP TABLE template_versions__old_fk_fix;
@@ -2343,10 +2429,10 @@ function ensureTemplateVersionsEngineConstraint() {
     ${TEMPLATE_VERSIONS_TABLE_SCHEMA}
 
     INSERT INTO template_versions (
-      id, template_id, version_no, engine, tsx_source, css_source, global_css_source, note, created_at
+      id, template_id, version_no, engine, tsx_source, css_source, note, created_at
     )
     SELECT
-      id, template_id, version_no, 'tsx', tsx_source, css_source, global_css_source, note, created_at
+      id, template_id, version_no, 'tsx', tsx_source, css_source, note, created_at
     FROM template_versions__old_engine_fix
     WHERE coalesce(engine, 'tsx') = 'tsx';
 

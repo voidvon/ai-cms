@@ -170,8 +170,7 @@ export function listSelectedThemePublishedComponents() {
     code: item.code,
     engine: item.engine || 'tsx',
     tsx_source: item.published_tsx_source || item.tsx_source || '',
-    css_source: item.published_css_source || item.css_source || '',
-    global_css_source: item.published_global_css_source || item.global_css_source || ''
+    css_source: item.published_css_source || item.css_source || ''
   }));
 }
 
@@ -221,16 +220,14 @@ function cloneThemeTemplates(sourceThemeId, targetThemeId) {
         engine,
         tsx_source,
         css_source,
-        global_css_source,
         published_tsx_source,
         published_css_source,
-        published_global_css_source,
         status,
         is_default,
         sort_order,
         created_at,
         updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
       `,
       [
         targetThemeId,
@@ -240,10 +237,8 @@ function cloneThemeTemplates(sourceThemeId, targetThemeId) {
         template.engine || 'tsx',
         template.tsx_source || '',
         template.css_source || '',
-        template.global_css_source || '',
         template.published_tsx_source || null,
         template.published_css_source || null,
-        template.published_global_css_source || null,
         template.status || 'draft',
         template.is_default || 0,
         template.sort_order || 0

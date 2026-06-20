@@ -66,7 +66,7 @@ export default function MediaAssetsPage() {
     return <div>加载失败: {(error as Error).message}</div>
   }
 
-  const items = data?.items || []
+  const items: MediaAsset[] = data?.items || []
   const pagination = data?.pagination
 
   return (

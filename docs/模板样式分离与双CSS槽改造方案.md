@@ -1,5 +1,7 @@
 # 模板样式分离与双CSS槽改造方案
 
+> 已过时：当前系统已完成样式迁移，不再采用双 CSS 槽位模型。现行方案以单一 `css_source` 为样式真源，并由构建器自动做依赖分析与分层打包。后续请以 [模板资源自动依赖分析与分层打包方案](/Users/yytest/Documents/projects/spiraxsarcocn/docs/模板资源自动依赖分析与分层打包方案.md:1) 为准。
+
 ## 背景
 
 当前 CMS 模板以数据库 `templates` / `template_versions` 为真源，模板源码主要存放在 `content` 与 `published_content` 字段中，样式通过 TSX 导出 `export const css` 或 `export const scss` 的方式内嵌在同一段模板源码里。

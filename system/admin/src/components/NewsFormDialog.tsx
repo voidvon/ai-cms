@@ -66,7 +66,6 @@ export default function NewsFormDialog({ open, onOpenChange, news, mode, default
     && item.column_type === 'list'
   ))
   const fieldMap = mapFieldsByName(newsModel?.fields || [])
-  const currentTranslation = translations[activeLanguage] || createEmptyTranslation()
 
   useEffect(() => {
     const source = mode === 'edit' ? (newsDetailData?.data || news) : null

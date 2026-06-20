@@ -108,7 +108,6 @@ function upsertPublishedTemplate(definition) {
     engine: 'tsx',
     ...(normalizedDefinition.tsx_source !== undefined ? { tsx_source: normalizedDefinition.tsx_source } : {}),
     ...(normalizedDefinition.css_source !== undefined ? { css_source: normalizedDefinition.css_source } : {}),
-    ...(normalizedDefinition.global_css_source !== undefined ? { global_css_source: normalizedDefinition.global_css_source } : {}),
     sort_order: normalizedDefinition.sort_order || 0,
   };
 
@@ -192,9 +191,165 @@ function buildTemplates() {
   const shortMastheadCss = readSourceCss([
     'src/components/shared/business/ShortMasthead.css',
   ]);
-  const contentCardGridCss = readSourceCss([
-    'src/components/shared/primitives/ContentCardGrid.css',
-  ]);
+  const contentCardGridCss = [
+    readSourceCss([
+      'src/components/shared/primitives/ContentCardGrid.css',
+    ]),
+    `
+.content-card-grid__grid--cols-fluid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+}
+
+.content-card-grid__grid--cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.content-card-grid__grid--cols-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 1024px) {
+  .content-card-grid__grid--cols-fluid,
+  .content-card-grid__grid--cols-3,
+  .content-card-grid__grid--cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .content-card-grid__grid--cols-fluid,
+  .content-card-grid__grid--cols-3,
+  .content-card-grid__grid--cols-4 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+    `.trim()
+  ].filter(Boolean).join('\n\n');
+  const productCardGridCss = `
+.product-card-grid {
+  --product-card-min-height: 190px;
+  --product-card-grey-bg: #eef1f3;
+  --product-card-shadow: 0 8px 22px rgba(0, 45, 114, 0.1);
+}
+
+.product-card-grid__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.product-card-grid__item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: var(--product-card-min-height);
+  color: inherit;
+  text-decoration: none;
+  background: #fff;
+  box-shadow: var(--product-card-shadow);
+}
+
+.product-card-grid__item--grey {
+  background: var(--product-card-grey-bg);
+}
+
+.product-card-grid__item--light-blue {
+  background: var(--sg-card-blue, #d9edf6);
+  box-shadow: none;
+}
+
+.product-card-grid__image {
+  flex: 0 0 auto;
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+}
+
+.product-card-grid__content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  justify-content: center;
+  min-height: calc(var(--product-card-min-height) * 0.55);
+  padding: 18px 24px;
+}
+
+.product-card-grid__link {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  color: inherit;
+  text-decoration: none;
+}
+
+.product-card-grid__title {
+  margin: 0;
+  color: var(--sg-blue);
+  font-weight: 700;
+  line-height: 1.24;
+}
+
+.product-card-grid__title--uppercase {
+  text-transform: uppercase;
+}
+
+.product-card-grid__desc {
+  margin-top: 14px;
+  color: #41576d;
+  font-size: 15px;
+  line-height: 1.68;
+}
+
+.product-card-grid__desc p {
+  margin: 0;
+  white-space: pre-line;
+}
+
+.product-card-grid__cta {
+  display: inline-flex;
+  align-items: center;
+  margin-top: 18px;
+  color: var(--sg-blue);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+@media (max-width: 1024px) {
+  .product-card-grid__grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .product-card-grid__grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .product-card-grid__item {
+    min-height: auto;
+  }
+
+  .product-card-grid__content {
+    padding: 8px;
+  }
+
+  .product-card-grid--mobile-carousel .product-card-grid__grid {
+    grid-template-columns: none;
+    grid-auto-columns: minmax(78vw, 1fr);
+    grid-auto-flow: column;
+    overflow-x: auto;
+    padding-bottom: 6px;
+    scroll-snap-type: x proximity;
+  }
+
+  .product-card-grid--mobile-carousel .product-card-grid__item {
+    scroll-snap-align: start;
+  }
+}
+  `.trim();
   const productImageGalleryCss = readSourceCss([
     'src/components/shared/business/ProductImageGallery.css',
   ]);
@@ -267,8 +422,7 @@ function buildTemplates() {
       sort_order: 1,
       content: buildShellComponent(),
       tsx_source: buildShellComponent(),
-      css_source: '',
-      global_css_source: buildShellGlobalCss(shellCss),
+      css_source: buildShellGlobalCss(shellCss),
     },
     {
       code: 'spirax_button',
@@ -277,8 +431,7 @@ function buildTemplates() {
       sort_order: 2,
       content: buildButtonComponent(),
       tsx_source: buildButtonComponent(),
-      css_source: '',
-      global_css_source: buildButtonGlobalCss(),
+      css_source: buildButtonGlobalCss(),
     },
     {
       code: 'spirax_short_masthead',
@@ -287,8 +440,7 @@ function buildTemplates() {
       sort_order: 3,
       content: buildShortMastheadComponent(),
       tsx_source: extractTemplateSourceParts(buildShortMastheadComponent()).tsx_source,
-      css_source: '',
-      global_css_source: shortMastheadCss,
+      css_source: shortMastheadCss,
     },
     {
       code: 'spirax_breadcrumbs',
@@ -297,8 +449,7 @@ function buildTemplates() {
       sort_order: 4,
       content: buildBreadcrumbsComponent(),
       tsx_source: buildBreadcrumbsComponent(),
-      css_source: '',
-      global_css_source: breadcrumbsCss,
+      css_source: breadcrumbsCss,
     },
     {
       code: 'spirax_global_search',
@@ -307,8 +458,7 @@ function buildTemplates() {
       sort_order: 5,
       content: buildGlobalSearchComponent(),
       tsx_source: buildGlobalSearchComponent(),
-      css_source: '',
-      global_css_source: globalSearchCss,
+      css_source: globalSearchCss,
     },
     {
       code: 'spirax_content_card_grid',
@@ -317,8 +467,16 @@ function buildTemplates() {
       sort_order: 6,
       content: buildContentCardGridComponent(),
       tsx_source: buildContentCardGridComponent(),
-      css_source: '',
-      global_css_source: contentCardGridCss,
+      css_source: contentCardGridCss,
+    },
+    {
+      code: 'product_card_grid',
+      name: '产品卡片网格组件',
+      type: 'component',
+      sort_order: 7,
+      content: buildProductCardGridComponent(),
+      tsx_source: buildProductCardGridComponent(),
+      css_source: productCardGridCss,
     },
     {
       code: 'spirax_product_image_gallery',
@@ -327,8 +485,7 @@ function buildTemplates() {
       sort_order: 7,
       content: buildProductImageGalleryComponent(),
       tsx_source: extractTemplateSourceParts(buildProductImageGalleryComponent()).tsx_source,
-      css_source: '',
-      global_css_source: productImageGalleryCss,
+      css_source: productImageGalleryCss,
     },
     {
       code: 'spirax_product_top_panel',
@@ -337,8 +494,7 @@ function buildTemplates() {
       sort_order: 8,
       content: buildProductTopPanelComponent(),
       tsx_source: buildProductTopPanelComponent(),
-      css_source: '',
-      global_css_source: productPageCssPartitions.productTopPanel,
+      css_source: productPageCssPartitions.productTopPanel,
     },
     {
       code: 'spirax_copy_section',
@@ -354,8 +510,7 @@ function buildTemplates() {
       sort_order: 10,
       content: buildBrandPathSectionComponent(),
       tsx_source: buildBrandPathSectionComponent(),
-      css_source: '',
-      global_css_source: brandPathSectionCss,
+      css_source: brandPathSectionCss,
     },
     {
       code: 'spirax_product_download_groups',
@@ -364,8 +519,7 @@ function buildTemplates() {
       sort_order: 11,
       content: buildProductDownloadGroupsComponent(),
       tsx_source: buildProductDownloadGroupsComponent(),
-      css_source: '',
-      global_css_source: productPageCssPartitions.productDownloadGroups,
+      css_source: productPageCssPartitions.productDownloadGroups,
     },
     {
       code: 'spirax_feature_cards',
@@ -381,8 +535,7 @@ function buildTemplates() {
       sort_order: 13,
       content: buildProductSideNavComponent(),
       tsx_source: buildProductSideNavComponent(),
-      css_source: '',
-      global_css_source: productPageCssPartitions.productSideNav,
+      css_source: productPageCssPartitions.productSideNav,
     },
     {
       code: 'spirax_product_overview',
@@ -391,8 +544,7 @@ function buildTemplates() {
       sort_order: 13,
       content: buildProductOverviewComponent(),
       tsx_source: buildProductOverviewComponent(),
-      css_source: '',
-      global_css_source: productPageCssPartitions.productOverview,
+      css_source: productPageCssPartitions.productOverview,
     },
     {
       code: 'spirax_benefit_blocks',
@@ -401,8 +553,7 @@ function buildTemplates() {
       sort_order: 14,
       content: buildBenefitBlocksComponent(),
       tsx_source: buildBenefitBlocksComponent(),
-      css_source: '',
-      global_css_source: benefitBlocksCss,
+      css_source: benefitBlocksCss,
     },
     {
       code: 'spirax_supplemental_sections',
@@ -418,8 +569,7 @@ function buildTemplates() {
       sort_order: 16,
       content: buildPromoBannerComponent(),
       tsx_source: buildPromoBannerComponent(),
-      css_source: '',
-      global_css_source: productPageCssPartitions.promoBanner,
+      css_source: productPageCssPartitions.promoBanner,
     },
     {
       code: 'spirax_home',
@@ -495,15 +645,10 @@ function normalizeTemplateDefinition(definition) {
   const cssSource = definition.css_source !== undefined
     ? String(definition.css_source ?? '')
     : templateSourceParts.css_source;
-  const globalCssSource = definition.global_css_source !== undefined
-    ? String(definition.global_css_source ?? '')
-    : '';
-
   return {
     ...definition,
     tsx_source: tsxSource,
     css_source: cssSource,
-    global_css_source: globalCssSource,
   };
 }
 
@@ -1307,33 +1452,30 @@ export default function Template(props) {
     topPanel: pageData?.topPanel || null,
     quickFactsTitle: 'Quick facts'
   }) : null;
-  const cards = props.component('spirax_content_card_grid', {
+  const cards = props.component('product_card_grid', {
     cards: categoryMainSource.map((item) => ({
       title: item?.name || item?.title || '',
       description: item?.summary || item?.description || '',
       image: item?.image || '',
       imageAlt: item?.imageAlt || item?.name || item?.title || '',
       href: item?.url || item?.link || item?.href || '',
-      itemClassName: ['content-card-grid__item', item?.image ? 'content-card-grid__item--grey' : 'content-card-grid__item--light-blue'].filter(Boolean).join(' '),
-      linkClassName: 'content-card-grid__link',
-      titleClassName: 'content-card-grid__title content-card-grid__title--uppercase'
+      itemClassName: ['product-card-grid__item', item?.image ? 'product-card-grid__item--grey' : 'product-card-grid__item--light-blue'].filter(Boolean).join(' '),
+      linkClassName: 'product-card-grid__link',
+      titleClassName: 'product-card-grid__title product-card-grid__title--uppercase'
     })),
-    gridClassName: 'content-card-grid__grid',
-    wrapperClassName: 'content-card-grid content-card-grid--compact content-card-grid--mobile-carousel product-card-grid-section product-card-grid-section--cols-3'
+    wrapperClassName: 'product-card-grid--mobile-carousel'
   });
-  const modelsSection = props.component('spirax_content_card_grid', {
+  const modelsSection = props.component('product_card_grid', {
     cards: pageModels.map((item) => ({
       title: item?.name || item?.title || '',
       description: item?.summary || item?.description || '',
       image: item?.image || '',
       imageAlt: item?.imageAlt || item?.name || item?.title || '',
       href: item?.url || item?.link || item?.href || '',
-      itemClassName: 'content-card-grid__item',
-      linkClassName: 'content-card-grid__link',
-      titleClassName: 'content-card-grid__title content-card-grid__title--uppercase'
-    })),
-    gridClassName: 'content-card-grid__grid',
-    wrapperClassName: 'content-card-grid content-card-grid--compact product-card-grid-section product-card-grid-section--cols-3'
+      itemClassName: 'product-card-grid__item',
+      linkClassName: 'product-card-grid__link',
+      titleClassName: 'product-card-grid__title product-card-grid__title--uppercase'
+    }))
   });
   const downloadsSection = props.component('spirax_product_download_groups', {
     downloads: Array.isArray(pageData?.downloads) ? pageData.downloads : []
@@ -1451,7 +1593,7 @@ export default function Component(props) {
 
   return props.component('spirax_content_card_grid', {
     cards,
-    gridClassName: 'content-card-grid__grid',
+    gridClassName: 'content-card-grid__grid content-card-grid__grid--cols-fluid',
     wrapperClassName: 'content-card-grid content-card-grid--mobile-carousel'
   });
 }
@@ -1723,19 +1865,18 @@ export default function Template(props) {
   const supplementalSections = props.component('spirax_supplemental_sections', {
     sections: Array.isArray(productPageData?.supplementalSections) ? productPageData.supplementalSections : []
   });
-  const relatedCards = props.component('spirax_content_card_grid', {
+  const relatedCards = props.component('product_card_grid', {
     cards: (props.relatedProductItems || []).map((item) => ({
       title: item?.name || item?.title || '',
       description: item?.summary || '',
       image: item?.image || '',
       imageAlt: item?.name || item?.title || '',
       href: item?.url || '',
-      itemClassName: 'content-card-grid__item content-card-grid__item--grey',
-      linkClassName: 'content-card-grid__link',
-      titleClassName: 'content-card-grid__title'
+      itemClassName: 'product-card-grid__item product-card-grid__item--grey',
+      linkClassName: 'product-card-grid__link',
+      titleClassName: 'product-card-grid__title'
     })),
-    gridClassName: 'content-card-grid__grid',
-    wrapperClassName: 'content-card-grid content-card-grid--mobile-carousel'
+    wrapperClassName: 'product-card-grid--mobile-carousel'
   });
   const content = (
     <main className="sg-page-shell sg-product-page">
@@ -2444,6 +2585,77 @@ export default function Component(props) {
 `;
 }
 
+function buildProductCardGridComponent() {
+  return `
+import React from 'react';
+
+export default function Component(props) {
+  const {
+    cards = [],
+    contentClassName = 'product-card-grid__content',
+    ctaClassName = 'product-card-grid__cta',
+    descriptionClassName = 'product-card-grid__desc',
+    gridClassName = 'product-card-grid__grid',
+    imageClassName = 'product-card-grid__image',
+    imageHeight,
+    imageLoading = 'lazy',
+    imageStyle,
+    imageWidth,
+    itemClassName = 'product-card-grid__item',
+    linkClassName = 'product-card-grid__link',
+    titleClassName = 'product-card-grid__title',
+    titleTag = 'h3',
+    wrapperClassName = ''
+  } = props || {};
+  const TitleTag = titleTag === 'h2' ? 'h2' : 'h3';
+
+  return (
+    <div className={['product-card-grid', wrapperClassName].filter(Boolean).join(' ')}>
+      <div className={gridClassName}>
+        {(Array.isArray(cards) ? cards : []).map((card, index) => {
+          const href = card?.href || card?.link || '';
+          const body = (
+            <>
+              {card?.image ? (
+                <img
+                  alt={card?.imageAlt || card?.title || ''}
+                  className={imageClassName}
+                  height={imageHeight}
+                  loading={imageLoading}
+                  src={card.image}
+                  style={imageStyle}
+                  width={imageWidth}
+                />
+              ) : null}
+              <div className={contentClassName}>
+                <TitleTag className={[titleClassName, card?.titleClassName || ''].filter(Boolean).join(' ')}>{card?.title || ''}</TitleTag>
+                {card?.description ? (
+                  <div className={descriptionClassName}>
+                    <p>{card.description}</p>
+                  </div>
+                ) : null}
+                {card?.cta ? <span className={ctaClassName}>{card.cta}</span> : null}
+              </div>
+            </>
+          );
+
+          return (
+            <article className={[itemClassName, card?.itemClassName || ''].filter(Boolean).join(' ')} key={href || card?.title || index}>
+              {href ? (
+                <a className={[linkClassName, card?.linkClassName || ''].filter(Boolean).join(' ')} href={href}>
+                  {body}
+                </a>
+              ) : body}
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+`;
+}
+
 function buildProductImageGalleryComponent() {
   return `
 import React from 'react';
@@ -2984,7 +3196,7 @@ export default function Component(props) {
         </div>
       </div>
       <div className="wrapper wrapper--pad-l">
-        <div className="content-card-grid__grid">
+        <div className="content-card-grid__grid content-card-grid__grid--cols-fluid">
           {items.map((card, index) => (
             <article className="content-card-grid__item content-card-grid__item--grey" key={card?.href || card?.title || index}>
               <a className="content-card-grid__link" href={card?.href || '#'}>
@@ -3348,6 +3560,7 @@ export default function Template(props) {
       imageAlt: card?.imageAlt || card?.title || '',
       cta: card?.label || card?.cta || ''
     })),
+    gridClassName: 'content-card-grid__grid content-card-grid__grid--cols-fluid',
     wrapperClassName: 'wrapper wrapper--pad-l'
   }) : null;
   const featureGrid = features.length > 0 ? props.component('spirax_content_card_grid', {
@@ -3359,6 +3572,7 @@ export default function Template(props) {
       imageAlt: feature?.title || '',
       cta: feature?.label || ''
     })),
+    gridClassName: 'content-card-grid__grid content-card-grid__grid--cols-fluid',
     wrapperClassName: 'wrapper wrapper--pad-l'
   }) : null;
   const introSection = (introParagraphs.length > 0 || pageData?.introBlock?.body || pageData?.introBlock?.statement || introAction) ? (
@@ -3571,6 +3785,7 @@ export default function Template(props) {
       image: item?.image || '',
       cta: item?.cta || ''
     })),
+    gridClassName: 'content-card-grid__grid content-card-grid__grid--cols-fluid',
     wrapperClassName: 'wrapper wrapper--pad-l'
   }) : null;
   const proofSection = proofItems.length > 0 ? (
@@ -3579,7 +3794,7 @@ export default function Template(props) {
         <div className="section-header">
           {pageData?.proof?.title ? <h2 className="section-header__title">{pageData.proof.title}</h2> : null}
         </div>
-        <div className="content-card-grid__grid">
+        <div className="content-card-grid__grid content-card-grid__grid--cols-fluid">
           {proofItems.map((item, index) => (
             <article className="content-card-grid__item content-card-grid__item--grey" key={item?.title || index}>
               <div className="content-card-grid__content">
@@ -3620,7 +3835,7 @@ export default function Template(props) {
           <h2 className="section-header__title">{pageData.caseStudy.title}</h2>
         </div>
         {pageData?.caseStudy?.image ? <p><img alt={pageData.caseStudy.title || ''} src={pageData.caseStudy.image} /></p> : null}
-        <div className="content-card-grid__grid">
+        <div className="content-card-grid__grid content-card-grid__grid--cols-fluid">
           {caseStudyItems.map((item, index) => (
             <article className="content-card-grid__item content-card-grid__item--grey" key={item?.label || index}>
               <div className="content-card-grid__content">
@@ -3650,6 +3865,7 @@ export default function Template(props) {
       imageAlt: slide?.title || '',
       cta: slide?.cta || ''
     })),
+    gridClassName: 'content-card-grid__grid content-card-grid__grid--cols-fluid',
     wrapperClassName: 'wrapper wrapper--pad-l'
   }) : null;
   const focusSection = pageData?.focus ? (
@@ -3693,6 +3909,7 @@ export default function Template(props) {
           cta: card?.cta || ''
         })),
         itemClassName: 'content-card-grid__item content-card-grid__item--grey',
+        gridClassName: 'content-card-grid__grid content-card-grid__grid--cols-fluid',
         wrapperClassName: 'wrapper wrapper--pad-l'
       })}
     </section>

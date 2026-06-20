@@ -12,12 +12,12 @@ export const columnsApi = {
     return response.data
   },
 
-  create: async (data: Record<string, unknown>) => {
+  create: async <T extends object>(data: T) => {
     const response = await apiClient.post<ApiResponse<Column>>('/columns', data)
     return response.data
   },
 
-  update: async (id: number, data: Record<string, unknown>) => {
+  update: async <T extends object>(id: number, data: T) => {
     const response = await apiClient.put<ApiResponse<Column>>(`/columns/${id}`, data)
     return response.data
   },

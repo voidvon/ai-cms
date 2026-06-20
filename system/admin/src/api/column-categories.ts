@@ -15,7 +15,7 @@ interface CategoryGetParams extends BaseCategoryParams {
   include_translations?: number | boolean
 }
 
-function withRootColumnId<T extends Record<string, unknown> | undefined>(rootColumnId: number, params?: T) {
+function withRootColumnId<T extends object | undefined>(rootColumnId: number, params?: T) {
   return {
     ...(params || {}),
     rootColumnId,

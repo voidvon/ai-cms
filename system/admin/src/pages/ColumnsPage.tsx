@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { Suspense, lazy, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { contentModelsApi, templateVariantsApi, templatesApi } from '@/api/advanced'
@@ -35,15 +35,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import CategoryTemplateBindingDialog from '@/components/CategoryTemplateBindingDialog'
-import ColumnCategoryFormDialog from '@/components/ColumnCategoryFormDialog'
-import ManualColumnFormDialog, { type ManualColumnFormValue } from '@/components/ManualColumnFormDialog'
-import NewsFormDialog from '@/components/NewsFormDialog'
-import ProductFormDialog from '@/components/ProductFormDialog'
 import { toast } from 'sonner'
 import type { Column, ColumnCategory, ContentModel, News, Product, Template, TemplateBinding } from '@/types'
+import type { ManualColumnFormValue } from '@/components/ManualColumnFormDialog'
 
 const DEFAULT_TEMPLATE_VALUE = '__default__'
+const CategoryTemplateBindingDialog = lazy(() => import('@/components/CategoryTemplateBindingDialog'))
+const ColumnCategoryFormDialog = lazy(() => import('@/components/ColumnCategoryFormDialog'))
+const ManualColumnFormDialog = lazy(() => import('@/components/ManualColumnFormDialog'))
+const NewsFormDialog = lazy(() => import('@/components/NewsFormDialog'))
+const ProductFormDialog = lazy(() => import('@/components/ProductFormDialog'))
 
 interface ColumnTreeNode extends Column {
   children: ColumnTreeNode[]
@@ -100,6 +101,10 @@ const COLUMN_KIND_META: Record<ColumnDisplayKind, { label: string; createLabel: 
     createLabel: '新增单页',
     showTreeBadge: true,
   },
+}
+
+function DialogFallback() {
+  return null
 }
 
 export default function ColumnsPage() {
@@ -436,7 +441,8 @@ export default function ColumnsPage() {
     },
   })
 
-  const activeItems = isNewsColumn ? (newsData?.items || []) : (isProductColumn ? (productsData?.items || []) : [])
+  const activeNewsItems = newsData?.items || []
+  const activeProductItems = productsData?.items || []
   const activePagination = isNewsColumn ? newsData?.pagination : (isProductColumn ? productsData?.pagination : undefined)
   const activeLoading = isNewsColumn ? newsLoading : (isProductColumn ? productsLoading : false)
   const pageTitle = selectedColumn?.name || '栏目'
@@ -840,13 +846,13 @@ export default function ColumnsPage() {
             <>
               {isNewsColumn ? (
                 <NewsTable
-                  items={activeItems as News[]}
+                  items={activeNewsItems}
                   onEdit={handleEditNews}
                   onDelete={(id) => handleDelete({ type: 'news', id })}
                 />
               ) : (
                 <ProductTable
-                  items={activeItems as Product[]}
+                  items={activeProductItems}
                   columns={columns}
                   onEdit={handleEditProduct}
                   onDelete={(id) => handleDelete({ type: 'product', id })}
@@ -921,21 +927,29 @@ export default function ColumnsPage() {
         </div>
       </div>
 
-      <ProductFormDialog
-        open={productFormOpen}
-        onOpenChange={setProductFormOpen}
-        product={editingProduct}
-        mode={editingProduct ? 'edit' : 'create'}
-        defaultColumnId={isProductColumn ? (selectedColumn?.id || undefined) : undefined}
-      />
+      {productFormOpen ? (
+        <Suspense fallback={<DialogFallback />}>
+          <ProductFormDialog
+            open={productFormOpen}
+            onOpenChange={setProductFormOpen}
+            product={editingProduct}
+            mode={editingProduct ? 'edit' : 'create'}
+            defaultColumnId={isProductColumn ? (selectedColumn?.id || undefined) : undefined}
+          />
+        </Suspense>
+      ) : null}
 
-      <NewsFormDialog
-        open={newsFormOpen}
-        onOpenChange={setNewsFormOpen}
-        news={editingNews}
-        mode={editingNews ? 'edit' : 'create'}
-        defaultColumnId={isNewsColumn ? (selectedColumn?.id || undefined) : undefined}
-      />
+      {newsFormOpen ? (
+        <Suspense fallback={<DialogFallback />}>
+          <NewsFormDialog
+            open={newsFormOpen}
+            onOpenChange={setNewsFormOpen}
+            news={editingNews}
+            mode={editingNews ? 'edit' : 'create'}
+            defaultColumnId={isNewsColumn ? (selectedColumn?.id || undefined) : undefined}
+          />
+        </Suspense>
+      ) : null}
 
       <Dialog open={rootCategoryDialogOpen} onOpenChange={handleRootCategoryDialogOpenChange}>
         <DialogContent className="max-w-xl">
@@ -1050,46 +1064,58 @@ export default function ColumnsPage() {
       </DialogContent>
       </Dialog>
 
-      <ManualColumnFormDialog
-        open={manualColumnDialogOpen}
-        onOpenChange={handleManualColumnDialogOpenChange}
-        mode={manualColumnDialogMode}
-        column={editingColumnTarget || editingManualColumn}
-        initialKind={manualColumnDialogKind}
-        forceBasicOnly={Boolean(editingColumnTarget)}
-        columns={columns}
-        contentModels={contentModels}
-        listTemplates={listTemplates}
-        contentTemplates={contentTemplates}
-        singleTemplates={singleTemplates}
-        initialListTemplateId={selectedManualListBinding?.template_id ? String(selectedManualListBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
-        initialContentTemplateId={selectedManualContentBinding?.template_id ? String(selectedManualContentBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
-        initialSingleTemplateId={selectedManualSingleBinding?.template_id ? String(selectedManualSingleBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
-        submitting={createManualColumnMutation.isPending || updateManualColumnMutation.isPending || updateColumnMutation.isPending}
-        onSubmit={handleSubmitManualColumn}
-      />
+      {manualColumnDialogOpen ? (
+        <Suspense fallback={<DialogFallback />}>
+          <ManualColumnFormDialog
+            open={manualColumnDialogOpen}
+            onOpenChange={handleManualColumnDialogOpenChange}
+            mode={manualColumnDialogMode}
+            column={editingColumnTarget || editingManualColumn}
+            initialKind={manualColumnDialogKind}
+            forceBasicOnly={Boolean(editingColumnTarget)}
+            columns={columns}
+            contentModels={contentModels}
+            listTemplates={listTemplates}
+            contentTemplates={contentTemplates}
+            singleTemplates={singleTemplates}
+            initialListTemplateId={selectedManualListBinding?.template_id ? String(selectedManualListBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
+            initialContentTemplateId={selectedManualContentBinding?.template_id ? String(selectedManualContentBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
+            initialSingleTemplateId={selectedManualSingleBinding?.template_id ? String(selectedManualSingleBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
+            submitting={createManualColumnMutation.isPending || updateManualColumnMutation.isPending || updateColumnMutation.isPending}
+            onSubmit={handleSubmitManualColumn}
+          />
+        </Suspense>
+      ) : null}
 
-      <ColumnCategoryFormDialog
-        open={categoryFormOpen && Boolean(categoryFormRootColumn)}
-        onOpenChange={handleCategoryFormOpenChange}
-        rootColumn={categoryFormRootColumn}
-        category={categoryFormMode === 'edit' ? editingCategoryData?.data as ColumnCategory | undefined : undefined}
-        currentParentId={categoryFormMode === 'create' ? creatingCategoryTarget?.id || 0 : 0}
-        mode={categoryFormMode}
-      />
+      {categoryFormOpen && categoryFormRootColumn ? (
+        <Suspense fallback={<DialogFallback />}>
+          <ColumnCategoryFormDialog
+            open={categoryFormOpen}
+            onOpenChange={handleCategoryFormOpenChange}
+            rootColumn={categoryFormRootColumn}
+            category={categoryFormMode === 'edit' ? editingCategoryData?.data as ColumnCategory | undefined : undefined}
+            currentParentId={categoryFormMode === 'create' ? creatingCategoryTarget?.id || 0 : 0}
+            mode={categoryFormMode}
+          />
+        </Suspense>
+      ) : null}
 
-      <CategoryTemplateBindingDialog
-        open={Boolean(bindingCategoryTarget)}
-        onOpenChange={(open) => {
-          if (!open) {
-            setBindingCategoryTarget(null)
-          }
-        }}
-        targetType={bindingCategoryTarget?.targetType || 'column'}
-        targetId={bindingCategoryTarget?.id}
-        targetName={bindingCategoryTarget?.name}
-        templateTypes={bindingCategoryTarget?.renderDriver === 'page_tree' ? ['single'] : ['list', 'content']}
-      />
+      {bindingCategoryTarget ? (
+        <Suspense fallback={<DialogFallback />}>
+          <CategoryTemplateBindingDialog
+            open={Boolean(bindingCategoryTarget)}
+            onOpenChange={(open) => {
+              if (!open) {
+                setBindingCategoryTarget(null)
+              }
+            }}
+            targetType={bindingCategoryTarget.targetType}
+            targetId={bindingCategoryTarget.id}
+            targetName={bindingCategoryTarget.name}
+            templateTypes={bindingCategoryTarget.renderDriver === 'page_tree' ? ['single'] : ['list', 'content']}
+          />
+        </Suspense>
+      ) : null}
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
@@ -1574,7 +1600,7 @@ async function saveRequiredTemplateBinding(
   targetId: number,
   templateType: Extract<TemplateBinding['template_type'], 'list' | 'content' | 'single'>,
   templateId: string,
-  bindings: TemplateBinding[] = []
+  _bindings: TemplateBinding[] = []
 ) {
   if (templateId === DEFAULT_TEMPLATE_VALUE) {
     throw new Error(`missing required ${templateType} template binding`)
