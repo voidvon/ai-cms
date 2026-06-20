@@ -1207,7 +1207,7 @@ function buildLegacyContactPageProps(templateContext) {
     ? resolveDedicatedColumnPageContent(contactColumn, templateContext.languageCode)
     : null;
   const contactUrl = contactColumn ? buildLegacyColumnUrl(contactColumn, templateContext.publicSections) || '/contact.html' : '/contact.html';
-  const pageTitleBase = templateContext.site.seo_organization_name || templateContext.site.company_name || templateContext.site.web_name || '';
+  const pageTitleBase = templateContext.site.company_name || templateContext.site.web_name || '';
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
@@ -1233,7 +1233,7 @@ function buildLegacyContactPageProps(templateContext) {
 function buildLegacyContentPageProps(templateContext, item) {
   const parentCategory = templateContext.corporationCategories.find((entry) => normalizeInteger(entry.id, 0) === normalizeInteger(item.parent_id, 0)) || null;
   const pageUrl = `/about/about-${normalizeInteger(item.id, 0)}.html`;
-  const pageTitleBase = templateContext.site.seo_organization_name || templateContext.site.company_name || templateContext.site.web_name || '';
+  const pageTitleBase = templateContext.site.company_name || templateContext.site.web_name || '';
   const pageContent = resolveDedicatedColumnPageContent(item, templateContext.languageCode);
   return {
     ...buildLegacyCommonProps(templateContext),
@@ -1272,7 +1272,7 @@ function buildLegacyContentPageProps(templateContext, item) {
 
 function buildLegacySingleColumnPageProps(templateContext, column) {
   const url = buildLegacyColumnUrl(column, templateContext.publicSections);
-  const columnPageData = normalizeLegacyCategoryPageData(column?.page_data);
+  const columnPageData = normalizeLegacyCategoryPageData(column?.template_data);
   const pageContent = resolveDedicatedColumnPageContent(column, templateContext.languageCode);
   const columnPrimaryImage = getPrimaryTemplateImage(column);
   const categoryChain = buildTemplateCategoryChain({
@@ -1333,7 +1333,7 @@ function buildLegacySectionRootPageProps({ templateContext, section, allItems, c
   const sectionUrl = `/${String(section?.dirName || '').trim().replace(/^\/+|\/+$/g, '')}/`;
   const rootColumn = section?.rootColumn || null;
   const pageContent = resolveDedicatedColumnPageContent(rootColumn, templateContext.languageCode);
-  const rootPageData = normalizeLegacyCategoryPageData(rootColumn?.page_data);
+  const rootPageData = normalizeLegacyCategoryPageData(rootColumn?.template_data);
   const rootColumnPrimaryImage = getPrimaryTemplateImage(rootColumn);
   const topLevelCategories = Array.isArray(categoryList) ? categoryList : getSectionTopLevelCategories(templateContext, section);
   const buckets = categoryBuckets instanceof Map ? categoryBuckets : groupBy(allItems || [], (item) => normalizeInteger(item.column_id, 0));
@@ -1425,7 +1425,7 @@ function buildLegacyProductListPageProps({ templateContext, category, parent, ch
     fallbackCategories: rootLevelCategories.length > 0 ? rootLevelCategories : [category].filter(Boolean),
     categoryMap
   });
-  let categoryPageData = normalizeLegacyCategoryPageData(category?.page_data);
+  let categoryPageData = normalizeLegacyCategoryPageData(category?.template_data);
 
   // 修正 pageData.cards 中的子分类 URL，使用完整的层级路径
   if (categoryPageData && Array.isArray(categoryPageData.cards) && categoryPageData.cards.length > 0) {
@@ -1565,8 +1565,8 @@ function buildLegacyProductDetailPageProps({ templateContext, product, relatedPr
   const normalizedBodyHtml = normalizeLegacyRichTextHtml(product.content_html, templateContext.site) || '';
   const enrichedBody = buildLegacyProductSectionNavigation(normalizedBodyHtml);
   const productImages = normalizeLegacyProductImages(product);
-  const categoryPageData = normalizeLegacyCategoryPageData(category?.page_data);
-  let productPageData = normalizeLegacyCategoryPageData(parseLegacyExtra(product?.legacy_extra)?.page_data);
+  const categoryPageData = normalizeLegacyCategoryPageData(category?.template_data);
+  let productPageData = normalizeLegacyCategoryPageData(product?.template_data);
 
   // 修正 productPageData.brandPathSection.cards 中的URL，确保使用完整路径并添加尾部斜杠
   if (productPageData?.brandPathSection?.cards && Array.isArray(productPageData.brandPathSection.cards)) {
@@ -1675,7 +1675,7 @@ function buildLegacyArticleListPageProps({ templateContext, section, category, p
   const sectionDir = resolvedSectionConfig.dirName;
   const sectionLabel = resolvedSectionConfig.sectionLabel;
   const sectionPrimaryImage = getPrimaryTemplateImage(resolvedSectionConfig.rootColumn);
-  const categoryPageData = normalizeLegacyCategoryPageData(category?.page_data);
+  const categoryPageData = normalizeLegacyCategoryPageData(category?.template_data);
   const categoryPrimaryImage = getPrimaryTemplateImage(category);
   const categoryHeroImage = categoryPageData?.mastheadImage
     || categoryPageData?.heroImage
@@ -1984,7 +1984,7 @@ function normalizeTemplateContent(content, options = {}) {
 
 function buildSectionSeoTitle(title, site) {
   const normalizedTitle = String(title || '').trim();
-  const siteTitleBase = String(site?.seo_organization_name || site?.company_name || site?.web_name || '').trim();
+  const siteTitleBase = String(site?.company_name || site?.web_name || '').trim();
   if (!normalizedTitle) {
     return siteTitleBase;
   }
@@ -2000,10 +2000,8 @@ function buildLegacyProductCategoryUrl(category, categoryMap = null) {
 
 function normalizeLegacyTemplateMarkup(value, site) {
   return String(value || '')
-    .replace(/\/Search\.asp\?action=search/gi, '/search')
-    .replace(/\/search\.asp\?action=search/gi, '/search')
-    .replace(/\/Search\.asp\b/gi, '/search')
-    .replace(/\/search\.asp\b/gi, '/search');
+    .replace(/\baction=(["'])\/(?:Search|search)\.asp(?:\?action=search)?\1/gi, 'action="#" data-search-open-form="true"')
+    .replace(/\bhref=(["'])\/(?:Search|search)\.asp(?:\?action=search)?\1/gi, 'href="#" data-search-open="true"');
 }
 
 function buildLegacyProductsMenu(categories) {
@@ -2085,7 +2083,7 @@ function buildLegacySectionRootPageData({
   categoryBuckets
 }) {
   const rootColumn = section?.rootColumn || null;
-  const existing = normalizeLegacyCategoryPageData(rootColumn?.page_data) || {};
+  const existing = normalizeLegacyCategoryPageData(rootColumn?.template_data) || {};
   const safeCategoryBuckets = categoryBuckets instanceof Map ? categoryBuckets : new Map();
   const generatedCards = (directRootItems || []).map((item) => ({
     title: item.title || '',
@@ -2843,8 +2841,6 @@ function addManagedStaticDirFromPath(target, pathValue) {
     'images',
     'img',
     'skin',
-    'upload',
-    'uploadfile',
     'uploads'
   ]);
   if (reservedRoots.has(firstSegment.toLowerCase())) {
@@ -2861,9 +2857,7 @@ function cleanupStaleTopLevelStaticDirs(outputRoot, managedDirs = []) {
     'assets',
     'img',
     'admin',
-    'api',
-    'upload',
-    'uploadfile'
+    'api'
   ].map((item) => String(item || '').trim()).filter(Boolean));
 
   for (const entry of fs.readdirSync(outputRoot, { withFileTypes: true })) {
@@ -3187,26 +3181,6 @@ function truncateRenderableNewsSummary(value, maxLength = 230) {
 
 function compareCategoryOrder(left, right) {
   return normalizeInteger(left.sort_order, 0) - normalizeInteger(right.sort_order, 0) || normalizeInteger(left.id, 0) - normalizeInteger(right.id, 0);
-}
-
-function normalizeCorporationCategoryRecord(row) {
-  const legacyExtra = parseLegacyExtra(row.legacy_extra);
-  return {
-    ...row,
-    content_html: String(legacyExtra.Centern ?? legacyExtra.content_html ?? '')
-  };
-}
-
-function parseLegacyExtra(value) {
-  if (!value) {
-    return {};
-  }
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
 }
 
 function gotTopicLegacy(value, maxLength) {

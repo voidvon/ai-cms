@@ -8,6 +8,7 @@ import { listProducts } from './products.mjs';
 import { listNews } from './news.mjs';
 import { listColumnCategories, listColumnCategoriesByRoot } from './column-categories.mjs';
 import { buildColumnPublicUrl, resolvePublicSectionContext } from './public-sections.mjs';
+import { buildContentDetailUrlFromColumn } from './column-paths.mjs';
 import { normalizeUploadedRelativePath } from './uploads.mjs';
 
 export const TEMPLATE_TYPES = ['home', 'list', 'content', 'single', 'component'];
@@ -17,6 +18,76 @@ const CONTENT_TYPE_PRODUCT_ID = 1;
 const CONTENT_TYPE_ARTICLE_ID = 2;
 const CONTENT_TYPE_CONTACT_ID = 4;
 const CONTENT_TYPE_CORPORATION_ID = 6;
+
+const TEMPLATE_SELECT_FIELDS = `
+  id,
+  theme_id,
+  name,
+  type,
+  code,
+  engine,
+  tsx_source,
+  css_source,
+  global_css_source,
+  published_tsx_source,
+  published_css_source,
+  published_global_css_source,
+  status,
+  is_default,
+  sort_order,
+  created_at,
+  updated_at
+`;
+
+const TEMPLATE_VERSION_SELECT_FIELDS = `
+  id,
+  template_id,
+  version_no,
+  engine,
+  tsx_source,
+  css_source,
+  global_css_source,
+  note,
+  created_at
+`;
+
+const TEMPLATES_TABLE_SCHEMA = `
+  CREATE TABLE templates (
+    id INTEGER PRIMARY KEY,
+    theme_id INTEGER,
+    name TEXT NOT NULL,
+    type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'single', 'component')),
+    code TEXT NOT NULL,
+    engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
+    tsx_source TEXT NOT NULL DEFAULT '',
+    css_source TEXT NOT NULL DEFAULT '',
+    global_css_source TEXT NOT NULL DEFAULT '',
+    published_tsx_source TEXT,
+    published_css_source TEXT,
+    published_global_css_source TEXT,
+    status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
+    is_default INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (theme_id, code)
+  );
+`;
+
+const TEMPLATE_VERSIONS_TABLE_SCHEMA = `
+  CREATE TABLE template_versions (
+    id INTEGER PRIMARY KEY,
+    template_id INTEGER NOT NULL,
+    version_no INTEGER NOT NULL,
+    engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
+    tsx_source TEXT NOT NULL DEFAULT '',
+    css_source TEXT NOT NULL DEFAULT '',
+    global_css_source TEXT NOT NULL DEFAULT '',
+    note TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
+  );
+`;
 
 let schemaEnsured = false;
 
@@ -72,14 +143,17 @@ export function ensureTemplatesSchema() {
       type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'single', 'component')),
       code TEXT NOT NULL,
       engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
-      content TEXT NOT NULL DEFAULT '',
-      published_content TEXT,
+      tsx_source TEXT NOT NULL DEFAULT '',
+      css_source TEXT NOT NULL DEFAULT '',
+      global_css_source TEXT NOT NULL DEFAULT '',
+      published_tsx_source TEXT,
+      published_css_source TEXT,
+      published_global_css_source TEXT,
       status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
       is_default INTEGER NOT NULL DEFAULT 0,
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      published_at TEXT,
       UNIQUE (theme_id, code)
     );
 
@@ -100,8 +174,10 @@ export function ensureTemplatesSchema() {
       id INTEGER PRIMARY KEY,
       template_id INTEGER NOT NULL,
       version_no INTEGER NOT NULL,
-      engine TEXT NOT NULL DEFAULT 'tsx',
-      content TEXT NOT NULL,
+      engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
+      tsx_source TEXT NOT NULL DEFAULT '',
+      css_source TEXT NOT NULL DEFAULT '',
+      global_css_source TEXT NOT NULL DEFAULT '',
       note TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
@@ -110,8 +186,17 @@ export function ensureTemplatesSchema() {
 
   addColumnIfMissing('templates', 'theme_id', 'INTEGER');
   addColumnIfMissing('templates', 'engine', "TEXT NOT NULL DEFAULT 'tsx'");
+  addColumnIfMissing('templates', 'tsx_source', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing('templates', 'css_source', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing('templates', 'global_css_source', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing('templates', 'published_tsx_source', 'TEXT');
+  addColumnIfMissing('templates', 'published_css_source', 'TEXT');
+  addColumnIfMissing('templates', 'published_global_css_source', 'TEXT');
   addColumnIfMissing('template_bindings', 'theme_id', 'INTEGER');
   addColumnIfMissing('template_versions', 'engine', "TEXT NOT NULL DEFAULT 'tsx'");
+  addColumnIfMissing('template_versions', 'tsx_source', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing('template_versions', 'css_source', "TEXT NOT NULL DEFAULT ''");
+  addColumnIfMissing('template_versions', 'global_css_source', "TEXT NOT NULL DEFAULT ''");
   ensureTemplateThemeOwnership();
   ensureTemplateBindingsThemeValues();
   ensureTemplateCodeThemeScope();
@@ -151,25 +236,28 @@ export function listTemplates({ type, themeId } = {}) {
 
   return queryAll(
     `
-      SELECT id, theme_id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
+      SELECT
+        ${TEMPLATE_SELECT_FIELDS}
       FROM templates
       ${where}
       ORDER BY type ASC, sort_order ASC, id ASC
     `,
     params
-  );
+  ).map(hydrateTemplateRecord);
 }
 
 export function getTemplateById(id) {
   ensureTemplatesSchema();
-  return queryOne(
+  const row = queryOne(
     `
-      SELECT id, theme_id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
+      SELECT
+        ${TEMPLATE_SELECT_FIELDS}
       FROM templates
       WHERE id = ?
     `,
     [id]
-  ) || null;
+  );
+  return row ? hydrateTemplateRecord(row) : null;
 }
 
 export function getPublishedTemplateByCode(code, themeId = null) {
@@ -181,15 +269,17 @@ export function getPublishedTemplateByCode(code, themeId = null) {
     whereTheme = 'AND theme_id = ?';
     params.push(normalizedThemeId);
   }
-  return queryOne(
+  const row = queryOne(
     `
-      SELECT id, theme_id, name, type, code, engine, coalesce(published_content, content) AS content
+      SELECT
+        ${TEMPLATE_SELECT_FIELDS}
       FROM templates
       WHERE code = ? AND status = 'published' ${whereTheme}
       LIMIT 1
     `,
     params
-  ) || null;
+  );
+  return row ? hydratePublishedTemplateRecord(row) : null;
 }
 
 export function getPublishedTemplateById(id, themeId = null) {
@@ -201,15 +291,17 @@ export function getPublishedTemplateById(id, themeId = null) {
     whereTheme = 'AND theme_id = ?';
     params.push(normalizedThemeId);
   }
-  return queryOne(
+  const row = queryOne(
     `
-      SELECT id, theme_id, name, type, code, engine, coalesce(published_content, content) AS content
+      SELECT
+        ${TEMPLATE_SELECT_FIELDS}
       FROM templates
       WHERE id = ? AND status = 'published' ${whereTheme}
       LIMIT 1
     `,
     params
-  ) || null;
+  );
+  return row ? hydratePublishedTemplateRecord(row) : null;
 }
 
 export function resolvePublishedTemplate({ templateType, targets = [], fallbackCode, fallbackCodes = [] }) {
@@ -254,13 +346,21 @@ export function listPublishedComponents() {
   }
   return queryAll(
     `
-      SELECT code, engine, coalesce(published_content, content) AS content
+      SELECT
+        code,
+        engine,
+        tsx_source,
+        css_source,
+        global_css_source,
+        published_tsx_source,
+        published_css_source,
+        published_global_css_source
       FROM templates
       WHERE type = 'component' AND status = 'published' ${whereTheme}
       ORDER BY sort_order ASC, id ASC
     `,
     params
-  );
+  ).map(hydratePublishedTemplateRecord);
 }
 
 export function listTemplateBindings(themeId = null) {
@@ -367,8 +467,25 @@ export function createTemplate(input) {
   const now = new Date().toISOString();
   const result = execute(
     `
-      INSERT INTO templates (theme_id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO templates (
+        theme_id,
+        name,
+        type,
+        code,
+        engine,
+        tsx_source,
+        css_source,
+        global_css_source,
+        published_tsx_source,
+        published_css_source,
+        published_global_css_source,
+        status,
+        is_default,
+        sort_order,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       payload.theme_id,
@@ -376,14 +493,17 @@ export function createTemplate(input) {
       payload.type,
       payload.code,
       payload.engine,
-      payload.content,
-      payload.status === 'published' ? payload.content : null,
+      payload.tsx_source,
+      payload.css_source,
+      payload.global_css_source,
+      payload.status === 'published' ? payload.tsx_source : null,
+      payload.status === 'published' ? payload.css_source : null,
+      payload.status === 'published' ? payload.global_css_source : null,
       payload.status,
       payload.is_default,
       payload.sort_order,
       now,
-      now,
-      payload.status === 'published' ? now : null
+      now
     ]
   );
   return getTemplateById(result.lastInsertRowid);
@@ -400,7 +520,18 @@ export function updateTemplate(id, input) {
   execute(
     `
       UPDATE templates
-      SET theme_id = ?, name = ?, type = ?, code = ?, engine = ?, content = ?, is_default = ?, sort_order = ?, updated_at = ?
+      SET
+        theme_id = ?,
+        name = ?,
+        type = ?,
+        code = ?,
+        engine = ?,
+        tsx_source = ?,
+        css_source = ?,
+        global_css_source = ?,
+        is_default = ?,
+        sort_order = ?,
+        updated_at = ?
       WHERE id = ?
     `,
     [
@@ -409,7 +540,9 @@ export function updateTemplate(id, input) {
       payload.type,
       payload.code,
       payload.engine,
-      payload.content,
+      payload.tsx_source,
+      payload.css_source,
+      payload.global_css_source,
       payload.is_default,
       payload.sort_order,
       new Date().toISOString(),
@@ -427,10 +560,31 @@ export function publishTemplate(id, note = null) {
   validateTemplateForPublish(existing);
 
   const nextVersion = (queryOne('SELECT coalesce(max(version_no), 0) + 1 AS next_version FROM template_versions WHERE template_id = ?', [id])?.next_version) || 1;
-  if (existing.published_content != null) {
+  if (existing.published_tsx_source != null || existing.published_css_source != null || existing.published_global_css_source != null) {
     execute(
-      'INSERT INTO template_versions (template_id, version_no, engine, content, note, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-      [id, nextVersion, existing.engine || 'tsx', existing.published_content, note || '发布前版本', new Date().toISOString()]
+      `
+        INSERT INTO template_versions (
+          template_id,
+          version_no,
+          engine,
+          tsx_source,
+          css_source,
+          global_css_source,
+          note,
+          created_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        id,
+        nextVersion,
+        existing.engine || 'tsx',
+        existing.published_tsx_source || '',
+        existing.published_css_source || '',
+        existing.published_global_css_source || '',
+        note || '发布前版本',
+        new Date().toISOString()
+      ]
     );
     pruneTemplateVersions(id);
   }
@@ -439,10 +593,21 @@ export function publishTemplate(id, note = null) {
   execute(
     `
       UPDATE templates
-      SET published_content = ?, status = 'published', published_at = ?, updated_at = ?
+      SET
+        published_tsx_source = ?,
+        published_css_source = ?,
+        published_global_css_source = ?,
+        status = 'published',
+        updated_at = ?
       WHERE id = ?
     `,
-    [existing.content || '', now, now, id]
+    [
+      existing.tsx_source || '',
+      existing.css_source || '',
+      existing.global_css_source || '',
+      now,
+      id
+    ]
   );
   return getTemplateById(id);
 }
@@ -469,13 +634,14 @@ export function listTemplateVersions(templateId) {
   ensureTemplatesSchema();
   return queryAll(
     `
-      SELECT id, template_id, version_no, engine, content, note, created_at
+      SELECT
+        ${TEMPLATE_VERSION_SELECT_FIELDS}
       FROM template_versions
       WHERE template_id = ?
       ORDER BY version_no DESC, id DESC
     `,
     [templateId]
-  );
+  ).map(hydrateTemplateVersionRecord);
 }
 
 export function restoreTemplateVersion(templateId, versionId) {
@@ -486,7 +652,8 @@ export function restoreTemplateVersion(templateId, versionId) {
 
   const version = queryOne(
     `
-      SELECT id, template_id, version_no, engine, content, note, created_at
+      SELECT
+        ${TEMPLATE_VERSION_SELECT_FIELDS}
       FROM template_versions
       WHERE id = ? AND template_id = ?
       LIMIT 1
@@ -500,7 +667,9 @@ export function restoreTemplateVersion(templateId, versionId) {
   const updated = updateTemplate(template.id, {
     ...template,
     engine: version.engine || template.engine || 'tsx',
-    content: version.content || ''
+    tsx_source: version.tsx_source || '',
+    css_source: version.css_source || '',
+    global_css_source: version.global_css_source || ''
   });
   return publishTemplate(updated.id, `恢复版本 #${version.version_no}`);
 }
@@ -515,7 +684,7 @@ export function getTemplateDependencyInfo(templateId) {
   const allTemplates = listTemplates({ themeId: template.theme_id });
   const byCode = new Map(allTemplates.map((item) => [normalizeCode(item.code), item]));
   const targetCode = normalizeCode(template.code);
-  const references = extractLiteralComponentReferences(template.content).map((code) => {
+  const references = extractLiteralComponentReferences(template.tsx_source).map((code) => {
     const referenced = byCode.get(code);
     return {
       code,
@@ -532,7 +701,7 @@ export function getTemplateDependencyInfo(templateId) {
     if (item.id === template.id) {
       continue;
     }
-    const refs = extractLiteralComponentReferences(item.content);
+    const refs = extractLiteralComponentReferences(item.tsx_source);
     if (!refs.includes(targetCode)) {
       continue;
     }
@@ -572,10 +741,10 @@ export function getTemplateDependencyInfo(templateId) {
 export function validateTemplateForPublish(template) {
   ensureTemplatesSchema();
   const normalizedTemplate = normalizeTemplateInput(template);
-  const content = normalizedTemplate.content || '';
+  const tsxSource = normalizedTemplate.tsx_source || '';
   const errors = [];
 
-  for (const componentCode of extractLiteralComponentReferences(content)) {
+  for (const componentCode of extractLiteralComponentReferences(tsxSource)) {
     const component = getTemplateByCode(componentCode, normalizedTemplate.theme_id);
     const isSelf = normalizeCode(componentCode) === normalizedTemplate.code;
     if (!component) {
@@ -592,12 +761,26 @@ export function validateTemplateForPublish(template) {
   }
 
   try {
-    renderTsxTemplate(content, buildTemplateValidationProps(normalizedTemplate));
-    getTsxTemplateStyleAsset(content, {
-      templateCode: normalizedTemplate.code
-    });
+    renderTsxTemplate(tsxSource, buildTemplateValidationProps(normalizedTemplate));
+    const templateStyleSource = buildTemplateStyleSource(normalizedTemplate);
+    if (templateStyleSource) {
+      getTsxTemplateStyleAsset(templateStyleSource, {
+        templateCode: normalizedTemplate.code
+      });
+    }
   } catch (error) {
     errors.push(`TSX 编译或渲染失败：${formatTemplateValidationError(error)}`);
+  }
+
+  try {
+    const globalStyleSource = String(normalizedTemplate.global_css_source || '').trim();
+    if (globalStyleSource) {
+      getTsxTemplateStyleAsset(buildStyleCarrierSource(globalStyleSource), {
+        templateCode: `${normalizedTemplate.code}_global`
+      });
+    }
+  } catch (error) {
+    errors.push(`全局样式编译失败：${formatTemplateValidationError(error)}`);
   }
 
   if (errors.length > 0) {
@@ -614,13 +797,81 @@ export function renderTemplatePreview(input) {
   const components = buildPreviewComponentMap(template);
   const props = buildTemplatePreviewProps(template, input?.preview_context);
   const previewState = {
-    styleAssets: new Map()
+    styleAssets: new Map(),
+    globalStyleAssets: new Map()
   };
+  collectPreviewStandaloneStyle(template.global_css_source || '', `${template.code}_global`, previewState.globalStyleAssets);
   const html = ensurePreviewBaseHref(injectPreviewTsxStyles(
     renderPreviewTemplate(template, props, components, 0, previewState),
-    previewState.styleAssets
+    previewState.styleAssets,
+    previewState.globalStyleAssets
   ));
   return { html };
+}
+
+function buildPreviewComponentMap(currentTemplate) {
+  const components = new Map();
+  const selectedTheme = getSelectedTemplateVariant();
+  const componentRows = selectedTheme?.id
+    ? listTemplateVariantComponents(selectedTheme.id, { publishedOnly: false })
+    : [];
+
+  for (const item of componentRows) {
+    const hydrated = hydrateTemplateRecord(item);
+    components.set(normalizeCode(item.code), {
+      code: hydrated.code,
+      engine: hydrated.engine || 'tsx',
+      tsx_source: hydrated.tsx_source || '',
+      css_source: hydrated.css_source || '',
+      global_css_source: hydrated.global_css_source || ''
+    });
+  }
+
+  if (currentTemplate.type === 'component') {
+    components.set(currentTemplate.code, {
+      code: currentTemplate.code,
+      engine: currentTemplate.engine,
+      tsx_source: currentTemplate.tsx_source || '',
+      css_source: currentTemplate.css_source || '',
+      global_css_source: currentTemplate.global_css_source || ''
+    });
+  }
+
+  return components;
+}
+
+function normalizeTemplateInput(input) {
+  const type = String(input.type || '').trim();
+  if (!TEMPLATE_TYPES.includes(type)) {
+    throw new Error('invalid template type');
+  }
+  const name = String(input.name || '').trim();
+  if (!name) {
+    throw new Error('name is required');
+  }
+  const code = normalizeCode(input.code);
+  if (!code) {
+    throw new Error('code is required');
+  }
+
+  const engine = normalizeTemplateEngine(input.engine);
+  const theme_id = resolveThemeId(input.theme_id);
+  const tsxSource = String(input.tsx_source ?? '');
+  const cssSource = String(input.css_source ?? '');
+  const globalCssSource = String(input.global_css_source ?? '');
+  return {
+    theme_id,
+    name,
+    type,
+    code,
+    engine,
+    tsx_source: tsxSource,
+    css_source: cssSource,
+    global_css_source: globalCssSource,
+    status: input.status === 'published' ? 'published' : 'draft',
+    is_default: 0,
+    sort_order: toInteger(input.sort_order, 0)
+  };
 }
 
 function buildTemplatePreviewProps(template, previewContext = {}) {
@@ -670,7 +921,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       items: products.map((item) => ({
         id: item.id,
         name: item.name || '',
-        url: `/product/${item.id}.html`,
+        url: buildPreviewProductUrl(item, managedRootColumn),
         image: normalizeUploadedRelativePath(String(item.primary_image || '').trim()),
         summary: item.summary || ''
       })),
@@ -686,15 +937,16 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       id: product.column_id,
       fallbackName: '示例列表栏目'
     });
+    const productUrl = buildPreviewProductUrl(product, managedRootColumn);
     return {
       ...props,
       ...buildPreviewPageContext({
         pageType: 'content-detail',
         title: product.name,
-        url: `/product/${product.id}.html`,
+        url: productUrl,
         section: { type: 'product', name: '产品', url: '/valve/' },
         category,
-        content: { id: product.id, title: product.name, name: product.name, type: 'product', url: `/product/${product.id}.html` }
+        content: { id: product.id, title: product.name, name: product.name, type: 'product', url: productUrl }
       }),
       title: product.name,
       primaryMenuItems: buildPreviewPrimaryMenuItems('product'),
@@ -1158,14 +1410,27 @@ function parsePreviewLegacyExtra(value) {
   }
 }
 
+function buildPreviewProductUrl(product, fallbackColumn = null) {
+  const productId = toInteger(product?.id, 0);
+  const resolvedColumn = listColumns().find((item) => toInteger(item?.id, 0) === toInteger(product?.column_id, 0))
+    || fallbackColumn
+    || null;
+
+  if (!resolvedColumn) {
+    return `/products/detail/${productId}.html`;
+  }
+
+  return buildContentDetailUrlFromColumn(product, resolvedColumn);
+}
+
 function buildPreviewFeaturedProductsHtml() {
   return getPreviewProducts(8).map((item) => (
-    `<li><img src="${escapeHtml(normalizeUploadedRelativePath(String(item.primary_image || '').trim()))}" width="120" height="120" border="0" alt="${escapeHtml(item.name || '')}"><li><a href="/product/${item.id}.html" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${escapeHtml(item.summary || '')}</li></li>`
+    `<li><img src="${escapeHtml(normalizeUploadedRelativePath(String(item.primary_image || '').trim()))}" width="120" height="120" border="0" alt="${escapeHtml(item.name || '')}"><li><a href="${escapeHtml(buildPreviewProductUrl(item))}" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${escapeHtml(item.summary || '')}</li></li>`
   )).join('');
 }
 
 function buildPreviewProductLinksHtml(limit = 8) {
-  return getPreviewProducts(limit).map((item) => `<li><a href="/product/${item.id}.html">${escapeHtml(item.name || '')}</a></li>`).join('');
+  return getPreviewProducts(limit).map((item) => `<li><a href="${escapeHtml(buildPreviewProductUrl(item))}">${escapeHtml(item.name || '')}</a></li>`).join('');
 }
 
 function buildPreviewArticleLinks(prefix, limit = 10) {
@@ -1176,35 +1441,10 @@ function formatPreviewDate(value) {
   return String(value || '').slice(0, 10);
 }
 
-function buildPreviewComponentMap(currentTemplate) {
-  const components = new Map();
-  const selectedTheme = getSelectedTemplateVariant();
-  const componentRows = selectedTheme?.id
-    ? listTemplateVariantComponents(selectedTheme.id, { publishedOnly: false })
-    : [];
-
-  for (const item of componentRows) {
-    components.set(normalizeCode(item.code), {
-      code: item.code,
-      engine: item.engine || 'tsx',
-      content: item.content || ''
-    });
-  }
-
-  if (currentTemplate.type === 'component') {
-    components.set(currentTemplate.code, {
-      code: currentTemplate.code,
-      engine: currentTemplate.engine,
-      content: currentTemplate.content
-    });
-  }
-
-  return components;
-}
-
 function renderPreviewTemplate(template, props, components, depth, previewState) {
   collectPreviewTemplateStyle(template, previewState);
-  return renderTsxTemplate(template.content, props, {
+  collectPreviewStandaloneStyle(template.global_css_source || '', `${template.code}_global`, previewState.globalStyleAssets);
+  return renderTsxTemplate(template.tsx_source || '', props, {
     templateCode: template.code,
     componentResolver: ({ code, props: extraProps, helpers }) => {
       return renderPreviewComponentElement(
@@ -1224,11 +1464,12 @@ function renderPreviewComponentElement(code, components, props, depth, previewSt
     return null;
   }
   const component = components.get(normalizeCode(code));
-  if (!component?.content) {
+  if (!component?.tsx_source) {
     return null;
   }
   collectPreviewTemplateStyle(component, previewState);
-  return createTsxTemplateElement(component.content, props, {
+  collectPreviewStandaloneStyle(component.global_css_source || '', `${component.code}_global`, previewState.globalStyleAssets);
+  return createTsxTemplateElement(component.tsx_source || '', props, {
     templateCode: component.code,
     componentResolver: ({ code: nestedCode, props: nestedProps, helpers: nestedHelpers }) => {
       return renderPreviewComponentElement(
@@ -1248,11 +1489,12 @@ function renderPreviewComponentMarkup(code, components, props, depth, previewSta
     return '';
   }
   const component = components.get(normalizeCode(code));
-  if (!component?.content) {
+  if (!component?.tsx_source) {
     return `<!-- missing component: ${escapeHtml(code)} -->`;
   }
   collectPreviewTemplateStyle(component, previewState);
-  return renderTsxTemplate(component.content, props, {
+  collectPreviewStandaloneStyle(component.global_css_source || '', `${component.code}_global`, previewState.globalStyleAssets);
+  return renderTsxTemplate(component.tsx_source || '', props, {
     templateCode: component.code,
     componentResolver: ({ code: nestedCode, props: nestedProps, helpers }) => {
       return renderPreviewComponentElement(
@@ -1268,11 +1510,12 @@ function renderPreviewComponentMarkup(code, components, props, depth, previewSta
 }
 
 function collectPreviewTemplateStyle(template, previewState) {
-  if (!previewState?.styleAssets || !template?.content) {
+  if (!previewState?.styleAssets || !template) {
     return;
   }
-  const asset = template.engine === 'tsx'
-    ? getTsxTemplateStyleAsset(template.content, {
+  const templateStyleSource = buildTemplateStyleSource(template);
+  const asset = template.engine === 'tsx' && templateStyleSource
+    ? getTsxTemplateStyleAsset(templateStyleSource, {
       templateCode: template.code
     })
     : null;
@@ -1282,11 +1525,16 @@ function collectPreviewTemplateStyle(template, previewState) {
   previewState.styleAssets.set(asset.code, asset);
 }
 
-function injectPreviewTsxStyles(html, styleAssets) {
-  if (!styleAssets || styleAssets.size === 0) {
+function injectPreviewTsxStyles(html, styleAssets, globalStyleAssets = new Map()) {
+  const allAssets = [
+    ...Array.from(globalStyleAssets?.values?.() || []),
+    ...Array.from(styleAssets?.values?.() || [])
+  ];
+
+  if (allAssets.length === 0) {
     return html;
   }
-  const styleHtml = Array.from(styleAssets.values())
+  const styleHtml = allAssets
     .map((asset) => `<style data-cms-template-style="${escapeHtml(asset.code)}">\n${asset.cssText}\n</style>`)
     .join('\n');
 
@@ -1294,6 +1542,22 @@ function injectPreviewTsxStyles(html, styleAssets) {
     return html.replace(/<\/head>/i, `${styleHtml}\n</head>`);
   }
   return `${styleHtml}\n${html}`;
+}
+
+function collectPreviewStandaloneStyle(styleSource, templateCode, targetMap) {
+  if (!(targetMap instanceof Map)) {
+    return;
+  }
+  const normalizedStyleSource = String(styleSource || '').trim();
+  if (!normalizedStyleSource) {
+    return;
+  }
+  const asset = getTsxTemplateStyleAsset(buildStyleCarrierSource(normalizedStyleSource), {
+    templateCode
+  });
+  if (asset) {
+    targetMap.set(asset.code, asset);
+  }
 }
 
 function mergePreviewComponentProps(baseProps, extraProps) {
@@ -1313,15 +1577,83 @@ function getTemplateByCode(code, themeId = null) {
     whereTheme = 'AND theme_id = ?';
     params.push(normalizedThemeId);
   }
-  return queryOne(
+  const row = queryOne(
     `
-      SELECT id, theme_id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
+      SELECT
+        ${TEMPLATE_SELECT_FIELDS}
       FROM templates
       WHERE code = ? ${whereTheme}
       LIMIT 1
     `,
     params
-  ) || null;
+  );
+  return row ? hydrateTemplateRecord(row) : null;
+}
+
+function hydrateTemplateRecord(row) {
+  if (!row) {
+    return null;
+  }
+
+  return {
+    ...row,
+    tsx_source: String(row.tsx_source ?? ''),
+    css_source: String(row.css_source ?? ''),
+    global_css_source: String(row.global_css_source ?? ''),
+    published_tsx_source: row.published_tsx_source == null ? null : String(row.published_tsx_source ?? ''),
+    published_css_source: row.published_css_source == null ? null : String(row.published_css_source ?? ''),
+    published_global_css_source: row.published_global_css_source == null ? null : String(row.published_global_css_source ?? '')
+  };
+}
+
+function hydratePublishedTemplateRecord(row) {
+  const template = hydrateTemplateRecord(row);
+  if (!template) {
+    return null;
+  }
+  return {
+    ...template,
+    tsx_source: template.published_tsx_source ?? template.tsx_source,
+    css_source: template.published_css_source ?? template.css_source,
+    global_css_source: template.published_global_css_source ?? template.global_css_source
+  };
+}
+
+function hydrateTemplateVersionRecord(row) {
+  if (!row) {
+    return null;
+  }
+  return {
+    ...row,
+    tsx_source: String(row.tsx_source ?? ''),
+    css_source: String(row.css_source ?? ''),
+    global_css_source: String(row.global_css_source ?? '')
+  };
+}
+
+function buildTemplateStyleSource(template) {
+  if (!template) {
+    return '';
+  }
+  const cssSource = String(template.css_source ?? '');
+  return cssSource ? buildStyleCarrierSource(cssSource) : '';
+}
+
+function buildStyleCarrierSource(styleSource) {
+  return [
+    `export const scss = String.raw\`${escapeTemplateLiteral(styleSource)}\`;`,
+    '',
+    'export default function TemplateStyleCarrier() {',
+    '  return null;',
+    '}',
+    ''
+  ].join('\n');
+}
+
+function escapeTemplateLiteral(value) {
+  return String(value ?? '')
+    .replace(/`/g, '\\`')
+    .replace(/\$\{/g, '\\${');
 }
 
 function extractLiteralComponentReferences(content) {
@@ -1478,35 +1810,6 @@ function normalizeBindingTarget(themeId, targetType, targetId, templateType) {
     target_type: normalizedTargetType,
     target_id: targetId == null || String(targetId).trim() === '' ? null : toInteger(targetId, null),
     template_type: templateType
-  };
-}
-
-function normalizeTemplateInput(input) {
-  const type = String(input.type || '').trim();
-  if (!TEMPLATE_TYPES.includes(type)) {
-    throw new Error('invalid template type');
-  }
-  const name = String(input.name || '').trim();
-  if (!name) {
-    throw new Error('name is required');
-  }
-  const code = normalizeCode(input.code);
-  if (!code) {
-    throw new Error('code is required');
-  }
-
-  const engine = normalizeTemplateEngine(input.engine);
-  const theme_id = resolveThemeId(input.theme_id);
-  return {
-    theme_id,
-    name,
-    type,
-    code,
-    engine,
-    content: String(input.content ?? ''),
-    status: input.status === 'published' ? 'published' : 'draft',
-    is_default: 0,
-    sort_order: toInteger(input.sort_order, 0)
   };
 }
 
@@ -1764,6 +2067,9 @@ function ensureTemplateBindingsThemeScope() {
     String(sql).includes('theme_id INTEGER NOT NULL')
     && String(sql).includes('UNIQUE (theme_id, target_type, target_id, template_type)')
     && String(sql).includes("CHECK (template_type IN ('home', 'list', 'content', 'single'))")
+    && String(sql).includes('REFERENCES templates(id)')
+    && !String(sql).includes('templates__old_theme_code_scope')
+    && !String(sql).includes('templates__old_engine_check')
   ) {
     return;
   }
@@ -1835,29 +2141,13 @@ function ensureTemplateCodeThemeScope() {
 
     ALTER TABLE templates RENAME TO templates__old_theme_code_scope;
 
-    CREATE TABLE templates (
-      id INTEGER PRIMARY KEY,
-      theme_id INTEGER,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'single', 'component')),
-      code TEXT NOT NULL,
-      engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
-      content TEXT NOT NULL DEFAULT '',
-      published_content TEXT,
-      status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
-      is_default INTEGER NOT NULL DEFAULT 0,
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      published_at TEXT,
-      UNIQUE (theme_id, code)
-    );
+    ${TEMPLATES_TABLE_SCHEMA}
 
     INSERT INTO templates (
-      id, theme_id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
+      id, theme_id, name, type, code, engine, tsx_source, css_source, global_css_source, published_tsx_source, published_css_source, published_global_css_source, status, is_default, sort_order, created_at, updated_at
     )
     SELECT
-      id, theme_id, name, type, code, 'tsx', content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
+      id, theme_id, name, type, code, 'tsx', tsx_source, css_source, global_css_source, published_tsx_source, published_css_source, published_global_css_source, status, is_default, sort_order, created_at, updated_at
     FROM templates__old_theme_code_scope;
 
     DROP TABLE templates__old_theme_code_scope;
@@ -1891,29 +2181,13 @@ function ensureTemplatesEngineConstraint() {
 
     ALTER TABLE templates RENAME TO templates__old_engine_check;
 
-    CREATE TABLE templates (
-      id INTEGER PRIMARY KEY,
-      theme_id INTEGER,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'single', 'component')),
-      code TEXT NOT NULL,
-      engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
-      content TEXT NOT NULL DEFAULT '',
-      published_content TEXT,
-      status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
-      is_default INTEGER NOT NULL DEFAULT 0,
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      published_at TEXT,
-      UNIQUE (theme_id, code)
-    );
+    ${TEMPLATES_TABLE_SCHEMA}
 
     INSERT INTO templates (
-      id, theme_id, name, type, code, engine, content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
+      id, theme_id, name, type, code, engine, tsx_source, css_source, global_css_source, published_tsx_source, published_css_source, published_global_css_source, status, is_default, sort_order, created_at, updated_at
     )
     SELECT
-      id, theme_id, name, type, code, 'tsx', content, published_content, status, is_default, sort_order, created_at, updated_at, published_at
+      id, theme_id, name, type, code, 'tsx', tsx_source, css_source, global_css_source, published_tsx_source, published_css_source, published_global_css_source, status, is_default, sort_order, created_at, updated_at
     FROM templates__old_engine_check;
 
     DROP TABLE templates__old_engine_check;
@@ -2027,22 +2301,13 @@ function ensureTemplateVersionsForeignKey() {
 
     ALTER TABLE template_versions RENAME TO template_versions__old_fk_fix;
 
-    CREATE TABLE template_versions (
-      id INTEGER PRIMARY KEY,
-      template_id INTEGER NOT NULL,
-      version_no INTEGER NOT NULL,
-      engine TEXT NOT NULL DEFAULT 'tsx',
-      content TEXT NOT NULL,
-      note TEXT,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
-    );
+    ${TEMPLATE_VERSIONS_TABLE_SCHEMA}
 
     INSERT INTO template_versions (
-      id, template_id, version_no, engine, content, note, created_at
+      id, template_id, version_no, engine, tsx_source, css_source, global_css_source, note, created_at
     )
     SELECT
-      id, template_id, version_no, 'tsx', content, note, created_at
+      id, template_id, version_no, 'tsx', tsx_source, css_source, global_css_source, note, created_at
     FROM template_versions__old_fk_fix;
 
     DROP TABLE template_versions__old_fk_fix;
@@ -2075,22 +2340,13 @@ function ensureTemplateVersionsEngineConstraint() {
 
     ALTER TABLE template_versions RENAME TO template_versions__old_engine_fix;
 
-    CREATE TABLE template_versions (
-      id INTEGER PRIMARY KEY,
-      template_id INTEGER NOT NULL,
-      version_no INTEGER NOT NULL,
-      engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
-      content TEXT NOT NULL,
-      note TEXT,
-      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
-    );
+    ${TEMPLATE_VERSIONS_TABLE_SCHEMA}
 
     INSERT INTO template_versions (
-      id, template_id, version_no, engine, content, note, created_at
+      id, template_id, version_no, engine, tsx_source, css_source, global_css_source, note, created_at
     )
     SELECT
-      id, template_id, version_no, 'tsx', content, note, created_at
+      id, template_id, version_no, 'tsx', tsx_source, css_source, global_css_source, note, created_at
     FROM template_versions__old_engine_fix
     WHERE coalesce(engine, 'tsx') = 'tsx';
 

@@ -120,6 +120,7 @@ export default function ContentModelsPage() {
                         <TableHead>字段类型</TableHead>
                         <TableHead>数据库类型</TableHead>
                         <TableHead>翻译</TableHead>
+                        <TableHead>搜索</TableHead>
                         <TableHead>列表</TableHead>
                         <TableHead>编辑</TableHead>
                         <TableHead>属性</TableHead>
@@ -141,6 +142,27 @@ export default function ContentModelsPage() {
                                   modelId: selectedModel.id,
                                   fieldName: field.field_name,
                                   patch: buildFieldPatch(field, { is_translatable: Number.parseInt(value, 10) }),
+                                })
+                              }}
+                            >
+                              <SelectTrigger className="w-20">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="1">是</SelectItem>
+                                <SelectItem value="0">否</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={String(field.is_searchable ?? inferSearchableDefault(field.field_name))}
+                              disabled={field.is_primary === 1 || isSearchProtectedField(field.field_name) || updateFieldMutation.isPending}
+                              onValueChange={(value) => {
+                                updateFieldMutation.mutate({
+                                  modelId: selectedModel.id,
+                                  fieldName: field.field_name,
+                                  patch: buildFieldPatch(field, { is_searchable: Number.parseInt(value, 10) }),
                                 })
                               }}
                             >
@@ -226,6 +248,7 @@ function buildFieldPatch(field: any, patch: Record<string, unknown>) {
     is_listed: field.is_listed ?? 1,
     is_editable: field.is_editable ?? 1,
     is_translatable: field.is_translatable ?? 0,
+    is_searchable: field.is_searchable ?? inferSearchableDefault(field.field_name),
     sort_order: field.sort_order,
     ...patch,
   }
@@ -249,6 +272,31 @@ function isProtectedField(fieldName: string) {
     'created_at',
     'updated_at',
   ].includes(fieldName)
+}
+
+function isSearchProtectedField(fieldName: string) {
+  return [
+    'id',
+    'parent_id',
+    'column_type',
+    'column_id',
+    'route_path',
+    'custom_url',
+    'sort_order',
+    'is_system',
+    'is_visible',
+    'is_featured_home',
+    'images',
+    'picture',
+    'primary_image',
+    'created_at',
+    'updated_at',
+    'publish_status',
+  ].includes(fieldName)
+}
+
+function inferSearchableDefault(fieldName: string) {
+  return ['name', 'summary', 'content_html', 'seo_title', 'seo_description', 'code'].includes(fieldName) ? 1 : 0
 }
 
 function formatFieldType(type: string) {

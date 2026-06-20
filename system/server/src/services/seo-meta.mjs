@@ -14,14 +14,11 @@ export function buildSeoMeta({
   const siteConfig = site || {};
   const baseUrl = normalizeBaseUrl(siteConfig.web_url);
   const canonicalUrl = toAbsoluteUrl(url, baseUrl) || baseUrl || '/';
-  const siteName = siteConfig.seo_site_name || siteConfig.company_name || siteConfig.web_name || '';
-  const defaultTitle = siteConfig.seo_default_title || siteConfig.web_name || siteName || '';
-  const defaultDescription = siteConfig.seo_default_description || siteConfig.company_name || siteConfig.web_name || '';
-  const defaultImage = toAbsoluteUrl(siteConfig.seo_default_image, baseUrl);
+  const siteName = siteConfig.web_name || siteConfig.company_name || '';
 
-  const finalTitle = title || defaultTitle;
-  const finalDescription = description || defaultDescription;
-  const finalImage = toAbsoluteUrl(image, baseUrl) || defaultImage || '';
+  const finalTitle = title || siteName;
+  const finalDescription = description || '';
+  const finalImage = toAbsoluteUrl(image, baseUrl) || '';
 
   return {
     basic: {
@@ -46,7 +43,6 @@ export function buildSeoMeta({
     },
     twitter: {
       card: finalImage ? 'summary_large_image' : 'summary',
-      site: siteConfig.seo_twitter_handle || '',
       title: finalTitle,
       description: finalDescription,
       image: finalImage,
@@ -56,29 +52,13 @@ export function buildSeoMeta({
 }
 
 export function buildHreflangLinks(site) {
-  const links = Array.isArray(site?.seo_hreflang_links)
-    ? site.seo_hreflang_links
-      .map((item) => ({
-        lang: String(item?.lang || '').trim(),
-        url: String(item?.url || '').trim()
-      }))
-      .filter((item) => item.lang && item.url)
-    : [];
-
-  if (links.length > 0) {
-    return links;
-  }
-
   const baseUrl = normalizeBaseUrl(site?.web_url);
   return baseUrl ? [{ lang: site?.current_language_code || 'x-default', url: baseUrl }] : [];
 }
 
 export function buildJsonLdOrganization(site) {
   const baseUrl = normalizeBaseUrl(site?.web_url);
-  const organizationName = site?.seo_organization_name || site?.company_name || site?.web_name || '';
-  const sameAs = Array.isArray(site?.seo_same_as)
-    ? site.seo_same_as.map((item) => String(item || '').trim()).filter(Boolean)
-    : [];
+  const organizationName = site?.company_name || site?.web_name || '';
 
   return {
     '@context': 'https://schema.org',
@@ -86,7 +66,6 @@ export function buildJsonLdOrganization(site) {
     name: organizationName,
     url: baseUrl || '',
     logo: baseUrl ? `${baseUrl}/logo.svg` : '/logo.svg',
-    sameAs,
     contactPoint: {
       telephone: site?.company_phone || '',
       contactType: 'customer service',
@@ -99,7 +78,7 @@ export function buildJsonLdProduct(product, site, options = {}) {
   const baseUrl = normalizeBaseUrl(site?.web_url);
   const imageValue = product?.photo_url || product?.primary_image || null;
   const imageUrl = toAbsoluteUrl(imageValue, baseUrl);
-  const organizationName = site?.seo_organization_name || site?.company_name || site?.web_name || '';
+  const organizationName = site?.company_name || site?.web_name || '';
 
   return {
     '@context': 'https://schema.org',
@@ -123,7 +102,7 @@ export function buildJsonLdArticle(article, site, options = {}) {
   const baseUrl = normalizeBaseUrl(site?.web_url);
   const imageValue = article?.photo_url || article?.picture || null;
   const imageUrl = toAbsoluteUrl(imageValue, baseUrl);
-  const organizationName = site?.seo_organization_name || site?.company_name || site?.web_name || '';
+  const organizationName = site?.company_name || site?.web_name || '';
 
   return {
     '@context': 'https://schema.org',
@@ -170,10 +149,10 @@ export function generateThemeColorMetas() {
 
 export function buildProductSeoMeta(product, site, options = {}) {
   const productName = product?.name || product?.title || '';
-  const organizationName = site?.seo_organization_name || site?.company_name || site?.web_name || '';
+  const organizationName = site?.company_name || site?.web_name || '';
   return buildSeoMeta({
     title: product?.seo_title || (productName && organizationName ? `${productName} | ${organizationName}` : productName),
-    description: product?.seo_description || product?.summary || product?.description || site?.seo_default_description || '',
+    description: product?.seo_description || product?.summary || product?.description || '',
     url: options.url || '',
     image: product?.photo_url || product?.primary_image || null,
     type: 'website',
@@ -185,7 +164,7 @@ export function buildArticleSeoMeta(article, site, options = {}) {
   const title = article?.seo_title || article?.title || '';
   return buildSeoMeta({
     title,
-    description: article?.seo_description || article?.summary || article?.description || site?.seo_default_description || '',
+    description: article?.seo_description || article?.summary || article?.description || '',
     url: options.url || '',
     image: article?.photo_url || article?.picture || null,
     type: 'article',

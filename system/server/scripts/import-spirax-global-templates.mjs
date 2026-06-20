@@ -28,7 +28,7 @@ ensureTemplatesSchema();
 const themeId = ensureTheme();
 const templates = buildTemplates();
 const publicSections = resolvePublicSectionContext(listColumns());
-const serviceSection = publicSections.getNewsSectionByDirName('service');
+const serviceSection = publicSections.getNewsSectionByDirName('services');
 
 for (const template of templates) {
   upsertPublishedTemplate(template);
@@ -41,8 +41,8 @@ const bindings = [
   { target_type: 'content_type', target_id: CONTENT_TYPE_ARTICLE_ID, template_type: 'list', template_code: 'spirax_article_list' },
   { target_type: 'content_type', target_id: CONTENT_TYPE_ARTICLE_ID, template_type: 'content', template_code: 'spirax_article_detail' },
   ...(serviceSection ? [
-    { target_type: 'news_category', target_id: serviceSection.rootColumnId, template_type: 'list', template_code: 'spirax_service_list' },
-    { target_type: 'news_category', target_id: serviceSection.rootColumnId, template_type: 'content', template_code: 'spirax_service_detail' }
+    { target_type: 'column', target_id: serviceSection.rootColumnId, template_type: 'list', template_code: 'spirax_service_list' },
+    { target_type: 'column', target_id: serviceSection.rootColumnId, template_type: 'content', template_code: 'spirax_service_detail' }
   ] : []),
   { target_type: 'content_type', target_id: CONTENT_TYPE_CORPORATION_ID, template_type: 'content', template_code: 'spirax_content_page' },
   { target_type: 'content_type', target_id: CONTENT_TYPE_CONTACT_ID, template_type: 'content', template_code: 'spirax_contact_page' },
@@ -98,15 +98,18 @@ function upsertPublishedTemplate(definition) {
     return;
   }
 
+  const normalizedDefinition = normalizeTemplateDefinition(definition);
   const existing = findTemplateByCode(definition.code);
   const payload = {
     theme_id: themeId,
-    name: definition.name,
-    type: definition.type,
-    code: definition.code,
+    name: normalizedDefinition.name,
+    type: normalizedDefinition.type,
+    code: normalizedDefinition.code,
     engine: 'tsx',
-    content: definition.content,
-    sort_order: definition.sort_order || 0,
+    ...(normalizedDefinition.tsx_source !== undefined ? { tsx_source: normalizedDefinition.tsx_source } : {}),
+    ...(normalizedDefinition.css_source !== undefined ? { css_source: normalizedDefinition.css_source } : {}),
+    ...(normalizedDefinition.global_css_source !== undefined ? { global_css_source: normalizedDefinition.global_css_source } : {}),
+    sort_order: normalizedDefinition.sort_order || 0,
   };
 
   const record = existing
@@ -142,6 +145,39 @@ function findTemplateByCode(code) {
 }
 
 function buildTemplates() {
+  const productUiCss = readSourceCss([
+    'src/components/shared/ui/ui.css',
+  ]);
+  const productPagesSourceCss = readSourceCss([
+    'src/components/templates/ProductPages/ProductPages.css',
+  ]);
+  const productPageCssPartitions = partitionCssByTargets(productPagesSourceCss, {
+    productTopPanel: [
+      'product-top-panel__',
+    ],
+    productDownloadGroups: [
+      'tabs__nav',
+      'tabs__content',
+      'tabs[data-group-count="1"]',
+      'tabs[data-has-tab-nav="true"][data-tabs-ready="true"]',
+      'download-group-accordion',
+      'table--downloads',
+      'table--striped tbody tr:nth-child(even)',
+      'download-link',
+      '.tab__header',
+    ],
+    productSideNav: [
+      'product-category-sidebar',
+    ],
+    productOverview: [
+      'product-overview__',
+    ],
+    promoBanner: [
+      'promo-bg',
+      'promo-banner',
+      '.btn',
+    ],
+  });
   const shellCss = readSourceCss([
     'src/styles/global.css',
     'src/styles/utilities.css',
@@ -150,17 +186,69 @@ function buildTemplates() {
     'src/styles/site-shell/Nav.css',
     'src/styles/site-shell/Footer.css',
   ]);
-  const productCss = readSourceCss([
+  const breadcrumbsCss = readSourceCss([
     'src/components/shared/business/Breadcrumbs.css',
-    'src/components/shared/business/ShortMasthead.css',
-    'src/components/shared/primitives/ContentCardGrid.css',
-    'src/components/shared/ui/ui.css',
-    'src/components/shared/business/ProductImageGallery.css',
-    'src/components/templates/ProductPages/ProductPages.css',
   ]);
-  const newsCss = readSourceCss([
+  const shortMastheadCss = readSourceCss([
+    'src/components/shared/business/ShortMasthead.css',
+  ]);
+  const contentCardGridCss = readSourceCss([
+    'src/components/shared/primitives/ContentCardGrid.css',
+  ]);
+  const productImageGalleryCss = readSourceCss([
+    'src/components/shared/business/ProductImageGallery.css',
+  ]);
+  const brandPathSectionCss = readSourceCss([
+    'src/components/shared/business/BrandPathSection.css',
+  ]);
+  const benefitBlocksCss = readSourceCss([
+    'src/components/shared/business/IconBlockSection.css',
+  ]);
+  const globalSearchCss = readSourceCss([
+    'src/styles/site-shell/GlobalSearch.css',
+  ]);
+  const productCss = readSourceCss([
+    'src/components/shared/ui/ui.css',
+  ]);
+  const productTemplateCss = joinCssSources([
+    productUiCss,
+    productPageCssPartitions.localCss,
+  ]);
+  const newsSourceCss = readSourceCss([
     'src/components/templates/NewsPages/NewsPages.base.css',
     'src/components/templates/NewsPages/NewsPages.css',
+  ]);
+  const newsCssPartitions = partitionCssByTargets(newsSourceCss, {
+    list: [
+      'filters',
+      'text-link',
+      'article-results-section',
+      'article-results__',
+      '.article',
+      'article__',
+    ],
+    detail: [
+      'article-details',
+      'article-details__',
+      'article-intro',
+      'article-intro__',
+      'article-body',
+      'article-body__',
+      'inline-image',
+      'inline-image__',
+      'clip-outside__wrap--small',
+      '.card',
+      'card__',
+      'card--',
+    ],
+  });
+  const newsListCss = joinCssSources([
+    newsCssPartitions.localCss,
+    newsCssPartitions.list,
+  ]);
+  const newsDetailCss = joinCssSources([
+    newsCssPartitions.localCss,
+    newsCssPartitions.detail,
   ]);
   const serviceCss = readSourceCss([
     'src/components/templates/ServicePages/ServicePages.base.css',
@@ -177,7 +265,10 @@ function buildTemplates() {
       name: 'Spirax 公共壳层',
       type: 'component',
       sort_order: 1,
-      content: buildShellComponent(shellCss),
+      content: buildShellComponent(),
+      tsx_source: buildShellComponent(),
+      css_source: '',
+      global_css_source: buildShellGlobalCss(shellCss),
     },
     {
       code: 'spirax_button',
@@ -185,6 +276,9 @@ function buildTemplates() {
       type: 'component',
       sort_order: 2,
       content: buildButtonComponent(),
+      tsx_source: buildButtonComponent(),
+      css_source: '',
+      global_css_source: buildButtonGlobalCss(),
     },
     {
       code: 'spirax_short_masthead',
@@ -192,6 +286,9 @@ function buildTemplates() {
       type: 'component',
       sort_order: 3,
       content: buildShortMastheadComponent(),
+      tsx_source: extractTemplateSourceParts(buildShortMastheadComponent()).tsx_source,
+      css_source: '',
+      global_css_source: shortMastheadCss,
     },
     {
       code: 'spirax_breadcrumbs',
@@ -199,62 +296,93 @@ function buildTemplates() {
       type: 'component',
       sort_order: 4,
       content: buildBreadcrumbsComponent(),
+      tsx_source: buildBreadcrumbsComponent(),
+      css_source: '',
+      global_css_source: breadcrumbsCss,
+    },
+    {
+      code: 'spirax_global_search',
+      name: 'Spirax 全局搜索组件',
+      type: 'component',
+      sort_order: 5,
+      content: buildGlobalSearchComponent(),
+      tsx_source: buildGlobalSearchComponent(),
+      css_source: '',
+      global_css_source: globalSearchCss,
     },
     {
       code: 'spirax_content_card_grid',
       name: 'Spirax 内容卡片网格组件',
       type: 'component',
-      sort_order: 5,
+      sort_order: 6,
       content: buildContentCardGridComponent(),
+      tsx_source: buildContentCardGridComponent(),
+      css_source: '',
+      global_css_source: contentCardGridCss,
     },
     {
       code: 'spirax_product_image_gallery',
       name: 'Spirax 产品图库组件',
       type: 'component',
-      sort_order: 6,
+      sort_order: 7,
       content: buildProductImageGalleryComponent(),
+      tsx_source: extractTemplateSourceParts(buildProductImageGalleryComponent()).tsx_source,
+      css_source: '',
+      global_css_source: productImageGalleryCss,
     },
     {
       code: 'spirax_product_top_panel',
       name: 'Spirax 产品顶部面板组件',
       type: 'component',
-      sort_order: 7,
+      sort_order: 8,
       content: buildProductTopPanelComponent(),
+      tsx_source: buildProductTopPanelComponent(),
+      css_source: '',
+      global_css_source: productPageCssPartitions.productTopPanel,
     },
     {
       code: 'spirax_copy_section',
       name: 'Spirax 文本区块组件',
       type: 'component',
-      sort_order: 8,
+      sort_order: 9,
       content: buildCopySectionComponent(),
     },
     {
       code: 'spirax_brand_path_section',
       name: 'Spirax 品牌路径区块组件',
       type: 'component',
-      sort_order: 9,
+      sort_order: 10,
       content: buildBrandPathSectionComponent(),
+      tsx_source: buildBrandPathSectionComponent(),
+      css_source: '',
+      global_css_source: brandPathSectionCss,
     },
     {
       code: 'spirax_product_download_groups',
       name: 'Spirax 产品下载区块组件',
       type: 'component',
-      sort_order: 10,
+      sort_order: 11,
       content: buildProductDownloadGroupsComponent(),
+      tsx_source: buildProductDownloadGroupsComponent(),
+      css_source: '',
+      global_css_source: productPageCssPartitions.productDownloadGroups,
     },
     {
       code: 'spirax_feature_cards',
       name: 'Spirax 卡片网格组件',
       type: 'component',
-      sort_order: 11,
+      sort_order: 12,
       content: buildFeatureCardsComponent(),
     },
     {
       code: 'spirax_product_side_nav',
       name: 'Spirax 产品侧栏组件',
       type: 'component',
-      sort_order: 12,
+      sort_order: 13,
       content: buildProductSideNavComponent(),
+      tsx_source: buildProductSideNavComponent(),
+      css_source: '',
+      global_css_source: productPageCssPartitions.productSideNav,
     },
     {
       code: 'spirax_product_overview',
@@ -262,6 +390,9 @@ function buildTemplates() {
       type: 'component',
       sort_order: 13,
       content: buildProductOverviewComponent(),
+      tsx_source: buildProductOverviewComponent(),
+      css_source: '',
+      global_css_source: productPageCssPartitions.productOverview,
     },
     {
       code: 'spirax_benefit_blocks',
@@ -269,6 +400,9 @@ function buildTemplates() {
       type: 'component',
       sort_order: 14,
       content: buildBenefitBlocksComponent(),
+      tsx_source: buildBenefitBlocksComponent(),
+      css_source: '',
+      global_css_source: benefitBlocksCss,
     },
     {
       code: 'spirax_supplemental_sections',
@@ -283,6 +417,9 @@ function buildTemplates() {
       type: 'component',
       sort_order: 16,
       content: buildPromoBannerComponent(),
+      tsx_source: buildPromoBannerComponent(),
+      css_source: '',
+      global_css_source: productPageCssPartitions.promoBanner,
     },
     {
       code: 'spirax_home',
@@ -296,35 +433,35 @@ function buildTemplates() {
       name: 'Spirax 产品列表模板',
       type: 'list',
       sort_order: 10,
-      content: buildProductListTemplate(productCss),
+      content: buildProductListTemplate(productTemplateCss),
     },
     {
       code: 'spirax_product_detail',
       name: 'Spirax 产品详情模板',
       type: 'content',
       sort_order: 20,
-      content: buildProductDetailTemplate(productCss),
+      content: buildProductDetailTemplate(productTemplateCss),
     },
     {
       code: 'spirax_article_list',
       name: 'Spirax 新闻列表模板',
       type: 'list',
       sort_order: 30,
-      content: buildArticleListTemplate(newsCss, 'news'),
+      content: buildArticleListTemplate(newsListCss, 'news'),
     },
     {
       code: 'spirax_article_detail',
       name: 'Spirax 新闻详情模板',
       type: 'content',
       sort_order: 40,
-      content: buildArticleDetailTemplate(newsCss, 'news'),
+      content: buildArticleDetailTemplate(newsDetailCss, 'news'),
     },
     {
       code: 'spirax_service_list',
       name: 'Spirax 服务列表模板',
       type: 'list',
       sort_order: 50,
-      content: buildArticleListTemplate(serviceCss, 'service'),
+      content: buildArticleListTemplate(newsListCss, 'service'),
     },
     {
       code: 'spirax_service_detail',
@@ -347,11 +484,361 @@ function buildTemplates() {
       sort_order: 80,
       content: buildContactPageTemplate(),
     },
-  ];
+  ].map(normalizeTemplateDefinition);
 }
 
-function buildShellComponent(cssText) {
-  const staticCss = `${cssText}
+function normalizeTemplateDefinition(definition) {
+  const templateSourceParts = extractTemplateSourceParts(definition.content ?? '');
+  const tsxSource = definition.tsx_source !== undefined
+    ? String(definition.tsx_source ?? '')
+    : templateSourceParts.tsx_source;
+  const cssSource = definition.css_source !== undefined
+    ? String(definition.css_source ?? '')
+    : templateSourceParts.css_source;
+  const globalCssSource = definition.global_css_source !== undefined
+    ? String(definition.global_css_source ?? '')
+    : '';
+
+  return {
+    ...definition,
+    tsx_source: tsxSource,
+    css_source: cssSource,
+    global_css_source: globalCssSource,
+  };
+}
+
+function partitionCssByTargets(cssText, targetMap) {
+  const css = String(cssText || '');
+  const blocks = parseCssBlocks(css);
+  const bucketEntries = Object.entries(targetMap || {});
+  const bucketBlocks = new Map(bucketEntries.map(([name]) => [name, []]));
+  const localBlocks = [];
+
+  for (const block of blocks) {
+    const assignedBuckets = collectMatchingBuckets(block, targetMap);
+    if (assignedBuckets.length === 0) {
+      localBlocks.push(block);
+      continue;
+    }
+
+    for (const bucket of assignedBuckets) {
+      bucketBlocks.get(bucket)?.push(filterCssBlockByTargets(block, targetMap[bucket]));
+    }
+  }
+
+  return {
+    localCss: stringifyCssBlocks(localBlocks),
+    ...Object.fromEntries(
+      bucketEntries.map(([name]) => [name, stringifyCssBlocks(bucketBlocks.get(name) || [])]),
+    ),
+  };
+}
+
+function collectMatchingBuckets(block, targetMap) {
+  if (!block || !targetMap || typeof targetMap !== 'object') {
+    return [];
+  }
+
+  return Object.entries(targetMap)
+    .filter(([, targets]) => blockMatchesTargets(block, targets))
+    .map(([name]) => name);
+}
+
+function blockMatchesTargets(block, targets) {
+  if (!block || !Array.isArray(targets) || targets.length === 0) {
+    return false;
+  }
+
+  if (block.type === 'rule') {
+    return selectorMatchesTargets(block.selectorText, targets);
+  }
+
+  if (block.type === 'atrule') {
+    return block.children.some((child) => blockMatchesTargets(child, targets));
+  }
+
+  return false;
+}
+
+function filterCssBlockByTargets(block, targets) {
+  if (block.type === 'rule') {
+    const matchedSelectorText = filterSelectorListByTargets(block.selectorText, targets);
+    if (!matchedSelectorText) {
+      return null;
+    }
+    if (matchedSelectorText === block.selectorText) {
+      return block;
+    }
+    return {
+      ...block,
+      selectorText: matchedSelectorText,
+    };
+  }
+
+  if (block.type === 'atrule') {
+    const children = block.children
+      .map((child) => filterCssBlockByTargets(child, targets))
+      .filter(Boolean);
+    if (children.length === 0) {
+      return null;
+    }
+    return {
+      ...block,
+      children,
+    };
+  }
+
+  return null;
+}
+
+function selectorMatchesTargets(selectorText, targets) {
+  return splitCssSelectorList(selectorText)
+    .some((selector) => targets.some((target) => selectorContainsTarget(selector, target)));
+}
+
+function filterSelectorListByTargets(selectorText, targets) {
+  const matchedSelectors = splitCssSelectorList(selectorText)
+    .filter((selector) => targets.some((target) => selectorContainsTarget(selector, target)));
+  return matchedSelectors.join(',\n');
+}
+
+function selectorContainsTarget(selector, target) {
+  const normalizedSelector = String(selector || '');
+  const normalizedTarget = String(target || '').trim();
+  if (!normalizedSelector || !normalizedTarget) {
+    return false;
+  }
+
+  if (normalizedTarget.startsWith('.')) {
+    const escapedTarget = escapeRegExp(normalizedTarget);
+    const pattern = new RegExp(`(^|[^A-Za-z0-9_-])${escapedTarget}(?![A-Za-z0-9_-])`);
+    return pattern.test(normalizedSelector);
+  }
+
+  return normalizedSelector.includes(normalizedTarget);
+}
+
+function splitCssSelectorList(selectorText) {
+  const source = String(selectorText || '');
+  const selectors = [];
+  let current = '';
+  let inString = false;
+  let stringQuote = '';
+  let parenDepth = 0;
+  let bracketDepth = 0;
+
+  for (let index = 0; index < source.length; index += 1) {
+    const char = source[index];
+    const previousChar = index > 0 ? source[index - 1] : '';
+
+    if (inString) {
+      current += char;
+      if (char === stringQuote && previousChar !== '\\') {
+        inString = false;
+        stringQuote = '';
+      }
+      continue;
+    }
+
+    if (char === '"' || char === '\'') {
+      inString = true;
+      stringQuote = char;
+      current += char;
+      continue;
+    }
+
+    if (char === '(') {
+      parenDepth += 1;
+      current += char;
+      continue;
+    }
+
+    if (char === ')') {
+      parenDepth = Math.max(0, parenDepth - 1);
+      current += char;
+      continue;
+    }
+
+    if (char === '[') {
+      bracketDepth += 1;
+      current += char;
+      continue;
+    }
+
+    if (char === ']') {
+      bracketDepth = Math.max(0, bracketDepth - 1);
+      current += char;
+      continue;
+    }
+
+    if (char === ',' && parenDepth === 0 && bracketDepth === 0) {
+      const selector = current.trim();
+      if (selector) {
+        selectors.push(selector);
+      }
+      current = '';
+      continue;
+    }
+
+    current += char;
+  }
+
+  const trailingSelector = current.trim();
+  if (trailingSelector) {
+    selectors.push(trailingSelector);
+  }
+
+  return selectors;
+}
+
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function stringifyCssBlocks(blocks) {
+  return joinCssSources(
+    (Array.isArray(blocks) ? blocks : [])
+      .map((block) => stringifyCssBlock(block))
+      .filter(Boolean),
+  );
+}
+
+function stringifyCssBlock(block) {
+  if (!block) {
+    return '';
+  }
+
+  if (block.type === 'rule') {
+    return `${block.selectorText} {\n${block.body.trim()}\n}`;
+  }
+
+  if (block.type === 'atrule') {
+    const children = stringifyCssBlocks(block.children || []);
+    if (!children) {
+      return '';
+    }
+    return `${block.prelude} {\n${indentCss(children)}\n}`;
+  }
+
+  return '';
+}
+
+function parseCssBlocks(cssText) {
+  const css = String(cssText || '');
+  const blocks = [];
+  let cursor = 0;
+
+  while (cursor < css.length) {
+    const nextBraceIndex = css.indexOf('{', cursor);
+    if (nextBraceIndex === -1) {
+      break;
+    }
+
+    const selectorText = css.slice(cursor, nextBraceIndex).trim();
+    if (!selectorText) {
+      cursor = nextBraceIndex + 1;
+      continue;
+    }
+
+    const closeBraceIndex = findMatchingBrace(css, nextBraceIndex);
+    if (closeBraceIndex === -1) {
+      break;
+    }
+
+    const body = css.slice(nextBraceIndex + 1, closeBraceIndex);
+    if (selectorText.startsWith('@')) {
+      blocks.push({
+        type: 'atrule',
+        prelude: selectorText,
+        children: parseCssBlocks(body),
+      });
+    } else {
+      blocks.push({
+        type: 'rule',
+        selectorText,
+        body,
+      });
+    }
+
+    cursor = closeBraceIndex + 1;
+  }
+
+  return blocks;
+}
+
+function findMatchingBrace(text, openBraceIndex) {
+  let depth = 0;
+  let inString = false;
+  let stringQuote = '';
+
+  for (let index = openBraceIndex; index < text.length; index += 1) {
+    const char = text[index];
+    const previousChar = index > 0 ? text[index - 1] : '';
+
+    if (inString) {
+      if (char === stringQuote && previousChar !== '\\') {
+        inString = false;
+        stringQuote = '';
+      }
+      continue;
+    }
+
+    if (char === '"' || char === '\'') {
+      inString = true;
+      stringQuote = char;
+      continue;
+    }
+
+    if (char === '{') {
+      depth += 1;
+      continue;
+    }
+
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        return index;
+      }
+    }
+  }
+
+  return -1;
+}
+
+function indentCss(cssText) {
+  return String(cssText || '')
+    .split('\n')
+    .map((line) => (line ? `  ${line}` : line))
+    .join('\n');
+}
+
+function joinCssSources(parts) {
+  return (Array.isArray(parts) ? parts : [])
+    .map((part) => String(part || '').trim())
+    .filter(Boolean)
+    .join('\n\n');
+}
+
+function extractTemplateSourceParts(content) {
+  const source = String(content ?? '');
+  const match = source.match(/export const (?:scss|css)\s*=\s*String\.raw`([\s\S]*?)`;\s*/);
+  if (!match) {
+    return {
+      tsx_source: source,
+      css_source: '',
+    };
+  }
+
+  const startIndex = match.index || 0;
+  const endIndex = startIndex + match[0].length;
+  return {
+    tsx_source: `${source.slice(0, startIndex)}${source.slice(endIndex)}`.trim(),
+    css_source: match[1] || '',
+  };
+}
+
+function buildShellGlobalCss(cssText) {
+  return `${cssText}
 
 @media (max-width: 940px) {
   .sg-site-nav-shell {
@@ -400,17 +887,51 @@ function buildShellComponent(cssText) {
     padding: 0 0 18px;
   }
 }
-`;
 
+.breadcrumb {
+  width: min(var(--sg-page-max-width), 100% - 40px);
+  margin: 0 auto;
+}
+
+.breadcrumb .wrapper {
+  width: 100%;
+}
+
+@media (max-width: 1050px) {
+  .breadcrumb {
+    width: min(100% - 24px, var(--sg-page-max-width));
+  }
+
+  .breadcrumb .wrapper {
+    width: 100%;
+  }
+}
+`;
+}
+
+function buildShellComponent() {
   return `
 import React from 'react';
 
-export const scss = String.raw\`${staticCss.replace(/`/g, '\\`')}\`;
-
 function renderNavItems(items = [], currentUrl = '') {
+  const normalizedCurrentUrl = String(currentUrl || '').trim();
+  const isHomeUrl = normalizedCurrentUrl === '/' || normalizedCurrentUrl === '/index.html';
+  const isNavItemActive = (item) => {
+    if (item?.active) {
+      return true;
+    }
+    const itemUrl = String(item?.url || '').trim();
+    if (!normalizedCurrentUrl || !itemUrl) {
+      return false;
+    }
+    if (itemUrl === '/' || itemUrl === '/index.html') {
+      return isHomeUrl;
+    }
+    return normalizedCurrentUrl === itemUrl || normalizedCurrentUrl.startsWith(itemUrl.endsWith('/') ? itemUrl : itemUrl + '/');
+  };
   return items.map((item, index) => {
     const children = Array.isArray(item.children) ? item.children : [];
-    const isActive = item.active || (currentUrl && item.url && currentUrl.startsWith(item.url));
+    const isActive = isNavItemActive(item);
     if (children.length > 0) {
       return (
         <li className="sg-global-nav__main-item" data-nav-group="" key={item.url || item.name || index}>
@@ -485,8 +1006,26 @@ function renderFooterLinks(columns = []) {
   });
 }
 
-export default function Template({ site, siteColumns = [], currentPage, children }) {
+export default function Template({ site, siteColumns = [], currentPage, currentContent, currentCategory, currentSection, children, slots = {}, component }) {
   const pageTitle = currentPage?.title ? \`\${currentPage.title} - \${site?.web_name || ''}\` : (site?.web_name || '');
+  const isHomePage = currentPage?.type === 'home' || currentPage?.url === '/' || currentPage?.url === '/index.html';
+  const utilityItems = [
+    { href: '/about-us/', label: '关于我们' },
+    { href: '/learn-about-steam/', label: '了解蒸汽' },
+    { href: '/resources-and-design-tools/', label: '资源和设计工具' },
+    { href: '/knowledge-exchange/', label: '知识中心' }
+  ];
+  const breadcrumbs = !isHomePage && typeof component === 'function'
+    ? component('spirax_breadcrumbs', {
+        ariaLabel: '面包屑导航',
+        currentContent,
+        currentCategory,
+        currentSection,
+        homeHref: '/',
+        includeItemsWrapper: false,
+        tag: 'nav'
+      })
+    : null;
   return (
     <html lang="zh-CN">
       <head>
@@ -500,9 +1039,40 @@ export default function Template({ site, siteColumns = [], currentPage, children
             <div className="sg-global-nav__topbar">
               <div className="sg-global-nav__inner">
                 <a aria-label={site?.company_name || site?.web_name || 'Site'} className="sg-global-nav__brand" href="/">
-                  <span className="sg-global-nav__brand-mark sg-global-nav__brand-mark--text">{site?.web_name || site?.company_name || 'Spirax'}</span>
+                  <img
+                    alt={site?.company_name || site?.web_name || 'Spirax Sarco'}
+                    className="sg-global-nav__brand-mark"
+                    height="50"
+                    src="/logo.svg"
+                    width="171"
+                  />
                 </a>
                 <div className="sg-global-nav__launchers">
+                  <nav aria-label="顶部导航" className="sg-global-nav__utility sg-global-nav__utility--inline">
+                    <ul className="sg-global-nav__utility-list">
+                      {utilityItems.map((item) => (
+                        <li key={item.href}>
+                          <a className="sg-global-nav__utility-link" href={item.href}>{item.label}</a>
+                        </li>
+                      ))}
+                    </ul>
+                  </nav>
+                  <div className="sg-global-nav__search">
+                    <button
+                      aria-controls="sg-global-search-dialog"
+                      aria-haspopup="dialog"
+                      aria-label="打开搜索"
+                      className="sg-search-button sg-global-nav__action-button sg-global-nav__action-button--search"
+                      data-search-open=""
+                      title="打开搜索"
+                      type="button"
+                    >
+                      <svg aria-hidden="true" className="sg-search-button__icon" fill="none" viewBox="0 0 24 24">
+                        <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.8"></circle>
+                        <path d="m16 16 4.5 4.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8"></path>
+                      </svg>
+                    </button>
+                  </div>
                   <button
                     aria-controls="site-main-nav"
                     aria-expanded="false"
@@ -531,7 +1101,10 @@ export default function Template({ site, siteColumns = [], currentPage, children
             </div>
           </div>
         </div>
+        {typeof component === 'function' ? component('spirax_global_search') : null}
 
+        {slots?.masthead || null}
+        {slots?.breadcrumbs || breadcrumbs || null}
         {children}
 
         <footer className="sg-site-footer" role="contentinfo">
@@ -569,41 +1142,51 @@ import React from 'react';
 export const scss = String.raw\`${cssText.replace(/`/g, '\\`')}\`;
 
 export default function Template(props) {
-  const shell = props.component('spirax_shell', props);
   const newsItems = Array.isArray(props.homeNewsItems) ? props.homeNewsItems : [];
   const productItems = Array.isArray(props.homeFeaturedProductItems) ? props.homeFeaturedProductItems : [];
   const serviceItems = Array.isArray(props.homeServiceItems) ? props.homeServiceItems : [];
   const productCards = props.component('spirax_feature_cards', { items: productItems, itemTitleKey: 'title' });
   const newsCards = props.component('spirax_feature_cards', { items: newsItems, itemTitleKey: 'title' });
   const serviceCards = props.component('spirax_feature_cards', { items: serviceItems, itemTitleKey: 'title' });
-  const content = (
-    <main className="sg-page-shell sg-content-shell sg-home-page sg-home">
-      <section className="home-hero bg--white">
-        <div className="wrapper wrapper--pad-l">
-          <div className="home-hero__grid">
-            <div className="home-hero__copy">
-              <p className="home-hero__eyebrow">Spirax Sarco</p>
-              <h1 className="display-heading">{props.site?.company_name || props.site?.web_name || 'Industrial Steam Solutions'}</h1>
-              <p className="home-hero__summary">{props.site?.company_address || '蒸汽系统解决方案、产品与服务。'}</p>
-              <div className="home-hero__actions">
-                <a className="btn btn--primary" href="/valve/">查看产品</a>
-                <a className="btn btn--secondary" href="/service/">服务</a>
-              </div>
-            </div>
-            <div className="home-hero__panel">
-              <div className="home-hero__metric">
-                <span className="home-hero__metric-label">联系电话</span>
-                <strong>{props.site?.company_phone || '-'}</strong>
-              </div>
-              <div className="home-hero__metric">
-                <span className="home-hero__metric-label">联系邮箱</span>
-                <strong>{props.site?.company_email || '-'}</strong>
-              </div>
+  const masthead = props.component('spirax_short_masthead', {
+    className: 'home-hero bg--white',
+    bodyClassName: 'home-hero__grid',
+    bodyStyle: { maxWidth: 'none', width: '100%' },
+    slots: {
+      body: (
+        <>
+          <div className="home-hero__copy">
+            <p className="home-hero__eyebrow">Spirax Sarco</p>
+            <h1 className="display-heading">{props.site?.company_name || props.site?.web_name || 'Industrial Steam Solutions'}</h1>
+            <p className="home-hero__summary">{props.site?.company_address || '蒸汽系统解决方案、产品与服务。'}</p>
+            <div className="home-hero__actions">
+              <a className="btn btn--primary" href="/valve/">查看产品</a>
+              <a className="btn btn--secondary" href="/service/">服务</a>
             </div>
           </div>
-        </div>
-      </section>
-
+          <div className="home-hero__panel">
+            <div className="home-hero__metric">
+              <span className="home-hero__metric-label">联系电话</span>
+              <strong>{props.site?.company_phone || '-'}</strong>
+            </div>
+            <div className="home-hero__metric">
+              <span className="home-hero__metric-label">联系邮箱</span>
+              <strong>{props.site?.company_email || '-'}</strong>
+            </div>
+          </div>
+        </>
+      )
+    }
+  });
+  const shell = props.component('spirax_shell', {
+    ...props,
+    slots: {
+      ...(props.slots || {}),
+      masthead
+    }
+  });
+  const content = (
+    <main className="sg-page-shell sg-content-shell sg-home-page sg-home">
       <section className="bg--light-blue">
         <div className="wrapper wrapper--pad-l">
           <div className="section-header">
@@ -644,7 +1227,6 @@ import React from 'react';
 export const scss = String.raw\`${cssText.replace(/`/g, '\\`')}\`;
 
 export default function Template(props) {
-  const shell = props.component('spirax_shell', props);
   const pageData = props.currentCategoryPageData || props.pageData || {};
   const normalizedPageKind = String(pageData?.pageKind || pageData?.kind || '').trim().toLowerCase();
   const productRoot = normalizedPageKind === 'root';
@@ -705,6 +1287,13 @@ export default function Template(props) {
     image: pageData?.mastheadImage || props.currentCategoryHeroImage || '',
     imageAlt: pageData?.title || props.smallName || props.title || '',
     className: 'short-masthead'
+  });
+  const shell = props.component('spirax_shell', {
+    ...props,
+    slots: {
+      ...(props.slots || {}),
+      masthead
+    }
   });
   const topPanel = hasTopPanel ? props.component('spirax_product_top_panel', {
     product: {
@@ -799,7 +1388,6 @@ export default function Template(props) {
     : null;
   const content = (
     <main className="sg-page-shell sg-product-page">
-      {masthead}
       {topPanel}
       {introSection}
       {benefitsSection}
@@ -1101,7 +1689,6 @@ import React from 'react';
 export const scss = String.raw\`${cssText.replace(/`/g, '\\`')}\`;
 
 export default function Template(props) {
-  const shell = props.component('spirax_shell', props);
   const product = props.currentProduct || props.currentContent || {};
   const productPageData = product.pageData || props.currentProductPageData || {};
   const sectionNavItems = Array.isArray(props.sectionNavItems) ? props.sectionNavItems : [];
@@ -1111,15 +1698,12 @@ export default function Template(props) {
     imageAlt: product.title || props.title || '',
     className: 'short-masthead'
   });
-  const breadcrumbs = props.component('spirax_breadcrumbs', {
-    ariaLabel: 'Breadcrumb',
-    includeItemsWrapper: false,
-    items: Array.isArray(props.breadcrumb?.items) ? props.breadcrumb.items.map((item, index, all) => ({
-      label: item?.label || '',
-      href: item?.url || '',
-      current: !item?.url && index === all.length - 1
-    })) : [],
-    tag: 'nav'
+  const shell = props.component('spirax_shell', {
+    ...props,
+    slots: {
+      ...(props.slots || {}),
+      masthead
+    }
   });
   const topPanel = props.component('spirax_product_top_panel', {
     product,
@@ -1155,8 +1739,6 @@ export default function Template(props) {
   });
   const content = (
     <main className="sg-page-shell sg-product-page">
-      {masthead}
-      {breadcrumbs}
       {topPanel}
 
       <section className="bg--white product-detail__body-section">
@@ -1262,24 +1844,297 @@ export default function Component(props) {
 `;
 }
 
+function buildButtonGlobalCss() {
+  return `
+.sg-ui-button,
+.sg-ui-tag,
+.sg-ui-dropdown__trigger,
+.sg-ui-input,
+.sg-ui-select__trigger,
+.sg-ui-choice__control {
+  --sg-ui-color-brand: var(--sg-color-brand, var(--rp-c-brand, #0050c7));
+  --sg-ui-color-brand-dark: var(--sg-color-brand-dark, var(--rp-c-brand-dark, #002d72));
+  --sg-ui-color-brand-tint: var(
+    --sg-color-brand-tint,
+    var(--rp-c-brand-tint, rgba(0, 45, 114, 0.12))
+  );
+  --sg-ui-color-text-1: var(--sg-color-text-1, var(--rp-c-text-1, #002d72));
+  --sg-ui-color-text-2: var(--sg-color-text-2, var(--rp-c-text-2, #48648f));
+  --sg-ui-color-text-3: var(--sg-color-text-3, var(--rp-c-text-3, #7b92b3));
+  --sg-ui-focus-ring: 0 0 0 3px var(--sg-ui-color-brand-tint);
+  box-sizing: border-box;
+  font: inherit;
+}
+
+.sg-ui-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: max-content;
+  border: 1px solid transparent;
+  border-radius: var(--sg-radius-control);
+  font-weight: 700;
+  line-height: 1;
+  text-decoration: none;
+  transition:
+    background-color 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
+  cursor: pointer;
+}
+
+.sg-ui-button:hover,
+.sg-ui-button:focus-visible {
+  text-decoration: none;
+}
+
+.sg-ui-button:focus-visible {
+  outline: 0;
+  box-shadow: var(--sg-ui-focus-ring);
+}
+
+.sg-ui-button--sm {
+  min-height: 38px;
+  padding: 0 16px;
+  font-size: 14px;
+}
+
+.sg-ui-button--md {
+  min-height: 46px;
+  padding: 0 22px;
+  font-size: 16px;
+}
+
+.sg-ui-button--lg {
+  min-height: 54px;
+  padding: 0 28px;
+  font-size: 17px;
+}
+
+.sg-ui-button--primary {
+  background: var(--sg-ui-color-brand-dark);
+  color: #fff;
+}
+
+.sg-ui-button--primary:hover,
+.sg-ui-button--primary:focus-visible {
+  background: var(--sg-ui-color-brand);
+}
+
+.sg-ui-button--secondary {
+  background: var(--sg-color-primary-soft);
+  color: var(--sg-color-primary-strong);
+}
+
+.sg-ui-button--secondary:hover,
+.sg-ui-button--secondary:focus-visible {
+  background: var(--sg-color-primary-soft-hover);
+}
+
+.sg-ui-button--warning {
+  background: var(--sg-color-warning);
+  color: var(--sg-color-warning-contrast);
+}
+
+.sg-ui-button--warning:hover,
+.sg-ui-button--warning:focus-visible {
+  background: var(--sg-color-warning-hover);
+  color: var(--sg-color-warning-contrast);
+}
+
+.sg-ui-button--outline {
+  border-color: var(--sg-ui-color-brand);
+  background: transparent;
+  color: var(--sg-ui-color-brand-dark);
+}
+
+.sg-ui-button--outline:hover,
+.sg-ui-button--outline:focus-visible {
+  background: var(--sg-ui-color-brand-tint);
+}
+
+.sg-ui-button--ghost,
+.sg-ui-button--link {
+  background: transparent;
+  color: var(--sg-ui-color-brand-dark);
+}
+
+.sg-ui-button--ghost:hover,
+.sg-ui-button--ghost:focus-visible {
+  background: var(--sg-ui-color-brand-tint);
+}
+
+.sg-ui-button--link {
+  min-height: auto;
+  padding: 0;
+  border-radius: var(--sg-radius-none);
+  font-weight: 700;
+}
+
+.sg-ui-button--link:hover,
+.sg-ui-button--link:focus-visible {
+  color: var(--sg-ui-color-brand);
+  text-decoration: underline;
+  box-shadow: none;
+}
+
+.sg-ui-button--disabled,
+.sg-ui-button:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+`;
+}
+
 function buildShortMastheadComponent() {
   return `
 import React from 'react';
 
+export const scss = String.raw\`
+.sg-short-masthead {
+  --sg-short-masthead-min-height: 228px;
+  --sg-short-masthead-mobile-min-height: 228px;
+  --sg-short-masthead-content-max-width: 760px;
+  --sg-short-masthead-content-padding: 38px 0;
+  --sg-short-masthead-overlay:
+    linear-gradient(
+      90deg,
+      rgba(0, 45, 114, 0.94) 0%,
+      rgba(0, 79, 153, 0.78) 50%,
+      rgba(0, 45, 114, 0.94) 100%
+    );
+  --sg-short-masthead-image-opacity: 0.34;
+  position: relative;
+  display: flex;
+  min-height: var(--sg-short-masthead-min-height);
+  overflow: hidden;
+  color: #fff;
+  background: var(--sg-blue);
+}
+
+.sg-short-masthead--hero {
+  --sg-short-masthead-min-height: 400px;
+  --sg-short-masthead-mobile-min-height: 320px;
+  --sg-short-masthead-content-max-width: 650px;
+  --sg-short-masthead-content-padding: 48px 0;
+}
+
+.sg-short-masthead__overlay {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 1;
+  background: var(--sg-short-masthead-overlay);
+  pointer-events: none;
+}
+
+.sg-short-masthead__text {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  width: min(var(--sg-page-max-width), 100% - 40px);
+  min-height: var(--sg-short-masthead-min-height);
+  margin: 0 auto;
+  padding: var(--sg-short-masthead-content-padding);
+}
+
+.sg-short-masthead__body {
+  max-width: var(--sg-short-masthead-content-max-width);
+}
+
+.sg-short-masthead__eyebrow {
+  margin: 0 0 12px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.sg-short-masthead__heading {
+  margin: 0;
+  color: #fff;
+}
+
+.sg-short-masthead__summary {
+  margin: 18px 0 0;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.sg-short-masthead__image {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: var(--sg-short-masthead-image-opacity);
+}
+
+.sg-short-masthead--with-image {
+  --sg-short-masthead-overlay:
+    linear-gradient(
+      90deg,
+      rgba(0, 45, 114, 0.82) 0%,
+      rgba(0, 79, 153, 0.62) 50%,
+      rgba(0, 45, 114, 0.82) 100%
+    );
+  --sg-short-masthead-image-opacity: 0.62;
+}
+
+@media (max-width: 1050px) {
+  .sg-short-masthead,
+  .sg-short-masthead__text {
+    min-height: var(--sg-short-masthead-mobile-min-height);
+  }
+
+  .sg-short-masthead[data-mobile-align=center] .sg-short-masthead__text {
+    justify-content: center;
+  }
+
+  .sg-short-masthead[data-mobile-align=center] .sg-short-masthead__heading,
+  .sg-short-masthead[data-mobile-align=center] .sg-short-masthead__summary,
+  .sg-short-masthead[data-mobile-align=center] .sg-short-masthead__eyebrow {
+    text-align: center;
+  }
+}
+\`;
+
 export default function Component(props) {
   const {
     align = 'left',
+    bodyClassName = '',
+    bodyStyle,
     className = '',
+    eyebrow = '',
+    eyebrowClassName = '',
     headingClassName = '',
     image = '',
     imageAlt = '',
     mobileAlign = 'center',
     overlayStyle,
     size = 'short',
+    slots = {},
     summary = '',
+    summaryClassName = '',
+    textClassName = '',
     title = ''
   } = props || {};
-  const hasImage = Boolean(image);
+  const resolvedImage = typeof image === 'string' ? image.trim() : '';
+  const hasImage = Boolean(resolvedImage);
+  const customBody = props.children ?? slots?.body ?? null;
 
   return (
     <header
@@ -1289,13 +2144,18 @@ export default function Component(props) {
       data-size={size}
     >
       {hasImage ? (
-        <img alt={imageAlt || ''} aria-hidden="true" className="sg-short-masthead__image" fetchPriority="high" loading="eager" src={image} />
+        <img alt={imageAlt || title || ''} aria-hidden="true" className="sg-short-masthead__image" fetchPriority="high" loading="eager" src={resolvedImage} />
       ) : null}
       <div aria-hidden="true" className="sg-short-masthead__overlay" style={overlayStyle}></div>
-      <div className="sg-short-masthead__text">
-        <div className="sg-short-masthead__body">
-          {title ? <h1 className={['sg-short-masthead__heading', 'masthead__heading', headingClassName].filter(Boolean).join(' ')}>{title}</h1> : null}
-          {summary ? <p className="sg-short-masthead__summary">{summary}</p> : null}
+      <div className={['sg-short-masthead__text', textClassName].filter(Boolean).join(' ')}>
+        <div className={['sg-short-masthead__body', bodyClassName].filter(Boolean).join(' ')} style={bodyStyle}>
+          {customBody ? customBody : (
+            <>
+              {eyebrow ? <p className={['sg-short-masthead__eyebrow', eyebrowClassName].filter(Boolean).join(' ')}>{eyebrow}</p> : null}
+              {title ? <h1 className={['sg-short-masthead__heading', 'masthead__heading', headingClassName].filter(Boolean).join(' ')}>{title}</h1> : null}
+              {summary ? <p className={['sg-short-masthead__summary', summaryClassName].filter(Boolean).join(' ')}>{summary}</p> : null}
+            </>
+          )}
         </div>
       </div>
     </header>
@@ -1311,18 +2171,92 @@ import React from 'react';
 export default function Component(props) {
   const {
     ariaLabel = 'Breadcrumb',
+    homeHref = '/',
+    homeLabel = '首页',
+    includeHome = true,
     includeItemsWrapper = true,
     items = [],
+    currentContent = null,
+    currentCategory = [],
+    currentSection = null,
     tag = 'div'
   } = props || {};
 
-  if (!Array.isArray(items) || items.length === 0) {
+  const normalizedItems = Array.isArray(items)
+    ? items
+        .filter((item) => item && String(item?.label || item?.name || '').trim())
+        .map((item) => ({
+          current: Boolean(item?.current),
+          href: String(item?.href || item?.url || '').trim(),
+          label: String(item?.label || item?.name || '').trim()
+        }))
+    : [];
+
+  const sectionName = String(currentSection?.name || '').trim();
+  const sectionUrl = String(currentSection?.url || '').trim();
+  const sectionType = String(currentSection?.type || '').trim().toLowerCase();
+  const categoryItems = Array.isArray(currentCategory)
+    ? currentCategory
+        .filter((item) => item && String(item?.name || item?.label || '').trim())
+        .map((item) => ({
+          href: String(item?.url || item?.href || '').trim(),
+          label: String(item?.name || item?.label || '').trim()
+        }))
+    : [];
+  const contentTitle = String(currentContent?.title || currentContent?.name || '').trim();
+
+  const shouldIncludeSection = Boolean(sectionName)
+    && (
+      categoryItems.length === 0
+      || !['content', 'page-tree'].includes(sectionType)
+    );
+  const derivedItems = [
+    ...(shouldIncludeSection ? [{ label: sectionName, href: sectionUrl }] : []),
+    ...categoryItems,
+    ...(contentTitle ? [{ label: contentTitle, href: '', current: true }] : [])
+  ];
+
+  const sourceItems = normalizedItems.length > 0 ? normalizedItems : derivedItems;
+  if (sourceItems.length === 0) {
     return null;
   }
 
+  const firstItem = sourceItems[0] || null;
+  const normalizedHomeHref = String(homeHref || '').trim();
+  const firstHref = String(firstItem?.href || firstItem?.url || '').trim();
+  const firstLabel = String(firstItem?.label || '').trim();
+  const firstItemIsHome = Boolean(firstItem)
+    && firstLabel === homeLabel
+    && (firstHref === normalizedHomeHref || firstHref === '/index.html' || firstHref === '/');
+  const homePrependedItems = includeHome
+    ? [
+        { label: homeLabel, href: normalizedHomeHref || '/' },
+        ...(firstItemIsHome ? sourceItems.slice(1) : sourceItems)
+      ]
+    : sourceItems;
+  const resolvedItems = homePrependedItems.reduce((acc, item) => {
+    const previous = acc[acc.length - 1] || null;
+    if (previous && previous.label === item.label && previous.href === item.href) {
+      return acc;
+    }
+    acc.push(item);
+    return acc;
+  }, []);
+  const hasExplicitCurrent = resolvedItems.some((item) => Boolean(item?.current));
+  const finalizedItems = resolvedItems.map((item, index) => {
+    const isLast = index === resolvedItems.length - 1;
+    if (Boolean(item?.current) || (!hasExplicitCurrent && isLast)) {
+      return {
+        ...item,
+        current: true,
+        href: ''
+      };
+    }
+    return item;
+  });
   const Tag = tag === 'nav' ? 'nav' : 'div';
-  const content = items.map((item, index) => {
-    const isCurrent = Boolean(item?.current) || (!item?.href && index === items.length - 1);
+  const content = finalizedItems.map((item, index) => {
+    const isCurrent = Boolean(item?.current);
     return (
       <React.Fragment key={\`\${item?.label || ''}-\${index}\`}>
         {isCurrent ? (
@@ -1330,7 +2264,7 @@ export default function Component(props) {
         ) : (
           <a className="breadcrumb__link" href={item?.href || '#'}>{item?.label || ''}</a>
         )}
-        {index < items.length - 1 ? <span aria-hidden="true" className="breadcrumb__sep">/</span> : null}
+        {index < finalizedItems.length - 1 ? <span aria-hidden="true" className="breadcrumb__sep">/</span> : null}
       </React.Fragment>
     );
   });
@@ -1347,6 +2281,94 @@ export default function Component(props) {
         )}
       </div>
     </Tag>
+  );
+}
+`;
+}
+
+function buildGlobalSearchComponent(cssText) {
+  return `
+import React from 'react';
+
+export default function Component(props) {
+  const messages = {
+    cancelLabel: '取消',
+    clearLabel: '清除搜索内容',
+    closeLabel: '关闭搜索',
+    emptyBody: '未找到相关内容，请尝试其他关键词。',
+    emptyTitle: '没有搜索结果',
+    loadingLabel: '搜索中...',
+    placeholder: '搜索产品、文章或解决方案',
+    resultsLabel: '站内搜索结果',
+    unavailableBody: '当前无法加载搜索，请稍后重试。',
+    unavailableTitle: '搜索暂不可用',
+    ...(props?.messages && typeof props.messages === 'object' ? props.messages : {})
+  };
+  const searchApiUrl = String(props?.searchApiUrl || '/api/search').trim() || '/api/search';
+
+  return (
+    <div
+      className="sg-global-search"
+      data-global-search=""
+      data-search-api-url={searchApiUrl}
+      data-search-messages={JSON.stringify(messages)}
+      hidden
+    >
+      <button
+        aria-label={messages.closeLabel}
+        className="sg-global-search__backdrop"
+        data-global-search-close=""
+        type="button"
+      ></button>
+
+      <section
+        aria-label={messages.resultsLabel}
+        aria-modal="true"
+        className="sg-global-search__panel"
+        id="sg-global-search-dialog"
+        role="dialog"
+      >
+        <div className="sg-global-search__topbar">
+          <div className="sg-global-search__field-shell">
+            <svg aria-hidden="true" className="sg-global-search__icon" fill="none" viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.8"></circle>
+              <path d="m16 16 4.5 4.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8"></path>
+            </svg>
+            <input
+              autoComplete="off"
+              className="sg-global-search__input"
+              data-global-search-input=""
+              name="q"
+              placeholder={messages.placeholder}
+              spellCheck="false"
+              type="search"
+            />
+            <button
+              aria-label={messages.clearLabel}
+              className="sg-global-search__clear"
+              data-global-search-clear=""
+              hidden
+              type="button"
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          </div>
+          <button
+            aria-label={messages.closeLabel}
+            className="sg-global-search__close"
+            data-global-search-close=""
+            type="button"
+          >
+            {messages.cancelLabel}
+          </button>
+        </div>
+
+        <div className="sg-global-search__results-shell">
+          <div className="sg-global-search__state" data-global-search-state="" hidden></div>
+          <div className="sg-global-search__results" data-global-search-results="" hidden></div>
+        </div>
+      </section>
+    </div>
   );
 }
 `;
@@ -2076,19 +3098,21 @@ import React from 'react';
 export const scss = String.raw\`${cssText.replace(/`/g, '\\`')}\`;
 
 export default function Template(props) {
-  const shell = props.component('spirax_shell', props);
   const items = Array.isArray(props.items) ? props.items : [];
+  const masthead = props.component('spirax_short_masthead', {
+    eyebrow: '${sectionTitle}',
+    title: props.title,
+    className: 'short-masthead'
+  });
+  const shell = props.component('spirax_shell', {
+    ...props,
+    slots: {
+      ...(props.slots || {}),
+      masthead
+    }
+  });
   const content = (
     <main className="sg-content-shell sg-news-page">
-      <section className="short-masthead">
-        <div className="wrapper wrapper--pad-l">
-          <div className="short-masthead__content">
-            <p className="short-masthead__eyebrow">${sectionTitle}</p>
-            <h1 className="short-masthead__title">{props.title}</h1>
-          </div>
-        </div>
-      </section>
-
       <section className="article-results-section bg--white">
         <div className="article-results__shell">
           <div className="article-results">
@@ -2139,20 +3163,22 @@ import React from 'react';
 export const scss = String.raw\`${cssText.replace(/`/g, '\\`')}\`;
 
 export default function Template(props) {
-  const shell = props.component('spirax_shell', props);
   const article = props.currentArticle || props.currentContent || {};
   const relatedItems = Array.isArray(props.relatedArticleItems) ? props.relatedArticleItems : [];
+  const masthead = props.component('spirax_short_masthead', {
+    eyebrow: props.currentCategoryItem?.name || 'News',
+    title: article.title || props.title,
+    className: 'short-masthead'
+  });
+  const shell = props.component('spirax_shell', {
+    ...props,
+    slots: {
+      ...(props.slots || {}),
+      masthead
+    }
+  });
   const content = (
     <main className="sg-content-shell sg-news-page">
-      <section className="short-masthead">
-        <div className="wrapper wrapper--pad-l">
-          <div className="short-masthead__content">
-            <p className="short-masthead__eyebrow">{props.currentCategoryItem?.name || 'News'}</p>
-            <h1 className="short-masthead__title">{article.title || props.title}</h1>
-          </div>
-        </div>
-      </section>
-
       {article.date ? (
         <section className="bg--industrial-blue-light">
           <div className="article-details__shell">
@@ -2204,21 +3230,23 @@ import React from 'react';
 export const scss = String.raw\`${cssText.replace(/`/g, '\\`')}\`;
 
 export default function Template(props) {
-  const shell = props.component('spirax_shell', props);
   const article = props.currentArticle || props.currentContent || {};
   const relatedItems = Array.isArray(props.relatedArticleItems) ? props.relatedArticleItems : [];
+  const masthead = props.component('spirax_short_masthead', {
+    eyebrow: 'Service',
+    title: article.title || props.title,
+    summary: article.summary || '',
+    className: 'short-masthead'
+  });
+  const shell = props.component('spirax_shell', {
+    ...props,
+    slots: {
+      ...(props.slots || {}),
+      masthead
+    }
+  });
   const content = (
     <main className="sg-page-shell sg-service-page">
-      <section className="short-masthead">
-        <div className="wrapper wrapper--pad-l">
-          <div className="short-masthead__content">
-            <p className="short-masthead__eyebrow">Service</p>
-            <h1 className="short-masthead__title">{article.title || props.title}</h1>
-            {article.summary ? <p className="short-masthead__summary">{article.summary}</p> : null}
-          </div>
-        </div>
-      </section>
-
       <section className="bg--white">
         <div className="wrapper wrapper--sml wrapper--pad-l">
           <div className="copy">
@@ -2259,7 +3287,6 @@ function buildContentPageTemplate() {
 import React from 'react';
 
 export default function Template(props) {
-  const shell = props.component('spirax_shell', props);
   const pageData = props.currentCategoryPageData || props.pageData || {};
   const pageKind = String(pageData?.pageKind || '').trim().toLowerCase();
   const cards = Array.isArray(pageData.cards) ? pageData.cards : [];
@@ -2303,6 +3330,13 @@ export default function Template(props) {
     image: heroImage,
     imageAlt: heroTitle || props.title || '',
     size: 'short'
+  });
+  const shell = props.component('spirax_shell', {
+    ...props,
+    slots: {
+      ...(props.slots || {}),
+      masthead
+    }
   });
   const gridCards = cards.length > 0 ? cards : (resources.length > 0 ? resources : (products.length > 0 ? products : (calloutCards.length > 0 ? calloutCards : promoCards)));
   const cardGrid = gridCards.length > 0 ? props.component('spirax_content_card_grid', {
@@ -2665,7 +3699,6 @@ export default function Template(props) {
   ) : null;
   const content = (
     <main className="sg-page-shell sg-content-shell">
-      {masthead}
       {introSection}
       {isGoalDetail ? featureImageSection : null}
       {isGoalDetail ? secondarySection : null}
@@ -2710,16 +3743,19 @@ function buildContactPageTemplate() {
 import React from 'react';
 
 export default function Template(props) {
-  const shell = props.component('spirax_shell', props);
+  const masthead = props.component('spirax_short_masthead', {
+    title: '联系我们',
+    className: 'short-masthead'
+  });
+  const shell = props.component('spirax_shell', {
+    ...props,
+    slots: {
+      ...(props.slots || {}),
+      masthead
+    }
+  });
   const content = (
     <main className="sg-page-shell sg-content-shell sg-contact-page">
-      <section className="short-masthead">
-        <div className="wrapper wrapper--pad-l">
-          <div className="short-masthead__content">
-            <h1 className="short-masthead__title">联系我们</h1>
-          </div>
-        </div>
-      </section>
       <section className="bg--white">
         <div className="wrapper wrapper--sml wrapper--pad-l">
           <div className="copy">

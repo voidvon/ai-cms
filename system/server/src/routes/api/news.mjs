@@ -3,6 +3,7 @@ import {
   listNews,
   listNewsAdmin,
   getNewsById,
+  searchNewsPaged,
   createNews,
   updateNews,
   deleteNews
@@ -40,6 +41,21 @@ export default async function newsRoutes(app) {
     });
 
     return { success: true, data: news };
+  });
+
+  app.get('/news/search', async (request, reply) => {
+    const { q, page, limit, language, lang } = request.query;
+    if (!String(q || '').trim()) {
+      return reply.badRequest('缺少搜索关键词');
+    }
+
+    const result = searchNewsPaged(q, {
+      page: page ? parseInt(page) : undefined,
+      limit: limit ? parseInt(limit) : undefined,
+      languageCode: language ?? lang
+    });
+
+    return { success: true, ...result };
   });
 
   // 公开 API：新闻详情

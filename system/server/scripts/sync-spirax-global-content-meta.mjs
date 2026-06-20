@@ -8,6 +8,7 @@ const sourceRoot = process.env.SPIRAX_GLOBAL_DIR
 
 const sourceDocsRoot = path.join(sourceRoot, 'docs', 'zh-cn');
 const sourceDistRoot = path.join(sourceRoot, 'dist', 'zh-cn');
+const sourceProductOptionsRoot = path.join(sourceRoot, 'src', 'data', 'product-options');
 const dryRun = process.argv.includes('--dry-run');
 
 if (!fs.existsSync(sourceDocsRoot)) {
@@ -122,6 +123,7 @@ for (const row of contentRows) {
     : null;
   const nextLegacyExtra = row.entry_type === 'product'
     ? syncProductLegacyPageData(currentLegacyExtra, {
+        pageData: metadata.pageData || null,
         title: metadata.pageData?.title || metadata.title || '',
         summary: metadata.pageData?.summary || metadata.description || '',
       })
@@ -337,7 +339,8 @@ function resolveSourceHtmlFile(routePath) {
 function loadMdxMetadata(filePath) {
   const raw = fs.readFileSync(filePath, 'utf8');
   const frontmatter = parseFrontmatter(raw);
-  const pageData = normalizePageData(safeParseExportObject(raw, 'pageData'));
+  const importContext = loadMdxImportContext(raw);
+  const pageData = normalizePageData(safeParseExportObject(raw, 'pageData', importContext));
 
   return {
     title: coalesceString(pageData?.title, frontmatter.title, ''),
@@ -417,6 +420,9 @@ function syncProductLegacyPageData(currentLegacyExtra, incoming) {
   if (incoming.summary) {
     currentPageData.summary = incoming.summary;
   }
+  if (incoming.pageData && typeof incoming.pageData === 'object') {
+    mergeProductPageData(currentPageData, incoming.pageData);
+  }
 
   if (Object.keys(currentPageData).length > 0) {
     nextLegacyExtra.page_data = currentPageData;
@@ -487,7 +493,7 @@ function parseFrontmatter(raw) {
   return result;
 }
 
-function parseExportObject(raw, exportName) {
+function parseExportObject(raw, exportName, scope = {}) {
   const marker = `export const ${exportName} =`;
   const start = raw.indexOf(marker);
   if (start < 0) {
@@ -537,7 +543,10 @@ function parseExportObject(raw, exportName) {
       depth -= 1;
       if (depth === 0) {
         const objectLiteral = raw.slice(braceStart, index + 1);
-        return Function(`"use strict"; return (${objectLiteral});`)();
+        const entries = Object.entries(scope || {});
+        const names = entries.map(([name]) => name);
+        const values = entries.map(([, value]) => value);
+        return Function(...names, `"use strict"; return (${objectLiteral});`)(...values);
       }
     }
   }
@@ -545,11 +554,165 @@ function parseExportObject(raw, exportName) {
   return null;
 }
 
-function safeParseExportObject(raw, exportName) {
+function safeParseExportObject(raw, exportName, scope = {}) {
   try {
-    return parseExportObject(raw, exportName);
+    return parseExportObject(raw, exportName, scope);
   } catch {
     return null;
+  }
+}
+
+function loadMdxImportContext(raw) {
+  const context = {};
+  const imports = Array.from(String(raw || '').matchAll(/^import\s+\{([^}]+)\}\s+from\s+['"]([^'"]+)['"];?\s*$/gmu));
+
+  for (const match of imports) {
+    const namedImports = String(match[1] || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const source = String(match[2] || '').trim();
+    if (!source.startsWith('@src/data/product-options/')) {
+      continue;
+    }
+
+    const fileName = source.slice('@src/data/product-options/'.length);
+    const sourceFile = path.join(sourceProductOptionsRoot, `${fileName}.ts`);
+    if (!fs.existsSync(sourceFile)) {
+      continue;
+    }
+
+    const sourceRaw = fs.readFileSync(sourceFile, 'utf8');
+    for (const namedImport of namedImports) {
+      const [importedName, aliasName] = namedImport.split(/\s+as\s+/i).map((item) => item.trim()).filter(Boolean);
+      const exportName = importedName || '';
+      const localName = aliasName || importedName || '';
+      if (!exportName || !localName) {
+        continue;
+      }
+
+      const parsed = safeParseNamedValueExport(sourceRaw, exportName);
+      if (parsed !== null && parsed !== undefined) {
+        context[localName] = parsed;
+      }
+    }
+  }
+
+  return context;
+}
+
+function safeParseNamedValueExport(raw, exportName) {
+  try {
+    return parseNamedValueExport(raw, exportName);
+  } catch {
+    return null;
+  }
+}
+
+function parseNamedValueExport(raw, exportName) {
+  const marker = `export const ${exportName} =`;
+  const start = raw.indexOf(marker);
+  if (start < 0) {
+    return null;
+  }
+
+  let index = start + marker.length;
+  while (index < raw.length && /\s/.test(raw[index])) {
+    index += 1;
+  }
+
+  const expressionStart = index;
+  let depthParen = 0;
+  let depthBracket = 0;
+  let depthBrace = 0;
+  let inSingle = false;
+  let inDouble = false;
+  let inTemplate = false;
+  let escaped = false;
+
+  for (; index < raw.length; index += 1) {
+    const char = raw[index];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if ((inSingle || inDouble || inTemplate) && char === '\\') {
+      escaped = true;
+      continue;
+    }
+    if (!inDouble && !inTemplate && char === '\'') {
+      inSingle = !inSingle;
+      continue;
+    }
+    if (!inSingle && !inTemplate && char === '"') {
+      inDouble = !inDouble;
+      continue;
+    }
+    if (!inSingle && !inDouble && char === '`') {
+      inTemplate = !inTemplate;
+      continue;
+    }
+    if (inSingle || inDouble || inTemplate) {
+      continue;
+    }
+    if (char === '(') {
+      depthParen += 1;
+      continue;
+    }
+    if (char === ')') {
+      depthParen -= 1;
+      continue;
+    }
+    if (char === '[') {
+      depthBracket += 1;
+      continue;
+    }
+    if (char === ']') {
+      depthBracket -= 1;
+      continue;
+    }
+    if (char === '{') {
+      depthBrace += 1;
+      continue;
+    }
+    if (char === '}') {
+      depthBrace -= 1;
+      continue;
+    }
+    if (char === ';' && depthParen === 0 && depthBracket === 0 && depthBrace === 0) {
+      const expression = raw.slice(expressionStart, index)
+        .replace(/\s+satisfies\s+[^;]+$/u, '')
+        .trim();
+      return Function(`"use strict"; return (${expression});`)();
+    }
+  }
+
+  return null;
+}
+
+function mergeProductPageData(target, incoming) {
+  const next = incoming && typeof incoming === 'object' ? incoming : null;
+  if (!next) {
+    return;
+  }
+
+  for (const [key, value] of Object.entries(next)) {
+    if (value === undefined) {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      target[key] = value;
+      continue;
+    }
+    if (value && typeof value === 'object') {
+      const base = target[key] && typeof target[key] === 'object' && !Array.isArray(target[key])
+        ? { ...target[key] }
+        : {};
+      mergeProductPageData(base, value);
+      target[key] = base;
+      continue;
+    }
+    target[key] = value;
   }
 }
 

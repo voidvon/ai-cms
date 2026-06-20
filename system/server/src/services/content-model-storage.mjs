@@ -1,4 +1,4 @@
-import { execute, getDb, queryAll } from '../db.mjs';
+import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { ensureContentModelsSchema, getContentModelByCode } from './content-models.mjs';
 import { ensureLanguagesSchema } from './languages.mjs';
 
@@ -35,7 +35,6 @@ function getFieldDefinition(fieldName) {
     'is_visible': 'INTEGER NOT NULL DEFAULT 1',
     'is_featured_home': 'INTEGER NOT NULL DEFAULT 0',
     'sort_order': 'INTEGER NOT NULL DEFAULT 0',
-    'legacy_extra': 'TEXT',
 
     // 翻译表字段
     'name': `TEXT NOT NULL DEFAULT ''`,
@@ -89,7 +88,6 @@ export function ensureModelTables(modelCode) {
     throw new Error(`内容模型 ${modelCode} 的数据表名不合法`);
   }
 
-  migrateLegacySlugUrlsToCustomUrl(tableName);
   rebuildContentTableIfNeeded(tableName, modelCode);
   rebuildContentTranslationTableIfNeeded(tableName, translationTableName, modelCode);
 
@@ -106,27 +104,10 @@ export function ensureModelTables(modelCode) {
   `);
 
   // 根据字段配置动态添加列
-  const { mainTableFields, translationTableFields } = getModelFields(modelCode);
+  applyConfiguredMainTableColumns(tableName, modelCode);
+  applyConfiguredTranslationTableColumns(translationTableName, modelCode);
 
-  // 主表字段
-  mainTableFields.forEach(fieldName => {
-    const def = getFieldDefinition(fieldName);
-    if (def) {
-      addColumnIfMissing(tableName, fieldName, def);
-    }
-  });
-
-  // 翻译表字段
-  translationTableFields.forEach(fieldName => {
-    const def = getFieldDefinition(fieldName);
-    if (def) {
-      addColumnIfMissing(translationTableName, fieldName, def);
-    }
-  });
-
-  if (mainTableFields.includes('legacy_extra')) {
-    migrateLegacyExtraKeysToCustomUrl(tableName);
-  }
+  addColumnIfMissing(translationTableName, 'template_data_json', 'TEXT');
 }
 
 export function getTranslationTableName(modelCode) {
@@ -153,61 +134,60 @@ function addColumnIfMissing(tableName, columnName, definition) {
   execute(`ALTER TABLE ${quoteIdentifier(tableName)} ADD COLUMN ${columnName} ${definition}`);
 }
 
-function rebuildContentTableIfNeeded(tableName) {
+function rebuildContentTableIfNeeded(tableName, modelCode) {
   const createSql = getCreateTableSql(tableName);
   const hasSlugColumn = hasColumn(tableName, 'slug');
+  const hasLegacyExtraColumn = hasColumn(tableName, 'legacy_extra');
 
-  if (!tableNeedsForeignKeylessRebuild(tableName, createSql, ['columns_legacy_rebuild']) && !hasSlugColumn) {
+  if (!tableNeedsForeignKeylessRebuild(tableName, createSql, ['columns_legacy_rebuild']) && !hasSlugColumn && !hasLegacyExtraColumn) {
     return;
   }
 
+  rebuildContentTable(tableName, modelCode);
+}
+
+function rebuildContentTable(tableName, modelCode) {
   const tempTableName = createTempTableName(tableName);
+  const oldColumns = queryAll(`PRAGMA table_info(${quoteIdentifier(tableName)})`);
+  const oldColumnNames = oldColumns.map((column) => String(column.name || ''));
+  const oldCount = queryOne(`SELECT COUNT(*) AS value FROM ${quoteIdentifier(tableName)}`)?.value || 0;
+
+  getDb().exec(`ALTER TABLE ${quoteIdentifier(tableName)} RENAME TO ${quoteIdentifier(tempTableName)};`);
+  getDb().exec(buildContentTableSql(tableName, modelCode));
+  applyConfiguredMainTableColumns(tableName, modelCode);
+
+  const newColumns = queryAll(`PRAGMA table_info(${quoteIdentifier(tableName)})`);
+  const columnsToMigrate = newColumns
+    .map((column) => String(column.name || ''))
+    .filter((columnName) => oldColumnNames.includes(columnName));
+
+  if (columnsToMigrate.length > 0) {
+    const columnList = columnsToMigrate.map((columnName) => quoteIdentifier(columnName)).join(', ');
+    getDb().exec(`
+      INSERT INTO ${quoteIdentifier(tableName)} (${columnList})
+      SELECT ${columnList}
+      FROM ${quoteIdentifier(tempTableName)};
+    `);
+  }
+
+  const newCount = queryOne(`SELECT COUNT(*) AS value FROM ${quoteIdentifier(tableName)}`)?.value || 0;
+  if (Number(newCount) !== Number(oldCount)) {
+    throw new Error(`内容表 ${tableName} 重建后记录数不一致：旧 ${oldCount}，新 ${newCount}`);
+  }
+
   getDb().exec(`
-    ALTER TABLE ${quoteIdentifier(tableName)} RENAME TO ${quoteIdentifier(tempTableName)};
-
-    ${buildContentTableSql(tableName)}
-
-    INSERT INTO ${quoteIdentifier(tableName)} (
-      id,
-      column_id,
-      custom_url,
-      code,
-      images,
-      primary_image,
-      is_visible,
-      is_featured_home,
-      sort_order,
-      publish_status,
-      published_at,
-      legacy_extra,
-      created_at,
-      updated_at
-    )
-    SELECT
-      id,
-      column_id,
-      custom_url,
-      code,
-      images,
-      primary_image,
-      is_visible,
-      is_featured_home,
-      sort_order,
-      publish_status,
-      published_at,
-      legacy_extra,
-      created_at,
-      updated_at
-    FROM ${quoteIdentifier(tempTableName)};
-
     DROP TABLE ${quoteIdentifier(tempTableName)};
 
     CREATE INDEX IF NOT EXISTS ${quoteIdentifier(`idx_${tableName}_column_sort`)}
-    ON ${quoteIdentifier(tableName)}(column_id, sort_order, id);
-
-    CREATE INDEX IF NOT EXISTS ${quoteIdentifier(`idx_${tableName}_visible`)}
-    ON ${quoteIdentifier(tableName)}(is_visible, is_featured_home, sort_order, id);
+    ON ${quoteIdentifier(tableName)}(column_id, created_at DESC, id);
   `);
+
+  if (hasColumn(tableName, 'is_visible') && hasColumn(tableName, 'is_featured_home') && hasColumn(tableName, 'sort_order')) {
+    getDb().exec(`
+      CREATE INDEX IF NOT EXISTS ${quoteIdentifier(`idx_${tableName}_visible`)}
+      ON ${quoteIdentifier(tableName)}(is_visible, is_featured_home, sort_order, id);
+    `);
+  }
 }
 
 function rebuildContentTranslationTableIfNeeded(tableName, translationTableName, modelCode) {
@@ -223,8 +203,6 @@ function rebuildContentTranslationTableIfNeeded(tableName, translationTableName,
   const oldColumns = getDb().prepare(`PRAGMA table_info(${quoteIdentifier(translationTableName)})`).all();
   const oldColumnNames = oldColumns.map(col => col.name);
 
-  // 定义新表应该有的列（不包含 published_at 如果是产品模型）
-  const includePublishedAt = modelCode !== 'product';
   const newTableColumns = [
     'id',
     'entry_id',
@@ -232,10 +210,10 @@ function rebuildContentTranslationTableIfNeeded(tableName, translationTableName,
     'name',
     'summary',
     'content_html',
+    'template_data_json',
     'seo_title',
     'seo_description',
     'publish_status',
-    ...(includePublishedAt ? ['published_at'] : []),
     'created_at',
     'updated_at'
   ];
@@ -306,37 +284,24 @@ function buildContentTableSql(tableName, modelCode) {
   `;
 }
 
-function migrateLegacySlugUrlsToCustomUrl(tableName) {
-  if (!hasColumn(tableName, 'slug')) {
-    return;
-  }
-
-  const rows = queryAll(
-    `
-      SELECT
-        entry.id,
-        entry.column_id,
-        entry.slug,
-        entry.custom_url,
-        column.route_path,
-        column.detail_rule
-      FROM ${quoteIdentifier(tableName)} entry
-      LEFT JOIN columns column ON column.id = entry.column_id
-      WHERE trim(coalesce(entry.slug, '')) <> ''
-        AND trim(coalesce(entry.custom_url, '')) = ''
-    `
-  );
-
-  for (const row of rows) {
-    const migrated = buildLegacyCustomUrlFromSlug(row);
-    if (!migrated) {
-      continue;
+function applyConfiguredMainTableColumns(tableName, modelCode) {
+  const { mainTableFields } = getModelFields(modelCode);
+  mainTableFields.forEach((fieldName) => {
+    const def = getFieldDefinition(fieldName);
+    if (def) {
+      addColumnIfMissing(tableName, fieldName, def);
     }
-    execute(
-      `UPDATE ${quoteIdentifier(tableName)} SET custom_url = ? WHERE id = ?`,
-      [migrated, Number(row.id || 0)]
-    );
-  }
+  });
+}
+
+function applyConfiguredTranslationTableColumns(translationTableName, modelCode) {
+  const { translationTableFields } = getModelFields(modelCode);
+  translationTableFields.forEach((fieldName) => {
+    const def = getFieldDefinition(fieldName);
+    if (def) {
+      addColumnIfMissing(translationTableName, fieldName, def);
+    }
+  });
 }
 
 function buildContentTranslationTableSql(tableName, translationTableName, modelCode) {
@@ -349,6 +314,7 @@ function buildContentTranslationTableSql(tableName, translationTableName, modelC
       name TEXT NOT NULL DEFAULT '',
       summary TEXT NOT NULL DEFAULT '',
       content_html TEXT NOT NULL DEFAULT '',
+      template_data_json TEXT,
       seo_title TEXT,
       seo_description TEXT,
       publish_status TEXT NOT NULL DEFAULT 'published',
@@ -357,32 +323,6 @@ function buildContentTranslationTableSql(tableName, translationTableName, modelC
       UNIQUE(entry_id, language_id)
     );
   `;
-}
-
-function migrateLegacyExtraKeysToCustomUrl(tableName) {
-  if (!hasColumn(tableName, 'custom_url') || !hasColumn(tableName, 'legacy_extra')) {
-    return;
-  }
-
-  const rows = queryAll(
-    `
-      SELECT id, legacy_extra, custom_url
-      FROM ${quoteIdentifier(tableName)}
-      WHERE trim(coalesce(legacy_extra, '')) <> ''
-        AND trim(coalesce(custom_url, '')) = ''
-    `
-  );
-
-  for (const row of rows) {
-    const migrated = buildCustomUrlFromLegacyExtraKey(row?.legacy_extra);
-    if (!migrated) {
-      continue;
-    }
-    execute(
-      `UPDATE ${quoteIdentifier(tableName)} SET custom_url = ? WHERE id = ?`,
-      [migrated, Number(row.id || 0)]
-    );
-  }
 }
 
 function getCreateTableSql(tableName) {
@@ -406,9 +346,21 @@ function tableNeedsForeignKeylessRebuild(tableName, createSql, legacyReferenceNa
     return true;
   }
 
-  return legacyReferenceNames.some((name) => (
-    createSql.includes(`"${name}"`) || createSql.includes(name)
-  ));
+  return legacyReferenceNames.some((name) => createSqlReferencesIdentifier(createSql, name));
+}
+
+function createSqlReferencesIdentifier(createSql, identifier) {
+  const source = String(createSql || '');
+  const safeIdentifier = String(identifier || '').trim();
+  if (!source || !safeIdentifier) {
+    return false;
+  }
+
+  const escaped = safeIdentifier.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return [
+    new RegExp(`"${escaped}"`, 'i'),
+    new RegExp(`\\b${escaped}\\b`, 'i')
+  ].some((pattern) => pattern.test(source));
 }
 
 function createTempTableName(tableName) {
@@ -420,59 +372,22 @@ function hasColumn(tableName, columnName) {
     .some((column) => String(column.name || '') === columnName);
 }
 
-function buildLegacyCustomUrlFromSlug(row) {
-  const slug = String(row?.slug || '').trim();
-  if (!slug) {
+function normalizeTemplateDataJson(value) {
+  if (value == null || value === '') {
     return null;
   }
-
-  const routePath = normalizeRoutePath(row?.route_path);
-  const detailRule = String(row?.detail_rule || '').trim();
-
-  if (detailRule === '{slug}.html') {
-    return `${routePath}${slug}.html`;
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    JSON.parse(trimmed);
+    return trimmed;
   }
-  if (detailRule === '{slug}/index.html' || !detailRule) {
-    return `${routePath}${slug}/index.html`;
+  if (typeof value !== 'object') {
+    throw new Error('template_data_json must be a JSON object or array');
   }
-  return null;
-}
-
-function buildCustomUrlFromLegacyExtraKey(value) {
-  const legacyExtra = parseJsonObject(value);
-  const rawKey = String(legacyExtra?.key || '').trim();
-  if (!rawKey) {
-    return null;
-  }
-
-  const normalizedKey = rawKey.includes(':') ? rawKey.slice(rawKey.indexOf(':') + 1) : rawKey;
-  const lastSegment = normalizedKey.split('/').map((segment) => segment.trim()).filter(Boolean).pop();
-  if (!lastSegment) {
-    return null;
-  }
-
-  return `${lastSegment}/index.html`;
-}
-
-function parseJsonObject(value) {
-  if (!value || typeof value !== 'string') {
-    return {};
-  }
-
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function normalizeRoutePath(value) {
-  const normalized = String(value || '').trim();
-  if (!normalized) {
-    return '';
-  }
-  return `${normalized.replace(/^\/+|\/+$/g, '')}/`;
+  return JSON.stringify(value);
 }
 
 function isSafeIdentifier(value) {

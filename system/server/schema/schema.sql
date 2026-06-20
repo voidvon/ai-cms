@@ -7,8 +7,7 @@ CREATE TABLE IF NOT EXISTS admins (
   password_scheme TEXT NOT NULL DEFAULT 'legacy-md5-16',
   permission_flags TEXT NOT NULL DEFAULT '',
   last_login_at TEXT,
-  last_login_ip TEXT,
-  legacy_extra TEXT
+  last_login_ip TEXT
 );
 
 CREATE TABLE IF NOT EXISTS admin_sessions (
@@ -92,7 +91,6 @@ CREATE TABLE IF NOT EXISTS column_translations (
   seo_title TEXT,
   seo_description TEXT,
   publish_status TEXT NOT NULL DEFAULT 'published',
-  published_at TEXT,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE (column_id, language_id),
@@ -104,8 +102,7 @@ CREATE TABLE IF NOT EXISTS corporation_categories (
   id INTEGER PRIMARY KEY,
   name TEXT NOT NULL,
   parent_id INTEGER NOT NULL DEFAULT 0,
-  sort_order INTEGER NOT NULL DEFAULT 0,
-  legacy_extra TEXT
+  sort_order INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS site_config (
@@ -183,8 +180,7 @@ CREATE TABLE IF NOT EXISTS templates (
   is_default INTEGER NOT NULL DEFAULT 0,
   sort_order INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  published_at TEXT
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS template_bindings (

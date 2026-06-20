@@ -55,8 +55,7 @@ export function listAdminsAdmin() {
         username,
         permission_flags,
         last_login_at,
-        last_login_ip,
-        legacy_extra
+        last_login_ip
       FROM admins
       ORDER BY id ASC
     `
@@ -71,8 +70,7 @@ export function getAdminById(id) {
         username,
         permission_flags,
         last_login_at,
-        last_login_ip,
-        legacy_extra
+        last_login_ip
       FROM admins
       WHERE id = ?
     `,
@@ -88,15 +86,13 @@ export function createAdmin(input) {
         username,
         password_hash,
         password_scheme,
-        permission_flags,
-        legacy_extra
-      ) VALUES (?, ?, 'legacy-md5-16', ?, ?)
+        permission_flags
+      ) VALUES (?, ?, 'legacy-md5-16', ?)
     `,
     [
       payload.username,
       createLegacyMd5Hash(payload.password),
-      payload.permission_flags,
-      null
+      payload.permission_flags
     ]
   );
 
@@ -111,8 +107,7 @@ export function updateAdmin(id, input) {
         username,
         password_hash,
         password_scheme,
-        permission_flags,
-        legacy_extra
+        permission_flags
       FROM admins
       WHERE id = ?
     `,

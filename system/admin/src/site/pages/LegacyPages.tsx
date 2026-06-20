@@ -25,7 +25,7 @@ function raw(value: string | null | undefined) {
 }
 
 function legacySearchForm(buttonName = 'searchbutton') {
-  return `<form id="form2" name="form2" method="post" action="/search"><p>
+  return `<form id="form2" name="form2" method="post" action="#" data-search-open-form="true"><p>
             <input name="ProductsName" type="text" id="ProductsName" value="找找看" size="18"  class="Font_666666_a" onfocus="this.value='';" />
             <input name="${buttonName}" type="submit" id="${buttonName}" value="" />
           </p>

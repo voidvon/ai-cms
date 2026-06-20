@@ -57,14 +57,9 @@ export async function createApp(options = {}) {
     await authHook(request, reply);
   });
 
-  // 全局钩子：产品 URL 重定向
-  app.addHook('onRequest', async (request, reply) => {
-    const { redirectLegacyProductUrls } = await import('./middleware/product-redirects.mjs');
-    await redirectLegacyProductUrls(request, reply);
-  });
-
   // 注册路由模块
   await app.register(import('./routes/auth.mjs'), { prefix: '/admin' });
+  await app.register(import('./routes/api/search.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/products.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/column-categories.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/news.mjs'), { prefix: '/api' });
@@ -80,7 +75,6 @@ export async function createApp(options = {}) {
   await app.register(import('./routes/api/sitemap.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/llms.mjs'), { prefix: '/api' });
   await app.register(import('./routes/admin/static-gen.mjs'), { prefix: '/admin' });
-  await app.register(import('./routes/legacy.mjs'));
 
   // 静态文件服务和 404 处理（最后注册）
   // 使用自定义静态文件处理器以支持大小写不敏感的路径匹配

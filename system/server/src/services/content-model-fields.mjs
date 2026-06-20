@@ -17,6 +17,25 @@ const PROTECTED_TRANSLATION_FIELDS = new Set([
   'updated_at'
 ]);
 
+const PROTECTED_SEARCH_FIELDS = new Set([
+  'id',
+  'parent_id',
+  'column_type',
+  'column_id',
+  'route_path',
+  'custom_url',
+  'sort_order',
+  'is_system',
+  'is_visible',
+  'is_featured_home',
+  'images',
+  'picture',
+  'primary_image',
+  'created_at',
+  'updated_at',
+  'publish_status'
+]);
+
 let schemaEnsured = false;
 
 export function ensureContentModelFieldsSchema() {
@@ -35,6 +54,7 @@ export function ensureContentModelFieldsSchema() {
       is_listed INTEGER NOT NULL DEFAULT 1,
       is_editable INTEGER NOT NULL DEFAULT 1,
       is_translatable INTEGER NOT NULL DEFAULT 0,
+      is_searchable INTEGER NOT NULL DEFAULT 0,
       is_system INTEGER NOT NULL DEFAULT 0,
       sort_order INTEGER NOT NULL DEFAULT 0,
       settings_json TEXT,
@@ -44,7 +64,7 @@ export function ensureContentModelFieldsSchema() {
     );
   `);
 
-  migrateLegacyContentModelFieldsSchema();
+  assertContentModelFieldsSchema();
 
   schemaEnsured = true;
 }
@@ -63,6 +83,7 @@ export function listConfiguredModelFields(modelCode) {
         is_listed,
         is_editable,
         is_translatable,
+        is_searchable,
         is_system,
         sort_order,
         settings_json,
@@ -90,6 +111,7 @@ export function getConfiguredModelField(modelCode, fieldName) {
         is_listed,
         is_editable,
         is_translatable,
+        is_searchable,
         is_system,
         sort_order,
         settings_json,
@@ -120,6 +142,7 @@ export function upsertConfiguredModelField(modelCode, fieldName, input, sourceFi
           is_listed = ?,
           is_editable = ?,
           is_translatable = ?,
+          is_searchable = ?,
           is_system = ?,
           sort_order = ?,
           settings_json = ?,
@@ -133,6 +156,7 @@ export function upsertConfiguredModelField(modelCode, fieldName, input, sourceFi
         payload.is_listed,
         payload.is_editable,
         payload.is_translatable,
+        payload.is_searchable,
         payload.is_system,
         payload.sort_order,
         payload.settings_json,
@@ -153,12 +177,13 @@ export function upsertConfiguredModelField(modelCode, fieldName, input, sourceFi
           is_listed,
           is_editable,
           is_translatable,
+          is_searchable,
           is_system,
           sort_order,
           settings_json,
           created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         modelCode,
@@ -169,6 +194,7 @@ export function upsertConfiguredModelField(modelCode, fieldName, input, sourceFi
         payload.is_listed,
         payload.is_editable,
         payload.is_translatable,
+        payload.is_searchable,
         payload.is_system,
         payload.sort_order,
         payload.settings_json,
@@ -197,11 +223,27 @@ export function mergeModelFieldConfigs(modelCode, fields) {
       is_listed: override?.is_listed ?? 1,
       is_editable: override?.is_editable ?? 1,
       is_translatable: override?.is_translatable ?? 0,
+      is_searchable: override?.is_searchable ?? inferSearchableDefault(field),
       sort_order: override?.sort_order ?? field.sort_order,
       settings_json: override?.settings_json ?? null,
       config_id: override?.id ?? null
     };
   });
+}
+
+export function listSearchableFieldNames(modelCode) {
+  ensureContentModelFieldsSchema();
+  const configuredFields = listConfiguredModelFields(modelCode);
+  const configuredNames = configuredFields
+    .filter((field) => Number(field.is_searchable ?? 0) === 1)
+    .map((field) => String(field.field_name || '').trim())
+    .filter(Boolean);
+  if (configuredNames.length) {
+    return configuredNames;
+  }
+  return configuredFields
+    .map((field) => String(field.field_name || '').trim())
+    .filter((fieldName) => inferSearchableDefault({ field_name: fieldName }) === 1);
 }
 
 function normalizeFieldConfigInput(modelCode, fieldName, input, sourceField) {
@@ -212,10 +254,17 @@ function normalizeFieldConfigInput(modelCode, fieldName, input, sourceField) {
 
   const source = sourceField || {};
   const isProtected = PROTECTED_TRANSLATION_FIELDS.has(safeFieldName);
+  const isSearchProtected = PROTECTED_SEARCH_FIELDS.has(safeFieldName);
   const requestedTranslatable = toBooleanInt(input?.is_translatable);
+  const requestedSearchable = input?.is_searchable === undefined
+    ? inferSearchableDefault(source)
+    : toBooleanInt(input?.is_searchable);
 
   if (isProtected && requestedTranslatable) {
     throw new Error(`字段 ${safeFieldName} 不允许配置为翻译字段`);
+  }
+  if (isSearchProtected && requestedSearchable) {
+    throw new Error(`字段 ${safeFieldName} 不允许配置为搜索字段`);
   }
 
   return {
@@ -227,6 +276,7 @@ function normalizeFieldConfigInput(modelCode, fieldName, input, sourceField) {
     is_listed: input?.is_listed === undefined ? 1 : toBooleanInt(input?.is_listed),
     is_editable: input?.is_editable === undefined ? 1 : toBooleanInt(input?.is_editable),
     is_translatable: requestedTranslatable,
+    is_searchable: requestedSearchable,
     is_system: Number(source.is_system || 0),
     sort_order: toInteger(input?.sort_order, Number(source.sort_order || 0)),
     settings_json: input?.settings_json ? JSON.stringify(input.settings_json) : null
@@ -244,6 +294,7 @@ function mapConfiguredField(row) {
     is_listed: Number(row.is_listed || 0),
     is_editable: Number(row.is_editable || 0),
     is_translatable: Number(row.is_translatable || 0),
+    is_searchable: Number(row.is_searchable || 0),
     is_system: Number(row.is_system || 0),
     sort_order: Number(row.sort_order || 0),
     settings_json: row.settings_json || null,
@@ -264,82 +315,39 @@ function toInteger(value, fallback = 0) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
-function migrateLegacyContentModelFieldsSchema() {
+function assertContentModelFieldsSchema() {
   const columns = queryAll('PRAGMA table_info(content_model_fields)');
   if (!columns.length) {
     return;
   }
 
   const columnNames = new Set(columns.map((column) => String(column.name)));
-  const hasModelCode = columnNames.has('model_code');
-  const hasModelId = columnNames.has('model_id');
-
-  if (!hasModelCode) {
-    execute('ALTER TABLE content_model_fields ADD COLUMN model_code TEXT');
+  const requiredColumns = [
+    'model_code',
+    'field_name',
+    'field_label',
+    'field_type',
+    'is_required',
+    'is_listed',
+    'is_editable',
+    'is_translatable',
+    'is_searchable',
+    'is_system',
+    'sort_order',
+    'settings_json',
+    'created_at',
+    'updated_at'
+  ];
+  const missingColumns = requiredColumns.filter((columnName) => !columnNames.has(columnName));
+  if (missingColumns.length > 0) {
+    throw new Error(`content_model_fields 表缺少字段：${missingColumns.join(', ')}`);
   }
-  if (!columnNames.has('is_listed')) {
-    execute('ALTER TABLE content_model_fields ADD COLUMN is_listed INTEGER NOT NULL DEFAULT 1');
-  }
-  if (!columnNames.has('is_editable')) {
-    execute('ALTER TABLE content_model_fields ADD COLUMN is_editable INTEGER NOT NULL DEFAULT 1');
-  }
-  if (!columnNames.has('is_translatable')) {
-    execute('ALTER TABLE content_model_fields ADD COLUMN is_translatable INTEGER NOT NULL DEFAULT 0');
-  }
-  if (!columnNames.has('settings_json')) {
-    execute('ALTER TABLE content_model_fields ADD COLUMN settings_json TEXT');
-  }
+}
 
-  if (hasModelId) {
-    execute(
-      `
-        UPDATE content_model_fields
-        SET model_code = (
-          SELECT cm.code
-          FROM content_models cm
-          WHERE cm.id = content_model_fields.model_id
-        )
-        WHERE model_code IS NULL OR trim(model_code) = ''
-      `
-    );
+function inferSearchableDefault(field) {
+  const fieldName = String(field?.field_name || '').trim();
+  if (!fieldName || PROTECTED_SEARCH_FIELDS.has(fieldName)) {
+    return 0;
   }
-
-  execute(
-    `
-      UPDATE content_model_fields
-      SET model_code = CASE field_name
-        WHEN 'name' THEN 'product'
-        WHEN 'code' THEN 'product'
-        WHEN 'images' THEN 'product'
-        WHEN 'title' THEN 'news'
-        WHEN 'picture' THEN 'news'
-        ELSE model_code
-      END
-      WHERE model_code IS NULL OR trim(model_code) = ''
-    `
-  );
-
-  execute(
-    `
-      UPDATE content_model_fields
-      SET model_code = 'product'
-      WHERE model_code IS NULL OR trim(model_code) = ''
-    `
-  );
-
-  execute(
-    `
-      DELETE FROM content_model_fields
-      WHERE rowid NOT IN (
-        SELECT MIN(rowid)
-        FROM content_model_fields
-        GROUP BY model_code, field_name
-      )
-    `
-  );
-
-  getDb().exec(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_content_model_fields_model_code_field_name
-    ON content_model_fields(model_code, field_name);
-  `);
+  return ['name', 'summary', 'content_html', 'seo_title', 'seo_description', 'code'].includes(fieldName) ? 1 : 0;
 }

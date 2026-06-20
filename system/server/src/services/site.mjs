@@ -1,6 +1,6 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { ensureLanguagesSchema, getDefaultLanguage, hasMultipleEnabledLanguages, listLanguages } from './languages.mjs';
-import { listNews } from './news.mjs';
+import { listNews, searchNews } from './news.mjs';
 import { listProducts, searchProducts } from './products.mjs';
 
 const SITE_TRANSLATABLE_FIELDS = [
@@ -73,9 +73,8 @@ export function updateSiteConfig(input) {
         web_qq,
         web_mobile,
         web_copyright,
-        web_author,
-        legacy_extra
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        web_author
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         web_name = excluded.web_name,
         web_url = excluded.web_url,
@@ -90,8 +89,7 @@ export function updateSiteConfig(input) {
         web_qq = excluded.web_qq,
         web_mobile = excluded.web_mobile,
         web_copyright = excluded.web_copyright,
-        web_author = excluded.web_author,
-        legacy_extra = excluded.legacy_extra
+        web_author = excluded.web_author
     `,
     [
       1,
@@ -108,8 +106,7 @@ export function updateSiteConfig(input) {
       basePayload.web_qq,
       basePayload.web_mobile,
       basePayload.web_copyright,
-      basePayload.web_author,
-      basePayload.legacy_extra
+      basePayload.web_author
     ]
   );
 
@@ -117,7 +114,7 @@ export function updateSiteConfig(input) {
   return getSiteConfig(null, { includeTranslations: true });
 }
 
-export { listNews, listProducts, searchProducts };
+export { listNews, searchNews, listProducts, searchProducts };
 
 function ensureSiteConfigSchema() {
   if (schemaEnsured) {
@@ -125,6 +122,7 @@ function ensureSiteConfigSchema() {
   }
 
   ensureLanguagesSchema();
+  ensureSiteConfigTableSchema();
   getDb().exec(`
     CREATE TABLE IF NOT EXISTS site_config_translations (
       id INTEGER PRIMARY KEY,
@@ -158,6 +156,50 @@ function ensureSiteConfigSchema() {
   schemaEnsured = true;
 }
 
+function ensureSiteConfigTableSchema() {
+  getDb().exec(`
+    CREATE TABLE IF NOT EXISTS site_config (
+      id INTEGER PRIMARY KEY,
+      web_name TEXT,
+      web_url TEXT,
+      company_name TEXT,
+      company_address TEXT,
+      postal_code TEXT,
+      company_phone TEXT,
+      company_fax TEXT,
+      contact_person TEXT,
+      company_email TEXT,
+      icp_number TEXT,
+      web_qq TEXT,
+      web_mobile TEXT,
+      web_copyright TEXT,
+      web_author TEXT
+    );
+  `);
+
+  const requiredColumns = [
+    'web_name',
+    'web_url',
+    'company_name',
+    'company_address',
+    'postal_code',
+    'company_phone',
+    'company_fax',
+    'contact_person',
+    'company_email',
+    'icp_number',
+    'web_qq',
+    'web_mobile',
+    'web_copyright',
+    'web_author'
+  ];
+  const columnNames = new Set(queryAll('PRAGMA table_info(site_config)').map((column) => String(column.name || '')));
+  const missingColumns = requiredColumns.filter((columnName) => !columnNames.has(columnName));
+  if (missingColumns.length > 0) {
+    throw new Error(`site_config 表缺少字段：${missingColumns.join(', ')}`);
+  }
+}
+
 function getBaseSiteConfig() {
   const base = (
     queryOne(`
@@ -176,8 +218,7 @@ function getBaseSiteConfig() {
         web_qq,
         web_mobile,
         web_copyright,
-        web_author,
-        legacy_extra
+        web_author
       FROM site_config
       WHERE id = 1
     `) || {
@@ -195,14 +236,10 @@ function getBaseSiteConfig() {
       web_qq: '',
       web_mobile: '',
       web_copyright: '',
-      web_author: '',
-      legacy_extra: null
+      web_author: ''
     }
   );
-  return {
-    ...base,
-    ...readSiteSeoBaseConfig(base.legacy_extra)
-  };
+  return base;
 }
 
 function normalizeSiteConfigInput(input) {
@@ -213,20 +250,6 @@ function normalizeSiteConfigInput(input) {
   if (!/^https?:\/\//i.test(webUrl)) {
     throw new Error('网站地址必须以 http:// 或 https:// 开头');
   }
-
-  const existingLegacyExtra = parseLegacyExtra(input.legacy_extra);
-  const mergedLegacyExtra = {
-    ...existingLegacyExtra,
-    seo: {
-      ...(existingLegacyExtra.seo && typeof existingLegacyExtra.seo === 'object' ? existingLegacyExtra.seo : {}),
-      default_image: toNullableString(input.seo_default_image),
-      site_name: toNullableString(input.seo_site_name),
-      twitter_handle: toNullableString(input.seo_twitter_handle),
-      organization_name: toNullableString(input.seo_organization_name),
-      same_as: normalizeMultilineList(input.seo_same_as_text),
-      hreflang_links: normalizeHreflangText(input.seo_hreflang_links_text)
-    }
-  };
 
   return {
     web_name: toNullableString(input.web_name),
@@ -242,16 +265,7 @@ function normalizeSiteConfigInput(input) {
     web_qq: toNullableString(input.web_qq),
     web_mobile: toNullableString(input.web_mobile),
     web_copyright: toNullableString(input.web_copyright),
-    web_author: toNullableString(input.web_author),
-    legacy_extra: stringifyLegacyExtra(mergedLegacyExtra),
-    seo_default_image: toNullableString(input.seo_default_image),
-    seo_site_name: toNullableString(input.seo_site_name),
-    seo_twitter_handle: toNullableString(input.seo_twitter_handle),
-    seo_organization_name: toNullableString(input.seo_organization_name),
-    seo_same_as: normalizeMultilineList(input.seo_same_as_text),
-    seo_same_as_text: stringifyMultilineList(normalizeMultilineList(input.seo_same_as_text)),
-    seo_hreflang_links: normalizeHreflangText(input.seo_hreflang_links_text),
-    seo_hreflang_links_text: stringifyHreflangList(normalizeHreflangText(input.seo_hreflang_links_text))
+    web_author: toNullableString(input.web_author)
   };
 }
 
@@ -544,113 +558,6 @@ function pickTranslationFields(input) {
     seo_home_title: toNullableString(input?.seo_home_title),
     seo_home_description: toNullableString(input?.seo_home_description)
   };
-}
-
-function readSiteSeoBaseConfig(legacyExtra) {
-  const parsed = parseLegacyExtra(legacyExtra);
-  const seo = parsed.seo && typeof parsed.seo === 'object' ? parsed.seo : {};
-  const sameAs = Array.isArray(seo.same_as)
-    ? seo.same_as.map((item) => String(item || '').trim()).filter(Boolean)
-    : [];
-  const hreflangLinks = Array.isArray(seo.hreflang_links)
-    ? seo.hreflang_links
-      .map((item) => ({
-        lang: toNullableString(item?.lang),
-        url: toNullableString(item?.url)
-      }))
-      .filter((item) => item.lang && item.url)
-    : [];
-
-  return {
-    seo_default_image: toNullableString(seo.default_image),
-    seo_site_name: toNullableString(seo.site_name),
-    seo_twitter_handle: toNullableString(seo.twitter_handle),
-    seo_organization_name: toNullableString(seo.organization_name),
-    seo_same_as: sameAs,
-    seo_same_as_text: stringifyMultilineList(sameAs),
-    seo_hreflang_links: hreflangLinks,
-    seo_hreflang_links_text: stringifyHreflangList(hreflangLinks)
-  };
-}
-
-function normalizeMultilineList(value) {
-  return String(value || '')
-    .split(/\r?\n/)
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-function stringifyMultilineList(items) {
-  return Array.isArray(items)
-    ? items.map((item) => String(item || '').trim()).filter(Boolean).join('\n')
-    : '';
-}
-
-function normalizeHreflangText(value) {
-  return String(value || '')
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [langPart, ...urlParts] = line.split('|');
-      const lang = String(langPart || '').trim();
-      const url = String(urlParts.join('|') || '').trim();
-      return {
-        lang: toNullableString(lang),
-        url: toNullableString(url)
-      };
-    })
-    .filter((item) => item.lang && item.url);
-}
-
-function stringifyHreflangList(items) {
-  return Array.isArray(items)
-    ? items
-      .map((item) => {
-        const lang = String(item?.lang || '').trim();
-        const url = String(item?.url || '').trim();
-        return lang && url ? `${lang}|${url}` : '';
-      })
-      .filter(Boolean)
-      .join('\n')
-    : '';
-}
-
-function parseLegacyExtra(value) {
-  if (!value) {
-    return {};
-  }
-  try {
-    const parsed = JSON.parse(value);
-    return parsed && typeof parsed === 'object' ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function stringifyLegacyExtra(value) {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-
-  const payload = { ...value };
-  if (payload.seo && typeof payload.seo === 'object') {
-    const seoPayload = Object.fromEntries(
-      Object.entries(payload.seo).filter(([, item]) => {
-        if (Array.isArray(item)) {
-          return item.length > 0;
-        }
-        return item !== undefined && item !== null && item !== '';
-      })
-    );
-    if (Object.keys(seoPayload).length > 0) {
-      payload.seo = seoPayload;
-    } else {
-      delete payload.seo;
-    }
-  }
-
-  return Object.keys(payload).length > 0 ? JSON.stringify(payload) : null;
 }
 
 function addColumnIfMissing(tableName, columnName, definition) {

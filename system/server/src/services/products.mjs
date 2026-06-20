@@ -9,6 +9,7 @@ import {
   listContentEntriesPaged,
   updateContentEntry
 } from './content-entries.mjs';
+import { searchContentEntriesPaged } from './content-search.mjs';
 import { ensureContentModelStorageSchema } from './content-model-storage.mjs';
 
 let schemaEnsured = false;
@@ -67,32 +68,13 @@ export function searchProducts(rawQuery, limit = 20, { languageCode = null } = {
 
 export function searchProductsPaged(rawQuery, { page = 1, limit = 20, languageCode = null } = {}) {
   ensureProductsSchema();
-  const normalizedQuery = String(rawQuery ?? '').trim().toLowerCase();
-  const result = listContentEntriesPaged('product', {
+  return searchContentEntriesPaged('product', rawQuery, {
     page,
-    limit: 10000,
+    limit,
+    languageCode,
     visibleOnly: true,
-    languageCode
+    sortItems: compareBySortAndId
   });
-  const items = normalizedQuery
-    ? result.items.filter((item) => (
-      String(item.name || '').toLowerCase().includes(normalizedQuery)
-      || String(item.summary || '').toLowerCase().includes(normalizedQuery)
-      || String(item.code || '').toLowerCase().includes(normalizedQuery)
-    ))
-    : result.items;
-  const safeLimit = clampLimit(limit);
-  const safePage = Math.max(Number.parseInt(String(page), 10) || 1, 1);
-  const offset = (safePage - 1) * safeLimit;
-  return {
-    items: items.slice(offset, offset + safeLimit),
-    pagination: {
-      page: safePage,
-      limit: safeLimit,
-      total: items.length,
-      totalPages: Math.max(Math.ceil(items.length / safeLimit), 1)
-    }
-  };
 }
 
 export function createProduct(input) {
@@ -115,10 +97,6 @@ export function updateProduct(id, input) {
 export function deleteProduct(id) {
   ensureProductsSchema();
   return deleteContentEntry('product', id);
-}
-
-function clampLimit(limit) {
-  return Math.min(Math.max(Number.parseInt(String(limit), 10) || 20, 1), 10000);
 }
 
 function compareBySortAndId(left, right) {

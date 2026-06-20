@@ -14,26 +14,19 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tree, type TreeItemData, type TreeMoveParams } from '@/components/ui/tree'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { TemplateCodeEditor } from '@/components/TemplateCodeEditor'
 import { TemplateVariableReference } from '@/components/TemplateVariableReference'
 import { toast } from 'sonner'
 import type { Template, TemplateVariant, TemplateVersion } from '@/types'
-
-const templateTypes: Array<{ value: Template['type']; label: string; description: string }> = [
-  { value: 'home', label: '首页模板', description: '生成首页' },
-  { value: 'list', label: '列表模板', description: '生成栏目和分页列表' },
-  { value: 'content', label: '内容模板', description: '生成详情页和表单页面' },
-  { value: 'single', label: '单页模板', description: '生成单页栏目和封面式栏目页面' },
-  { value: 'component', label: '组件模板', description: '头部、底部、导航和公共片段' },
-]
 
 const previewModes = [
   { value: 'auto', label: '自动场景' },
@@ -56,7 +49,10 @@ const templateTypeLabelMap: Record<Template['type'], string> = {
   component: '组件模板',
 }
 
-type TemplateForm = Pick<Template, 'name' | 'code' | 'type' | 'engine' | 'content' | 'sort_order'>
+type TemplateForm = Pick<
+  Template,
+  'name' | 'code' | 'type' | 'engine' | 'tsx_source' | 'css_source' | 'global_css_source' | 'sort_order'
+>
 
 type EditorTarget = {
   templateId: number | null
@@ -83,6 +79,7 @@ export default function TemplateVariantsPage() {
   const [versionPopoverOpen, setVersionPopoverOpen] = useState(false)
   const [versionPreview, setVersionPreview] = useState<TemplateVersion | null>(null)
   const [previewMode, setPreviewMode] = useState('auto')
+  const [editorTab, setEditorTab] = useState('tsx')
   const [deleteThemeDialogOpen, setDeleteThemeDialogOpen] = useState(false)
   const [templateDeleteDialogOpen, setTemplateDeleteDialogOpen] = useState(false)
   const [deletingTreeItem, setDeletingTreeItem] = useState<TemplateLibraryNode | null>(null)
@@ -94,7 +91,9 @@ export default function TemplateVariantsPage() {
     code: '',
     type: 'home',
     engine: 'tsx',
-    content: '',
+    tsx_source: '',
+    css_source: '',
+    global_css_source: '',
     sort_order: 0,
   })
   const { data: themesData, isLoading: isThemesLoading, error: themesError } = useQuery({
@@ -258,7 +257,9 @@ export default function TemplateVariantsPage() {
         code: '',
         type: 'content',
         engine: 'tsx',
-        content: '',
+        tsx_source: '',
+        css_source: '',
+        global_css_source: '',
         sort_order: 0,
       })
       return
@@ -268,7 +269,9 @@ export default function TemplateVariantsPage() {
       code: selectedTemplate.code,
       type: selectedTemplate.type,
       engine: selectedTemplate.engine || 'tsx',
-      content: selectedTemplate.content || '',
+      tsx_source: selectedTemplate.tsx_source || '',
+      css_source: selectedTemplate.css_source || '',
+      global_css_source: selectedTemplate.global_css_source || '',
       sort_order: selectedTemplate.sort_order || 0,
     })
   }, [selectedTemplate])
@@ -321,7 +324,7 @@ export default function TemplateVariantsPage() {
       if (!selectedTemplate) {
         throw new Error('未选择模板')
       }
-      await templatesApi.update(selectedTemplate.id, formData)
+      await templatesApi.update(selectedTemplate.id, buildTemplatePayload(formData))
       return templatesApi.publish(selectedTemplate.id)
     },
     onSuccess: () => {
@@ -343,7 +346,9 @@ export default function TemplateVariantsPage() {
         code,
         type: templateType,
         engine: 'tsx',
-        content: 'export default function Template() {\n  return <div>新模板</div>\n}\n',
+        tsx_source: 'export default function Template() {\n  return <div>新模板</div>\n}\n',
+        css_source: '',
+        global_css_source: '',
         status: 'published',
         sort_order: templateCount + 1,
       })
@@ -377,13 +382,7 @@ export default function TemplateVariantsPage() {
         type: 'component',
         engine: 'tsx',
         status: 'published',
-        content: [
-          'export const scss = String.raw`',
-          '.component-root {',
-          '  display: block;',
-          '}',
-          '`;',
-          '',
+        tsx_source: [
           'export default function ComponentTemplate({ children, slots = {}, title = "" }) {',
           '  return (',
           '    <section className="component-root">',
@@ -396,6 +395,8 @@ export default function TemplateVariantsPage() {
           '}',
           '',
         ].join('\n'),
+        css_source: ['.component-root {', '  display: block;', '}', ''].join('\n'),
+        global_css_source: '',
         sort_order: themeComponentTemplates.length + 1,
       })
       if (!created.data?.id) {
@@ -435,7 +436,7 @@ export default function TemplateVariantsPage() {
 
   const createThemeMutation = useMutation({
     mutationFn: () => templateVariantsApi.create(buildNewThemePayload(selectedTheme, themes.length + 1)),
-    onSuccess: (response) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['themes'] })
       queryClient.invalidateQueries({ queryKey: ['selected-theme'] })
       toast.success('主题已创建')
@@ -522,7 +523,7 @@ export default function TemplateVariantsPage() {
 
   const previewMutation = useMutation({
     mutationFn: () => templatesApi.preview({
-      ...formData,
+      ...buildTemplatePayload(formData),
       preview_context: { mode: resolvePreviewMode(previewMode) },
     }),
     onSuccess: (response) => {
@@ -549,7 +550,9 @@ export default function TemplateVariantsPage() {
           code: response.data.code,
           type: response.data.type,
           engine: response.data.engine || 'tsx',
-          content: response.data.content || '',
+          tsx_source: response.data.tsx_source || '',
+          css_source: response.data.css_source || '',
+          global_css_source: response.data.global_css_source || '',
           sort_order: response.data.sort_order || 0,
         })
       }
@@ -799,7 +802,7 @@ export default function TemplateVariantsPage() {
                     </PopoverTrigger>
                     <PopoverContent align="start" className="w-[680px] p-0">
                       <TemplateVersionPopover
-                        currentContent={formData.content}
+                        currentContent={formData.tsx_source || ''}
                         versions={versionsData?.data || []}
                         isLoading={isVersionsLoading}
                         isRestoring={restoreVersionMutation.isPending}
@@ -841,14 +844,48 @@ export default function TemplateVariantsPage() {
               <div className="flex min-h-0 flex-col gap-4 pr-1">
                 <div className="flex min-h-0 flex-1 flex-col">
                   <div className="grid min-h-0 flex-1 gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
-                    <TemplateCodeEditor
-                      id="template-content"
-                      value={formData.content}
-                      onChange={(content) => setFormData({ ...formData, content })}
-                      placeholder="模板内容"
-                      height="100%"
-                      className="h-full min-h-[420px]"
-                    />
+                    <Tabs value={editorTab} onValueChange={setEditorTab} className="flex min-h-0 flex-col rounded border">
+                      <div className="border-b px-3 pt-3">
+                        <TabsList className="justify-start">
+                          <TabsTrigger value="tsx">模板内容</TabsTrigger>
+                          <TabsTrigger value="css">模板样式</TabsTrigger>
+                          <TabsTrigger value="global-css">全局样式</TabsTrigger>
+                        </TabsList>
+                      </div>
+                      <TabsContent value="tsx" className="mt-0 flex-1 p-3">
+                        <TemplateCodeEditor
+                          id="template-content"
+                          value={formData.tsx_source || ''}
+                          onChange={(tsx_source) => setFormData((current) => ({ ...current, tsx_source }))}
+                          placeholder="输入 TSX 模板内容"
+                          height="100%"
+                          className="h-full min-h-[420px]"
+                        />
+                      </TabsContent>
+                      <TabsContent value="css" className="mt-0 flex-1 p-3">
+                        <TemplateCodeEditor
+                          id="template-css"
+                          value={formData.css_source || ''}
+                          onChange={(css_source) => setFormData((current) => ({ ...current, css_source }))}
+                          placeholder="输入当前模板的局部样式"
+                          height="100%"
+                          className="h-full min-h-[420px]"
+                        />
+                      </TabsContent>
+                      <TabsContent value="global-css" className="mt-0 flex-1 p-3">
+                        <div className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                          此区域样式会进入全站公共 CSS，影响当前主题下所有页面。
+                        </div>
+                        <TemplateCodeEditor
+                          id="template-global-css"
+                          value={formData.global_css_source || ''}
+                          onChange={(global_css_source) => setFormData((current) => ({ ...current, global_css_source }))}
+                          placeholder="输入需要进入全站公共包的样式"
+                          height="100%"
+                          className="h-full min-h-[380px]"
+                        />
+                      </TabsContent>
+                    </Tabs>
                     <div className="min-h-0 overflow-auto">
                       <TemplateVariableReference type={formData.type} />
                     </div>
@@ -1023,6 +1060,15 @@ function buildNewThemePayload(baseTheme: TemplateVariant | null, nextIndex: numb
   }
 }
 
+function buildTemplatePayload(formData: TemplateForm): TemplateForm {
+  return {
+    ...formData,
+    tsx_source: formData.tsx_source || '',
+    css_source: formData.css_source || '',
+    global_css_source: formData.global_css_source || '',
+  }
+}
+
 function getApiErrorMessage(error: unknown, fallback: string) {
   if (error && typeof error === 'object' && 'response' in error) {
     const response = (error as { response?: { data?: { message?: string } } }).response
@@ -1160,7 +1206,7 @@ function TemplateVersionPopover({
         ) : versions.length === 0 ? (
           <div className="text-sm text-muted-foreground">暂无历史版本</div>
         ) : versions.map((version) => {
-          const diff = summarizeContentDiff(currentContent, version.content || '')
+          const diff = summarizeContentDiff(currentContent, version.tsx_source || '')
           return (
             <div key={version.id} className="grid gap-2 rounded bg-muted/50 p-2 text-sm md:grid-cols-[1fr_auto]">
               <div className="min-w-0">
@@ -1171,7 +1217,7 @@ function TemplateVersionPopover({
                 </div>
                 <div className="mt-1 truncate text-xs text-muted-foreground">{version.note || '发布前版本'}</div>
                 <div className="mt-1 text-xs text-muted-foreground">
-                  当前草稿 {currentContent.length} 字符，历史版本 {version.content.length} 字符，{diff}
+                  当前草稿 {currentContent.length} 字符，历史版本 {(version.tsx_source || '').length} 字符，{diff}
                 </div>
               </div>
               <div className="flex items-center justify-end gap-2">
@@ -1216,6 +1262,14 @@ function TemplateVersionCodeDialog({
   templateName: string
   version: TemplateVersion | null
 }) {
+  const [versionTab, setVersionTab] = useState('tsx')
+
+  useEffect(() => {
+    if (open) {
+      setVersionTab('tsx')
+    }
+  }, [open, version?.id])
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="h-[86vh] max-w-[1180px] grid-rows-[auto_minmax(0,1fr)] p-4">
@@ -1231,13 +1285,42 @@ function TemplateVersionCodeDialog({
               备注：{version.note}
             </div>
           ) : null}
-          <TemplateCodeEditor
-            value={version?.content || ''}
-            onChange={() => {}}
-            readOnly
-            height="100%"
-            className="h-full min-h-[420px]"
-          />
+          <Tabs value={versionTab} onValueChange={setVersionTab} className="flex min-h-0 flex-col rounded border">
+            <div className="border-b px-3 pt-3">
+              <TabsList className="justify-start">
+                <TabsTrigger value="tsx">模板内容</TabsTrigger>
+                <TabsTrigger value="css">模板样式</TabsTrigger>
+                <TabsTrigger value="global-css">全局样式</TabsTrigger>
+              </TabsList>
+            </div>
+            <TabsContent value="tsx" className="mt-0 flex-1 p-3">
+              <TemplateCodeEditor
+                value={version?.tsx_source || ''}
+                onChange={() => {}}
+                readOnly
+                height="100%"
+                className="h-full min-h-[420px]"
+              />
+            </TabsContent>
+            <TabsContent value="css" className="mt-0 flex-1 p-3">
+              <TemplateCodeEditor
+                value={version?.css_source || ''}
+                onChange={() => {}}
+                readOnly
+                height="100%"
+                className="h-full min-h-[420px]"
+              />
+            </TabsContent>
+            <TabsContent value="global-css" className="mt-0 flex-1 p-3">
+              <TemplateCodeEditor
+                value={version?.global_css_source || ''}
+                onChange={() => {}}
+                readOnly
+                height="100%"
+                className="h-full min-h-[420px]"
+              />
+            </TabsContent>
+          </Tabs>
         </div>
       </DialogContent>
     </Dialog>

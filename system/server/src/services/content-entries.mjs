@@ -36,8 +36,7 @@ function buildMainTableSelect(modelCode, alias = 'e') {
     'primary_image',
     'is_visible',
     'is_featured_home',
-    'sort_order',
-    'legacy_extra'
+    'sort_order'
   ];
 
   const selectParts = allPossibleFields.map(field => {
@@ -56,13 +55,12 @@ function buildMainTableSelect(modelCode, alias = 'e') {
   return selectParts.join(',\n        ');
 }
 
-/**
- * 获取翻译表的发布时间字段表达式
- * 所有模型统一使用 created_at（已删除 published_at 字段）
- */
-function getTranslationPublishedAtExpr(modelCode, translationAlias, defaultTranslationAlias, entryAlias) {
-  // 所有模型统一使用 created_at
+function getTranslationCreatedAtExpr(translationAlias, defaultTranslationAlias, entryAlias) {
   return `coalesce(${translationAlias}.created_at, ${defaultTranslationAlias}.created_at, ${entryAlias}.created_at)`;
+}
+
+function getTranslationTemplateDataExpr(selectedAlias, defaultAlias) {
+  return `coalesce(${selectedAlias}.template_data_json, ${defaultAlias}.template_data_json)`;
 }
 
 export function listContentEntries(modelCode, {
@@ -97,10 +95,11 @@ export function listContentEntries(modelCode, {
         ${buildNameExpr('t', 'dt')} AS name,
         coalesce(t.summary, dt.summary, '') AS summary,
         coalesce(t.content_html, dt.content_html, '') AS content_html,
+        ${getTranslationTemplateDataExpr('t', 'dt')} AS template_data_json,
         coalesce(t.seo_title, dt.seo_title) AS seo_title,
         coalesce(t.seo_description, dt.seo_description) AS seo_description,
         coalesce(t.publish_status, dt.publish_status, 'published') AS translation_publish_status,
-        ${getTranslationPublishedAtExpr(modelCode, 't', 'dt', 'e')} AS translation_published_at,
+        ${getTranslationCreatedAtExpr('t', 'dt', 'e')} AS translation_created_at,
         coalesce(tc.name, dtc.name, '') AS category_name,
         coalesce(l.code, dl.code, ?) AS current_language_code
       FROM ${quoteIdentifier(tableName)} e
@@ -192,10 +191,11 @@ export function listContentEntriesPaged(modelCode, {
         ${buildNameExpr('t', 'dt')} AS name,
         coalesce(t.summary, dt.summary, '') AS summary,
         coalesce(t.content_html, dt.content_html, '') AS content_html,
+        ${getTranslationTemplateDataExpr('t', 'dt')} AS template_data_json,
         coalesce(t.seo_title, dt.seo_title) AS seo_title,
         coalesce(t.seo_description, dt.seo_description) AS seo_description,
         coalesce(t.publish_status, dt.publish_status, 'published') AS translation_publish_status,
-        ${getTranslationPublishedAtExpr(modelCode, 't', 'dt', 'e')} AS translation_published_at,
+        ${getTranslationCreatedAtExpr('t', 'dt', 'e')} AS translation_created_at,
         coalesce(tc.name, dtc.name, '') AS category_name,
         coalesce(l.code, dl.code, ?) AS current_language_code
       FROM ${quoteIdentifier(tableName)} e
@@ -255,10 +255,11 @@ export function getContentEntryById(modelCode, id, {
         ${buildNameExpr('t', 'dt')} AS name,
         coalesce(t.summary, dt.summary, '') AS summary,
         coalesce(t.content_html, dt.content_html, '') AS content_html,
+        ${getTranslationTemplateDataExpr('t', 'dt')} AS template_data_json,
         coalesce(t.seo_title, dt.seo_title) AS seo_title,
         coalesce(t.seo_description, dt.seo_description) AS seo_description,
         coalesce(t.publish_status, dt.publish_status, 'published') AS translation_publish_status,
-        ${getTranslationPublishedAtExpr(modelCode, 't', 'dt', 'e')} AS translation_published_at,
+        ${getTranslationCreatedAtExpr('t', 'dt', 'e')} AS translation_created_at,
         coalesce(tc.name, dtc.name, '') AS category_name,
         coalesce(l.code, dl.code, ?) AS current_language_code
       FROM ${quoteIdentifier(tableName)} e
@@ -298,6 +299,8 @@ export function getContentEntryById(modelCode, id, {
           title: translation.name,
           summary: translation.summary,
           content_html: translation.content_html,
+          template_data_json: translation.template_data_json,
+          template_data: parseTemplateDataJson(translation.template_data_json),
           seo_title: translation.seo_title,
           seo_description: translation.seo_description,
           publish_status: translation.publish_status
@@ -342,8 +345,6 @@ export function createContentEntry(modelCode, input) {
   appendMainTableField(insertFields, insertValues, 'is_visible', payload.base.is_visible, mainFields);
   appendMainTableField(insertFields, insertValues, 'is_featured_home', payload.base.is_featured_home, mainFields);
   appendMainTableField(insertFields, insertValues, 'sort_order', payload.base.sort_order, mainFields);
-  appendMainTableField(insertFields, insertValues, 'legacy_extra', payload.base.legacy_extra, mainFields);
-
   insertFields.push('created_at', 'updated_at');
   insertValues.push(payload.base.created_at || now, now);
   const placeholders = insertFields.map(() => '?').join(', ');
@@ -390,7 +391,6 @@ export function updateContentEntry(modelCode, id, input) {
   appendMainTableAssignment(updateAssignments, updateValues, 'is_visible', payload.base.is_visible, mainFields);
   appendMainTableAssignment(updateAssignments, updateValues, 'is_featured_home', payload.base.is_featured_home, mainFields);
   appendMainTableAssignment(updateAssignments, updateValues, 'sort_order', payload.base.sort_order, mainFields);
-  appendMainTableAssignment(updateAssignments, updateValues, 'legacy_extra', payload.base.legacy_extra, mainFields);
   updateAssignments.push('created_at = ?', 'updated_at = ?');
   updateValues.push(payload.base.created_at || existing.created_at || now, now, id);
 
@@ -422,10 +422,6 @@ export function deleteContentEntry(modelCode, id) {
   return existing;
 }
 
-export function migrateLegacyContentNodesToModelTables(modelCode) {
-  throw new Error(`legacy content migration removed: ${modelCode}`);
-}
-
 function loadEntryTranslations(modelCode, entryIds) {
   if (!entryIds.length) {
     return new Map();
@@ -433,7 +429,6 @@ function loadEntryTranslations(modelCode, entryIds) {
   const translationTableName = getTranslationTableName(modelCode);
   const placeholders = entryIds.map(() => '?').join(', ');
 
-  // 所有翻译表统一使用 created_at（已删除 published_at 字段）
   const rows = queryAll(
     `
       SELECT
@@ -444,10 +439,10 @@ function loadEntryTranslations(modelCode, entryIds) {
         t.name,
         t.summary,
         t.content_html,
+        t.template_data_json,
         t.seo_title,
         t.seo_description,
-        t.publish_status,
-        t.created_at AS published_at
+        t.publish_status
       FROM ${quoteIdentifier(translationTableName)} t
       INNER JOIN languages l ON l.id = t.language_id
       WHERE t.entry_id IN (${placeholders})
@@ -466,10 +461,10 @@ function loadEntryTranslations(modelCode, entryIds) {
       name: row.name || '',
       summary: row.summary || '',
       content_html: row.content_html || '',
+      template_data_json: row.template_data_json || null,
       seo_title: row.seo_title || '',
       seo_description: row.seo_description || '',
-      publish_status: normalizePublishStatus(row.publish_status),
-      published_at: toNullableString(row.published_at)
+      publish_status: normalizePublishStatus(row.publish_status)
     });
     map.set(Number(row.entry_id), list);
   }
@@ -495,7 +490,6 @@ function appendMainTableAssignment(assignments, values, fieldName, fieldValue, m
 function saveEntryTranslations(translationTableName, entryId, translations, now) {
   const languageIdByCode = new Map(listLanguages().map((language) => [language.code, language.id]));
 
-  // 所有翻译表统一不使用 published_at 字段（已删除）
   for (const [languageCode, translation] of Object.entries(translations || {})) {
     const languageId = languageIdByCode.get(languageCode);
     if (!languageId) {
@@ -510,16 +504,18 @@ function saveEntryTranslations(translationTableName, entryId, translations, now)
           name,
           summary,
           content_html,
+          template_data_json,
           seo_title,
           seo_description,
           publish_status,
           created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(entry_id, language_id) DO UPDATE SET
           name = excluded.name,
           summary = excluded.summary,
           content_html = excluded.content_html,
+          template_data_json = excluded.template_data_json,
           seo_title = excluded.seo_title,
           seo_description = excluded.seo_description,
           publish_status = excluded.publish_status,
@@ -531,6 +527,7 @@ function saveEntryTranslations(translationTableName, entryId, translations, now)
         String(translation?.name || '').trim(),
         String(translation?.summary || ''),
         String(translation?.content_html || ''),
+        normalizeTemplateDataJson(translation?.template_data_json ?? translation?.template_data ?? null),
         toNullableString(translation?.seo_title),
         toNullableString(translation?.seo_description),
         normalizePublishStatus(translation?.publish_status),
@@ -568,6 +565,7 @@ function normalizeContentEntryInput(modelCode, input, { existingEntry = null } =
     name: modelCode === 'news' ? String(existing.title || existing.name || '') : String(existing.name || ''),
     summary: String(existing.summary || ''),
     content_html: String(existing.content_html || ''),
+    template_data_json: existing.template_data_json ?? existing.template_data ?? null,
     seo_title: toNullableString(existing.seo_title),
     seo_description: toNullableString(existing.seo_description),
     publish_status: normalizePublishStatus(existing.publish_status),
@@ -592,7 +590,6 @@ function normalizeContentEntryInput(modelCode, input, { existingEntry = null } =
       is_visible: toBooleanInt(baseInput.is_visible ?? existing.is_visible, 1),
       is_featured_home: toBooleanInt(baseInput.is_featured_home ?? existing.is_featured_home ?? existing.is_featured, 0),
       sort_order: toInteger(baseInput.sort_order ?? existing.sort_order, 0),
-      legacy_extra: baseInput.legacy_extra ?? existing.legacy_extra ?? null,
       created_at: toNullableString(baseInput.created_at ?? existing.created_at)
     },
     translations
@@ -626,6 +623,7 @@ function normalizeTranslations(translations, {
       name: translationName,
       summary: String(value?.summary ?? existingTranslations?.[languageCode]?.summary ?? fallbackBase.summary ?? ''),
       content_html: String(value?.content_html ?? existingTranslations?.[languageCode]?.content_html ?? fallbackBase.content_html ?? ''),
+      template_data_json: normalizeTemplateDataJson(value?.template_data_json ?? value?.template_data ?? existingTranslations?.[languageCode]?.template_data_json ?? existingTranslations?.[languageCode]?.template_data ?? fallbackBase.template_data_json ?? fallbackBase.template_data ?? null),
       seo_title: toNullableString(value?.seo_title ?? existingTranslations?.[languageCode]?.seo_title ?? fallbackBase.seo_title),
       seo_description: toNullableString(value?.seo_description ?? existingTranslations?.[languageCode]?.seo_description ?? fallbackBase.seo_description),
       publish_status: normalizePublishStatus(value?.publish_status ?? existingTranslations?.[languageCode]?.publish_status ?? fallbackBase.publish_status)
@@ -637,6 +635,7 @@ function normalizeTranslations(translations, {
       name: String(fallbackBase.name || '').trim(),
       summary: String(fallbackBase.summary || ''),
       content_html: String(fallbackBase.content_html || ''),
+      template_data_json: normalizeTemplateDataJson(fallbackBase.template_data_json ?? fallbackBase.template_data ?? null),
       seo_title: toNullableString(fallbackBase.seo_title),
       seo_description: toNullableString(fallbackBase.seo_description),
       publish_status: normalizePublishStatus(fallbackBase.publish_status)
@@ -655,6 +654,7 @@ function resolveDefaultTranslation(translations, defaultLanguageCode) {
     name: '',
     summary: '',
     content_html: '',
+    template_data_json: null,
     seo_title: null,
     seo_description: null,
     publish_status: 'published'
@@ -669,11 +669,12 @@ function mapEntryRow(modelCode, row) {
     name: row.name || '',
     summary: row.summary || '',
     content_html: row.content_html || '',
+    template_data_json: row.template_data_json || null,
+    template_data: parseTemplateDataJson(row.template_data_json),
     seo_title: row.seo_title ?? null,
     seo_description: row.seo_description ?? null,
     custom_url: row.custom_url || null,
     publish_status: normalizePublishStatus(row.translation_publish_status || row.publish_status),
-    legacy_extra: row.legacy_extra || null,
     code: row.code || '',
     column_id: toNullableInteger(row.column_id),
     images,
@@ -754,6 +755,36 @@ function normalizeSingleImage(value) {
     return normalizeUploadedRelativePath(String(value[0] || '').trim());
   }
   return normalizeUploadedRelativePath(String(value || '').trim());
+}
+
+function normalizeTemplateDataJson(value) {
+  if (value == null || value === '') {
+    return null;
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return null;
+    }
+    JSON.parse(trimmed);
+    return trimmed;
+  }
+  if (typeof value !== 'object') {
+    throw new Error('template_data_json must be a JSON object or array');
+  }
+  return JSON.stringify(value);
+}
+
+function parseTemplateDataJson(value) {
+  if (!value) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function normalizeEntryCustomUrl(value) {

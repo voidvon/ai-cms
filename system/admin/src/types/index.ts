@@ -37,6 +37,8 @@ export interface Product {
   code?: string;
   summary?: string;
   content_html?: string;
+  template_data_json?: string | null;
+  template_data?: Record<string, unknown> | null;
   images?: string[];
   primary_image?: string;
   is_featured_home: number;
@@ -52,6 +54,8 @@ export interface ProductTranslation {
   name: string;
   summary?: string;
   content_html?: string;
+  template_data_json?: string | null;
+  template_data?: Record<string, unknown> | null;
   seo_title?: string;
   seo_description?: string;
   publish_status: PublishStatus;
@@ -70,6 +74,8 @@ export interface News {
   title: string;
   summary?: string;
   content_html?: string;
+  template_data_json?: string | null;
+  template_data?: Record<string, unknown> | null;
   image?: string;
   picture?: string;
   is_featured?: number;
@@ -86,6 +92,8 @@ export interface NewsTranslation {
   title: string;
   summary?: string;
   content_html?: string;
+  template_data_json?: string | null;
+  template_data?: Record<string, unknown> | null;
   seo_title?: string;
   seo_description?: string;
   publish_status: PublishStatus;
@@ -122,6 +130,7 @@ export interface TemplateVariant {
   id: number;
   template_name: string;
   is_selected: number;
+  source_theme_id?: number | null;
   theme_templates?: Template[];
 }
 
@@ -132,14 +141,17 @@ export interface Template {
   type: 'home' | 'list' | 'content' | 'single' | 'component';
   code: string;
   engine: 'tsx';
-  content: string;
-  published_content?: string | null;
+  tsx_source: string;
+  css_source: string;
+  global_css_source: string;
+  published_tsx_source?: string | null;
+  published_css_source?: string | null;
+  published_global_css_source?: string | null;
   status: 'draft' | 'published';
   is_default: number;
   sort_order: number;
   created_at?: string;
   updated_at?: string;
-  published_at?: string | null;
 }
 
 export interface TemplateBinding {
@@ -182,7 +194,9 @@ export interface TemplateVersion {
   template_id: number;
   version_no: number;
   engine: Template['engine'];
-  content: string;
+  tsx_source: string;
+  css_source: string;
+  global_css_source: string;
   note?: string | null;
   created_at?: string;
 }
@@ -205,6 +219,7 @@ export interface ContentModelField {
   is_listed?: number;
   is_editable?: number;
   is_translatable?: number;
+  is_searchable?: number;
   settings_json?: string | null;
   sort_order: number;
   created_at?: string;
@@ -288,11 +303,6 @@ export interface SiteConfigTranslation {
   seo_home_description?: string | null;
 }
 
-export interface SiteHreflangLink {
-  lang: string;
-  url: string;
-}
-
 export interface SiteConfig {
   id?: number;
   web_name: string;
@@ -309,19 +319,10 @@ export interface SiteConfig {
   web_mobile: string;
   web_copyright: string;
   web_author: string;
-  seo_default_image?: string | null;
-  seo_site_name?: string | null;
-  seo_twitter_handle?: string | null;
-  seo_organization_name?: string | null;
-  seo_same_as?: string[];
-  seo_same_as_text?: string;
-  seo_hreflang_links?: SiteHreflangLink[];
-  seo_hreflang_links_text?: string;
   seo_default_title?: string | null;
   seo_default_description?: string | null;
   seo_home_title?: string | null;
   seo_home_description?: string | null;
-  legacy_extra?: string | null;
   current_language_code?: string;
   translations?: Record<string, SiteConfigTranslation>;
 }

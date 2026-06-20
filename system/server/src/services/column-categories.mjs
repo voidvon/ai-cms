@@ -122,14 +122,13 @@ function mapColumnToCategory(column, rootColumn = null) {
     detail_rule: column.detail_rule || null,
     summary: column.summary ?? '',
     content_html: column.content_html ?? '',
+    template_data_json: column.template_data_json ?? null,
+    template_data: column.template_data ?? null,
     seo_title: column.seo_title ?? null,
     seo_description: column.seo_description ?? null,
     publish_status: column.publish_status ?? 'published',
-    published_at: column.published_at ?? null,
     is_visible: toInteger(column.is_visible, 1),
     is_featured_home: toInteger(column.is_featured_home, 0),
-    legacy_extra: column.legacy_extra || null,
-    page_data: column.page_data || null,
     current_language_code: column.current_language_code,
     translations
   };
@@ -275,8 +274,7 @@ export function createColumnCategory(model, input) {
       seo_title: toNullableString(input?.seo_title),
       seo_description: toNullableString(input?.seo_description),
       content_html: String(input?.content_html || ''),
-      publish_status: String(input?.publish_status || 'published') === 'draft' ? 'draft' : 'published',
-      published_at: toNullableString(input?.published_at)
+      publish_status: String(input?.publish_status || 'published') === 'draft' ? 'draft' : 'published'
     }
   };
   const defaultTranslation = translations[defaultLanguageCode] || Object.values(translations)[0] || {};
@@ -302,8 +300,7 @@ export function createColumnCategory(model, input) {
       sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
       is_visible: 1,
       dir_name: dirName,
-      detail_rule: toNullableString(input?.base?.detail_rule ?? input?.detail_rule),
-      legacy_extra: input?.base?.legacy_extra ?? input?.legacy_extra ?? null
+      detail_rule: toNullableString(input?.base?.detail_rule ?? input?.detail_rule)
     },
     translations
   });
@@ -326,7 +323,6 @@ export function createColumnCategory(model, input) {
         route_path: finalRoutePath,
         dir_name: dirName,
         detail_rule: null,
-        legacy_extra: input?.base?.legacy_extra ?? input?.legacy_extra ?? null,
         sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
         is_visible: 1,
         custom_url: null
@@ -362,8 +358,7 @@ export function createColumnCategoryByRoot(rootColumnId, input) {
       seo_title: toNullableString(input?.seo_title),
       seo_description: toNullableString(input?.seo_description),
       content_html: String(input?.content_html || ''),
-      publish_status: String(input?.publish_status || 'published') === 'draft' ? 'draft' : 'published',
-      published_at: toNullableString(input?.published_at)
+      publish_status: String(input?.publish_status || 'published') === 'draft' ? 'draft' : 'published'
     }
   };
   const defaultTranslation = translations[defaultLanguageCode] || Object.values(translations)[0] || {};
@@ -388,8 +383,7 @@ export function createColumnCategoryByRoot(rootColumnId, input) {
       dir_name: dirName,
       detail_rule: rootContext.columnType === 'list'
         ? toNullableString(input?.base?.detail_rule ?? input?.detail_rule)
-        : null,
-      legacy_extra: input?.base?.legacy_extra ?? input?.legacy_extra ?? null
+        : null
     },
     translations
   });
@@ -412,7 +406,6 @@ export function createColumnCategoryByRoot(rootColumnId, input) {
         route_path: finalRoutePath,
         dir_name: dirName,
         detail_rule: null,
-        legacy_extra: input?.base?.legacy_extra ?? input?.legacy_extra ?? null,
         sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
         is_visible: 1,
         custom_url: null
@@ -469,7 +462,6 @@ export function updateColumnCategory(model, id, input) {
         route_path: routePath,
         dir_name: dirName,
         detail_rule: null,
-        legacy_extra: input?.base?.legacy_extra ?? input?.legacy_extra ?? column.legacy_extra ?? null,
         sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order ?? column.sort_order, 0),
         is_visible: toInteger(input?.base?.is_visible ?? column.is_visible, 1),
         custom_url: null
@@ -527,7 +519,6 @@ export function updateColumnCategoryInRoot(rootColumnId, id, input) {
         route_path: routePath,
         dir_name: dirName,
         detail_rule: null,
-        legacy_extra: input?.base?.legacy_extra ?? input?.legacy_extra ?? column.legacy_extra ?? null,
         sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order ?? column.sort_order, 0),
         is_visible: toInteger(input?.base?.is_visible ?? column.is_visible, 1),
         custom_url: null
@@ -602,8 +593,7 @@ function normalizeCategoryTranslations(input, existingTranslations, column) {
       seo_description: toNullableString(input?.seo_description ?? fallbackTranslation.seo_description ?? column?.seo_description),
       publish_status: String(input?.publish_status ?? fallbackTranslation.publish_status ?? column?.publish_status ?? 'published') === 'draft'
         ? 'draft'
-        : 'published',
-      published_at: toNullableString(input?.published_at ?? fallbackTranslation.published_at ?? column?.published_at)
+        : 'published'
     }
   };
 }

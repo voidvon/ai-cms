@@ -847,6 +847,7 @@ export default function ColumnsPage() {
               ) : (
                 <ProductTable
                   items={activeItems as Product[]}
+                  columns={columns}
                   onEdit={handleEditProduct}
                   onDelete={(id) => handleDelete({ type: 'product', id })}
                 />
@@ -1150,10 +1151,12 @@ export default function ColumnsPage() {
 
 function ProductTable({
   items,
+  columns,
   onEdit,
   onDelete,
 }: {
   items: Product[]
+  columns: Column[]
   onEdit: (item: Product) => void
   onDelete: (id: number) => void
 }) {
@@ -1184,7 +1187,7 @@ function ProductTable({
                 <div className="flex items-center gap-1">
                   <span>{product.name}</span>
                   <a
-                    href={buildProductDetailPreviewHref(product.id)}
+                    href={buildProductDetailPreviewHref(product, columns)}
                     target="_blank"
                     rel="noreferrer"
                     className="inline-flex size-4 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none group-hover/title:opacity-100"
@@ -1227,8 +1230,54 @@ function ProductTable({
   )
 }
 
-function buildProductDetailPreviewHref(productId: number) {
-  return `/product/${productId}.html`
+function buildProductDetailPreviewHref(product: Product, columns: Column[]) {
+  const productId = Number(product.id) || 0
+  const column = columns.find((item) => item.id === product.column_id) || null
+  const routePath = ensureTrailingSlash(column?.route_path || '/products/')
+  const detailRule = String(column?.detail_rule || '').trim()
+  const customUrl = String(product.custom_url || '').trim()
+
+  if (customUrl) {
+    return resolveRelativePublicUrl(customUrl, routePath)
+  }
+  if (detailRule === '{id}.html') {
+    return `${routePath}${productId}.html`
+  }
+  if (detailRule === '{id}/index.html') {
+    return `${routePath}${productId}/`
+  }
+  if (detailRule === 'detail/{id}.html') {
+    return `${routePath}detail/${productId}.html`
+  }
+  if (detailRule && !detailRule.includes('{')) {
+    return resolveRelativePublicUrl(detailRule, routePath)
+  }
+  return `${routePath}detail/${productId}.html`
+}
+
+function ensureTrailingSlash(value: string) {
+  const normalized = String(value || '').trim()
+  if (!normalized) {
+    return '/'
+  }
+  return normalized.endsWith('/') ? normalized : `${normalized}/`
+}
+
+function resolveRelativePublicUrl(value: string, parentPath: string) {
+  const normalizedValue = String(value || '').trim()
+  if (!normalizedValue) {
+    return parentPath
+  }
+  if (normalizedValue.startsWith('/')) {
+    return normalizePublicUrl(normalizedValue)
+  }
+  return normalizePublicUrl(`${ensureTrailingSlash(parentPath)}${normalizedValue}`)
+}
+
+function normalizePublicUrl(value: string) {
+  const normalized = value.startsWith('/') ? value : `/${value}`
+  const collapsed = normalized.replace(/\/{2,}/g, '/')
+  return collapsed.replace(/\/index\.html$/i, '/')
 }
 
 function NewsTable({

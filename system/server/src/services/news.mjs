@@ -9,6 +9,7 @@ import {
   listContentEntriesPaged,
   updateContentEntry
 } from './content-entries.mjs';
+import { searchContentEntriesPaged } from './content-search.mjs';
 import { ensureContentModelStorageSchema } from './content-model-storage.mjs';
 
 let schemaEnsured = false;
@@ -62,6 +63,22 @@ export function getNewsById(id, { languageCode = null, includeTranslations = fal
   });
 }
 
+export function searchNews(rawQuery, limit = 20, { languageCode = null } = {}) {
+  ensureNewsSchema();
+  return searchNewsPaged(rawQuery, { page: 1, limit, languageCode }).items;
+}
+
+export function searchNewsPaged(rawQuery, { page = 1, limit = 20, languageCode = null } = {}) {
+  ensureNewsSchema();
+  return searchContentEntriesPaged('news', rawQuery, {
+    page,
+    limit,
+    languageCode,
+    visibleOnly: true,
+    sortItems: compareByCreatedDesc
+  });
+}
+
 export function createNews(input) {
   ensureNewsSchema();
   return createContentEntry('news', input);
@@ -75,10 +92,6 @@ export function updateNews(id, input) {
 export function deleteNews(id) {
   ensureNewsSchema();
   return deleteContentEntry('news', id);
-}
-
-function clampLimit(limit) {
-  return Math.min(Math.max(Number.parseInt(String(limit), 10) || 20, 1), 10000);
 }
 
 function compareByCreatedDesc(left, right) {

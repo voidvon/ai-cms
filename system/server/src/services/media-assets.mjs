@@ -3,7 +3,6 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { UPLOADS_IMAGES_ROOT, UPLOAD_ALLOWED_EXTENSIONS, UPLOAD_MAX_SIZE_KB } from '../config.mjs';
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
-import { resolveUploadedFilePath } from './uploads.mjs';
 
 const PURPOSE_TARGETS = {
   product_cover: {
@@ -219,60 +218,6 @@ export function markMediaAssetStatusByPath(relativePath, status) {
     `,
     [status, normalizedPath],
   );
-}
-
-export function registerExistingMediaAsset({ relativePath, purpose, status = 'active' }) {
-  ensureMediaAssetsSchema();
-
-  const normalizedPath = String(relativePath || '').trim();
-  if (!normalizedPath) {
-    return null;
-  }
-
-  const fsPath = resolveUploadedFilePath(normalizedPath);
-  if (!fsPath || !fs.existsSync(fsPath)) {
-    return null;
-  }
-
-  const stat = fs.statSync(fsPath);
-  const extension = path.extname(fsPath).toLowerCase();
-  const normalizedPurpose = resolvePurpose(purpose);
-
-  execute(
-    `
-      INSERT INTO media_assets (
-        storage_driver,
-        purpose,
-        original_name,
-        mime_type,
-        file_ext,
-        file_size,
-        relative_path,
-        fs_path,
-        status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(relative_path) DO UPDATE SET
-        purpose = excluded.purpose,
-        mime_type = excluded.mime_type,
-        file_ext = excluded.file_ext,
-        file_size = excluded.file_size,
-        fs_path = excluded.fs_path,
-        status = excluded.status
-    `,
-    [
-      'local',
-      normalizedPurpose,
-      path.basename(fsPath),
-      MIME_BY_EXTENSION[extension] || PURPOSE_TARGETS[normalizedPurpose].mimeFallback,
-      extension,
-      stat.size,
-      normalizedPath,
-      fsPath,
-      normalizeStatus(status),
-    ],
-  );
-
-  return queryOne('SELECT id, relative_path, purpose, status FROM media_assets WHERE relative_path = ?', [normalizedPath]);
 }
 
 export function cleanupOrphanedMediaAssets({ purpose } = {}) {

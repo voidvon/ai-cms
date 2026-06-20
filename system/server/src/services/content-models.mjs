@@ -35,8 +35,7 @@ const FIELD_LABELS = {
   openings: '需求人数',
   contact_person: '联系人',
   phone: '联系电话',
-  created_at: '创建时间',
-  legacy_extra: '扩展数据'
+  created_at: '创建时间'
 };
 
 let schemaEnsured = false;

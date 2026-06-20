@@ -138,10 +138,10 @@ src/
 │   └── auth.mjs              # 认证中间件
 ├── routes/
 │   ├── auth.mjs              # 登录/登出
-│   ├── legacy.mjs            # 前台动态路由（搜索）
 │   ├── api/                  # REST API 路由
 │   │   ├── products.mjs
 │   │   ├── news.mjs
+│   │   ├── search.mjs
 │   │   ├── uploads.mjs
 │   │   ├── admin.mjs
 │   │   └── site-config.mjs
@@ -170,7 +170,6 @@ src/
 
 ✅ **生成的静态 HTML URL 完全不变**：
 - `/index.html`
-- `/product/123.html`
 - `/products/分类名/`
 - `/news/456.html`
 - 等等...
@@ -180,8 +179,8 @@ src/
 - 旧: `/spck/index.asp` → 新: `/admin/dashboard`
 - 旧: `/manage/makehtml/index.asp` → 新: `/admin/build`
 
-✅ **前台动态 URL 保持兼容**：
-- `/search?keyword=xxx` - 正常工作
+✅ **前台动态搜索使用 API**：
+- `/api/search?q=xxx` - 正常工作
 
 ### Services 层无变化
 

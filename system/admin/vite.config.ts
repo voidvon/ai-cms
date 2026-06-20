@@ -29,18 +29,6 @@ export default defineConfig({
         target: apiProxyTarget,
         changeOrigin: true,
       },
-      '/UploadFile': {
-        target: apiProxyTarget,
-        changeOrigin: true,
-      },
-      '/uploadfile': {
-        target: apiProxyTarget,
-        changeOrigin: true,
-      },
-      '/upload': {
-        target: apiProxyTarget,
-        changeOrigin: true,
-      },
     },
   },
 })

@@ -19,12 +19,6 @@ type SiteConfigBaseForm = {
   icp_number: string
   web_qq: string
   web_mobile: string
-  seo_default_image: string
-  seo_site_name: string
-  seo_twitter_handle: string
-  seo_organization_name: string
-  seo_same_as_text: string
-  seo_hreflang_links_text: string
 }
 
 export default function SiteConfigPage() {
@@ -71,12 +65,6 @@ export default function SiteConfigPage() {
       icp_number: source.icp_number || '',
       web_qq: source.web_qq || '',
       web_mobile: source.web_mobile || '',
-      seo_default_image: source.seo_default_image || '',
-      seo_site_name: source.seo_site_name || '',
-      seo_twitter_handle: source.seo_twitter_handle || '',
-      seo_organization_name: source.seo_organization_name || '',
-      seo_same_as_text: source.seo_same_as_text || '',
-      seo_hreflang_links_text: source.seo_hreflang_links_text || '',
     })
     setTranslations(buildInitialTranslations(source, defaultLanguageCode, availableLanguageCodes))
     setActiveLanguage(source.current_language_code || defaultLanguageCode)
@@ -208,72 +196,6 @@ export default function SiteConfigPage() {
                 />
               </div>
             </div>
-
-            <div className="rounded border p-4 space-y-4">
-              <div>
-                <div className="font-medium">全局 SEO</div>
-                <div className="text-sm text-muted-foreground">分享图、站点名、组织名、社媒和 hreflang 为全站共用配置。</div>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="seo_default_image">默认分享图</Label>
-                  <Input
-                    id="seo_default_image"
-                    value={baseData.seo_default_image}
-                    onChange={(e) => setBaseData({ ...baseData, seo_default_image: e.target.value })}
-                    placeholder="/images/share/default.jpg"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="seo_site_name">Open Graph 站点名</Label>
-                  <Input
-                    id="seo_site_name"
-                    value={baseData.seo_site_name}
-                    onChange={(e) => setBaseData({ ...baseData, seo_site_name: e.target.value })}
-                    placeholder="请输入站点名"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="seo_organization_name">组织名称</Label>
-                  <Input
-                    id="seo_organization_name"
-                    value={baseData.seo_organization_name}
-                    onChange={(e) => setBaseData({ ...baseData, seo_organization_name: e.target.value })}
-                    placeholder="请输入组织名称"
-                  />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="seo_twitter_handle">Twitter 账号</Label>
-                  <Input
-                    id="seo_twitter_handle"
-                    value={baseData.seo_twitter_handle}
-                    onChange={(e) => setBaseData({ ...baseData, seo_twitter_handle: e.target.value })}
-                    placeholder="@example"
-                  />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="seo_same_as_text">社媒链接</Label>
-                  <Textarea
-                    id="seo_same_as_text"
-                    value={baseData.seo_same_as_text}
-                    onChange={(e) => setBaseData({ ...baseData, seo_same_as_text: e.target.value })}
-                    placeholder={"每行一个 URL"}
-                    rows={4}
-                  />
-                </div>
-                <div className="space-y-2 md:col-span-2">
-                  <Label htmlFor="seo_hreflang_links_text">hreflang 列表</Label>
-                  <Textarea
-                    id="seo_hreflang_links_text"
-                    value={baseData.seo_hreflang_links_text}
-                    onChange={(e) => setBaseData({ ...baseData, seo_hreflang_links_text: e.target.value })}
-                    placeholder={"每行一条，格式：zh-CN|https://example.com/"}
-                    rows={5}
-                  />
-                </div>
-              </div>
-            </div>
-
             <div className="rounded border p-4 space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <div>
@@ -422,12 +344,6 @@ function createEmptyBaseData(): SiteConfigBaseForm {
     icp_number: '',
     web_qq: '',
     web_mobile: '',
-    seo_default_image: '',
-    seo_site_name: '',
-    seo_twitter_handle: '',
-    seo_organization_name: '',
-    seo_same_as_text: '',
-    seo_hreflang_links_text: '',
   }
 }
 

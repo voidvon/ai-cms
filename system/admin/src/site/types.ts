@@ -13,16 +13,10 @@ export type SiteConfig = {
   web_mobile?: string | null
   web_author?: string | null
   web_copyright?: string | null
-  seo_site_name?: string | null
-  seo_organization_name?: string | null
   seo_default_title?: string | null
   seo_default_description?: string | null
   seo_home_title?: string | null
   seo_home_description?: string | null
-  seo_default_image?: string | null
-  seo_twitter_handle?: string | null
-  seo_same_as?: string[] | null
-  seo_hreflang_links?: Array<{ lang?: string | null; url?: string | null }> | null
   current_language_code?: string | null
 }
 
