@@ -806,7 +806,7 @@ function buildLegacyCommonProps(templateContext) {
     };
   });
 
-  // 构建siteColumns用于header导航（保留原始的顶级栏目结构）
+  // header 主导航直接来自现有栏目树，不再维护单独的导航配置根节点
   const siteColumns = buildLegacySiteColumns(templateContext.columns, {
     productCategories: templateContext.productCategories,
     newsEntries,
@@ -838,6 +838,7 @@ function buildLegacyCommonProps(templateContext) {
     productCategories: templateContext.productCategories,
     corporationCategories: templateContext.corporationCategories,
     siteColumns,
+    utilityColumns: buildHeaderUtilityColumns(templateContext.columns),
     footerColumns,
     footerProductCategories,
     fragments: {
@@ -954,11 +955,8 @@ function buildLegacyHomePageProps(templateContext) {
     }));
   return {
     ...buildLegacyCommonProps(templateContext),
-    siteColumns: buildLegacySiteColumns(templateContext.columns, {
-      activeColumnId: normalizeInteger(homeColumn?.id, 0),
-      productCategories: templateContext.productCategories,
-      newsEntries: templateContext.newsEntries,
-      templateContext
+    siteColumns: buildTemplateContextSiteColumns(templateContext, {
+      activeColumnId: normalizeInteger(homeColumn?.id, 0)
     }),
     secondaryMenuItems: buildLegacyRootColumnMenuItems(templateContext.columns),
     newsIndexHtml: buildLegacyIndexNews(),
@@ -987,6 +985,58 @@ function buildLegacyRootColumnMenuItems(columns) {
     url: item.url || '',
     active: false
   })).filter((item) => item.url);
+}
+
+function buildTemplateContextSiteColumns(templateContext, overrides = {}) {
+  return buildLegacySiteColumns(templateContext.columns, {
+    productCategories: templateContext.productCategories,
+    newsEntries: templateContext.newsEntries,
+    templateContext,
+    ...overrides
+  });
+}
+
+function mapHeaderChildEntry(item, activeColumnId) {
+  return {
+    id: normalizeInteger(item?.id, 0),
+    name: item?.name || '',
+    parentId: normalizeInteger(item?.parentId ?? item?.parent_id, 0),
+    modelCode: item?.modelCode ?? item?.model_code ?? '',
+    sourceType: item?.sourceType ?? item?.column_type ?? '',
+    sourceId: normalizeInteger(item?.sourceId ?? item?.id, 0),
+    active: activeColumnId !== 0 && normalizeInteger(item?.id, 0) === activeColumnId,
+    showInNav: normalizeInteger(item?.showInNav ?? item?.is_visible, 1),
+    url: item?.url || ''
+  };
+}
+
+function buildHeaderUtilityColumns(rows) {
+  const publicSections = resolvePublicSectionContext(rows);
+  const normalizedRows = rows.map((item) => ({
+    ...item,
+    id: normalizeInteger(item?.id, 0),
+    parent_id: normalizeInteger(item?.parent_id, 0),
+    sort_order: normalizeInteger(item?.sort_order, 0),
+    is_visible: normalizeInteger(item?.is_visible, 1),
+    url: buildLegacyColumnUrl(item, publicSections)
+  }));
+
+  const utilityRoot = normalizedRows.find((item) => String(item?.custom_url || '').trim() === '#top-menu') || null;
+  if (!utilityRoot) {
+    return [];
+  }
+
+  return normalizedRows
+    .filter((item) => item.parent_id === utilityRoot.id)
+    .filter((item) => item.is_visible !== 0)
+    .filter((item) => item.url)
+    .sort(compareHeaderNavEntries)
+    .map((item) => ({
+      id: item.id,
+      name: item.name || '',
+      url: item.url,
+      openInNewTab: false
+    }));
 }
 
 function buildHeaderNavItem(base, overrides = {}) {
@@ -1121,80 +1171,63 @@ function buildLegacySiteColumns(columns, options = {}) {
     sourceType: item?.column_type || '',
     sourceId: normalizeInteger(item?.id, 0),
     modelCode: item?.model_code || '',
+    renderDriver: String(item?.column_semantics?.render_driver || '').trim(),
     showInNav: normalizeInteger(item?.is_visible, 1),
     sortOrder: normalizeInteger(item?.sort_order, 0),
+    customUrl: String(item?.custom_url || '').trim(),
     url: buildLegacyColumnUrl(item, publicSections)
   })).filter((item) => item.id !== 0);
 
-  const visibleRows = normalizedRows
+  const topLevelNavRows = normalizedRows
+    .filter((item) => item.parentId === 0)
     .filter((item) => item.showInNav !== 0)
-    .filter((item) => item.url);
+    .filter((item) => item.url)
+    .filter((item) => !item.customUrl.startsWith('#'))
+    .sort(compareHeaderNavEntries);
 
-  const findByUrl = (url) => visibleRows.find((item) => item.url === url) || null;
-  const findByModelRoot = (modelCode) => visibleRows.find((item) => item.modelCode === modelCode && item.sourceType === 'list' && item.parentId === 0) || null;
-  const newsSection = publicSections.getNewsSectionByDirName('news');
-  const serviceSection = publicSections.getNewsSectionByDirName('services');
-  const newsRoot = newsSection
-    ? visibleRows.find((item) => item.id === normalizeInteger(newsSection.rootColumnId, 0)) || null
-    : null;
-  const serviceRoot = serviceSection
-    ? visibleRows.find((item) => item.id === normalizeInteger(serviceSection.rootColumnId, 0)) || null
-    : null;
+  return topLevelNavRows.map((item) => {
+    let children = [];
 
-  const productChildren = Array.isArray(options.productCategories)
-    ? options.productCategories
-      .filter((cat) => normalizeInteger(cat.parent_id, 0) === 0 && normalizeInteger(cat.id, 0) !== 0)
-      .slice(0, 11)
-      .map((cat) => ({
-        id: cat.id,
-        name: cat.name,
-        parentId: normalizeInteger(cat.parent_id, 0),
-        modelCode: 'product',
-        sourceType: 'list',
-        sourceId: normalizeInteger(cat.id, 0),
-        active: false,
-        showInNav: 1,
-        url: buildLegacyProductCategoryUrl(cat, productCategoryMap)
-      }))
-    : [];
-
-  return [
-    buildHeaderNavItem(findByUrl('/'), {
-      name: '首页',
-      active: activeColumnId !== 0 && normalizeInteger(findByUrl('/')?.id, 0) === activeColumnId,
-      children: []
-    }),
-    buildHeaderNavItem(findByUrl('/your-goals/'), {
-      name: '您的目标',
-      children: buildHeaderPrefixChildren(normalizedRows, '/your-goals/', activeColumnId)
-    }),
-    buildHeaderNavItem(findByModelRoot('product'), {
-      name: '产品',
-      children: productChildren
-    }),
-    buildHeaderNavItem(findByUrl('/industries/'), {
-      name: '行业',
-      children: buildHeaderPrefixChildren(normalizedRows, '/industries/', activeColumnId)
-    }),
-    buildHeaderNavItem(serviceRoot, {
-      name: '服务',
-      children: buildHeaderSectionChildren(normalizedRows, serviceSection, activeColumnId, {
+    if (item.renderDriver === 'managed_category') {
+      children = Array.isArray(options.productCategories)
+        ? options.productCategories
+          .filter((cat) => normalizeInteger(cat.parent_id, 0) === 0 && normalizeInteger(cat.id, 0) !== 0)
+          .slice(0, 11)
+          .map((cat) => ({
+            id: cat.id,
+            name: cat.name,
+            parentId: normalizeInteger(cat.parent_id, 0),
+            modelCode: 'product',
+            sourceType: 'list',
+            sourceId: normalizeInteger(cat.id, 0),
+            active: false,
+            showInNav: 1,
+            url: buildLegacyProductCategoryUrl(cat, productCategoryMap)
+          }))
+        : [];
+    } else if (item.renderDriver === 'section') {
+      const section = publicSections.getNewsSectionByColumnId(item.id);
+      children = buildHeaderSectionChildren(normalizedRows, section, activeColumnId, {
         newsEntries: options.newsEntries,
         templateContext: options.templateContext || null
-      })
-    }),
-    buildHeaderNavItem(findByUrl('/training/'), {
-      name: '培训',
-      children: buildHeaderPrefixChildren(normalizedRows, '/training/', activeColumnId)
-    }),
-    buildHeaderNavItem(newsRoot, {
-      name: '公司新闻',
-      children: buildHeaderSectionChildren(normalizedRows, newsSection, activeColumnId, {
-        newsEntries: options.newsEntries,
-        templateContext: options.templateContext || null
-      })
-    })
-  ].filter(Boolean);
+      });
+    } else if (item.renderDriver === 'single_page') {
+      children = buildHeaderPrefixChildren(normalizedRows, item.url, activeColumnId);
+    }
+
+    return {
+      id: item.id,
+      name: item.name,
+      parentId: item.parentId,
+      modelCode: item.modelCode,
+      sourceType: item.sourceType,
+      sourceId: item.sourceId,
+      active: activeColumnId !== 0 && item.id === activeColumnId,
+      showInNav: item.showInNav,
+      url: item.url,
+      children
+    };
+  });
 }
 
 function buildLegacyColumnUrl(column, rowsById = new Map()) {
@@ -1301,9 +1334,8 @@ function buildLegacySingleColumnPageProps(templateContext, column) {
       categoryType: 'content',
       categoryUrl: url
     }),
-    siteColumns: buildLegacySiteColumns(templateContext.columns, {
-      activeColumnId: normalizeInteger(column.id, 0),
-      newsEntries: templateContext.newsEntries
+    siteColumns: buildTemplateContextSiteColumns(templateContext, {
+      activeColumnId: normalizeInteger(column.id, 0)
     }),
     title: column.name || '',
     pageData: columnPageData,
