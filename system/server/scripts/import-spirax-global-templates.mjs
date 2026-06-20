@@ -1612,7 +1612,7 @@ import React from 'react';
 
 export default function Component(props) {
   const items = Array.isArray(props.secondaryMenuItems) ? props.secondaryMenuItems : [];
-  const eyebrow = props.secondaryMenuTitle || 'Browse categories';
+  const eyebrow = props.secondaryMenuTitle || 'Browse columns';
   const eyebrowLink = props.secondaryMenuParentUrl || '';
 
   return (

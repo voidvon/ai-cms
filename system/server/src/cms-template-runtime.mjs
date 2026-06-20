@@ -1421,22 +1421,11 @@ function buildTemplateStyleAsset(template) {
   if (!template) {
     return null;
   }
-  const styleSource = mergeTemplateStyleSources(template);
+  const styleSource = String(template?.css_source || '').trim();
   if (!styleSource) {
     return null;
   }
   return buildStandaloneStyleAsset(styleSource, template.code);
-}
-
-function mergeTemplateStyleSources(template) {
-  const segments = [
-    String(template?.css_source || '').trim()
-  ].filter(Boolean);
-
-  if (segments.length === 0) {
-    return '';
-  }
-  return segments.join('\n');
 }
 
 function inferPageKind(pageName, templateType) {

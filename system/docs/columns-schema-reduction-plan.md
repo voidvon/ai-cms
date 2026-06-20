@@ -45,7 +45,7 @@
 
 - `single_page`
 - `contact_page`
-- `corporation_category`
+- `corporation_column`
 
 ### `column_pages` 建议承接字段
 
@@ -108,8 +108,8 @@
 
 - `single_page`
 - `contact_page`
-- `corporation_category`
-- `product_category`
+- `corporation_column`
+- `product_column`
 
 `columns` 和 `column_translations` 中这些字段已经只应视为 legacy shadow：
 
@@ -125,17 +125,17 @@
 
 补充说明：
 
-- `product_category` 当前已不再依赖 `columns.content_html / seo_*` 作为主读取来源
-- `product_category.summary` 目前本身几乎未使用，可在后续 schema 收敛时一并评估删除
-- `news_category` 当前库内内容字段基本为空，后续可视为下一批低风险收敛对象
+- `product_column` 当前已不再依赖 `columns.content_html / seo_*` 作为主读取来源
+- `product_column.summary` 目前本身几乎未使用，可在后续 schema 收敛时一并评估删除
+- `news_column` 当前库内内容字段基本为空，后续可视为下一批低风险收敛对象
 
 ### 当前数据库现状补充
 
 按当前库内统计：
 
-- `single_page` / `contact_page` / `corporation_category` 的旧内容字段已经清空
-- `product_category` 的 `content_html / seo_title / seo_keywords / seo_description` 已经清空
-- `news_category` 当前本来就几乎全部为空，不再是主要迁移阻力
+- `single_page` / `contact_page` / `corporation_column` 的旧内容字段已经清空
+- `product_column` 的 `content_html / seo_title / seo_keywords / seo_description` 已经清空
+- `news_column` 当前本来就几乎全部为空，不再是主要迁移阻力
 
 因此，`columns` 上仍然真正承载内容的重点已收敛到：
 

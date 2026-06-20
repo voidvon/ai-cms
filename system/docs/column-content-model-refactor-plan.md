@@ -184,7 +184,7 @@
 - `table_name`
 - `translation_table_name`
 - `status`
-- `supports_category`
+- `supports_column`
 - `supports_list`
 - `supports_detail`
 - `supports_translation`
@@ -195,7 +195,7 @@
 
 - `table_name`：主表名
 - `translation_table_name`：翻译表名
-- `supports_category`：是否允许栏目挂此模型
+- `supports_column`：是否允许栏目挂此模型
 - `supports_translation`：是否启用多语言翻译
 
 ## 4.4 `content_model_fields` 表升级建议

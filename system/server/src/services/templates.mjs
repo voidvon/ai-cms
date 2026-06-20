@@ -1,6 +1,6 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { detachTemplateFromAllThemeVariants, getSelectedTemplateVariant, listTemplateVariantComponents } from './template-variants.mjs';
-import { createTsxTemplateElement, renderTsxTemplate } from '../tsx-template-renderer.mjs';
+import { createTsxTemplateElement, getTsxTemplateModuleExports, renderTsxTemplate } from '../tsx-template-renderer.mjs';
 import { getTsxTemplateStyleAsset } from '../tsx-template-styles.mjs';
 import { escapeHtml } from '../utils/html.mjs';
 import { listColumns } from './columns.mjs';
@@ -194,6 +194,7 @@ export function ensureTemplatesSchema() {
   ensureTemplateBindingsThemeScope();
   reconcileThemeOwnedTemplateAssets();
   collapseLegacyGlobalCssSources();
+  collapseLegacyInlineTsxStyleSources();
   ensureSingleCssSourceSchema();
 
   getDb().exec(`
@@ -1616,6 +1617,80 @@ function buildTemplateStyleSource(template) {
   return cssSource ? buildStyleCarrierSource(cssSource) : '';
 }
 
+function collapseLegacyInlineTsxStyleSources() {
+  const templateRows = queryAll(`
+    SELECT id, code, tsx_source, css_source, published_tsx_source, published_css_source
+    FROM templates
+    WHERE instr(coalesce(tsx_source, ''), 'export const scss') > 0
+       OR instr(coalesce(tsx_source, ''), 'export const css') > 0
+       OR instr(coalesce(published_tsx_source, ''), 'export const scss') > 0
+       OR instr(coalesce(published_tsx_source, ''), 'export const css') > 0
+  `);
+
+  for (const row of templateRows) {
+    const draftParts = extractInlineTemplateStyleParts(row.tsx_source, `${row.code || row.id}:draft`);
+    const publishedParts = row.published_tsx_source == null
+      ? null
+      : extractInlineTemplateStyleParts(row.published_tsx_source, `${row.code || row.id}:published`);
+
+    const nextCssSource = mergeTemplateStyleText(row.css_source, draftParts.css_source);
+    const nextPublishedCssSource = publishedParts
+      ? mergeTemplateStyleText(row.published_css_source, publishedParts.css_source)
+      : row.published_css_source;
+
+    if (
+      draftParts.migrated
+      || (publishedParts && publishedParts.migrated)
+      || nextCssSource !== String(row.css_source ?? '')
+      || nextPublishedCssSource !== row.published_css_source
+    ) {
+      execute(
+        `
+          UPDATE templates
+          SET
+            tsx_source = ?,
+            css_source = ?,
+            published_tsx_source = ?,
+            published_css_source = ?
+          WHERE id = ?
+        `,
+        [
+          draftParts.tsx_source,
+          nextCssSource,
+          publishedParts ? publishedParts.tsx_source : row.published_tsx_source,
+          nextPublishedCssSource == null ? null : nextPublishedCssSource,
+          row.id
+        ]
+      );
+    }
+  }
+
+  const versionRows = queryAll(`
+    SELECT id, template_id, version_no, tsx_source, css_source
+    FROM template_versions
+    WHERE instr(coalesce(tsx_source, ''), 'export const scss') > 0
+       OR instr(coalesce(tsx_source, ''), 'export const css') > 0
+  `);
+
+  for (const row of versionRows) {
+    const parts = extractInlineTemplateStyleParts(
+      row.tsx_source,
+      `template-version-${row.template_id}-${row.version_no}`
+    );
+    const nextCssSource = mergeTemplateStyleText(row.css_source, parts.css_source);
+    if (parts.migrated || nextCssSource !== String(row.css_source ?? '')) {
+      execute(
+        `
+          UPDATE template_versions
+          SET tsx_source = ?, css_source = ?
+          WHERE id = ?
+        `,
+        [parts.tsx_source, nextCssSource, row.id]
+      );
+    }
+  }
+}
+
 function collapseLegacyGlobalCssSources() {
   const templateColumns = new Set(queryAll('PRAGMA table_info(templates)').map((column) => String(column.name || '')));
   const versionColumns = new Set(queryAll('PRAGMA table_info(template_versions)').map((column) => String(column.name || '')));
@@ -1734,6 +1809,126 @@ function buildStyleCarrierSource(styleSource) {
     '}',
     ''
   ].join('\n');
+}
+
+function extractInlineTemplateStyleParts(source, templateCode = '') {
+  const normalizedSource = String(source ?? '');
+  const declarationMatch = /export const (scss|css)\s*=\s*/.exec(normalizedSource);
+  if (!declarationMatch) {
+    return {
+      tsx_source: normalizedSource,
+      css_source: '',
+      migrated: false
+    };
+  }
+
+  const declarationStart = declarationMatch.index ?? -1;
+  if (declarationStart < 0) {
+    return {
+      tsx_source: normalizedSource,
+      css_source: '',
+      migrated: false
+    };
+  }
+
+  const declarationEnd = findInlineTemplateStyleDeclarationEnd(
+    normalizedSource,
+    declarationStart + declarationMatch[0].length
+  );
+  if (declarationEnd < 0) {
+    return {
+      tsx_source: normalizedSource,
+      css_source: '',
+      migrated: false
+    };
+  }
+
+  const moduleExports = getTsxTemplateModuleExports(normalizedSource, { templateCode });
+  const cssSource = pickInlineTemplateStyleValue(moduleExports?.css, moduleExports?.scss);
+  if (!cssSource) {
+    return {
+      tsx_source: normalizedSource,
+      css_source: '',
+      migrated: false
+    };
+  }
+
+  return {
+    tsx_source: `${normalizedSource.slice(0, declarationStart)}${normalizedSource.slice(declarationEnd)}`.trim(),
+    css_source: cssSource,
+    migrated: true
+  };
+}
+
+function findInlineTemplateStyleDeclarationEnd(source, declarationValueStart) {
+  let index = skipWhitespace(source, declarationValueStart);
+  if (source.startsWith('String.raw', index)) {
+    index += 'String.raw'.length;
+    index = skipWhitespace(source, index);
+  }
+
+  const quote = source[index];
+  if (quote !== '`' && quote !== '"' && quote !== '\'') {
+    return -1;
+  }
+
+  const literalEnd = findInlineTemplateStyleLiteralEnd(source, index, quote);
+  if (literalEnd < 0) {
+    return -1;
+  }
+
+  index = literalEnd + 1;
+  index = skipWhitespace(source, index);
+  if (source[index] === ';') {
+    index += 1;
+  }
+  return skipWhitespace(source, index);
+}
+
+function findInlineTemplateStyleLiteralEnd(source, startIndex, quote) {
+  for (let index = startIndex + 1; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '\\') {
+      index += 1;
+      continue;
+    }
+    if (quote === '`' && char === '$' && source[index + 1] === '{') {
+      return -1;
+    }
+    if (char === quote) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function pickInlineTemplateStyleValue(cssValue, scssValue) {
+  const cssSource = String(cssValue ?? '').trim();
+  const scssSource = String(scssValue ?? '').trim();
+  if (cssSource && scssSource) {
+    throw new Error('TSX 模板不能同时导出 css 和 scss，请只保留一种。');
+  }
+  return scssSource || cssSource;
+}
+
+function mergeTemplateStyleText(existingSource, nextSource) {
+  const existing = String(existingSource ?? '').trim();
+  const next = String(nextSource ?? '').trim();
+  if (!existing) {
+    return next;
+  }
+  if (!next || existing === next) {
+    return existing;
+  }
+  return `${existing}\n\n${next}`;
+}
+
+function skipWhitespace(source, startIndex) {
+  let index = startIndex;
+  while (index < source.length && /\s/.test(source[index])) {
+    index += 1;
+  }
+  return index;
 }
 
 function escapeTemplateLiteral(value) {

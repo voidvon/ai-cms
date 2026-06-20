@@ -32,10 +32,10 @@
 例如下面这些值：
 
 - `product_root`
-- `product_category`
-- `news_category`
+- `product_column`
+- `news_column`
 - `corporation_root`
-- `corporation_category`
+- `corporation_column`
 - `contact_page`
 - `single_page`
 - `custom_link`
@@ -248,12 +248,12 @@
   - `content_model_id = product`
   - `detail_rule` 保留现有规则
 
-- `product_category`
+- `product_column`
   - `column_type = list`
   - `content_model_id = product`
   - `detail_rule` 保留现有规则
 
-- `news_category`
+- `news_column`
   - `column_type = list`
   - `content_model_id = news`
   - `detail_rule` 保留现有规则
@@ -262,13 +262,13 @@
   - `column_type = single` 或 `list`
   - 需要结合现有业务确认
 
-- `corporation_category`
+- `corporation_column`
   - 更合理的目标是 `single`
   - 因为当前一条栏目对应一个内容页，而不是一组内容记录
 
 这里特别说明：
 
-`corporation_root / corporation_category` 当前更接近“页面树”，不是标准内容列表。
+`corporation_root / corporation_column` 当前更接近“页面树”，不是标准内容列表。
 
 因此重构时建议把这条线优先收敛成：
 
@@ -315,7 +315,7 @@
 原则：
 
 - 新旧模型不能长期并存
-- 不接受在核心链路里继续判断 `product_root/news_category/contact_page`
+- 不接受在核心链路里继续判断 `product_root/news_column/contact_page`
 - 不接受为了平滑迁移继续保留 `source_type -> column_type` 的映射层
 - 一次迁移完成后，所有核心读写路径都只认新模型
 

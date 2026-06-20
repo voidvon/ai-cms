@@ -15,8 +15,8 @@
 ✅ **新增统一函数** (`column-paths.mjs`)
 ```javascript
 // 替代所有按模型硬编码的函数
-buildContentDetailUrlFromColumn(entry, column, categoryPath?)
-buildContentDetailPathFromColumn(entry, column, categoryPath?)
+buildContentDetailUrlFromColumn(entry, column, columnPath?)
+buildContentDetailPathFromColumn(entry, column, columnPath?)
 ```
 
 ✅ **完全移除启发式推断** (`columns.mjs`, `public-sections.mjs`)
@@ -123,7 +123,7 @@ npm --prefix system/server run build:static
 
 ```javascript
 // ❌ 旧方式：按模型硬编码
-function buildProductDetailPublicUrl(product, categorySlugPath) {
+function buildProductDetailPublicUrl(product, columnSlugPath) {
   const sectionRoot = '/products/';  // 硬编码
   // ...
 }
@@ -207,7 +207,7 @@ function resolveNewsRouteDirFromColumn(row) {
 保留旧函数作为适配器：
 ```javascript
 // @deprecated 使用 buildContentDetailUrlFromColumn 代替
-export function buildProductDetailPublicUrl(product, categorySlugPath) {
+export function buildProductDetailPublicUrl(product, columnSlugPath) {
   const column = getColumnBySourceType('product_root');
   return buildContentDetailUrlFromColumn(product, column);
 }

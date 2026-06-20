@@ -80,7 +80,7 @@ EOF
 ```javascript
 SELECT
   id,
-  category_id,
+  column_id,
   name,
   code,
   summary,
@@ -281,7 +281,7 @@ GET /api/products
       "id": 1,
       "name": "LP30 自监测型液位感应器",
       "slug": "lp30",
-      "category_id": 123,
+      "column_id": 123,
       ...
     }
   ]

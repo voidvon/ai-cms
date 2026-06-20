@@ -116,7 +116,7 @@ const jobMeta = meta['5'] || {}
 | `currentContent` | object \| null | 当前内容对象的摘要信息 |
 | `breadcrumb` | object | 面包屑上下文 |
 
-分类对象结构：
+栏目对象结构：
 
 | 字段 | 说明 |
 | --- | --- |
@@ -179,8 +179,8 @@ export default function HomeTemplate({ meta, newsIndexHtml, component, Raw }) {
 | 字段 | 类型 | 说明 |
 | --- | --- | --- |
 | `smallName` | string | 当前产品分类名 |
-| `bigId` | number | 父级分类 ID；没有父级时为当前分类 ID |
-| `bigName` | string | 父级分类名；没有父级时为当前分类名 |
+| `bigId` | number | 父级分类 ID；没有父级时为当前栏目 ID |
+| `bigName` | string | 父级分类名；没有父级时为当前栏目名 |
 | `prodKeywords` | string | 产品分类 SEO 关键词 |
 | `productsSmallCatHtml` | string | 同级/子级产品小分类 HTML |
 | `items` | array | 当前页产品列表 |
@@ -220,8 +220,8 @@ export default function ProductList({ items = [], component, Raw }) {
 | `sectionDir` | string | URL 目录，`news` 或 `service` |
 | `sectionLabel` | string | 板块名称 |
 | `sectionCategoryHtml` | string | 当前板块分类菜单 HTML |
-| `categoryId` | number | 当前分类 ID |
-| `title` | string | 当前分类名称 |
+| `columnId` | number | 当前栏目 ID |
+| `title` | string | 当前栏目名称 |
 | `items` | array | 当前页文章列表 |
 | `pagerHtml` | string | 分页 HTML |
 
