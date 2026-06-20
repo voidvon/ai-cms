@@ -436,8 +436,8 @@ function buildTemplates() {
       css_source: siteNavCss,
     },
     {
-      code: 'spirax_button',
-      name: 'Spirax 按钮组件',
+      code: 'button',
+      name: '按钮组件',
       type: 'component',
       sort_order: 3,
       content: buildButtonComponent(),
@@ -1146,7 +1146,8 @@ function renderUtilityItems(items = [], currentUrl = '') {
     ));
 }
 
-export default function Component({ site, siteColumns = [], currentPage }) {
+export default function Component(props) {
+  const { site, siteColumns = [], currentPage } = props || {};
   const currentUrl = currentPage?.url || '';
   const utilityItems = [
     { url: '/about-us/', name: '关于我们' },
@@ -1228,9 +1229,10 @@ export default function Component({ site, siteColumns = [], currentPage }) {
           </nav>
 
           <div className="sg-primary-cta sg-primary-cta--badge-left sg-primary-cta--badge-desktop-left sg-primary-cta--badge-mobile-right">
-            <a className="sg-primary-cta__button sg-ui-button sg-ui-button--warning" href="/contact-us/">
-              <span>联系我们</span>
-            </a>
+            {props.component('button', {
+              href: '/contact-us/',
+              children: <span>联系我们</span>
+            })}
           </div>
         </div>
       </div>
@@ -1842,7 +1844,7 @@ export default function Component(props) {
   const TitleTag = titleTag === 'h3' ? 'h3' : 'h2';
   const actionNodes = items.length > 0 ? (
     <>
-      {items.map((item, index) => props.component('spirax_button', {
+      {items.map((item, index) => props.component('button', {
         href: item?.href || '',
         target: item?.target,
         rel: item?.rel,
@@ -2014,13 +2016,27 @@ export default function Component(props) {
     href = '',
     children = null,
     className = '',
-    variant = 'primary',
+    variant = '',
     size = 'md',
     type = 'button',
     disabled = false,
     target,
-    rel
+    rel,
+    ...rest
   } = props || {};
+  const domProps = Object.fromEntries(
+    Object.entries(rest).filter(([key]) => (
+      key === 'id'
+      || key === 'title'
+      || key === 'role'
+      || key === 'tabIndex'
+      || key === 'name'
+      || key === 'value'
+      || key === 'download'
+      || key.startsWith('data-')
+      || key.startsWith('aria-')
+    ))
+  );
   const classes = [
     'sg-ui-button',
     size && size !== 'none' ? \`sg-ui-button--\${size}\` : '',
@@ -2029,10 +2045,10 @@ export default function Component(props) {
   ].filter(Boolean).join(' ');
 
   if (href && !disabled) {
-    return <a className={classes} href={href} rel={rel} target={target}>{children}</a>;
+    return <a {...domProps} className={classes} href={href} rel={rel} target={target}>{children}</a>;
   }
 
-  return <button className={classes} disabled={disabled} type={type}>{children}</button>;
+  return <button {...domProps} className={classes} disabled={disabled} type={type}>{children}</button>;
 }
 `;
 }
@@ -2066,8 +2082,11 @@ function buildButtonGlobalCss() {
   gap: 8px;
   min-width: max-content;
   border: 1px solid transparent;
-  border-radius: var(--sg-radius-control);
-  font-weight: 700;
+  border-radius: 999px;
+  background: var(--sg-ui-color-brand-dark);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 400;
   line-height: 1;
   text-decoration: none;
   transition:
@@ -2080,6 +2099,7 @@ function buildButtonGlobalCss() {
 
 .sg-ui-button:hover,
 .sg-ui-button:focus-visible {
+  background: var(--sg-ui-color-brand);
   text-decoration: none;
 }
 
@@ -2091,19 +2111,16 @@ function buildButtonGlobalCss() {
 .sg-ui-button--sm {
   min-height: 38px;
   padding: 0 16px;
-  font-size: 14px;
 }
 
 .sg-ui-button--md {
   min-height: 46px;
   padding: 0 22px;
-  font-size: 16px;
 }
 
 .sg-ui-button--lg {
   min-height: 54px;
   padding: 0 28px;
-  font-size: 17px;
 }
 
 .sg-ui-button--primary {
@@ -2163,7 +2180,7 @@ function buildButtonGlobalCss() {
   min-height: auto;
   padding: 0;
   border-radius: var(--sg-radius-none);
-  font-weight: 700;
+  font-weight: 400;
 }
 
 .sg-ui-button--link:hover,
@@ -3130,7 +3147,7 @@ export default function Component(props) {
                     </div>
                   </div>
                   <div className="product-top-panel__actions">
-                    {props.component('spirax_button', {
+                    {props.component('button', {
                       href: topPanel.ctaHref,
                       className: 'product-top-panel__cta',
                       children: topPanel.ctaLabel
@@ -3637,7 +3654,7 @@ export default function Template(props) {
           {pageData?.introBlock?.statement ? <p><strong>{pageData.introBlock.statement}</strong></p> : null}
           {introAction?.href && introAction?.label ? (
             <p>
-              {props.component('spirax_button', {
+              {props.component('button', {
                 href: introAction.href,
                 target: String(introAction.href).startsWith('http') ? '_blank' : undefined,
                 rel: String(introAction.href).startsWith('http') ? 'noreferrer' : undefined,
@@ -3760,7 +3777,7 @@ export default function Template(props) {
           {promo?.title ? <h2>{promo.title}</h2> : null}
           {promo?.body ? <p>{promo.body}</p> : null}
           <p>
-            {props.component('spirax_button', {
+            {props.component('button', {
               href: promo.href,
               children: promo.label
             })}
@@ -3899,7 +3916,7 @@ export default function Template(props) {
         </div>
         {pageData?.caseStudy?.href && pageData?.caseStudy?.cta ? (
           <p style={{ marginTop: '1.5rem' }}>
-            {props.component('spirax_button', {
+            {props.component('button', {
               href: pageData.caseStudy.href,
               children: pageData.caseStudy.cta
             })}
