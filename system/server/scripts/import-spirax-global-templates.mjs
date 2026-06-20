@@ -182,8 +182,10 @@ function buildTemplates() {
     'src/styles/utilities.css',
     'src/components/shared/primitives/PageShell.css',
     'src/components/shared/primitives/ContentShell.css',
-    'src/styles/site-shell/Nav.css',
     'src/styles/site-shell/Footer.css',
+  ]);
+  const siteNavCss = readSourceCss([
+    'src/styles/site-shell/Nav.css',
   ]);
   const breadcrumbsCss = readSourceCss([
     'src/components/shared/business/Breadcrumbs.css',
@@ -425,10 +427,19 @@ function buildTemplates() {
       css_source: buildShellGlobalCss(shellCss),
     },
     {
+      code: 'spirax_site_nav',
+      name: 'Spirax 站点导航组件',
+      type: 'component',
+      sort_order: 2,
+      content: buildSiteNavComponent(),
+      tsx_source: buildSiteNavComponent(),
+      css_source: siteNavCss,
+    },
+    {
       code: 'spirax_button',
       name: 'Spirax 按钮组件',
       type: 'component',
-      sort_order: 2,
+      sort_order: 3,
       content: buildButtonComponent(),
       tsx_source: buildButtonComponent(),
       css_source: buildButtonGlobalCss(),
@@ -991,36 +1002,10 @@ function extractTemplateSourceParts(content) {
 function buildShellGlobalCss(cssText) {
   return `${cssText}
 
-@media (max-width: 940px) {
-  .sg-site-nav-shell {
-    --sg-mobile-nav-offset: 54px;
-  }
-
-  .sg-global-nav__menu-toggle,
-  .sg-global-nav__drawer-backdrop {
-    display: none !important;
-  }
-
-  .sg-global-nav__main--desktop {
-    position: static;
-    top: auto;
-    right: auto;
-    bottom: auto;
-    width: 100%;
-    max-width: none;
-    overflow: visible;
-    background: rgba(255, 255, 255, 0.96);
-    color: #002d72;
-    box-shadow: none;
-    transform: none;
-    opacity: 1;
-    visibility: visible;
-    pointer-events: auto;
-  }
-
-  .sg-global-nav__main-item .sg-global-nav__flyout {
-    display: block;
-  }
+.sg-page-shell img,
+.sg-content-shell img {
+  max-width: 100%;
+  height: auto;
 }
 
 @media (max-width: 1050px) {
@@ -1060,29 +1045,42 @@ function buildShellGlobalCss(cssText) {
 `;
 }
 
-function buildShellComponent() {
+function buildSiteNavComponent() {
   return `
 import React from 'react';
 
+function normalizeUrl(value = '') {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return '';
+  }
+  if (normalized === '/index.html') {
+    return '/';
+  }
+  return normalized.endsWith('/index.html') ? normalized.slice(0, -10) || '/' : normalized;
+}
+
+function isCurrentUrlActive(itemUrl = '', currentUrl = '') {
+  const normalizedItemUrl = normalizeUrl(itemUrl);
+  const normalizedCurrentUrl = normalizeUrl(currentUrl);
+  if (!normalizedItemUrl || !normalizedCurrentUrl) {
+    return false;
+  }
+  if (normalizedItemUrl === '/') {
+    return normalizedCurrentUrl === '/';
+  }
+  return normalizedCurrentUrl === normalizedItemUrl || normalizedCurrentUrl.startsWith(normalizedItemUrl.endsWith('/') ? normalizedItemUrl : normalizedItemUrl + '/');
+}
+
+function hasActiveChild(children = [], currentUrl = '') {
+  return children.some((child) => isCurrentUrlActive(child?.url || '', currentUrl));
+}
+
 function renderNavItems(items = [], currentUrl = '') {
-  const normalizedCurrentUrl = String(currentUrl || '').trim();
-  const isHomeUrl = normalizedCurrentUrl === '/' || normalizedCurrentUrl === '/index.html';
-  const isNavItemActive = (item) => {
-    if (item?.active) {
-      return true;
-    }
-    const itemUrl = String(item?.url || '').trim();
-    if (!normalizedCurrentUrl || !itemUrl) {
-      return false;
-    }
-    if (itemUrl === '/' || itemUrl === '/index.html') {
-      return isHomeUrl;
-    }
-    return normalizedCurrentUrl === itemUrl || normalizedCurrentUrl.startsWith(itemUrl.endsWith('/') ? itemUrl : itemUrl + '/');
-  };
   return items.map((item, index) => {
-    const children = Array.isArray(item.children) ? item.children : [];
-    const isActive = isNavItemActive(item);
+    const children = Array.isArray(item.children) ? item.children.filter((child) => child?.url) : [];
+    const isActive = Boolean(item?.active) || isCurrentUrlActive(item?.url || '', currentUrl) || hasActiveChild(children, currentUrl);
+
     if (children.length > 0) {
       return (
         <li className="sg-global-nav__main-item" data-nav-group="" key={item.url || item.name || index}>
@@ -1104,7 +1102,12 @@ function renderNavItems(items = [], currentUrl = '') {
               <ul className="sg-global-nav__flyout-list">
                 {children.map((child, childIndex) => (
                   <li className="sg-global-nav__flyout-item" key={child.url || child.name || childIndex}>
-                    <a className={['sg-global-nav__flyout-link', child.active ? 'is-active' : ''].filter(Boolean).join(' ')} href={child.url || '#'} target={child.openInNewTab ? '_blank' : undefined} rel={child.openInNewTab ? 'noreferrer' : undefined}>
+                    <a
+                      className={['sg-global-nav__flyout-link', isCurrentUrlActive(child?.url || '', currentUrl) ? 'is-active' : ''].filter(Boolean).join(' ')}
+                      href={child.url || '#'}
+                      rel={child.openInNewTab ? 'noreferrer' : undefined}
+                      target={child.openInNewTab ? '_blank' : undefined}
+                    >
                       {child.name}
                     </a>
                   </li>
@@ -1118,13 +1121,128 @@ function renderNavItems(items = [], currentUrl = '') {
 
     return (
       <li className="sg-global-nav__main-item" key={item.url || item.name || index}>
-        <a className={['sg-global-nav__main-link', isActive ? 'is-active' : ''].filter(Boolean).join(' ')} href={item.url || '#'} target={item.openInNewTab ? '_blank' : undefined} rel={item.openInNewTab ? 'noreferrer' : undefined}>
+        <a
+          className={['sg-global-nav__main-link', isActive ? 'is-active' : ''].filter(Boolean).join(' ')}
+          href={item.url || '#'}
+          rel={item.openInNewTab ? 'noreferrer' : undefined}
+          target={item.openInNewTab ? '_blank' : undefined}
+        >
           {item.name}
         </a>
       </li>
     );
   });
 }
+
+function renderUtilityItems(items = [], currentUrl = '') {
+  return items
+    .filter((item) => item?.url)
+    .map((item, index) => (
+      <li key={item.url || item.name || index}>
+        <a className={['sg-global-nav__utility-link', isCurrentUrlActive(item?.url || '', currentUrl) ? 'is-active' : ''].filter(Boolean).join(' ')} href={item.url || '#'}>
+          {item.name}
+        </a>
+      </li>
+    ));
+}
+
+export default function Component({ site, siteColumns = [], currentPage }) {
+  const currentUrl = currentPage?.url || '';
+  const utilityItems = [
+    { url: '/about-us/', name: '关于我们' },
+    { url: '/learn-about-steam/', name: '了解蒸汽' },
+    { url: '/resources-and-design-tools/', name: '资源和设计工具' },
+    { url: '/knowledge-exchange/', name: '知识中心' }
+  ];
+
+  return (
+    <div className="sg-site-nav-shell" data-site-nav="">
+      <header className="sg-global-nav">
+        <div className="sg-global-nav__topbar">
+          <div className="sg-global-nav__inner">
+            <a aria-label={site?.company_name || site?.web_name || 'Site'} className="sg-global-nav__brand" href="/">
+              <img
+                alt={site?.company_name || site?.web_name || 'Spirax Sarco'}
+                className="sg-global-nav__brand-mark"
+                height="50"
+                src="/logo.svg"
+                width="171"
+              />
+            </a>
+
+            <div className="sg-global-nav__launchers">
+              <nav aria-label="顶部导航" className="sg-global-nav__utility sg-global-nav__utility--inline">
+                <ul className="sg-global-nav__utility-list">
+                  {renderUtilityItems(utilityItems, currentUrl)}
+                </ul>
+              </nav>
+
+              <div className="sg-global-nav__search">
+                <button
+                  aria-controls="sg-global-search-dialog"
+                  aria-haspopup="dialog"
+                  aria-label="打开搜索"
+                  className="sg-search-button sg-global-nav__action-button sg-global-nav__action-button--search"
+                  data-search-open=""
+                  title="打开搜索"
+                  type="button"
+                >
+                  <svg aria-hidden="true" className="sg-search-button__icon" fill="none" viewBox="0 0 24 24">
+                    <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.8"></circle>
+                    <path d="m16 16 4.5 4.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8"></path>
+                  </svg>
+                </button>
+              </div>
+
+              <button
+                aria-controls="site-main-nav"
+                aria-expanded="false"
+                aria-label="菜单"
+                className="sg-nav-hamburger sg-global-nav__action-button sg-global-nav__action-button--menu sg-global-nav__menu-toggle"
+                data-nav-toggle=""
+                type="button"
+              >
+                <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
+                  <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div aria-hidden="true" className="sg-global-nav__drawer-backdrop" data-nav-backdrop=""></div>
+
+      <div className="sg-global-nav__main sg-global-nav__main--desktop" data-nav-panel="" id="site-main-nav">
+        <div className="sg-global-nav__main-inner">
+          <nav aria-label="顶部导航" className="sg-global-nav__utility sg-global-nav__utility--panel">
+            <ul className="sg-global-nav__utility-list">
+              {renderUtilityItems(utilityItems, currentUrl)}
+            </ul>
+          </nav>
+
+          <nav aria-label="主导航">
+            <ul className="sg-global-nav__main-list">
+              {renderNavItems(siteColumns, currentUrl)}
+            </ul>
+          </nav>
+
+          <div className="sg-primary-cta sg-primary-cta--badge-left sg-primary-cta--badge-desktop-left sg-primary-cta--badge-mobile-right">
+            <a className="sg-primary-cta__button sg-ui-button sg-ui-button--warning" href="/contact-us/">
+              <span>联系我们</span>
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+`;
+}
+
+function buildShellComponent() {
+  return `
+import React from 'react';
 
 function renderFooterLinks(columns = []) {
   const groups = columns.filter((item) => Array.isArray(item.children) && item.children.length > 0).slice(0, 4);
@@ -1160,12 +1278,6 @@ function renderFooterLinks(columns = []) {
 export default function Template({ site, siteColumns = [], currentPage, currentContent, currentColumn, currentSection, children, slots = {}, component }) {
   const pageTitle = currentPage?.title ? \`\${currentPage.title} - \${site?.web_name || ''}\` : (site?.web_name || '');
   const isHomePage = currentPage?.type === 'home' || currentPage?.url === '/' || currentPage?.url === '/index.html';
-  const utilityItems = [
-    { href: '/about-us/', label: '关于我们' },
-    { href: '/learn-about-steam/', label: '了解蒸汽' },
-    { href: '/resources-and-design-tools/', label: '资源和设计工具' },
-    { href: '/knowledge-exchange/', label: '知识中心' }
-  ];
   const breadcrumbs = !isHomePage && typeof component === 'function'
     ? component('spirax_breadcrumbs', {
         ariaLabel: '面包屑导航',
@@ -1185,73 +1297,7 @@ export default function Template({ site, siteColumns = [], currentPage, currentC
         <title>{pageTitle}</title>
       </head>
       <body>
-        <div className="sg-site-nav-shell" data-site-nav="">
-          <header className="sg-global-nav">
-            <div className="sg-global-nav__topbar">
-              <div className="sg-global-nav__inner">
-                <a aria-label={site?.company_name || site?.web_name || 'Site'} className="sg-global-nav__brand" href="/">
-                  <img
-                    alt={site?.company_name || site?.web_name || 'Spirax Sarco'}
-                    className="sg-global-nav__brand-mark"
-                    height="50"
-                    src="/logo.svg"
-                    width="171"
-                  />
-                </a>
-                <div className="sg-global-nav__launchers">
-                  <nav aria-label="顶部导航" className="sg-global-nav__utility sg-global-nav__utility--inline">
-                    <ul className="sg-global-nav__utility-list">
-                      {utilityItems.map((item) => (
-                        <li key={item.href}>
-                          <a className="sg-global-nav__utility-link" href={item.href}>{item.label}</a>
-                        </li>
-                      ))}
-                    </ul>
-                  </nav>
-                  <div className="sg-global-nav__search">
-                    <button
-                      aria-controls="sg-global-search-dialog"
-                      aria-haspopup="dialog"
-                      aria-label="打开搜索"
-                      className="sg-search-button sg-global-nav__action-button sg-global-nav__action-button--search"
-                      data-search-open=""
-                      title="打开搜索"
-                      type="button"
-                    >
-                      <svg aria-hidden="true" className="sg-search-button__icon" fill="none" viewBox="0 0 24 24">
-                        <circle cx="11" cy="11" r="6.5" stroke="currentColor" strokeWidth="1.8"></circle>
-                        <path d="m16 16 4.5 4.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8"></path>
-                      </svg>
-                    </button>
-                  </div>
-                  <button
-                    aria-controls="site-main-nav"
-                    aria-expanded="false"
-                    aria-label="菜单"
-                    className="sg-nav-hamburger sg-global-nav__action-button sg-global-nav__action-button--menu sg-global-nav__menu-toggle"
-                    data-nav-toggle=""
-                    type="button"
-                  >
-                    <svg aria-hidden="true" fill="none" viewBox="0 0 24 24">
-                      <path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" strokeLinecap="round" strokeWidth="1.8"></path>
-                    </svg>
-                  </button>
-                </div>
-              </div>
-            </div>
-          </header>
-
-          <div aria-hidden="true" className="sg-global-nav__drawer-backdrop" data-nav-backdrop=""></div>
-          <div className="sg-global-nav__main sg-global-nav__main--desktop" data-nav-panel="" id="site-main-nav">
-            <div className="sg-global-nav__main-inner">
-              <nav aria-label="主导航">
-                <ul className="sg-global-nav__main-list">
-                  {renderNavItems(siteColumns, currentPage?.url || '')}
-                </ul>
-              </nav>
-            </div>
-          </div>
-        </div>
+        {typeof component === 'function' ? component('spirax_site_nav', { site, siteColumns, currentPage }) : null}
         {typeof component === 'function' ? component('spirax_global_search') : null}
 
         {slots?.masthead || null}

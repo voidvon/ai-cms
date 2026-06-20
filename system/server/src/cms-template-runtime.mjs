@@ -632,13 +632,23 @@ const GLOBAL_INTERACTION_SCRIPT = String.raw`(() => {
         return;
       }
       const headerHeight = Math.ceil(header.getBoundingClientRect().height);
-      root.style.setProperty('--sg-mobile-nav-offset', String(headerHeight) + 'px');
+      const offsetValue = String(headerHeight) + 'px';
+      root.style.setProperty('--sg-mobile-nav-offset', offsetValue);
+      if (panel instanceof HTMLElement) {
+        panel.style.setProperty('--sg-mobile-nav-offset', offsetValue);
+      }
+      if (backdrop instanceof HTMLElement) {
+        backdrop.style.setProperty('--sg-mobile-nav-offset', offsetValue);
+      }
     }
 
     function setPanelOpen(open) {
       const wasOpen = root.classList.contains('is-panel-open');
       root.classList.toggle('is-panel-open', open);
-      document.body.style.overflow = mobileQuery.matches && open ? 'hidden' : '';
+      document.body.classList.toggle('sg-nav-open', mobileQuery.matches && open);
+      if (!(mobileQuery.matches && open)) {
+        document.body.style.overflow = '';
+      }
 
       if (toggle instanceof HTMLButtonElement) {
         toggle.setAttribute('aria-expanded', String(open));
