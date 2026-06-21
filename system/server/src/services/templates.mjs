@@ -1,5 +1,6 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { detachTemplateFromAllThemeVariants, getSelectedTemplateVariant, listTemplateVariantComponents } from './template-variants.mjs';
+import { compileBrowserCompatibleCss, compileBrowserCompatibleJs } from '../template-browser-compat.mjs';
 import { createTsxTemplateElement, getTsxTemplateModuleExports, renderTsxTemplate } from '../tsx-template-renderer.mjs';
 import { getTsxTemplateStyleAsset } from '../tsx-template-styles.mjs';
 import { escapeHtml } from '../utils/html.mjs';
@@ -452,6 +453,9 @@ export function deleteTemplateBinding(id) {
 export function createTemplate(input) {
   ensureTemplatesSchema();
   const payload = normalizeTemplateInput(input);
+  if (payload.status === 'published') {
+    validateTemplateForPublish(payload);
+  }
   assertTemplateCodeAvailable(payload.theme_id, payload.code);
   const now = new Date().toISOString();
   const result = execute(
@@ -746,6 +750,7 @@ export function validateTemplateForPublish(template) {
         templateCode: normalizedTemplate.code
       });
     }
+    validateRenderedTemplateBrowserCompatibility(normalizedTemplate);
   } catch (error) {
     errors.push(`TSX 编译或渲染失败：${formatTemplateValidationError(error)}`);
   }
@@ -800,6 +805,46 @@ function buildPreviewComponentMap(currentTemplate) {
   }
 
   return components;
+}
+
+function validateRenderedTemplateBrowserCompatibility(template) {
+  const components = buildPreviewComponentMap(template);
+  const props = buildTemplatePreviewProps(template);
+  const previewState = {
+    styleAssets: new Map()
+  };
+  const html = renderPreviewTemplate(template, props, components, 0, previewState);
+
+  for (const asset of previewState.styleAssets.values()) {
+    compileBrowserCompatibleCss(asset.cssText, {
+      filename: `${asset.code || template.code || 'template'}.css`
+    });
+  }
+
+  const inlineScripts = extractPreviewInlineScripts(html);
+  inlineScripts.forEach((scriptSource) => {
+    compileBrowserCompatibleJs(scriptSource, { minify: false });
+  });
+}
+
+function extractPreviewInlineScripts(html) {
+  const sources = [];
+  String(html || '').replace(
+    /<script\b(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/gi,
+    (_, rawAttrs = '', scriptContent = '') => {
+      const typeMatch = rawAttrs.match(/\btype\s*=\s*["']([^"']+)["']/i);
+      const scriptType = String(typeMatch?.[1] || '').trim().toLowerCase();
+      if (scriptType === 'application/ld+json') {
+        return '';
+      }
+      const normalizedScriptContent = String(scriptContent || '').trim();
+      if (normalizedScriptContent) {
+        sources.push(normalizedScriptContent);
+      }
+      return '';
+    }
+  );
+  return sources;
 }
 
 function normalizeTemplateInput(input) {

@@ -272,7 +272,6 @@ function buildTemplates() {
   display: flex;
   flex: 1;
   flex-direction: column;
-  justify-content: center;
   min-height: calc(var(--product-card-min-height) * 0.55);
   padding: 18px 24px;
 }
@@ -305,7 +304,11 @@ function buildTemplates() {
 
 .product-card-grid__desc p {
   margin: 0;
-  white-space: pre-line;
+  display: -webkit-box;
+  overflow: hidden;
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .product-card-grid__cta {
@@ -1231,6 +1234,7 @@ export default function Component(props) {
           <div className="sg-primary-cta sg-primary-cta--badge-left sg-primary-cta--badge-desktop-left sg-primary-cta--badge-mobile-right">
             {props.component('button', {
               href: '/contact-us/',
+              variant: 'warning',
               children: <span>联系我们</span>
             })}
           </div>
@@ -1513,9 +1517,8 @@ export default function Template(props) {
       image: item?.image || '',
       imageAlt: item?.imageAlt || item?.name || item?.title || '',
       href: item?.url || item?.link || item?.href || '',
-      itemClassName: ['product-card-grid__item', item?.image ? 'product-card-grid__item--grey' : 'product-card-grid__item--light-blue'].filter(Boolean).join(' '),
-      linkClassName: 'product-card-grid__link',
-      titleClassName: 'product-card-grid__title product-card-grid__title--uppercase'
+      itemClassName: item?.image ? 'product-card-grid__item--grey' : 'product-card-grid__item--light-blue',
+      titleClassName: 'product-card-grid__title--uppercase'
     })),
     wrapperClassName: 'product-card-grid--mobile-carousel'
   });
@@ -1526,9 +1529,7 @@ export default function Template(props) {
       image: item?.image || '',
       imageAlt: item?.imageAlt || item?.name || item?.title || '',
       href: item?.url || item?.link || item?.href || '',
-      itemClassName: 'product-card-grid__item',
-      linkClassName: 'product-card-grid__link',
-      titleClassName: 'product-card-grid__title product-card-grid__title--uppercase'
+      titleClassName: 'product-card-grid__title--uppercase'
     }))
   });
   const downloadsSection = props.component('spirax_product_download_groups', {
@@ -1926,9 +1927,7 @@ export default function Template(props) {
       image: item?.image || '',
       imageAlt: item?.name || item?.title || '',
       href: item?.url || '',
-      itemClassName: 'product-card-grid__item product-card-grid__item--grey',
-      linkClassName: 'product-card-grid__link',
-      titleClassName: 'product-card-grid__title'
+      itemClassName: 'product-card-grid__item--grey'
     })),
     wrapperClassName: 'product-card-grid--mobile-carousel'
   });
@@ -2143,6 +2142,18 @@ function buildButtonGlobalCss() {
   background: var(--sg-color-primary-soft-hover);
 }
 
+.sg-ui-button--neutral {
+  border-color: rgba(255, 255, 255, 0.72);
+  background: #fff;
+  color: var(--sg-ui-color-brand-dark);
+}
+
+.sg-ui-button--neutral:hover,
+.sg-ui-button--neutral:focus-visible {
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.92);
+}
+
 .sg-ui-button--warning {
   background: var(--sg-color-warning);
   color: var(--sg-color-warning-contrast);
@@ -2163,6 +2174,19 @@ function buildButtonGlobalCss() {
 .sg-ui-button--outline:hover,
 .sg-ui-button--outline:focus-visible {
   background: var(--sg-ui-color-brand-tint);
+}
+
+.sg-ui-button--outline-light {
+  border-color: rgba(255, 255, 255, 0.8);
+  background: transparent;
+  color: #fff;
+}
+
+.sg-ui-button--outline-light:hover,
+.sg-ui-button--outline-light:focus-visible {
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
 }
 
 .sg-ui-button--ghost,
@@ -2607,6 +2631,13 @@ export default function Component(props) {
     wrapperClassName = ''
   } = props || {};
   const TitleTag = titleTag === 'h2' ? 'h2' : 'h3';
+  const mergeClassNames = (...values) => Array.from(
+    new Set(
+      values
+        .flatMap((value) => String(value || '').split(/\s+/))
+        .filter(Boolean)
+    )
+  ).join(' ');
   const grid = (
     <div className={gridClassName}>
       {(Array.isArray(cards) ? cards : []).map((card, index) => {
@@ -2697,7 +2728,7 @@ export default function Component(props) {
                 />
               ) : null}
               <div className={contentClassName}>
-                <TitleTag className={[titleClassName, card?.titleClassName || ''].filter(Boolean).join(' ')}>{card?.title || ''}</TitleTag>
+                <TitleTag className={mergeClassNames(titleClassName, card?.titleClassName)}>{card?.title || ''}</TitleTag>
                 {card?.description ? (
                   <div className={descriptionClassName}>
                     <p>{card.description}</p>
@@ -2709,9 +2740,9 @@ export default function Component(props) {
           );
 
           return (
-            <article className={[itemClassName, card?.itemClassName || ''].filter(Boolean).join(' ')} key={href || card?.title || index}>
+            <article className={mergeClassNames(itemClassName, card?.itemClassName)} key={href || card?.title || index}>
               {href ? (
-                <a className={[linkClassName, card?.linkClassName || ''].filter(Boolean).join(' ')} href={href}>
+                <a className={mergeClassNames(linkClassName, card?.linkClassName)} href={href}>
                   {body}
                 </a>
               ) : body}

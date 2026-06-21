@@ -1,10 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { transform as transformCss } from 'lightningcss';
 import { createHash } from 'node:crypto';
-import { transformSync as transformJs } from 'esbuild';
 import { getSelectedTemplateVariant, listSelectedThemePublishedComponents, listThemeVariantTemplates } from './services/template-variants.mjs';
 import { resolvePublishedTemplate } from './services/templates.mjs';
+import { compileBrowserCompatibleCss, compileBrowserCompatibleJs } from './template-browser-compat.mjs';
 import { createTsxTemplateElement, renderTsxTemplate } from './tsx-template-renderer.mjs';
 import { getTsxTemplateStyleAsset } from './tsx-template-styles.mjs';
 import { escapeHtml } from './utils/html.mjs';
@@ -1324,12 +1323,10 @@ function minifyStyleAssetCss(cssText, bundleCode, assetCode) {
   }
 
   try {
-    const result = transformCss({
+    return compileBrowserCompatibleCss(normalizedCssText, {
       filename: `${sanitizeTemplateCode(bundleCode) || 'bundle'}-${sanitizeTemplateCode(assetCode) || 'asset'}.css`,
-      code: Buffer.from(normalizedCssText),
       minify: true
     });
-    return Buffer.from(result.code).toString('utf8');
   } catch (error) {
     console.warn(
       `[cms-template-runtime] Failed to minify CSS asset "${assetCode}" in bundle "${bundleCode}", using original CSS:`,
@@ -1346,12 +1343,9 @@ function minifyScriptAssetJs(jsText, assetCode) {
   }
 
   try {
-    const result = transformJs(normalizedJsText, {
-      loader: 'js',
-      minify: true,
-      legalComments: 'none'
+    return compileBrowserCompatibleJs(normalizedJsText, {
+      minify: true
     });
-    return String(result.code || '').trim() || normalizedJsText;
   } catch (error) {
     console.warn(
       `[cms-template-runtime] Failed to minify JS asset "${assetCode}", using original JS:`,

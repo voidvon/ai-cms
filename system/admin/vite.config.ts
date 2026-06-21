@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import path from 'path'
+import { ADMIN_VITE_TARGET } from '../shared/browser-targets.mjs'
 
 const apiProxyTarget = 'http://127.0.0.1:3000'
 
@@ -32,6 +33,7 @@ export default defineConfig({
     },
   },
   build: {
+    target: [...ADMIN_VITE_TARGET],
     rollupOptions: {
       output: {
         manualChunks(id) {
