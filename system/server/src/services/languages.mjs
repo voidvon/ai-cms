@@ -1,4 +1,9 @@
+import { HOST, PORT } from '../config.mjs';
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
+
+const SITE_MODE_SUBDIR = 'subdir';
+const SITE_MODE_STANDALONE = 'standalone';
+const SITE_MODE_VALUES = new Set([SITE_MODE_SUBDIR, SITE_MODE_STANDALONE]);
 
 let schemaEnsured = false;
 
@@ -26,6 +31,9 @@ export function ensureLanguagesSchema() {
       host TEXT,
       path_prefix TEXT,
       output_dir TEXT,
+      site_mode TEXT NOT NULL DEFAULT 'subdir',
+      access_port INTEGER,
+      bind_host TEXT,
       is_primary INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -39,6 +47,11 @@ export function ensureLanguagesSchema() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_language_sites_language_id
     ON language_sites(language_id);
   `);
+
+  addColumnIfMissing('language_sites', 'site_mode', "TEXT NOT NULL DEFAULT 'subdir'");
+  addColumnIfMissing('language_sites', 'access_port', 'INTEGER');
+  addColumnIfMissing('language_sites', 'bind_host', 'TEXT');
+  execute("UPDATE language_sites SET site_mode = 'subdir' WHERE site_mode IS NULL OR TRIM(site_mode) = ''");
 
   ensureDefaultLanguage();
   schemaEnsured = true;
@@ -62,6 +75,9 @@ export function listLanguages() {
         ls.host,
         ls.path_prefix,
         ls.output_dir,
+        ls.site_mode,
+        ls.access_port,
+        ls.bind_host,
         ls.is_primary
       FROM languages l
       LEFT JOIN language_sites ls ON ls.language_id = l.id
@@ -88,6 +104,9 @@ export function getLanguageById(id) {
         ls.host,
         ls.path_prefix,
         ls.output_dir,
+        ls.site_mode,
+        ls.access_port,
+        ls.bind_host,
         ls.is_primary
       FROM languages l
       LEFT JOIN language_sites ls ON ls.language_id = l.id
@@ -117,6 +136,9 @@ export function getDefaultLanguage() {
         ls.host,
         ls.path_prefix,
         ls.output_dir,
+        ls.site_mode,
+        ls.access_port,
+        ls.bind_host,
         ls.is_primary
       FROM languages l
       LEFT JOIN language_sites ls ON ls.language_id = l.id
@@ -132,9 +154,18 @@ export function hasMultipleEnabledLanguages() {
   return listLanguages().filter((language) => Number(language.is_enabled || 0) === 1).length > 1;
 }
 
+export function listStandaloneLanguageSites() {
+  return listLanguages().filter((language) => (
+    Number(language.is_enabled || 0) === 1
+    && language?.site?.site_mode === SITE_MODE_STANDALONE
+    && Number(language?.site?.access_port || 0) > 0
+  ));
+}
+
 export function createLanguage(input) {
   ensureLanguagesSchema();
   const payload = normalizeLanguageInput(input, { isCreate: true });
+  validateLanguageSiteConfig(payload);
   const now = new Date().toISOString();
 
   if (payload.is_default) {
@@ -177,7 +208,11 @@ export function updateLanguage(id, input) {
     return null;
   }
 
-  const payload = normalizeLanguageInput({ ...existing, ...input, site: { ...existing.site, ...(input?.site || {}) } });
+  const payload = normalizeLanguageInput(
+    { ...existing, ...input, site: { ...existing.site, ...(input?.site || {}) } },
+    { isCreate: false }
+  );
+  validateLanguageSiteConfig(payload, { currentLanguageId: id });
   const now = new Date().toISOString();
 
   if (payload.is_default) {
@@ -229,6 +264,18 @@ export function deleteLanguage(id) {
   return existing;
 }
 
+export function deriveLanguageSiteOutputDir({ siteMode = SITE_MODE_SUBDIR, pathPrefix = '/', languageCode = '' } = {}) {
+  if (siteMode === SITE_MODE_STANDALONE) {
+    return `html_${buildStandaloneOutputSuffix(languageCode)}`;
+  }
+
+  if (pathPrefix === '/') {
+    return 'html';
+  }
+
+  return `html${pathPrefix}`;
+}
+
 function ensureDefaultLanguage() {
   const existingDefault = queryOne('SELECT id FROM languages WHERE is_default = 1 LIMIT 1');
   if (existingDefault) {
@@ -259,17 +306,20 @@ function ensureDefaultLanguage() {
         host,
         path_prefix,
         output_dir,
+        site_mode,
+        access_port,
+        bind_host,
         is_primary,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, 1, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     `,
-    [result.lastInsertRowid, null, '/', 'html', now, now]
+    [result.lastInsertRowid, null, '/', 'html', SITE_MODE_SUBDIR, null, null, now, now]
   );
 }
 
 function upsertLanguageSite(languageId, site, now = new Date().toISOString()) {
-  const normalizedSite = normalizeSiteInput(site);
+  const normalizedSite = normalizeSiteInput(site, { languageCode: site?.language_code || '', isDefault: site?.is_default === 1 });
   const existing = queryOne('SELECT id FROM language_sites WHERE language_id = ? LIMIT 1', [languageId]);
 
   if (!existing) {
@@ -280,16 +330,22 @@ function upsertLanguageSite(languageId, site, now = new Date().toISOString()) {
           host,
           path_prefix,
           output_dir,
+          site_mode,
+          access_port,
+          bind_host,
           is_primary,
           created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `,
       [
         languageId,
         normalizedSite.host,
         normalizedSite.path_prefix,
         normalizedSite.output_dir,
+        normalizedSite.site_mode,
+        normalizedSite.access_port,
+        normalizedSite.bind_host,
         normalizedSite.is_primary,
         now,
         now
@@ -305,6 +361,9 @@ function upsertLanguageSite(languageId, site, now = new Date().toISOString()) {
         host = ?,
         path_prefix = ?,
         output_dir = ?,
+        site_mode = ?,
+        access_port = ?,
+        bind_host = ?,
         is_primary = ?,
         updated_at = ?
       WHERE language_id = ?
@@ -313,6 +372,9 @@ function upsertLanguageSite(languageId, site, now = new Date().toISOString()) {
       normalizedSite.host,
       normalizedSite.path_prefix,
       normalizedSite.output_dir,
+      normalizedSite.site_mode,
+      normalizedSite.access_port,
+      normalizedSite.bind_host,
       normalizedSite.is_primary,
       now,
       languageId
@@ -333,27 +395,76 @@ function normalizeLanguageInput(input, { isCreate = false } = {}) {
     throw new Error('语言名称不能为空');
   }
 
+  const isDefault = toBooleanInt(input?.is_default);
+
   return {
     code,
     name,
     native_name: toNullableString(input?.native_name),
-    is_default: toBooleanInt(input?.is_default),
+    is_default: isDefault,
     is_enabled: isCreate && input?.is_enabled === undefined ? 1 : toBooleanInt(input?.is_enabled),
     sort_order: toInteger(input?.sort_order, 0),
-    site: input?.site || {}
+    site: normalizeSiteInput(input?.site || {}, { languageCode: code, isDefault })
   };
 }
 
-function normalizeSiteInput(input) {
-  const pathPrefix = normalizePathPrefix(input?.path_prefix);
-  const outputDir = toNullableString(input?.output_dir) || deriveOutputDir(pathPrefix);
+function normalizeSiteInput(input, { languageCode = '', isDefault = 0 } = {}) {
+  const siteMode = normalizeSiteMode(input?.site_mode);
+  const pathPrefix = siteMode === SITE_MODE_STANDALONE ? '/' : normalizePathPrefix(input?.path_prefix);
+  const accessPort = siteMode === SITE_MODE_STANDALONE ? normalizePort(input?.access_port) : null;
+  const bindHost = siteMode === SITE_MODE_STANDALONE ? normalizeBindHost(input?.bind_host) : null;
 
   return {
     host: toNullableString(input?.host),
     path_prefix: pathPrefix,
-    output_dir: outputDir,
-    is_primary: toBooleanInt(input?.is_primary ?? 1)
+    output_dir: deriveLanguageSiteOutputDir({ siteMode, pathPrefix, languageCode }),
+    site_mode: siteMode,
+    access_port: accessPort,
+    bind_host: bindHost,
+    is_primary: toBooleanInt(input?.is_primary ?? 1),
+    language_code: languageCode,
+    is_default: isDefault
   };
+}
+
+function validateLanguageSiteConfig(payload, { currentLanguageId = null } = {}) {
+  const site = payload.site || {};
+  if (site.site_mode === SITE_MODE_STANDALONE) {
+    if (payload.is_default) {
+      throw new Error('默认语言必须保留在主站目录，不能配置为独立站点');
+    }
+    if (!site.access_port) {
+      throw new Error('独立站点必须配置访问端口');
+    }
+    if (site.access_port === PORT) {
+      throw new Error(`独立站点端口不能与主站端口 ${PORT} 冲突`);
+    }
+
+    const conflict = queryOne(
+      `
+        SELECT l.code
+        FROM language_sites ls
+        INNER JOIN languages l ON l.id = ls.language_id
+        WHERE ls.site_mode = ?
+          AND ls.access_port = ?
+          AND l.id <> ?
+        LIMIT 1
+      `,
+      [SITE_MODE_STANDALONE, site.access_port, currentLanguageId || 0]
+    );
+
+    if (conflict) {
+      throw new Error(`端口 ${site.access_port} 已被语言 ${conflict.code} 使用`);
+    }
+  }
+}
+
+function normalizeSiteMode(value) {
+  const normalized = String(value || SITE_MODE_SUBDIR).trim().toLowerCase();
+  if (!SITE_MODE_VALUES.has(normalized)) {
+    throw new Error('站点模式不正确');
+  }
+  return normalized;
 }
 
 function normalizePathPrefix(value) {
@@ -365,14 +476,41 @@ function normalizePathPrefix(value) {
   return withSlash.replace(/\/+$/, '');
 }
 
-function deriveOutputDir(pathPrefix) {
-  if (pathPrefix === '/') {
-    return 'html';
+function normalizePort(value) {
+  if (value === undefined || value === null || String(value).trim() === '') {
+    return null;
   }
-  return `html${pathPrefix}`;
+
+  const parsed = Number.parseInt(String(value).trim(), 10);
+  if (!Number.isFinite(parsed) || parsed < 1 || parsed > 65535) {
+    throw new Error('站点访问端口必须是 1-65535 之间的整数');
+  }
+  return parsed;
+}
+
+function normalizeBindHost(value) {
+  return toNullableString(value) || HOST;
+}
+
+function buildStandaloneOutputSuffix(languageCode) {
+  const normalized = String(languageCode || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+
+  return normalized || 'site';
 }
 
 function mapLanguageRow(row) {
+  const siteMode = normalizeSiteMode(row.site_mode || SITE_MODE_SUBDIR);
+  const pathPrefix = row.path_prefix || '/';
+  const outputDir = row.output_dir || deriveLanguageSiteOutputDir({
+    siteMode,
+    pathPrefix,
+    languageCode: row.code
+  });
+
   return {
     id: Number(row.id),
     code: row.code,
@@ -386,11 +524,22 @@ function mapLanguageRow(row) {
     site: {
       id: row.site_id ? Number(row.site_id) : null,
       host: row.host || '',
-      path_prefix: row.path_prefix || '/',
-      output_dir: row.output_dir || '',
+      path_prefix: pathPrefix,
+      output_dir: outputDir,
+      site_mode: siteMode,
+      access_port: row.access_port ? Number(row.access_port) : null,
+      bind_host: row.bind_host || '',
       is_primary: Number(row.is_primary || 0)
     }
   };
+}
+
+function addColumnIfMissing(tableName, columnName, definition) {
+  const columns = new Set(queryAll(`PRAGMA table_info(${tableName})`).map((column) => String(column.name || '')));
+  if (columns.has(columnName)) {
+    return;
+  }
+  getDb().exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
 }
 
 function toNullableString(value) {

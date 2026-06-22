@@ -129,7 +129,7 @@ export default function ManualColumnFormDialog({
         return JSON.stringify(previous) === JSON.stringify(nextTranslations) ? previous : nextTranslations
       })
       setActiveLanguage((previous) => {
-        const nextLanguage = column.current_language_code || defaultLanguageCode
+        const nextLanguage = column.requested_language_code || column.current_language_code || defaultLanguageCode
         return previous === nextLanguage ? previous : nextLanguage
       })
       setListTemplateId((previous) => previous === (initialListTemplateId || DEFAULT_TEMPLATE_VALUE) ? previous : (initialListTemplateId || DEFAULT_TEMPLATE_VALUE))

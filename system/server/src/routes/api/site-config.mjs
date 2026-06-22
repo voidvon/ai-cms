@@ -12,7 +12,7 @@ export default async function siteConfigRoutes(app) {
 
   // 公开 API：站点配置
   app.get('/site-config', async (request, reply) => {
-    const languageCode = String(request.query?.language || '').trim() || null;
+    const languageCode = String(request.query?.language || '').trim() || app.publicSite?.languageCode || null;
     const includeTranslations = Number.parseInt(String(request.query?.include_translations ?? 0), 10) === 1;
     const config = getSiteConfig(languageCode, { includeTranslations });
     return { success: true, data: config };

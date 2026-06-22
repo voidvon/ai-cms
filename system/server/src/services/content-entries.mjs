@@ -106,6 +106,7 @@ export function listContentEntries(modelCode, {
         coalesce(t.publish_status, dt.publish_status, 'published') AS translation_publish_status,
         ${getTranslationCreatedAtExpr('t', 'dt', 'e')} AS translation_created_at,
         coalesce(tc.name, dtc.name, '') AS column_name,
+        ? AS requested_language_code,
         coalesce(l.code, dl.code, ?) AS current_language_code
       FROM ${quoteIdentifier(tableName)} e
       LEFT JOIN ${quoteIdentifier(translationTableName)} t ON t.entry_id = e.id AND t.language_id = ?
@@ -120,6 +121,7 @@ export function listContentEntries(modelCode, {
       LIMIT ?
     `,
     [
+      selectedLanguage.code,
       selectedLanguage.code,
       selectedLanguage.id,
       selectedLanguage.default_id,
@@ -202,6 +204,7 @@ export function listContentEntriesPaged(modelCode, {
         coalesce(t.publish_status, dt.publish_status, 'published') AS translation_publish_status,
         ${getTranslationCreatedAtExpr('t', 'dt', 'e')} AS translation_created_at,
         coalesce(tc.name, dtc.name, '') AS column_name,
+        ? AS requested_language_code,
         coalesce(l.code, dl.code, ?) AS current_language_code
       FROM ${quoteIdentifier(tableName)} e
       LEFT JOIN ${quoteIdentifier(translationTableName)} t ON t.entry_id = e.id AND t.language_id = ?
@@ -216,7 +219,7 @@ export function listContentEntriesPaged(modelCode, {
       LIMIT ?
       OFFSET ?
     `,
-    [...queryParams, safeLimit, offset]
+    [selectedLanguage.code, ...queryParams, safeLimit, offset]
   );
 
   const total = queryOne(
@@ -266,6 +269,7 @@ export function getContentEntryById(modelCode, id, {
         coalesce(t.publish_status, dt.publish_status, 'published') AS translation_publish_status,
         ${getTranslationCreatedAtExpr('t', 'dt', 'e')} AS translation_created_at,
         coalesce(tc.name, dtc.name, '') AS column_name,
+        ? AS requested_language_code,
         coalesce(l.code, dl.code, ?) AS current_language_code
       FROM ${quoteIdentifier(tableName)} e
       LEFT JOIN ${quoteIdentifier(translationTableName)} t ON t.entry_id = e.id AND t.language_id = ?
@@ -278,6 +282,7 @@ export function getContentEntryById(modelCode, id, {
       WHERE e.id = ?
     `,
     [
+      selectedLanguage.code,
       selectedLanguage.code,
       selectedLanguage.id,
       selectedLanguage.default_id,
@@ -671,6 +676,8 @@ function resolveDefaultTranslation(translations, defaultLanguageCode) {
 function mapEntryRow(modelCode, row) {
   const images = normalizeImageList(row.images);
   const primaryImage = resolvePrimaryImage(row.primary_image, row.images);
+  const requestedLanguageCode = row.requested_language_code || row.current_language_code || null;
+  const resolvedLanguageCode = row.current_language_code || requestedLanguageCode;
   const base = {
     id: toInteger(row.id, 0),
     name: row.name || '',
@@ -690,7 +697,17 @@ function mapEntryRow(modelCode, row) {
     is_featured_home: toBooleanInt(row.is_featured_home, 0),
     sort_order: toInteger(row.sort_order, 0),
     column_name: row.column_name || undefined,
-    current_language_code: row.current_language_code,
+    current_language_code: resolvedLanguageCode,
+    requested_language_code: requestedLanguageCode,
+    resolved_language_code: resolvedLanguageCode,
+    fallback_language_code: resolvedLanguageCode && requestedLanguageCode && resolvedLanguageCode !== requestedLanguageCode
+      ? resolvedLanguageCode
+      : null,
+    is_language_fallback: Boolean(
+      resolvedLanguageCode
+      && requestedLanguageCode
+      && resolvedLanguageCode !== requestedLanguageCode
+    ),
     created_at: row.created_at,
     updated_at: row.updated_at
   };
@@ -762,11 +779,12 @@ function compareEntriesBySortOrder(left, right) {
 function resolveLanguage(languageCode) {
   const languages = listLanguages();
   const defaultLanguage = getDefaultLanguage() || languages[0];
-  const selected = languageCode
-    ? languages.find((language) => language.code === languageCode)
+  const requestedCode = String(languageCode || '').trim();
+  const selected = requestedCode
+    ? languages.find((language) => language.code === requestedCode)
     : defaultLanguage;
   return {
-    code: selected?.code || defaultLanguage?.code || 'zh-CN',
+    code: requestedCode || selected?.code || defaultLanguage?.code || 'zh-CN',
     id: toInteger(selected?.id, toInteger(defaultLanguage?.id, 1)),
     default_id: toInteger(defaultLanguage?.id, toInteger(selected?.id, 1))
   };

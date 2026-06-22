@@ -143,7 +143,7 @@ export default function ColumnNodeFormDialog({
         setSingleName(source.name || '')
       } else {
         setTranslations(buildInitialTranslations(source, defaultLanguageCode, availableLanguageCodes, meta.supportsSeo))
-        setActiveLanguage(source.current_language_code || defaultLanguageCode)
+        setActiveLanguage(source.requested_language_code || source.current_language_code || defaultLanguageCode)
         setSingleName('')
       }
       const bindings = bindingsData?.data || []

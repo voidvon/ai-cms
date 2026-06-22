@@ -6,11 +6,13 @@ import fastifySensible from '@fastify/sensible';
 import fastifyFormbody from '@fastify/formbody';
 import { HOST, PORT } from './config.mjs';
 import { getDb } from './db.mjs';
+import { createSiteListenerManager } from './site-listener-manager.mjs';
+import { withPortConflictDetails } from './utils/port-diagnostics.mjs';
 
-// 确保数据库初始化
 getDb();
 
 export async function createApp(options = {}) {
+  const publicSite = normalizePublicSiteOptions(options.publicSite);
   const app = Fastify({
     logger: options.logger ?? {
       level: process.env.LOG_LEVEL || 'info',
@@ -26,7 +28,45 @@ export async function createApp(options = {}) {
     ...options
   });
 
-  // 注册插件
+  app.decorate('publicSite', publicSite);
+  app.decorate('siteListenerManager', options.siteListenerManager || null);
+  app.decorateRequest('session', null);
+  app.decorateRequest('adminUser', null);
+
+  await registerCommonPlugins(app);
+  await registerCommonHooks(app);
+  await registerCommonRoutes(app, { publicSite });
+  registerCommonErrorHandling(app, { publicSite });
+
+  return app;
+}
+
+export async function startServer() {
+  const siteListenerManager = createSiteListenerManager({ logger: console });
+  const app = await createApp({ siteListenerManager });
+
+  try {
+    await app.listen({ port: PORT, host: HOST });
+    await siteListenerManager.sync();
+    console.log(`🚀 Server listening on http://${HOST}:${PORT}`);
+  } catch (err) {
+    const enrichedError = withPortConflictDetails(err, PORT);
+    app.log.error(enrichedError);
+    await siteListenerManager.closeAll();
+    process.exit(1);
+  }
+
+  const shutdown = async () => {
+    await siteListenerManager.closeAll();
+    await app.close();
+    process.exit(0);
+  };
+
+  process.once('SIGINT', shutdown);
+  process.once('SIGTERM', shutdown);
+}
+
+async function registerCommonPlugins(app) {
   await app.register(fastifySensible);
   await app.register(fastifyCookie, {
     secret: process.env.COOKIE_SECRET || 'spiraxsarcocn-server-secret-key-change-in-production',
@@ -46,41 +86,41 @@ export async function createApp(options = {}) {
     origin: true,
     credentials: true
   });
+}
 
-  // 自定义装饰器：会话管理
-  app.decorateRequest('session', null);
-  app.decorateRequest('adminUser', null);
-
-  // 全局钩子：加载会话信息
+async function registerCommonHooks(app) {
   app.addHook('onRequest', async (request, reply) => {
     const { authHook } = await import('./middleware/auth.mjs');
     await authHook(request, reply);
   });
+}
 
-  // 注册路由模块
-  await app.register(import('./routes/auth.mjs'), { prefix: '/admin' });
+async function registerCommonRoutes(app, { publicSite }) {
+  if (!publicSite) {
+    await app.register(import('./routes/auth.mjs'), { prefix: '/admin' });
+    await app.register(import('./routes/api/content-items.mjs'), { prefix: '/api' });
+    await app.register(import('./routes/api/column-nodes.mjs'), { prefix: '/api' });
+    await app.register(import('./routes/api/template-variants.mjs'), { prefix: '/api' });
+    await app.register(import('./routes/api/templates.mjs'), { prefix: '/api' });
+    await app.register(import('./routes/api/content-models.mjs'), { prefix: '/api' });
+    await app.register(import('./routes/api/content-model-fields.mjs'), { prefix: '/api' });
+    await app.register(import('./routes/api/columns.mjs'), { prefix: '/api' });
+    await app.register(import('./routes/api/languages.mjs'), { prefix: '/api' });
+    await app.register(import('./routes/api/media.mjs'), { prefix: '/api' });
+    await app.register(import('./routes/api/admin.mjs'), { prefix: '/api' });
+    await app.register(import('./routes/admin/static-gen.mjs'), { prefix: '/admin' });
+  }
+
   await app.register(import('./routes/api/search.mjs'), { prefix: '/api' });
-  await app.register(import('./routes/api/content-items.mjs'), { prefix: '/api' });
-  await app.register(import('./routes/api/column-nodes.mjs'), { prefix: '/api' });
-  await app.register(import('./routes/api/template-variants.mjs'), { prefix: '/api' });
-  await app.register(import('./routes/api/templates.mjs'), { prefix: '/api' });
-  await app.register(import('./routes/api/content-models.mjs'), { prefix: '/api' });
-  await app.register(import('./routes/api/content-model-fields.mjs'), { prefix: '/api' });
-  await app.register(import('./routes/api/columns.mjs'), { prefix: '/api' });
-  await app.register(import('./routes/api/languages.mjs'), { prefix: '/api' });
-  await app.register(import('./routes/api/media.mjs'), { prefix: '/api' });
-  await app.register(import('./routes/api/admin.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/site-config.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/sitemap.mjs'), { prefix: '/api' });
   await app.register(import('./routes/api/llms.mjs'), { prefix: '/api' });
-  await app.register(import('./routes/admin/static-gen.mjs'), { prefix: '/admin' });
+}
 
-  // 静态文件服务和 404 处理（最后注册）
-  // 使用自定义静态文件处理器以支持大小写不敏感的路径匹配
+function registerCommonErrorHandling(app, { publicSite }) {
   app.setNotFoundHandler(async (request, reply) => {
-    // 尝试提供静态文件
     const { serveStatic } = await import('./static-file-handler.mjs');
-    const handled = await serveStatic(request, reply);
+    const handled = await serveStatic(request, reply, publicSite || undefined);
 
     if (!handled) {
       reply.type('text/html; charset=utf-8');
@@ -99,7 +139,6 @@ export async function createApp(options = {}) {
     }
   });
 
-  // 全局错误处理
   app.setErrorHandler((error, request, reply) => {
     app.log.error(error);
 
@@ -123,18 +162,21 @@ export async function createApp(options = {}) {
       message: process.env.NODE_ENV === 'production' ? 'An error occurred' : error.message
     });
   });
-
-  return app;
 }
 
-export async function startServer() {
-  const app = await createApp();
-
-  try {
-    await app.listen({ port: PORT, host: HOST });
-    console.log(`🚀 Server listening on http://${HOST}:${PORT}`);
-  } catch (err) {
-    app.log.error(err);
-    process.exit(1);
+function normalizePublicSiteOptions(publicSite) {
+  if (!publicSite) {
+    return null;
   }
+
+  const contentRoot = String(publicSite.contentRoot || '').trim();
+  if (!contentRoot) {
+    throw new Error('publicSite.contentRoot 不能为空');
+  }
+
+  return {
+    languageCode: String(publicSite.languageCode || '').trim() || null,
+    languageSiteId: Number.parseInt(String(publicSite.languageSiteId || ''), 10) || null,
+    contentRoot
+  };
 }

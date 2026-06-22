@@ -101,10 +101,29 @@ export function createCmsTemplateRuntime({
   }
 
   function injectPageAssets(html, { templateCode, renderGroup, props }) {
-    const withSeoHead = injectSeoHead(html, props);
+    const withHtmlLang = injectHtmlLangAttribute(html, props);
+    const withSeoHead = injectSeoHead(withHtmlLang, props);
     const withStyles = injectStylesheetLinks(withSeoHead, templateCode, renderGroup);
     const withRuntimePlaceholder = injectGlobalInteractionScript(withStyles);
     return injectInlineScriptAssetPlaceholders(withRuntimePlaceholder);
+  }
+
+  function injectHtmlLangAttribute(html, props = {}) {
+    const languageCode = String(
+      props?.site?.requested_language_code
+      || props?.site?.current_language_code
+      || ''
+    ).trim();
+    if (!languageCode) {
+      return html;
+    }
+
+    return String(html || '').replace(/<html\b([^>]*)>/i, (match, attrs = '') => {
+      if (/\slang\s*=/i.test(attrs)) {
+        return match.replace(/\slang\s*=\s*(['"])(.*?)\1/i, ` lang="${escapeHtml(languageCode)}"`);
+      }
+      return `<html lang="${escapeHtml(languageCode)}"${attrs}>`;
+    });
   }
 
   function injectSeoHead(html, props = {}) {

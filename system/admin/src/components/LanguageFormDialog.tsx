@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { languagesApi } from '@/api/languages'
 import { Button } from '@/components/ui/button'
@@ -16,22 +16,11 @@ interface LanguageFormDialogProps {
   mode: 'create' | 'edit'
 }
 
+const DEFAULT_BIND_HOST = '127.0.0.1'
+
 export default function LanguageFormDialog({ open, onOpenChange, language, mode }: LanguageFormDialogProps) {
   const queryClient = useQueryClient()
-  const [formData, setFormData] = useState({
-    code: '',
-    name: '',
-    native_name: '',
-    is_default: 0,
-    is_enabled: 1,
-    sort_order: 0,
-    site: {
-      host: '',
-      path_prefix: '/',
-      output_dir: 'html',
-      is_primary: 1,
-    },
-  })
+  const [formData, setFormData] = useState(createEmptyFormData())
 
   useEffect(() => {
     if (language && mode === 'edit') {
@@ -46,34 +35,40 @@ export default function LanguageFormDialog({ open, onOpenChange, language, mode 
           host: language.site?.host || '',
           path_prefix: language.site?.path_prefix || '/',
           output_dir: language.site?.output_dir || 'html',
+          site_mode: language.site?.site_mode || 'subdir',
+          access_port: language.site?.access_port ? String(language.site.access_port) : '',
+          bind_host: language.site?.bind_host || DEFAULT_BIND_HOST,
           is_primary: language.site?.is_primary || 1,
         },
       })
       return
     }
 
-    setFormData({
-      code: '',
-      name: '',
-      native_name: '',
-      is_default: 0,
-      is_enabled: 1,
-      sort_order: 0,
-      site: {
-        host: '',
-        path_prefix: '/',
-        output_dir: 'html',
-        is_primary: 1,
-      },
-    })
+    setFormData(createEmptyFormData())
   }, [language, mode, open])
+
+  const derivedOutputDir = useMemo(
+    () => deriveOutputDir(formData.code, formData.site.site_mode, formData.site.path_prefix),
+    [formData.code, formData.site.path_prefix, formData.site.site_mode]
+  )
 
   const mutation = useMutation({
     mutationFn: async () => {
-      if (mode === 'create') {
-        return languagesApi.create(formData)
+      const payload = {
+        ...formData,
+        site: {
+          ...formData.site,
+          output_dir: derivedOutputDir,
+          access_port: formData.site.site_mode === 'standalone'
+            ? Number.parseInt(formData.site.access_port || '', 10) || null
+            : null,
+        },
       }
-      return languagesApi.update(language!.id, formData)
+
+      if (mode === 'create') {
+        return languagesApi.create(payload)
+      }
+      return languagesApi.update(language!.id, payload)
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['languages'] })
@@ -95,6 +90,16 @@ export default function LanguageFormDialog({ open, onOpenChange, language, mode 
       toast.error('请输入语言名称')
       return
     }
+    if (formData.site.site_mode === 'standalone') {
+      if (formData.is_default === 1) {
+        toast.error('默认语言不能配置为独立站点')
+        return
+      }
+      if (!formData.site.access_port.trim()) {
+        toast.error('独立站点必须填写访问端口')
+        return
+      }
+    }
     mutation.mutate()
   }
 
@@ -103,7 +108,7 @@ export default function LanguageFormDialog({ open, onOpenChange, language, mode 
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{mode === 'create' ? '新增语言' : '编辑语言'}</DialogTitle>
-          <DialogDescription>配置语言标识和部署路径。</DialogDescription>
+          <DialogDescription>配置语言标识、多站点模式和发布目录。</DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2">
@@ -182,35 +187,89 @@ export default function LanguageFormDialog({ open, onOpenChange, language, mode 
           </div>
 
           <div className="rounded border p-4 space-y-4">
-            <div className="font-medium">部署配置</div>
+            <div className="font-medium">站点部署</div>
             <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>站点模式</Label>
+                <Select
+                  value={formData.site.site_mode}
+                  onValueChange={(value: 'subdir' | 'standalone') => {
+                    setFormData({
+                      ...formData,
+                      site: {
+                        ...formData.site,
+                        site_mode: value,
+                        path_prefix: value === 'standalone' ? '/' : formData.site.path_prefix || '/',
+                        access_port: value === 'standalone' ? formData.site.access_port : '',
+                        bind_host: value === 'standalone' ? (formData.site.bind_host || DEFAULT_BIND_HOST) : DEFAULT_BIND_HOST,
+                      },
+                    })
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="subdir">子目录站点</SelectItem>
+                    <SelectItem value="standalone">独立站点</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="space-y-2">
                 <Label htmlFor="host">独立域名</Label>
                 <Input
                   id="host"
                   value={formData.site.host}
                   onChange={(e) => setFormData({ ...formData, site: { ...formData.site, host: e.target.value } })}
-                  placeholder="en.example.com"
+                  placeholder="ru.example.com"
                 />
               </div>
+            </div>
+
+            {formData.site.site_mode === 'subdir' ? (
               <div className="space-y-2">
                 <Label htmlFor="path_prefix">子目录前缀</Label>
                 <Input
                   id="path_prefix"
                   value={formData.site.path_prefix}
                   onChange={(e) => setFormData({ ...formData, site: { ...formData.site, path_prefix: e.target.value } })}
-                  placeholder="/en"
+                  placeholder="/ru"
                 />
               </div>
-            </div>
+            ) : (
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="access_port">访问端口</Label>
+                  <Input
+                    id="access_port"
+                    type="number"
+                    value={formData.site.access_port}
+                    onChange={(e) => setFormData({ ...formData, site: { ...formData.site, access_port: e.target.value } })}
+                    placeholder="3001"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="bind_host">监听地址</Label>
+                  <Input
+                    id="bind_host"
+                    value={formData.site.bind_host}
+                    onChange={(e) => setFormData({ ...formData, site: { ...formData.site, bind_host: e.target.value } })}
+                    placeholder={DEFAULT_BIND_HOST}
+                  />
+                </div>
+              </div>
+            )}
+
             <div className="space-y-2">
               <Label htmlFor="output_dir">输出目录</Label>
               <Input
                 id="output_dir"
-                value={formData.site.output_dir}
-                onChange={(e) => setFormData({ ...formData, site: { ...formData.site, output_dir: e.target.value } })}
-                placeholder="html/en"
+                value={derivedOutputDir}
+                readOnly
               />
+              <div className="text-xs text-muted-foreground">
+                输出目录按站点模式自动生成，避免路径冲突。
+              </div>
             </div>
           </div>
 
@@ -226,4 +285,43 @@ export default function LanguageFormDialog({ open, onOpenChange, language, mode 
       </DialogContent>
     </Dialog>
   )
+}
+
+function createEmptyFormData() {
+  return {
+    code: '',
+    name: '',
+    native_name: '',
+    is_default: 0,
+    is_enabled: 1,
+    sort_order: 0,
+    site: {
+      host: '',
+      path_prefix: '/',
+      output_dir: 'html',
+      site_mode: 'subdir' as const,
+      access_port: '',
+      bind_host: DEFAULT_BIND_HOST,
+      is_primary: 1,
+    },
+  }
+}
+
+function deriveOutputDir(code: string, siteMode: 'subdir' | 'standalone', pathPrefix: string) {
+  if (siteMode === 'standalone') {
+    const normalizedCode = String(code || '')
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_+|_+$/g, '')
+    return `html_${normalizedCode || 'site'}`
+  }
+
+  const normalizedPrefix = String(pathPrefix || '').trim()
+  if (!normalizedPrefix || normalizedPrefix === '/') {
+    return 'html'
+  }
+
+  const withSlash = normalizedPrefix.startsWith('/') ? normalizedPrefix : `/${normalizedPrefix}`
+  return `html${withSlash.replace(/\/+$/, '')}`
 }

@@ -18,6 +18,10 @@ export type SiteConfig = {
   seo_home_title?: string | null
   seo_home_description?: string | null
   current_language_code?: string | null
+  requested_language_code?: string | null
+  resolved_language_code?: string | null
+  fallback_language_code?: string | null
+  is_language_fallback?: boolean | null
 }
 
 export type SeoMetaPayload = {

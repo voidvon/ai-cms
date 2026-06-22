@@ -128,6 +128,10 @@ function mapColumnToNode(column, rootColumn = null) {
     is_visible: toInteger(column.is_visible, 1),
     is_featured_home: toInteger(column.is_featured_home, 0),
     current_language_code: column.current_language_code,
+    requested_language_code: column.requested_language_code,
+    resolved_language_code: column.resolved_language_code,
+    fallback_language_code: column.fallback_language_code,
+    is_language_fallback: column.is_language_fallback,
     translations
   };
 }

@@ -39,7 +39,8 @@ type PageProps =
 
 export function renderPage(pageName: PageName, props: PageProps): string {
   const page = resolveLegacyPage(pageName, props)
-  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">${renderToStaticMarkup(page)}`
+  const markup = renderToStaticMarkup(page)
+  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">${injectHtmlLang(markup, props)}`
 }
 
 function resolveLegacyPage(pageName: PageName, props: PageProps): React.ReactElement {
@@ -61,4 +62,23 @@ function resolveLegacyPage(pageName: PageName, props: PageProps): React.ReactEle
     default:
       throw new Error(`Unknown legacy site page: ${pageName}`)
   }
+}
+
+function injectHtmlLang(markup: string, props: PageProps): string {
+  const languageCode = String(
+    props?.site?.requested_language_code
+    || props?.site?.current_language_code
+    || ''
+  ).trim()
+
+  if (!languageCode) {
+    return markup
+  }
+
+  return markup.replace(/<html\b([^>]*)>/i, (match, attrs = '') => {
+    if (/\slang\s*=/i.test(attrs)) {
+      return match.replace(/\slang\s*=\s*(['"])(.*?)\1/i, ` lang="${languageCode}"`)
+    }
+    return `<html lang="${languageCode}"${attrs}>`
+  })
 }

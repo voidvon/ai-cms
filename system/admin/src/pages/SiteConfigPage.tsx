@@ -67,7 +67,7 @@ export default function SiteConfigPage() {
       web_mobile: source.web_mobile || '',
     })
     setTranslations(buildInitialTranslations(source, defaultLanguageCode, availableLanguageCodes))
-    setActiveLanguage(source.current_language_code || defaultLanguageCode)
+    setActiveLanguage(source.requested_language_code || source.current_language_code || defaultLanguageCode)
   }, [data, defaultLanguageCode, availableLanguageCodes.join('|')])
 
   const mutation = useMutation({

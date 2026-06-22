@@ -28,10 +28,16 @@ export function getSiteConfig(languageCode = null, options = {}) {
   const defaultTranslation = translationMap[selectedLanguage.default_code];
   const fallbackTranslation = selectedTranslation || defaultTranslation || translations[0] || null;
   const merged = applySiteTranslation(base, fallbackTranslation);
+  const resolvedLanguageCode = fallbackTranslation?.language_code || selectedLanguage.code;
+  const requestedLanguageCode = selectedLanguage.code;
 
   return {
     ...merged,
-    current_language_code: fallbackTranslation?.language_code || selectedLanguage.code,
+    current_language_code: resolvedLanguageCode,
+    requested_language_code: requestedLanguageCode,
+    resolved_language_code: resolvedLanguageCode,
+    fallback_language_code: resolvedLanguageCode !== requestedLanguageCode ? resolvedLanguageCode : null,
+    is_language_fallback: resolvedLanguageCode !== requestedLanguageCode,
     ...(includeTranslations ? {
       translations: Object.fromEntries(
         translations.map((item) => [
@@ -503,12 +509,13 @@ function ensureDefaultSiteConfigTranslation() {
 function resolveLanguageForContent(languageCode) {
   const languages = listLanguages();
   const defaultLanguage = languages.find((item) => Number(item.is_default || 0) === 1) || languages[0] || { code: 'zh-CN' };
-  const selected = languageCode
-    ? languages.find((item) => item.code === languageCode)
+  const requestedCode = String(languageCode || '').trim();
+  const selected = requestedCode
+    ? languages.find((item) => item.code === requestedCode)
     : defaultLanguage;
 
   return {
-    code: selected?.code || defaultLanguage.code || 'zh-CN',
+    code: requestedCode || selected?.code || defaultLanguage.code || 'zh-CN',
     default_code: defaultLanguage.code || 'zh-CN'
   };
 }

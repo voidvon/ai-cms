@@ -3,6 +3,7 @@ import { normalizeSearchModelCodes, searchAllContentPaged } from '../../services
 export default async function searchRoutes(app) {
   app.get('/search', async (request, reply) => {
     const { q, page = 1, pageSize = 20, language, lang, models } = request.query;
+    const defaultLanguageCode = app.publicSite?.languageCode || null;
 
     if (!String(q || '').trim()) {
       return reply.badRequest('缺少搜索关键词');
@@ -16,7 +17,7 @@ export default async function searchRoutes(app) {
     const result = searchAllContentPaged(q, {
       page: parseInt(page),
       limit: parseInt(pageSize),
-      languageCode: language ?? lang,
+      languageCode: language ?? lang ?? defaultLanguageCode,
       models: normalizeSearchModelCodes(modelList)
     });
 

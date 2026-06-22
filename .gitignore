@@ -2,6 +2,8 @@
 .codex/
 
 /html/
+/html_*/
+
 
 node_modules/
 /dist

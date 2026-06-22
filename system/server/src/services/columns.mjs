@@ -299,6 +299,7 @@ function hydrateColumns(rows, {
     const resolvedSeoTitle = fallbackTranslation?.seo_title ?? null;
     const resolvedSeoDescription = fallbackTranslation?.seo_description ?? null;
     const resolvedPublishStatus = fallbackTranslation?.publish_status ?? 'published';
+    const resolvedLanguageCode = fallbackTranslation?.language_code || selectedLanguage.default_code || selectedLanguage.code;
     const modelCode = inferModelCode(row, rowById, modelCodeById);
     const semantics = inferColumnSemantics(row, rowById, semanticsById, modelCode);
 
@@ -312,7 +313,11 @@ function hydrateColumns(rows, {
       seo_title: resolvedSeoTitle ?? null,
       seo_description: resolvedSeoDescription ?? null,
       publish_status: resolvedPublishStatus,
-      current_language_code: fallbackTranslation?.language_code || selectedLanguage.code,
+      current_language_code: resolvedLanguageCode,
+      requested_language_code: selectedLanguage.code,
+      resolved_language_code: resolvedLanguageCode,
+      fallback_language_code: resolvedLanguageCode !== selectedLanguage.code ? resolvedLanguageCode : null,
+      is_language_fallback: resolvedLanguageCode !== selectedLanguage.code,
       content_model_id: toNullableInteger(row.content_model_id),
       dir_name: row.dir_name || null,
       images: parseColumnImages(row.images),

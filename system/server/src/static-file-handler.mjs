@@ -1,10 +1,11 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { ADMIN_DIST_ROOT, CONTENT_ROOT, PUBLIC_ROOT, MIME_TYPES } from './config.mjs';
+import { ADMIN_DIST_ROOT, CONTENT_ROOT, MIME_TYPES, PROJECT_ROOT, PUBLIC_ROOT } from './config.mjs';
+import { getLanguageById, listLanguages } from './services/languages.mjs';
 
 const ADMIN_DEV_SERVER_URL = normalizeDevServerUrl(process.env.ADMIN_DEV_SERVER_URL);
 
-export async function serveStatic(request, reply) {
+export async function serveStatic(request, reply, options = {}) {
   const pathname = getPathname(request.url);
   const rewrittenPathname = pathname;
 
@@ -16,7 +17,8 @@ export async function serveStatic(request, reply) {
     return serveAdminApp(request, reply, rewrittenPathname);
   }
 
-  // 优先从 public/ 目录查找静态资源
+  const contentRoot = resolveRequestContentRoot(request, options);
+
   const publicHandled = await serveFromCandidates(
     PUBLIC_ROOT,
     getStaticCandidates(rewrittenPathname),
@@ -27,9 +29,8 @@ export async function serveStatic(request, reply) {
     return true;
   }
 
-  // 然后从 html/ 目录查找生成的内容
   const contentHandled = await serveFromCandidates(
-    CONTENT_ROOT,
+    contentRoot,
     getStaticCandidates(rewrittenPathname),
     request,
     reply
@@ -69,6 +70,39 @@ export async function serveAdminApp(request, reply, pathname = getPathname(reque
   return serveFromCandidates(ADMIN_DIST_ROOT, ['/index.html'], request, reply);
 }
 
+export function resolveContentRootByLanguageSite(language) {
+  const configuredOutputDir = String(language?.site?.output_dir || '').trim();
+  const siteMode = String(language?.site?.site_mode || '').trim();
+
+  if (!configuredOutputDir || configuredOutputDir === 'html') {
+    return CONTENT_ROOT;
+  }
+
+  if (siteMode === 'standalone') {
+    return path.resolve(PROJECT_ROOT, configuredOutputDir);
+  }
+
+  return path.resolve(CONTENT_ROOT, configuredOutputDir.slice('html/'.length));
+}
+
+function resolveRequestContentRoot(request, options = {}) {
+  const overrideRoot = String(options?.contentRoot || '').trim();
+  if (overrideRoot) {
+    return path.resolve(overrideRoot);
+  }
+
+  const languageSiteId = Number.parseInt(String(options?.languageSiteId ?? request.routeOptions?.config?.languageSiteId ?? ''), 10);
+  if (Number.isFinite(languageSiteId) && languageSiteId > 0) {
+    const language = listLanguages().find((item) => Number(item?.site?.id || 0) === languageSiteId)
+      || getLanguageById(languageSiteId);
+    if (language) {
+      return resolveContentRootByLanguageSite(language);
+    }
+  }
+
+  return CONTENT_ROOT;
+}
+
 async function serveFromCandidates(rootDir, candidates, request, reply) {
   for (const candidate of candidates) {
     const handled = await trySendFile(rootDir, candidate, request, reply);
@@ -84,8 +118,9 @@ async function trySendFile(rootDir, candidate, request, reply) {
     return false;
   }
 
-  const filePath = path.resolve(rootDir, `.${candidate}`);
-  if (!filePath.startsWith(rootDir)) {
+  const resolvedRoot = path.resolve(rootDir);
+  const filePath = path.resolve(resolvedRoot, `.${candidate}`);
+  if (!filePath.startsWith(resolvedRoot)) {
     return false;
   }
 

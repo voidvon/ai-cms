@@ -112,7 +112,12 @@ export default function LanguagesPage() {
                       {language.is_default ? '默认' : '普通'} / {language.is_enabled ? '启用' : '停用'}
                     </TableCell>
                     <TableCell>
-                      {language.site.host ? language.site.host : language.site.path_prefix}
+                      <div>{language.site.site_mode === 'standalone' ? '独立站点' : '子目录站点'}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {language.site.site_mode === 'standalone'
+                          ? `${language.site.bind_host || '127.0.0.1'}:${language.site.access_port || '-'}`
+                          : (language.site.host ? language.site.host : language.site.path_prefix)}
+                      </div>
                     </TableCell>
                     <TableCell className="font-mono text-xs">{language.site.output_dir}</TableCell>
                     <TableCell className="text-right">

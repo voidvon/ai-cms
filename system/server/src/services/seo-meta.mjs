@@ -29,7 +29,7 @@ export function buildSeoMeta({
     openGraph: {
       title: finalTitle,
       site_name: siteName || finalTitle,
-      locale: normalizeOgLocale(siteConfig.current_language_code),
+      locale: normalizeOgLocale(resolveSiteLanguageSignal(siteConfig)),
       localeAlternates: buildLocaleAlternates(siteConfig),
       description: finalDescription,
       url: canonicalUrl,
@@ -53,7 +53,8 @@ export function buildSeoMeta({
 
 export function buildHreflangLinks(site) {
   const baseUrl = normalizeBaseUrl(site?.web_url);
-  return baseUrl ? [{ lang: site?.current_language_code || 'x-default', url: baseUrl }] : [];
+  const siteLanguage = resolveSiteLanguageSignal(site);
+  return baseUrl ? [{ lang: siteLanguage || 'x-default', url: baseUrl }] : [];
 }
 
 export function buildJsonLdOrganization(site) {
@@ -202,7 +203,7 @@ function normalizeOgLocale(languageCode) {
 function buildLocaleAlternates(site) {
   return buildHreflangLinks(site)
     .map((item) => normalizeOgLocale(item.lang))
-    .filter((item) => item !== normalizeOgLocale(site?.current_language_code));
+    .filter((item) => item !== normalizeOgLocale(resolveSiteLanguageSignal(site)));
 }
 
 function collectAvailableLanguages(site) {
@@ -212,6 +213,10 @@ function collectAvailableLanguages(site) {
     .filter((item) => item !== 'x-default')
     .map((item) => item.split('-')[0]);
   return Array.from(new Set(langs));
+}
+
+function resolveSiteLanguageSignal(site) {
+  return String(site?.requested_language_code || site?.current_language_code || '').trim() || 'zh-CN';
 }
 
 function inferImageMimeType(url) {

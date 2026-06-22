@@ -127,10 +127,22 @@ export default function StaticGenerationPage() {
                     {language.code}
                   </Badge>
                   <span>{language.name}</span>
+                  <Badge variant="outline">
+                    {language.site?.site_mode === 'standalone' ? '独立站点' : '子目录站点'}
+                  </Badge>
                   <span className="text-muted-foreground">输出到</span>
                   <code className="rounded bg-muted px-2 py-0.5 text-xs">{language.site?.output_dir || 'html'}</code>
-                  <span className="text-muted-foreground">路径前缀</span>
-                  <code className="rounded bg-muted px-2 py-0.5 text-xs">{language.site?.path_prefix || '/'}</code>
+                  {language.site?.site_mode === 'standalone' ? (
+                    <>
+                      <span className="text-muted-foreground">访问端口</span>
+                      <code className="rounded bg-muted px-2 py-0.5 text-xs">{language.site?.bind_host || '127.0.0.1'}:{language.site?.access_port || '-'}</code>
+                    </>
+                  ) : (
+                    <>
+                      <span className="text-muted-foreground">路径前缀</span>
+                      <code className="rounded bg-muted px-2 py-0.5 text-xs">{language.site?.path_prefix || '/'}</code>
+                    </>
+                  )}
                   <Button
                     size="sm"
                     variant="outline"

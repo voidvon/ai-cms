@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { CONTENT_ROOT, PUBLIC_ROOT } from './config.mjs';
+import { CONTENT_ROOT, PROJECT_ROOT, PUBLIC_ROOT } from './config.mjs';
 import { getDb, queryAll } from './db.mjs';
 import { createCmsTemplateRuntime } from './cms-template-runtime.mjs';
 import { listColumns } from './services/columns.mjs';
@@ -3315,6 +3315,10 @@ function resolveLanguageOutputRoot(baseOutputRoot, language) {
   const configuredOutputDir = String(language?.site?.output_dir || '').trim();
   if (!configuredOutputDir) {
     return requestedRoot;
+  }
+
+  if (String(language?.site?.site_mode || '').trim() === 'standalone') {
+    return path.resolve(PROJECT_ROOT, configuredOutputDir);
   }
 
   const defaultRootName = path.basename(DEFAULT_OUTPUT_ROOT);

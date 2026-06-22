@@ -13,6 +13,9 @@ export interface LanguageSite {
   host?: string;
   path_prefix: string;
   output_dir: string;
+  site_mode: 'subdir' | 'standalone';
+  access_port?: number | null;
+  bind_host?: string;
   is_primary: number;
 }
 
@@ -54,6 +57,10 @@ export interface ManagedContentItem {
   sort_order: number;
   column_name?: string;
   current_language_code?: string;
+  requested_language_code?: string;
+  resolved_language_code?: string;
+  fallback_language_code?: string | null;
+  is_language_fallback?: boolean;
   translation_statuses?: ContentTranslationStatus[];
   translations?: Record<string, ManagedContentTranslation>;
 }
@@ -88,6 +95,10 @@ export interface SectionContentItem {
   created_at: string;
   column_name?: string;
   current_language_code?: string;
+  requested_language_code?: string;
+  resolved_language_code?: string;
+  fallback_language_code?: string | null;
+  is_language_fallback?: boolean;
   translation_statuses?: ContentTranslationStatus[];
   translations?: Record<string, SectionContentTranslation>;
 }
@@ -273,6 +284,10 @@ export interface Column {
     column_type?: string;
   };
   current_language_code?: string;
+  requested_language_code?: string;
+  resolved_language_code?: string;
+  fallback_language_code?: string | null;
+  is_language_fallback?: boolean;
   translations?: Record<string, ColumnTranslation>;
   created_at?: string;
   updated_at?: string;
@@ -322,6 +337,10 @@ export interface SiteConfig {
   seo_home_title?: string | null;
   seo_home_description?: string | null;
   current_language_code?: string;
+  requested_language_code?: string;
+  resolved_language_code?: string;
+  fallback_language_code?: string | null;
+  is_language_fallback?: boolean;
   translations?: Record<string, SiteConfigTranslation>;
 }
 
