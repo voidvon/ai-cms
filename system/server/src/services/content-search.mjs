@@ -1,7 +1,12 @@
 import { listSearchableFieldNames } from './content-model-fields.mjs';
-import { listContentEntriesPaged } from './content-entries.mjs';
+import {
+  listContentEntriesPaged,
+  resolveContentEntryCoverImage,
+  resolveContentEntryDisplayTitle
+} from './content-entries.mjs';
 import { ensureContentModelStorageSchema } from './content-model-storage.mjs';
-import { listColumns, listModelColumns } from './columns.mjs';
+import { listContentModels } from './content-models.mjs';
+import { listColumns } from './columns.mjs';
 import { buildColumnSlugPath, buildContentDetailUrlFromColumn } from './column-paths.mjs';
 import { resolvePublicSectionContext } from './public-sections.mjs';
 
@@ -61,19 +66,12 @@ export function searchAllContentPaged(rawQuery, {
   page = 1,
   limit = 20,
   languageCode = null,
-  models = ['product', 'news']
+  models = null
 } = {}) {
   ensureContentModelStorageSchema();
   const normalizedQuery = normalizeSearchQuery(rawQuery);
-  const modelList = Array.from(new Set(
-    (Array.isArray(models) ? models : [models])
-      .map((item) => String(item || '').trim())
-      .filter((item) => item === 'product' || item === 'news')
-  ));
+  const modelList = normalizeSearchModelCodes(models);
   const columns = listColumns({ languageCode, includeTranslations: true });
-  const productCategoryMap = new Map(
-    listModelColumns('product', { languageCode }).map((item) => [Number(item.id || 0), item])
-  );
   const columnMap = new Map(columns.map((item) => [Number(item.id || 0), item]));
   const publicSections = resolvePublicSectionContext(columns);
 
@@ -94,8 +92,8 @@ export function searchAllContentPaged(rawQuery, {
         summary: String(item.summary || '').trim(),
         excerpt: String(item.search_excerpt || item.summary || '').trim(),
         score: Number(item.search_score || 0),
-        url: buildSearchResultUrl(modelCode, item, { columnMap, productCategoryMap, publicSections }),
-        cover_image: resolveResultCoverImage(modelCode, item),
+        url: buildSearchResultUrl(item, { columnMap, publicSections }),
+        cover_image: resolveResultCoverImage(item),
         column_name: item.column_name || '',
         created_at: item.created_at || '',
         updated_at: item.updated_at || ''
@@ -123,39 +121,53 @@ function clampLimit(limit) {
   return Math.min(Math.max(Number.parseInt(String(limit), 10) || 20, 1), 10000);
 }
 
+export function listSearchableModelCodes() {
+  ensureContentModelStorageSchema();
+  return listContentModels()
+    .map((item) => String(item?.code || '').trim())
+    .filter(Boolean)
+    .filter((modelCode) => listSearchableFieldNames(modelCode).length > 0);
+}
+
+export function normalizeSearchModelCodes(models) {
+  const allowedModelCodes = new Set(listSearchableModelCodes());
+  const requestedModelCodes = Array.isArray(models) ? models : [models];
+  const normalizedModelCodes = Array.from(new Set(
+    requestedModelCodes
+      .map((item) => String(item || '').trim())
+      .filter(Boolean)
+      .filter((item) => allowedModelCodes.has(item))
+  ));
+
+  return normalizedModelCodes.length > 0
+    ? normalizedModelCodes
+    : Array.from(allowedModelCodes);
+}
+
 function resolveResultTitle(modelCode, item) {
-  if (modelCode === 'news') {
-    return String(item.title || item.name || '').trim();
-  }
-  return String(item.name || item.title || '').trim();
+  return resolveContentEntryDisplayTitle(item);
 }
 
-function resolveResultCoverImage(modelCode, item) {
-  if (modelCode === 'news') {
-    return item.picture || item.primary_image || null;
-  }
-  return item.primary_image || null;
+function resolveResultCoverImage(item) {
+  return resolveContentEntryCoverImage(item);
 }
 
-function buildSearchResultUrl(modelCode, item, context) {
-  if (modelCode === 'product') {
-    const column = context.columnMap.get(Number(item.column_id || 0));
-    if (!column) {
-      return `/products/${Number(item.id || 0)}.html`;
-    }
-    const columnTreeNode = context.productCategoryMap.get(Number(item.column_id || 0));
-    const columnPath = columnTreeNode ? buildColumnSlugPath(columnTreeNode, context.productCategoryMap) : null;
+function buildSearchResultUrl(item, context) {
+  const column = context.columnMap.get(Number(item.column_id || 0));
+  if (!column) {
+    return '/';
+  }
+  const section = context.publicSections.getSectionByColumnId(Number(item.column_id || 0));
+  if (section?.rootColumn) {
+    return buildContentDetailUrlFromColumn(item, section.rootColumn);
+  }
+  const columnPath = buildColumnSlugPath(column, context.columnMap);
+  if (columnPath && columnPath.length > 0) {
     return buildContentDetailUrlFromColumn(item, column, columnPath);
   }
-
-  if (modelCode === 'news') {
-    const section = context.publicSections.getNewsSectionByColumnId(Number(item.column_id || 0));
-    if (section?.rootColumn) {
-      return buildContentDetailUrlFromColumn(item, section.rootColumn);
-    }
-    return `/news/detail/${Number(item.id || 0)}.html`;
+  if (column.route_path) {
+    return buildContentDetailUrlFromColumn(item, column);
   }
-
   return '/';
 }
 
@@ -183,7 +195,7 @@ function scoreSearchItem(modelCode, item, searchableFields, normalizedQuery) {
   let score = 0;
   let bestExcerpt = '';
   const title = resolveResultTitle(modelCode, item);
-  const weightedFields = buildWeightedSearchFields(modelCode, item, title);
+  const weightedFields = buildWeightedSearchFields(item, title);
 
   for (const field of weightedFields) {
     if (!searchableFields.includes(field.name)) {
@@ -213,9 +225,9 @@ function scoreSearchItem(modelCode, item, searchableFields, normalizedQuery) {
   };
 }
 
-function buildWeightedSearchFields(modelCode, item, title) {
+function buildWeightedSearchFields(item, title) {
   const fields = [
-    { name: modelCode === 'news' ? 'title' : 'name', value: title },
+    { name: 'name', value: title },
     { name: 'summary', value: item.summary },
     { name: 'content_html', value: stripHtml(item.content_html) },
     { name: 'seo_title', value: item.seo_title },

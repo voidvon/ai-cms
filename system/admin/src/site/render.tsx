@@ -1,22 +1,22 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import {
-  LegacyArticleDetailPage,
-  LegacyArticleListPage,
   LegacyContactPage,
   LegacyContentPage,
   LegacyHomePage,
-  LegacyProductDetailPage,
-  LegacyProductListPage,
+  LegacyArticleDetailPage,
+  LegacyArticleListPage,
+  LegacyCollectionDetailPage,
+  LegacyCollectionListPage,
 } from './pages/LegacyPages'
 import type {
   LegacyArticleDetailPageProps,
   LegacyArticleListPageProps,
   LegacyContactPageProps,
+  LegacyCollectionDetailPageProps,
+  LegacyCollectionListPageProps,
   LegacyContentPageProps,
   LegacyHomePageProps,
-  LegacyProductDetailPageProps,
-  LegacyProductListPageProps,
 } from './types'
 
 type PageName =
@@ -32,8 +32,8 @@ type PageProps =
   | LegacyHomePageProps
   | LegacyContactPageProps
   | LegacyContentPageProps
-  | LegacyProductListPageProps
-  | LegacyProductDetailPageProps
+  | LegacyCollectionListPageProps
+  | LegacyCollectionDetailPageProps
   | LegacyArticleListPageProps
   | LegacyArticleDetailPageProps
 
@@ -51,9 +51,9 @@ function resolveLegacyPage(pageName: PageName, props: PageProps): React.ReactEle
     case 'legacy-content':
       return <LegacyContentPage {...props as LegacyContentPageProps} />
     case 'legacy-product-list':
-      return <LegacyProductListPage {...props as LegacyProductListPageProps} />
+      return <LegacyCollectionListPage {...props as LegacyCollectionListPageProps} />
     case 'legacy-product-detail':
-      return <LegacyProductDetailPage {...props as LegacyProductDetailPageProps} />
+      return <LegacyCollectionDetailPage {...props as LegacyCollectionDetailPageProps} />
     case 'legacy-article-list':
       return <LegacyArticleListPage {...props as LegacyArticleListPageProps} />
     case 'legacy-article-detail':

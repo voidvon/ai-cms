@@ -2,7 +2,6 @@ import { buildColumnTreeIndex } from './column-tree.mjs';
 import { resolveRelativePublicPath } from './column-paths.mjs';
 
 const SERVICE_SECTION_PATTERN = /(service|services|support|knowledge|learn|training|服务|知识|学习|培训)/i;
-const NEWS_SECTION_PATTERN = /(news|article|articles|insight|updates|新闻|资讯|动态)/i;
 
 export function resolveLegacyColumnPublicId(columnNode) {
   // 公共栏目标识统一直接使用栏目 ID
@@ -12,18 +11,18 @@ export function resolveLegacyColumnPublicId(columnNode) {
 export function resolvePublicSectionContext(columns) {
   const rows = Array.isArray(columns) ? columns : [];
   const allById = new Map(rows.map((item) => [toInteger(item?.id, 0), item]));
-  const newsRows = rows
+  const sectionRows = rows
     .filter((item) => (
       String(item?.column_semantics?.render_driver || '') === 'section'
     ))
     .slice()
     .sort(compareBySortAndId);
-  const newsTree = buildColumnTreeIndex(newsRows);
+  const sectionTree = buildColumnTreeIndex(sectionRows);
   const rootSections = [];
   const usedDirNames = new Set();
 
-  for (const root of newsRows.filter((item) => toInteger(item?.parent_id, 0) === 0)) {
-    const dirName = resolveNewsSectionDirName(root, rootSections.length, usedDirNames);
+  for (const root of sectionRows.filter((item) => toInteger(item?.parent_id, 0) === 0)) {
+    const dirName = resolveSectionDirName(root, rootSections.length, usedDirNames);
     usedDirNames.add(dirName);
     rootSections.push({
       rootColumnId: toInteger(root.id, 0),
@@ -38,13 +37,13 @@ export function resolvePublicSectionContext(columns) {
   const sectionsByRootId = new Map(rootSections.map((item) => [item.rootColumnId, item]));
   const sectionsByDirName = new Map(rootSections.map((item) => [item.dirName, item]));
 
-  function getNewsSectionByColumnId(columnId) {
+  function getSectionByColumnId(columnId) {
     let currentId = toInteger(columnId, 0);
     while (currentId > 0) {
       if (sectionsByRootId.has(currentId)) {
         return sectionsByRootId.get(currentId) || null;
       }
-      currentId = toInteger(newsTree.byId.get(currentId)?.parent_id, 0);
+      currentId = toInteger(sectionTree.byId.get(currentId)?.parent_id, 0);
     }
     return null;
   }
@@ -53,15 +52,15 @@ export function resolvePublicSectionContext(columns) {
     allById,
     productRootColumnId: findRootColumnId(rows, { renderDriver: 'managed_column' }),
     corporationRootColumnId: findRootColumnId(rows, { renderDriver: 'page_tree' }),
-    newsTree,
-    newsSections: rootSections,
-    newsSectionsByRootId: sectionsByRootId,
-    newsSectionsByDirName: sectionsByDirName,
-    getNewsSectionByColumnId,
-    getNewsSectionByDirName(dirName) {
+    sectionTree,
+    sections: rootSections,
+    sectionsByRootId,
+    sectionsByDirName,
+    getSectionByColumnId,
+    getSectionByDirName(dirName) {
       return sectionsByDirName.get(String(dirName || '').trim()) || null;
     },
-    getNewsSectionByType(sectionType) {
+    getSectionByType(sectionType) {
       const normalized = String(sectionType || '').trim().toLowerCase();
       return rootSections.find((item) => item.sectionType === normalized) || null;
     }
@@ -84,7 +83,7 @@ export function buildColumnPublicUrl(column, publicSections) {
     return '';
   }
   if (renderDriver === 'section') {
-    const section = publicSections?.getNewsSectionByColumnId?.(column.id);
+    const section = publicSections?.getSectionByColumnId?.(column.id);
     if (!section) {
       return '';
     }
@@ -109,6 +108,29 @@ export function buildColumnPublicUrl(column, publicSections) {
     return resolveRelativePublicPath(relativeCustomUrl, resolveColumnParentPublicUrl(column, publicSections));
   }
   return '';
+}
+
+export function buildSectionColumnPublicUrl(section, columnNode) {
+  const dirName = String(section?.dirName || '').trim().replace(/^\/+|\/+$/g, '');
+  if (!dirName || !columnNode) {
+    return '';
+  }
+
+  const routePath = normalizeColumnRoutePath(columnNode.route_path);
+  if (routePath) {
+    return routePath;
+  }
+
+  if (toInteger(columnNode?.parent_id, 0) === 0) {
+    return `/${dirName}/`;
+  }
+
+  const columnDirName = String(columnNode?.dir_name || '').trim();
+  if (columnDirName) {
+    return `/${dirName}/${columnDirName}/`;
+  }
+
+  return `/${dirName}/${resolveLegacyColumnPublicId(columnNode)}.html`;
 }
 
 function normalizeColumnRoutePath(value) {
@@ -153,7 +175,7 @@ function findRootColumnId(columns, { renderDriver }) {
   );
 }
 
-function resolveNewsSectionDirName(root, index, usedDirNames) {
+function resolveSectionDirName(root, index, usedDirNames) {
   // 只使用数据库配置的 dir_name，不进行任何推断
   const explicitDirName = String(root?.dir_name || '').trim();
   if (explicitDirName) {
@@ -165,7 +187,7 @@ function resolveNewsSectionDirName(root, index, usedDirNames) {
 }
 
 function reserveDirName(candidate, usedDirNames, root) {
-  const base = sanitizeDirName(candidate) || `news-${resolveLegacyColumnPublicId(root)}`;
+  const base = sanitizeDirName(candidate) || `section-${resolveLegacyColumnPublicId(root)}`;
   if (!usedDirNames.has(base)) {
     return base;
   }

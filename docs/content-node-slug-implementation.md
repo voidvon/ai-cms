@@ -1,4 +1,6 @@
-# 产品自定义 URL (Slug) 功能实现
+# 内容节点自定义 URL (Slug) 功能实现
+
+> 历史说明：本文记录的是早期围绕 `product` 模型完成 slug 化的实现过程。文中 `products` 表、`products.mjs`、`product-redirects.mjs` 等名称属于当时阶段性结构，不代表当前仓库已经完成的通用化命名结果。
 
 本文档记录了为产品添加自定义 URL（slug）功能的完整实现过程。
 

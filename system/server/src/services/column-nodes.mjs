@@ -2,6 +2,7 @@ import {
   createManualColumn,
   deleteManualColumn,
   ensureColumnsSchema,
+  getColumnTreeModelConfig,
   getModelRootColumn,
   getColumnById,
   listModelColumns,
@@ -50,16 +51,13 @@ function slugifyName(value, fallback) {
 }
 
 function getModelColumnConfig(model) {
-  if (model === 'product') {
-    return { columnType: 'list', contentModelCode: 'product', rootBasePath: '/products/' };
-  }
-  if (model === 'news') {
-    return { columnType: 'list', contentModelCode: 'news', rootBasePath: null };
-  }
-  if (model === 'corporation') {
-    return { columnType: 'single', contentModelCode: null, rootBasePath: '/about/' };
-  }
-  throw new Error(`unsupported model: ${model}`);
+  const config = getColumnTreeModelConfig(model);
+  return {
+    columnType: config.columnType,
+    contentModelCode: config.modelCode === 'corporation' ? null : config.modelCode,
+    rootBasePath: config.rootBasePath,
+    renderDriver: config.renderDriver
+  };
 }
 
 function getRootColumnNodeContext(rootColumnId, languageCode = null) {
@@ -92,7 +90,7 @@ function getRootColumnNodeContext(rootColumnId, languageCode = null) {
 function isModelColumn(column, model) {
   const config = getModelColumnConfig(model);
   return String(column?.column_type || '') === config.columnType
-    && String(column?.model_code || '') === (config.contentModelCode || 'corporation');
+    && String(column?.column_semantics?.render_driver || '') === config.renderDriver;
 }
 
 function isColumnInRootCategoryTree(column, rootContext) {
@@ -637,9 +635,9 @@ function buildColumnNodeRoutePath({
     return resolveRelativePublicPath(`${normalizedDirName}/`, rootContext.rootRoutePath) || `/${normalizedDirName}/`;
   }
 
-  if (config.rootBasePath && model === 'product') {
+  if (config.rootBasePath && config.renderDriver === 'managed_column') {
     return currentColumnId > 0 && parentColumn
-      ? resolveRelativePublicPath(`${normalizedDirName}/`, parentColumn.route_path || config.rootBasePath) || `/products/${normalizedDirName}/`
+      ? resolveRelativePublicPath(`${normalizedDirName}/`, parentColumn.route_path || config.rootBasePath) || `${config.rootBasePath}${normalizedDirName}/`
       : config.rootBasePath;
   }
 

@@ -1,4 +1,4 @@
-# News 多语言改造与 publish_status 增强完成报告
+# 栏目内容多语言改造与 publish_status 增强完成报告
 
 ## 执行时间
 2026-06-16

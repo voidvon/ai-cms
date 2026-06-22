@@ -1,4 +1,4 @@
-# 产品URL层级结构更新
+# 受管内容 URL 层级结构更新
 
 ## 更新日期
 - 2026-06-14: 初始实现（静态页面路径）
@@ -177,7 +177,7 @@ html/products/steam-traps/thermodynamic-steam-traps/td32f-flanged-thermodynamic-
 
 ## 相关文档
 
-- [产品SEO友好Slug实现](./product-slug-implementation.md)
+- [内容节点 SEO 友好 Slug 实现](./content-node-slug-implementation.md)
 - [静态站点生成说明](../CLAUDE.md#static-site-generation)
 
 ## 第二阶段：侧边栏分类链接修复 (2026-06-14)

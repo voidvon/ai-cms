@@ -4,9 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { contentModelsApi, templateVariantsApi, templatesApi } from '@/api/advanced'
 import { columnNodesApi } from '@/api/column-nodes'
 import { columnsApi } from '@/api/columns'
+import { contentItemsApi } from '@/api/content-items'
 import { languagesApi } from '@/api/languages'
-import { newsApi } from '@/api/news'
-import { productsApi } from '@/api/products'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -36,24 +35,36 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
-import type { Column, ColumnNode, ContentModel, News, Product, Template, TemplateBinding } from '@/types'
+import type { Column, ColumnNode, ContentModel, ManagedContentItem, SectionContentItem, Template, TemplateBinding } from '@/types'
 import type { ManualColumnFormValue } from '@/components/ManualColumnFormDialog'
 
 const DEFAULT_TEMPLATE_VALUE = '__default__'
 const ColumnTemplateBindingDialog = lazy(() => import('@/components/ColumnTemplateBindingDialog'))
 const ColumnNodeFormDialog = lazy(() => import('@/components/ColumnNodeFormDialog'))
+const ContentItemFormDialog = lazy(() => import('@/components/ContentItemFormDialog'))
 const ManualColumnFormDialog = lazy(() => import('@/components/ManualColumnFormDialog'))
-const NewsFormDialog = lazy(() => import('@/components/NewsFormDialog'))
-const ProductFormDialog = lazy(() => import('@/components/ProductFormDialog'))
 
 interface ColumnTreeNode extends Column {
   children: ColumnTreeNode[]
 }
 
 type DeleteTarget =
-  | { type: 'product'; id: number }
-  | { type: 'news'; id: number }
+  | { modelCode: ManagedModelCode; id: number }
   | null
+
+const MANAGED_MODEL_META = {
+  product: {
+    code: 'product',
+    isSectionContent: false,
+  },
+  news: {
+    code: 'news',
+    isSectionContent: true,
+  },
+} as const
+
+type ManagedModelCode = keyof typeof MANAGED_MODEL_META
+type ListedContentItem = ManagedContentItem | SectionContentItem
 
 type EditingNodeTarget =
   | { rootColumnId: number; id: number }
@@ -114,10 +125,8 @@ export default function ColumnsPage() {
   const limit = 50
   const queryClient = useQueryClient()
 
-  const [productFormOpen, setProductFormOpen] = useState(false)
-  const [newsFormOpen, setNewsFormOpen] = useState(false)
-  const [editingProduct, setEditingProduct] = useState<Product | undefined>()
-  const [editingNews, setEditingNews] = useState<News | undefined>()
+  const [contentItemFormOpen, setContentItemFormOpen] = useState(false)
+  const [editingContentItem, setEditingContentItem] = useState<ListedContentItem | undefined>()
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null)
   const [nodeFormOpen, setNodeFormOpen] = useState(false)
@@ -197,8 +206,9 @@ export default function ColumnsPage() {
   const selectedColumnType = selectedColumn?.column_type || ''
   const selectedModelCode = selectedColumn?.model_code || ''
   const selectedRenderDriver = String(selectedColumn?.column_semantics?.render_driver || '')
-  const isProductColumn = selectedColumnType === 'list' && selectedModelCode === 'product'
-  const isNewsColumn = selectedColumnType === 'list' && selectedModelCode === 'news'
+  const activeManagedModelCode = selectedColumnType === 'list' && selectedModelCode in MANAGED_MODEL_META
+    ? selectedModelCode as ManagedModelCode
+    : null
   const isManualLinkColumn = selectedColumnType === 'link'
   const isManualSingleColumn = selectedColumnType === 'single' && selectedRenderDriver !== 'page_tree'
   const isManualColumn = isManualLinkColumn || isManualSingleColumn
@@ -207,49 +217,27 @@ export default function ColumnsPage() {
     ? columns.find((item) => item.id === nodeFormRootColumnId) || null
     : null
 
-  const { data: productsData, isLoading: productsLoading } = useQuery({
-    queryKey: ['products', 'columns', selectedColumn?.id || 0, page, limit],
-    queryFn: () => productsApi.list({
+  const activeContentModelCode = activeManagedModelCode
+
+  const { data: contentItemsData, isLoading: contentItemsLoading } = useQuery({
+    queryKey: ['content-items', activeContentModelCode, 'columns', selectedColumn?.id || 0, page, limit],
+    queryFn: () => contentItemsApi.list<ManagedContentItem>(activeContentModelCode!, {
       page,
       limit,
-      column_id: isProductColumn ? (selectedColumn?.id || undefined) : undefined,
-      include_descendants: isProductColumn ? 1 : undefined,
+      column_id: activeContentModelCode ? (selectedColumn?.id || undefined) : undefined,
+      include_descendants: activeContentModelCode ? 1 : undefined,
       language: defaultLanguageCode,
     }),
-    enabled: isProductColumn,
+    enabled: Boolean(activeContentModelCode),
     staleTime: 0,
   })
 
-  const { data: newsData, isLoading: newsLoading } = useQuery({
-    queryKey: ['news', 'columns', selectedColumn?.id || 0, page, limit],
-    queryFn: () => newsApi.list({
-      page,
-      limit,
-      column_id: isNewsColumn ? (selectedColumn?.id || undefined) : undefined,
-      include_descendants: isNewsColumn ? 1 : undefined,
-      language: defaultLanguageCode,
-    }),
-    enabled: isNewsColumn,
-    staleTime: 0,
-  })
-
-  const deleteProductMutation = useMutation({
-    mutationFn: (id: number) => productsApi.delete(id),
+  const deleteContentItemMutation = useMutation({
+    mutationFn: ({ modelCode, id }: { modelCode: ManagedModelCode; id: number }) => contentItemsApi.delete(modelCode, id),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['products'] })
-      toast.success('删除成功')
-      setDeleteDialogOpen(false)
-      setDeleteTarget(null)
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || '删除失败')
-    },
-  })
-
-  const deleteNewsMutation = useMutation({
-    mutationFn: (id: number) => newsApi.delete(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['news'] })
+      Object.keys(MANAGED_MODEL_META).forEach((modelCode) => {
+        queryClient.invalidateQueries({ queryKey: ['content-items', modelCode] })
+      })
       toast.success('删除成功')
       setDeleteDialogOpen(false)
       setDeleteTarget(null)
@@ -264,8 +252,9 @@ export default function ColumnsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['column-nodes'] })
       queryClient.invalidateQueries({ queryKey: ['columns'] })
-      queryClient.invalidateQueries({ queryKey: ['products'] })
-      queryClient.invalidateQueries({ queryKey: ['news'] })
+      Object.keys(MANAGED_MODEL_META).forEach((modelCode) => {
+        queryClient.invalidateQueries({ queryKey: ['content-items', modelCode] })
+      })
       queryClient.invalidateQueries({ queryKey: ['template-bindings'] })
       toast.success('删除成功')
       if (deletingNodeTarget?.columnId === selectedColumn?.id) {
@@ -441,10 +430,9 @@ export default function ColumnsPage() {
     },
   })
 
-  const activeNewsItems = newsData?.items || []
-  const activeProductItems = productsData?.items || []
-  const activePagination = isNewsColumn ? newsData?.pagination : (isProductColumn ? productsData?.pagination : undefined)
-  const activeLoading = isNewsColumn ? newsLoading : (isProductColumn ? productsLoading : false)
+  const activeContentItems = contentItemsData?.items || []
+  const activePagination = contentItemsData?.pagination
+  const activeLoading = contentItemsLoading
   const pageTitle = selectedColumn?.name || '栏目'
   const templates = templatesData?.data || []
   const bindings = bindingsData?.data || []
@@ -579,8 +567,9 @@ export default function ColumnsPage() {
       setEditingNodeTarget(null)
       setCreatingNodeTarget(null)
       queryClient.invalidateQueries({ queryKey: ['columns'] })
-      queryClient.invalidateQueries({ queryKey: ['products'] })
-      queryClient.invalidateQueries({ queryKey: ['news'] })
+      Object.keys(MANAGED_MODEL_META).forEach((modelCode) => {
+        queryClient.invalidateQueries({ queryKey: ['content-items', modelCode] })
+      })
       queryClient.invalidateQueries({ queryKey: ['column-nodes'] })
     }
   }
@@ -693,25 +682,15 @@ export default function ColumnsPage() {
   }
 
   const handleAdd = () => {
-    if (isProductColumn) {
-      setEditingProduct(undefined)
-      setProductFormOpen(true)
-      return
-    }
-    if (isNewsColumn) {
-      setEditingNews(undefined)
-      setNewsFormOpen(true)
+    if (activeContentModelCode) {
+      setEditingContentItem(undefined)
+      setContentItemFormOpen(true)
     }
   }
 
-  const handleEditProduct = (product: Product) => {
-    setEditingProduct(product)
-    setProductFormOpen(true)
-  }
-
-  const handleEditNews = (news: News) => {
-    setEditingNews(news)
-    setNewsFormOpen(true)
+  const handleEditContentItem = (contentItem: ListedContentItem) => {
+    setEditingContentItem(contentItem)
+    setContentItemFormOpen(true)
   }
 
   const handleDelete = (target: DeleteTarget) => {
@@ -723,11 +702,7 @@ export default function ColumnsPage() {
     if (!deleteTarget) {
       return
     }
-    if (deleteTarget.type === 'product') {
-      deleteProductMutation.mutate(deleteTarget.id)
-      return
-    }
-    deleteNewsMutation.mutate(deleteTarget.id)
+    deleteContentItemMutation.mutate(deleteTarget)
   }
 
   const selectedEditingColumnId = editingColumnTarget?.id || editingManualColumn?.id || 0
@@ -816,7 +791,7 @@ export default function ColumnsPage() {
                 </Button>
               </>
             ) : null}
-            {(isProductColumn || isNewsColumn) && (
+            {activeManagedModelCode && (
               <Button onClick={handleAdd}>
                 新增内容
               </Button>
@@ -844,20 +819,13 @@ export default function ColumnsPage() {
             <div className="flex min-h-0 flex-1 items-center justify-center rounded border p-8 text-center text-muted-foreground">加载中...</div>
           ) : (
             <>
-              {isNewsColumn ? (
-                <NewsTable
-                  items={activeNewsItems}
-                  onEdit={handleEditNews}
-                  onDelete={(id) => handleDelete({ type: 'news', id })}
-                />
-              ) : (
-                <ProductTable
-                  items={activeProductItems}
-                  columns={columns}
-                  onEdit={handleEditProduct}
-                  onDelete={(id) => handleDelete({ type: 'product', id })}
-                />
-              )}
+              <ContentItemsTable
+                modelCode={activeContentModelCode}
+                items={activeContentItems}
+                columns={columns}
+                onEdit={handleEditContentItem}
+                onDelete={(id) => activeContentModelCode && handleDelete({ modelCode: activeContentModelCode, id })}
+              />
             </>
           )}
 
@@ -927,26 +895,15 @@ export default function ColumnsPage() {
         </div>
       </div>
 
-      {productFormOpen ? (
+      {contentItemFormOpen && activeContentModelCode ? (
         <Suspense fallback={<DialogFallback />}>
-          <ProductFormDialog
-            open={productFormOpen}
-            onOpenChange={setProductFormOpen}
-            product={editingProduct}
-            mode={editingProduct ? 'edit' : 'create'}
-            defaultColumnId={isProductColumn ? (selectedColumn?.id || undefined) : undefined}
-          />
-        </Suspense>
-      ) : null}
-
-      {newsFormOpen ? (
-        <Suspense fallback={<DialogFallback />}>
-          <NewsFormDialog
-            open={newsFormOpen}
-            onOpenChange={setNewsFormOpen}
-            news={editingNews}
-            mode={editingNews ? 'edit' : 'create'}
-            defaultColumnId={isNewsColumn ? (selectedColumn?.id || undefined) : undefined}
+          <ContentItemFormDialog
+            open={contentItemFormOpen}
+            onOpenChange={setContentItemFormOpen}
+            item={editingContentItem}
+            mode={editingContentItem ? 'edit' : 'create'}
+            modelCode={activeContentModelCode}
+            defaultColumnId={selectedColumn?.id || undefined}
           />
         </Suspense>
       ) : null}
@@ -1175,65 +1132,71 @@ export default function ColumnsPage() {
   )
 }
 
-function ProductTable({
+function ContentItemsTable({
+  modelCode,
   items,
   columns,
   onEdit,
   onDelete,
 }: {
-  items: Product[]
+  modelCode: ManagedModelCode | null
+  items: ListedContentItem[]
   columns: Column[]
-  onEdit: (item: Product) => void
+  onEdit: (item: ListedContentItem) => void
   onDelete: (id: number) => void
 }) {
+  const isSectionContent = modelCode ? MANAGED_MODEL_META[modelCode].isSectionContent : false
+
   return (
     <Table containerClassName="min-h-0 flex-1 rounded border">
       <TableHeader>
         <TableRow>
           <TableHead>ID</TableHead>
           <TableHead>标题</TableHead>
-          <TableHead>编号</TableHead>
+          {!isSectionContent ? <TableHead>编号</TableHead> : null}
           <TableHead>分类</TableHead>
           <TableHead>多语言</TableHead>
-          <TableHead>状态</TableHead>
           <TableHead>推荐</TableHead>
+          {isSectionContent ? <TableHead>创建时间</TableHead> : <TableHead>状态</TableHead>}
           <TableHead className="text-right">操作</TableHead>
         </TableRow>
       </TableHeader>
       <TableBody>
         {items.length === 0 ? (
           <TableRow>
-            <TableCell colSpan={8} className="text-center">暂无内容</TableCell>
+            <TableCell colSpan={isSectionContent ? 7 : 8} className="text-center">暂无内容</TableCell>
           </TableRow>
         ) : (
-          items.map((product) => (
-            <TableRow key={product.id}>
-              <TableCell>{product.id}</TableCell>
+          items.map((item) => (
+            <TableRow key={item.id}>
+              <TableCell>{item.id}</TableCell>
               <TableCell className="group/title font-medium">
                 <div className="flex items-center gap-1">
-                  <span>{product.name}</span>
-                  <a
-                    href={buildProductDetailPreviewHref(product, columns)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="inline-flex size-4 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none group-hover/title:opacity-100"
-                    aria-label={`新窗口打开 ${product.name} 详情页`}
-                    title="打开详情页"
-                  >
-                    <ExternalLink className="size-3.5" />
-                  </a>
+                  <span>{resolveContentItemTitle(item)}</span>
+                  {!isSectionContent ? (
+                    <a
+                      href={buildManagedContentPreviewHref(item as ManagedContentItem, columns)}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex size-4 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none group-hover/title:opacity-100"
+                      aria-label={`新窗口打开 ${resolveContentItemTitle(item)} 详情页`}
+                      title="打开详情页"
+                    >
+                      <ExternalLink className="size-3.5" />
+                    </a>
+                  ) : null}
                 </div>
               </TableCell>
-              <TableCell>{product.code || '-'}</TableCell>
-              <TableCell>{product.column_name || product.column_id || '-'}</TableCell>
+              {!isSectionContent ? <TableCell>{(item as ManagedContentItem).code || '-'}</TableCell> : null}
+              <TableCell>{item.column_name || item.column_id || '-'}</TableCell>
               <TableCell>
                 <div className="flex flex-wrap gap-1">
-                  {(product.translation_statuses || []).length === 0 ? (
+                  {(item.translation_statuses || []).length === 0 ? (
                     <Badge variant="outline">默认语言</Badge>
                   ) : (
-                    product.translation_statuses?.map((status) => (
+                    item.translation_statuses?.map((status) => (
                       <Badge
-                        key={`${product.id}-${status.language_code}`}
+                        key={`${item.id}-${status.language_code}`}
                         variant={status.publish_status === 'published' ? 'default' : 'outline'}
                       >
                         {status.language_code}
@@ -1242,11 +1205,15 @@ function ProductTable({
                   )}
                 </div>
               </TableCell>
-              <TableCell>{product.is_visible === 1 ? <Badge>显示</Badge> : <Badge variant="secondary">隐藏</Badge>}</TableCell>
-              <TableCell>{product.is_featured_home === 1 ? <Badge>是</Badge> : <Badge variant="outline">否</Badge>}</TableCell>
+              <TableCell>{Number(item.is_featured_home || (item as SectionContentItem).is_featured || 0) === 1 ? <Badge>是</Badge> : <Badge variant="outline">否</Badge>}</TableCell>
+              {isSectionContent ? (
+                <TableCell>{(item as SectionContentItem).created_at ? new Date((item as SectionContentItem).created_at).toLocaleDateString('zh-CN') : '-'}</TableCell>
+              ) : (
+                <TableCell>{(item as ManagedContentItem).is_visible === 1 ? <Badge>显示</Badge> : <Badge variant="secondary">隐藏</Badge>}</TableCell>
+              )}
               <TableCell className="text-right">
-                <Button variant="ghost" size="sm" onClick={() => onEdit(product)}>编辑</Button>
-                <Button variant="destructiveGhost" size="sm" onClick={() => onDelete(product.id)}>删除</Button>
+                <Button variant="ghost" size="sm" onClick={() => onEdit(item)}>编辑</Button>
+                <Button variant="destructiveGhost" size="sm" onClick={() => onDelete(item.id)}>删除</Button>
               </TableCell>
             </TableRow>
           ))
@@ -1256,29 +1223,33 @@ function ProductTable({
   )
 }
 
-function buildProductDetailPreviewHref(product: Product, columns: Column[]) {
-  const productId = Number(product.id) || 0
-  const column = columns.find((item) => item.id === product.column_id) || null
+function resolveContentItemTitle(item: ListedContentItem) {
+  return 'title' in item ? item.title : item.name
+}
+
+function buildManagedContentPreviewHref(item: ManagedContentItem, columns: Column[]) {
+  const contentId = Number(item.id) || 0
+  const column = columns.find((entry) => entry.id === item.column_id) || null
   const routePath = ensureTrailingSlash(column?.route_path || '/products/')
   const detailRule = String(column?.detail_rule || '').trim()
-  const customUrl = String(product.custom_url || '').trim()
+  const customUrl = String(item.custom_url || '').trim()
 
   if (customUrl) {
     return resolveRelativePublicUrl(customUrl, routePath)
   }
   if (detailRule === '{id}.html') {
-    return `${routePath}${productId}.html`
+    return `${routePath}${contentId}.html`
   }
   if (detailRule === '{id}/index.html') {
-    return `${routePath}${productId}/`
+    return `${routePath}${contentId}/`
   }
   if (detailRule === 'detail/{id}.html') {
-    return `${routePath}detail/${productId}.html`
+    return `${routePath}detail/${contentId}.html`
   }
   if (detailRule && !detailRule.includes('{')) {
     return resolveRelativePublicUrl(detailRule, routePath)
   }
-  return `${routePath}detail/${productId}.html`
+  return `${routePath}detail/${contentId}.html`
 }
 
 function ensureTrailingSlash(value: string) {
@@ -1304,69 +1275,6 @@ function normalizePublicUrl(value: string) {
   const normalized = value.startsWith('/') ? value : `/${value}`
   const collapsed = normalized.replace(/\/{2,}/g, '/')
   return collapsed.replace(/\/index\.html$/i, '/')
-}
-
-function NewsTable({
-  items,
-  onEdit,
-  onDelete,
-}: {
-  items: News[]
-  onEdit: (item: News) => void
-  onDelete: (id: number) => void
-}) {
-  return (
-    <Table containerClassName="min-h-0 flex-1 rounded border">
-      <TableHeader>
-        <TableRow>
-          <TableHead>ID</TableHead>
-          <TableHead>标题</TableHead>
-          <TableHead>分类</TableHead>
-          <TableHead>多语言</TableHead>
-          <TableHead>推荐</TableHead>
-          <TableHead>创建时间</TableHead>
-          <TableHead className="text-right">操作</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {items.length === 0 ? (
-          <TableRow>
-            <TableCell colSpan={7} className="text-center">暂无内容</TableCell>
-          </TableRow>
-        ) : (
-          items.map((item) => (
-            <TableRow key={item.id}>
-              <TableCell>{item.id}</TableCell>
-              <TableCell className="font-medium">{item.title}</TableCell>
-              <TableCell>{item.column_name || item.column_id || '-'}</TableCell>
-              <TableCell>
-                <div className="flex flex-wrap gap-1">
-                  {(item.translation_statuses || []).length === 0 ? (
-                    <Badge variant="outline">默认语言</Badge>
-                  ) : (
-                    item.translation_statuses?.map((status) => (
-                      <Badge
-                        key={`${item.id}-${status.language_code}`}
-                        variant={status.publish_status === 'published' ? 'default' : 'outline'}
-                      >
-                        {status.language_code}
-                      </Badge>
-                    ))
-                  )}
-                </div>
-              </TableCell>
-              <TableCell>{Number(item.is_featured_home || item.is_featured || 0) === 1 ? <Badge>是</Badge> : <Badge variant="outline">否</Badge>}</TableCell>
-              <TableCell>{item.created_at ? new Date(item.created_at).toLocaleDateString('zh-CN') : '-'}</TableCell>
-              <TableCell className="text-right">
-                <Button variant="ghost" size="sm" onClick={() => onEdit(item)}>编辑</Button>
-                <Button variant="destructiveGhost" size="sm" onClick={() => onDelete(item.id)}>删除</Button>
-              </TableCell>
-            </TableRow>
-          ))
-        )}
-      </TableBody>
-    </Table>
-  )
 }
 
 function PageTreeColumnPanel({ column }: { column: Column | null }) {

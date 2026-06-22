@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createProduct, listProducts } from '../src/services/products.mjs';
+import { createContentItem, listContentItems } from '../src/services/content-items.mjs';
 import { getDefaultLanguage } from '../src/services/languages.mjs';
 import { listColumns } from '../src/services/columns.mjs';
 
@@ -15,8 +15,9 @@ const sourceDocsRoot = path.join(sourceRoot, 'docs', 'zh-cn');
 const sourceDistRoot = path.join(sourceRoot, 'dist', 'zh-cn');
 const htmlRoot = path.join(projectRoot, 'html');
 const defaultLanguageCode = getDefaultLanguage()?.code || 'zh-CN';
+const MODEL_CODE = 'product';
 
-const missingProductDetails = [
+const missingContentDetails = [
   {
     slug: 'avm7-stainless-steel-thermostatic-air-vent',
     routePath: '/products/clean-steam/',
@@ -62,27 +63,27 @@ const columnsByRoutePath = new Map(
     .map((item) => [String(item.route_path || '').trim(), item])
     .filter((item) => item[0])
 );
-const existingProducts = listProducts({
+const existingContentItems = listContentItems(MODEL_CODE, {
   visibleOnly: false,
   limit: 10000,
   languageCode: defaultLanguageCode
 });
 
-for (const definition of missingProductDetails) {
+for (const definition of missingContentDetails) {
   const column = columnsByRoutePath.get(definition.routePath);
   if (!column) {
-    throw new Error(`未找到产品栏目: ${definition.routePath}`);
+    throw new Error(`未找到内容栏目: ${definition.routePath}`);
   }
 
   const customUrl = `${definition.slug}/index.html`;
-  const existing = existingProducts.find((item) => (
+  const existing = existingContentItems.find((item) => (
     Number(item.column_id || 0) === Number(column.id || 0)
     && String(item.custom_url || '').trim() === customUrl
   ));
   if (existing) {
     skipped.push({
       slug: definition.slug,
-      productId: existing.id,
+      contentItemId: existing.id,
       reason: 'already_exists'
     });
     continue;
@@ -94,7 +95,7 @@ for (const definition of missingProductDetails) {
   const primaryImage = resolvePrimaryImage(parsed);
   const legacyExtra = {
     import_source: 'spirax-global',
-    key: `product:${definition.slug}`,
+    key: `${MODEL_CODE}:${definition.slug}`,
     route_path: definition.routePath,
     page_data: parsed.pageData || null
   };
@@ -108,7 +109,7 @@ for (const definition of missingProductDetails) {
       primary_image: primaryImage || '',
       is_visible: 1,
       is_featured_home: 0,
-      sort_order: getNextSortOrder(existingProducts, column.id),
+      sort_order: getNextSortOrder(existingContentItems, column.id),
       legacy_extra: JSON.stringify(legacyExtra),
       created_at: null
     },
@@ -125,14 +126,14 @@ for (const definition of missingProductDetails) {
     }
   };
 
-  const record = createProduct(payload);
+  const record = createContentItem(MODEL_CODE, payload);
   imported.push({
     slug: definition.slug,
-    productId: record.id,
+    contentItemId: record.id,
     columnId: column.id,
     title
   });
-  existingProducts.push(record);
+  existingContentItems.push(record);
 
   for (const assetPath of collectReferencedImagePaths(parsed)) {
     const copied = syncAsset(assetPath);

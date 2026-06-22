@@ -1,5 +1,7 @@
 # Node.js + SQLite 迁移进度
 
+> 历史说明：本文是早期 `node-app/` 迁移阶段记录，文中的目录、命令、表结构和 `products/news` 命名大多反映当时状态，不代表当前以 `system/server`、`system/admin`、数据库模板为核心的实际架构。
+
 更新日期：2026-06-06
 
 ## 当前结论
@@ -31,7 +33,7 @@
   - `node-app/scripts/import-csv.mjs`
 - 已实现旧库编码修复：
   - `node-app/scripts/repair-legacy-encoding.mjs`
-  - `node-app/scripts/repair-product-visibility.mjs`
+  - `node-app/scripts/repair-content-visibility-from-csv.mjs`
   - CSV 导入后会自动执行一次编码修复
   - 当前已覆盖 `site_config`、`products`、`product_categories`、`news.summary`、`news.keywords`、`custom_labels`
   - 已额外清理一批旧新闻摘要/关键词里的乱码和历史营销尾巴（如 `上海彪维供应`、转载署名等）
@@ -373,9 +375,9 @@
 - `node --check node-app/src/services/custom-labels.mjs`
 - `node --check node-app/src/services/template-variants.mjs`
 - `node --check node-app/src/static-builder.mjs`
-- `node --check node-app/scripts/repair-product-visibility.mjs`
+- `node --check node-app/scripts/repair-content-visibility-from-csv.mjs`
 - `node --check node-app/scripts/runtime-smoke.mjs`
-- `node node-app/scripts/repair-product-visibility.mjs`
+- `node node-app/scripts/repair-content-visibility-from-csv.mjs`
 - `node node-app/scripts/runtime-smoke.mjs`
 - `npm --prefix node-app run build:static`
 - 生成后的 `node-app/generated/**/*.html` 中 `spiraxsarcocn.com` 绝对链接已清零

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-从 spirax-global 导入 knowledge-exchange 新闻/博客文章
+从 spirax-global 导入栏目文章内容
 """
 import sqlite3
 import re
@@ -10,7 +10,7 @@ from datetime import datetime
 # 配置
 GLOBAL_DIST_DIR = Path("/Users/yytest/Documents/projects/spirax-global/dist/zh-cn/knowledge-exchange")
 DB_PATH = Path("data/site.sqlite")
-NEWS_COLUMN_ID = 69  # 公司新闻栏目ID
+ROOT_COLUMN_ID = 69  # 当前导入目标栏目 ID
 LANGUAGE_ID = 1  # zh-CN
 
 def extract_article_data(html_file):
@@ -93,7 +93,7 @@ def import_articles(conn):
                     column_id, custom_url, code, is_featured_home,
                     created_at, updated_at
                 ) VALUES (?, ?, ?, 0, datetime('now'), datetime('now'))
-            """, [NEWS_COLUMN_ID, custom_url, article_slug])
+            """, [ROOT_COLUMN_ID, custom_url, article_slug])
 
             entry_id = cursor.lastrowid
 
@@ -126,7 +126,7 @@ def import_articles(conn):
 
 def main():
     print("=" * 80)
-    print("知识交流（knowledge-exchange）新闻文章导入工具")
+    print("知识交流（knowledge-exchange）栏目文章导入工具")
     print("=" * 80)
 
     # 连接数据库

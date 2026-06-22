@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-从 spirax-global HTML 中提取产品详细内容并更新数据库
+从 spirax-global HTML 中提取内容详情并更新数据库
 """
 import sqlite3
 import re
@@ -8,7 +8,7 @@ from pathlib import Path
 from html.parser import HTMLParser
 
 # HTML内容提取器
-class ProductContentExtractor(HTMLParser):
+class ContentDetailExtractor(HTMLParser):
     def __init__(self):
         super().__init__()
         self.in_body = False
@@ -50,8 +50,8 @@ class ProductContentExtractor(HTMLParser):
         if self.in_overview:
             self.overview_text += data.strip() + " "
 
-# 产品映射：数据库ID -> HTML文件路径
-PRODUCT_MAPPING = {
+# 内容映射：数据库ID -> HTML文件路径
+CONTENT_MAPPING = {
     1: "products/isolation-valves/hv3-stop-valves/index.html",
     2: "products/boiler-controls-and-systems/level-controls/lp30-boiler-level-controller/index.html",
     3: "products/boiler-controls-and-systems/tds-blowdown-controls/bc3150-boiler-blowdown-controller/index.html",
@@ -99,8 +99,8 @@ def extract_meta_from_html(html_content):
 
     return title, description
 
-def extract_product_overview(html_content):
-    """提取产品概述内容"""
+def extract_content_overview(html_content):
+    """提取内容概述"""
     # 提取 product-overview 区域的文本
     overview_match = re.search(
         r'<section[^>]*product-overview[^>]*>.*?<p[^>]*data-overview-content[^>]*>(.*?)</p>',
@@ -111,8 +111,8 @@ def extract_product_overview(html_content):
         return overview_match.group(1).strip()
     return ""
 
-def extract_product_body(html_content):
-    """提取产品详细内容HTML"""
+def extract_content_body(html_content):
+    """提取内容详情 HTML"""
     # 提取 product-detail__body 区域
     body_match = re.search(
         r'<div class="intro__copy copy intro__copy--left product-detail__body">(.*?)</div>\s*</div>\s*<aside',
@@ -123,28 +123,28 @@ def extract_product_body(html_content):
         return body_match.group(1).strip()
 
     # 如果没有详细body，尝试提取overview
-    overview = extract_product_overview(html_content)
+    overview = extract_content_overview(html_content)
     if overview:
         return f'<p>{overview}</p>'
 
     return ""
 
-def process_product(product_id, html_path, base_dir):
-    """处理单个产品"""
+def process_content_item(item_id, html_path, base_dir):
+    """处理单条内容"""
     full_path = Path(base_dir) / html_path
 
     if not full_path.exists():
-        print(f"⚠️  产品 {product_id}: 文件不存在 {html_path}")
+        print(f"⚠️  内容 {item_id}: 文件不存在 {html_path}")
         return None
 
     with open(full_path, 'r', encoding='utf-8') as f:
         html_content = f.read()
 
     title, description = extract_meta_from_html(html_content)
-    content_html = extract_product_body(html_content)
+    content_html = extract_content_body(html_content)
 
     return {
-        'id': product_id,
+        'id': item_id,
         'seo_title': title,
         'seo_description': description,
         'summary': description,  # summary使用description
@@ -160,13 +160,13 @@ def main():
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
-    print(f"开始处理 {len(PRODUCT_MAPPING)} 个产品...")
+    print(f"开始处理 {len(CONTENT_MAPPING)} 条内容...")
 
     updated_count = 0
     failed_count = 0
 
-    for product_id, html_path in PRODUCT_MAPPING.items():
-        result = process_product(product_id, html_path, global_dist_dir)
+    for item_id, html_path in CONTENT_MAPPING.items():
+        result = process_content_item(item_id, html_path, global_dist_dir)
 
         if result:
             # 更新数据库
@@ -187,10 +187,10 @@ def main():
             ))
 
             updated_count += 1
-            print(f"✅ 产品 {product_id}: 已更新")
+            print(f"✅ 内容 {item_id}: 已更新")
         else:
             failed_count += 1
-            print(f"❌ 产品 {product_id}: 更新失败")
+            print(f"❌ 内容 {item_id}: 更新失败")
 
     # 提交事务
     conn.commit()
@@ -199,7 +199,7 @@ def main():
     print(f"\n处理完成:")
     print(f"  成功: {updated_count}")
     print(f"  失败: {failed_count}")
-    print(f"  总计: {len(PRODUCT_MAPPING)}")
+    print(f"  总计: {len(CONTENT_MAPPING)}")
 
 if __name__ == "__main__":
     main()

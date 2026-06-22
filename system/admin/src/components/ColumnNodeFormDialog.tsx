@@ -15,6 +15,7 @@ import { toast } from 'sonner'
 import type { Column, ColumnNode, ColumnNodeTranslation, TemplateBinding } from '@/types'
 
 const DEFAULT_TEMPLATE_VALUE = '__default__'
+const INVALIDATED_CONTENT_MODELS = ['product', 'news'] as const
 
 interface ColumnNodeFormDialogProps {
   open: boolean
@@ -209,8 +210,9 @@ export default function ColumnNodeFormDialog({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['column-nodes'] })
       queryClient.invalidateQueries({ queryKey: ['columns'] })
-      queryClient.invalidateQueries({ queryKey: ['products'] })
-      queryClient.invalidateQueries({ queryKey: ['news'] })
+      INVALIDATED_CONTENT_MODELS.forEach((modelCode) => {
+        queryClient.invalidateQueries({ queryKey: ['content-items', modelCode] })
+      })
       queryClient.invalidateQueries({ queryKey: ['template-bindings'] })
       toast.success(mode === 'create' ? '创建成功' : '更新成功')
       onOpenChange(false)

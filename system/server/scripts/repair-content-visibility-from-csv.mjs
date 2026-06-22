@@ -5,9 +5,11 @@ import { fileURLToPath } from 'node:url';
 import { execute } from '../src/db.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const csvPath = path.resolve(__dirname, '../import/benming_ch_prod.csv');
+const args = parseArgs(process.argv.slice(2));
+const modelCode = args.modelCode || 'product';
+const csvPath = args.csvPath || path.resolve(__dirname, '../import/benming_ch_prod.csv');
 
-export function runProductVisibilityRepair() {
+export function runContentVisibilityRepair() {
   if (!fs.existsSync(csvPath)) {
     throw new Error(`missing import file: ${csvPath}`);
   }
@@ -28,10 +30,10 @@ export function runProductVisibilityRepair() {
         SET is_visible = ?
         WHERE id = ?
           AND coalesce(is_visible, -1) <> ?
-          AND model_code = 'product'
+          AND model_code = ?
           AND node_type = 'content'
       `,
-      [isVisible, id, isVisible]
+      [isVisible, id, isVisible, modelCode]
     );
     touched += result.changes || 0;
   }
@@ -125,5 +127,24 @@ function toObject(headers, record) {
   return row;
 }
 
-const result = runProductVisibilityRepair();
-console.log(`Repaired product visibility for ${result.touched} rows from ${result.rows} CSV records.`);
+function parseArgs(argv) {
+  const output = {
+    modelCode: '',
+    csvPath: ''
+  };
+
+  for (const arg of argv) {
+    if (String(arg).startsWith('--model=')) {
+      output.modelCode = String(arg).slice('--model='.length).trim();
+      continue;
+    }
+    if (String(arg).startsWith('--csv=')) {
+      output.csvPath = path.resolve(__dirname, String(arg).slice('--csv='.length).trim());
+    }
+  }
+
+  return output;
+}
+
+const result = runContentVisibilityRepair();
+console.log(`Repaired ${modelCode} visibility for ${result.touched} rows from ${result.rows} CSV records.`);

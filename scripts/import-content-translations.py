@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-从 spirax-global HTML 中提取产品详细内容并插入到 content_product_translations
+从 spirax-global HTML 中提取内容详情并插入到 content_product_translations
 """
 import sqlite3
 import re
@@ -20,9 +20,9 @@ def extract_meta_from_html(html_content):
 
     return title, description
 
-def extract_product_body(html_content):
-    """提取产品详细内容HTML"""
-    # 提取 product-detail__body 区域
+def extract_content_body(html_content):
+    """提取内容详情 HTML"""
+    # 提取当前详情主体区域
     body_match = re.search(
         r'<div class="intro__copy copy intro__copy--left product-detail__body">(.*?)</div>\s*</div>\s*<aside',
         html_content,
@@ -49,10 +49,10 @@ def get_html_path_from_custom_url(custom_url):
     # 从之前的报告看，路径格式是: products/{category}/{product}/index.html
 
     # 简单策略：在 products/ 目录下递归查找匹配的文件
-    product_slug = custom_url.replace('/index.html', '')
+    content_slug = custom_url.replace('/index.html', '')
 
     # 在 products 目录下查找
-    for html_file in GLOBAL_DIST_DIR.glob(f"products/**/{product_slug}/index.html"):
+    for html_file in GLOBAL_DIST_DIR.glob(f"products/**/{content_slug}/index.html"):
         return html_file
 
     return None
@@ -61,33 +61,33 @@ def main():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
 
-    # 获取所有产品
+    # 获取所有内容
     cursor.execute("""
         SELECT id, custom_url, code
         FROM content_product
         ORDER BY id
     """)
-    products = cursor.fetchall()
+    content_items = cursor.fetchall()
 
-    print(f"找到 {len(products)} 个产品")
+    print(f"找到 {len(content_items)} 条内容")
 
     # 中文语言ID
     LANGUAGE_ID = 1
 
     success_count = 0
-    failed_products = []
+    failed_items = []
 
-    for entry_id, custom_url, code in products:
+    for entry_id, custom_url, code in content_items:
         if not custom_url:
-            print(f"⚠️  产品 {entry_id} (code={code}): 没有 custom_url")
-            failed_products.append((entry_id, code, "无 custom_url"))
+            print(f"⚠️  内容 {entry_id} (code={code}): 没有 custom_url")
+            failed_items.append((entry_id, code, "无 custom_url"))
             continue
 
         html_path = get_html_path_from_custom_url(custom_url)
 
         if not html_path or not html_path.exists():
-            print(f"⚠️  产品 {entry_id} (code={code}): 找不到 HTML 文件 {custom_url}")
-            failed_products.append((entry_id, code, f"找不到文件: {custom_url}"))
+            print(f"⚠️  内容 {entry_id} (code={code}): 找不到 HTML 文件 {custom_url}")
+            failed_items.append((entry_id, code, f"找不到文件: {custom_url}"))
             continue
 
         # 读取HTML
@@ -96,7 +96,7 @@ def main():
 
         # 提取内容
         seo_title, seo_description = extract_meta_from_html(html_content)
-        content_html = extract_product_body(html_content)
+        content_html = extract_content_body(html_content)
 
         # 插入数据库
         try:
@@ -114,7 +114,7 @@ def main():
             """, (
                 entry_id,
                 LANGUAGE_ID,
-                seo_title.split(' | ')[0] if ' | ' in seo_title else seo_title,  # 提取产品名称
+                seo_title.split(' | ')[0] if ' | ' in seo_title else seo_title,
                 seo_description,
                 content_html,
                 seo_title,
@@ -122,11 +122,11 @@ def main():
             ))
 
             success_count += 1
-            print(f"✅ 产品 {entry_id} ({code}): 已插入")
+            print(f"✅ 内容 {entry_id} ({code}): 已插入")
 
         except Exception as e:
-            print(f"❌ 产品 {entry_id} ({code}): 插入失败 - {e}")
-            failed_products.append((entry_id, code, str(e)))
+            print(f"❌ 内容 {entry_id} ({code}): 插入失败 - {e}")
+            failed_items.append((entry_id, code, str(e)))
 
     # 提交事务
     conn.commit()
@@ -134,12 +134,12 @@ def main():
 
     print(f"\n处理完成:")
     print(f"  成功: {success_count}")
-    print(f"  失败: {len(failed_products)}")
-    print(f"  总计: {len(products)}")
+    print(f"  失败: {len(failed_items)}")
+    print(f"  总计: {len(content_items)}")
 
-    if failed_products:
-        print(f"\n失败的产品:")
-        for entry_id, code, reason in failed_products:
+    if failed_items:
+        print(f"\n失败的内容:")
+        for entry_id, code, reason in failed_items:
             print(f"  - ID={entry_id}, code={code}: {reason}")
 
 if __name__ == "__main__":

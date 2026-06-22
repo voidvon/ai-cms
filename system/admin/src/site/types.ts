@@ -56,7 +56,7 @@ export type HreflangLink = {
   url?: string | null
 }
 
-export type ProductSummary = {
+export type ManagedContentSummary = {
   id: number
   name?: string | null
   summary?: string | null
@@ -64,7 +64,7 @@ export type ProductSummary = {
   primary_image?: string | null
 }
 
-export type NewsSummary = {
+export type SectionContentSummary = {
   id: number
   title?: string | null
   summary?: string | null
@@ -94,50 +94,50 @@ export type ContentPageProps = {
   contentHtml: string
 }
 
-export type ProductListPageProps = {
+export type ManagedColumnListPageProps = {
   site: SiteConfig
   title: string
-  products: ProductSummary[]
+  products: ManagedContentSummary[]
   categories: ColumnSummary[]
   pagination: Pagination
 }
 
-export type ProductDetailPageProps = {
+export type ManagedColumnDetailPageProps = {
   site: SiteConfig
-  product: ProductSummary & {
+  product: ManagedContentSummary & {
     code?: string | null
     content_html?: string | null
   }
-  relatedProducts: ProductSummary[]
+  relatedProducts: ManagedContentSummary[]
 }
 
-export type ArticleListPageProps = {
+export type SectionListPageProps = {
   site: SiteConfig
   title: string
   sectionLabel: string
   sectionPath: string
-  articles: NewsSummary[]
+  articles: SectionContentSummary[]
   categories: ColumnSummary[]
   pagination: Pagination
 }
 
-export type ArticleDetailPageProps = {
+export type SectionDetailPageProps = {
   site: SiteConfig
   title: string
   sectionLabel: string
   sectionPath: string
-  article: NewsSummary & {
+  article: SectionContentSummary & {
     content_html?: string | null
   }
   column?: ColumnSummary | null
-  previous?: NewsSummary | null
-  next?: NewsSummary | null
+  previous?: SectionContentSummary | null
+  next?: SectionContentSummary | null
 }
 
 export type HomePageProps = {
   site: SiteConfig
-  featuredProducts: ProductSummary[]
-  latestNews: NewsSummary[]
+  featuredProducts: ManagedContentSummary[]
+  latestNews: SectionContentSummary[]
 }
 
 export type ContactPageProps = {
@@ -187,20 +187,20 @@ export type LegacyContentPageProps = LegacyPageBaseProps & {
   contentHtml: string
 }
 
-export type LegacyProductListPageProps = LegacyPageBaseProps & {
+export type LegacyCollectionListPageProps = LegacyPageBaseProps & {
   smallName: string
   bigId: number
   bigName: string
-  productsSmallCatHtml: string
+  collectionCategoryHtml: string
   bodyHtml: string
 }
 
-export type LegacyProductDetailPageProps = LegacyPageBaseProps & {
+export type LegacyCollectionDetailPageProps = LegacyPageBaseProps & {
   title: string
-  prodDescription: string
+  itemDescription: string
   image: string
   code: string
-  relatedProductsHtml: string
+  relatedItemsHtml: string
   bodyHtml: string
 }
 
@@ -214,7 +214,7 @@ export type LegacyArticleListPageProps = LegacyPageBaseProps & {
 export type LegacyArticleDetailPageProps = LegacyPageBaseProps & {
   section: 'news' | 'service'
   title: string
-  newsDescription: string
+  itemDescription: string
   columnId: number
   columnName: string
   bodyHtml: string

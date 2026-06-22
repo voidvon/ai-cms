@@ -47,6 +47,16 @@ interface ManualColumnFormDialogProps {
 }
 
 const DEFAULT_TEMPLATE_VALUE = '__default__'
+const MODEL_DETAIL_RULE_OPTIONS = {
+  news: [
+    { value: 'detail/{id}.html', label: 'detail/{id}.html' },
+    { value: '{id}.html', label: '{id}.html' },
+  ],
+  product: [
+    { value: '{id}/index.html', label: '{id}/index.html' },
+    { value: '{id}.html', label: '{id}.html' },
+  ],
+} as const
 
 export default function ManualColumnFormDialog({
   open,
@@ -93,19 +103,7 @@ export default function ManualColumnFormDialog({
   const availableLanguageCodes = useMemo(() => languages.map((item) => item.code), [languages])
   const basicOnly = forceBasicOnly || (mode === 'edit' && column?.column_type === 'list')
   const detailRuleOptions = basicOnly
-    ? (
-      column?.model_code === 'news'
-        ? [
-            { value: 'detail/{id}.html', label: 'detail/{id}.html' },
-            { value: '{id}.html', label: '{id}.html' },
-          ]
-        : column?.model_code === 'product'
-          ? [
-              { value: '{id}/index.html', label: '{id}/index.html' },
-              { value: '{id}.html', label: '{id}.html' },
-            ]
-          : []
-    )
+    ? getDetailRuleOptions(column?.model_code)
     : []
 
   useEffect(() => {
@@ -172,6 +170,13 @@ export default function ManualColumnFormDialog({
       return String(item.column_type || 'list') !== 'single'
     })
   }, [columns, mode, column])
+
+  function getDetailRuleOptions(modelCode?: string | null) {
+    const normalizedModelCode = String(modelCode || '').trim() as keyof typeof MODEL_DETAIL_RULE_OPTIONS
+    return MODEL_DETAIL_RULE_OPTIONS[normalizedModelCode]
+      ? [...MODEL_DETAIL_RULE_OPTIONS[normalizedModelCode]]
+      : []
+  }
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()

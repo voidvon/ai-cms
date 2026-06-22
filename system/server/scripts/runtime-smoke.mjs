@@ -1,11 +1,11 @@
 import assert from 'node:assert/strict';
 import { createApp } from '../src/app.mjs';
-import { listProducts } from '../src/services/products.mjs';
+import { listContentItems } from '../src/services/content-items.mjs';
 
 async function main() {
-  const product = listProducts({ visibleOnly: false, limit: 1 })[0];
-  assert(product?.name, '缺少可搜索产品数据，无法执行搜索接口回归。');
-  const searchKeyword = String(product.name).trim();
+  const sampleManagedItem = listContentItems('product', { visibleOnly: false, limit: 1 })[0];
+  assert(sampleManagedItem?.name, '缺少可搜索内容数据，无法执行搜索接口回归。');
+  const searchKeyword = String(sampleManagedItem.name).trim();
 
   const app = await createApp({ logger: false });
 
@@ -46,12 +46,12 @@ async function main() {
     });
     assert.equal(legacySearch.statusCode, 404);
 
-    const removedLegacyProductUrl = await app.inject({
+    const removedLegacyManagedItemUrl = await app.inject({
       method: 'GET',
       url: '/product/1.html',
       headers: { host: 'localhost' }
     });
-    assert.equal(removedLegacyProductUrl.statusCode, 404);
+    assert.equal(removedLegacyManagedItemUrl.statusCode, 404);
 
     const legacyAdminLogin = await app.inject({
       method: 'GET',

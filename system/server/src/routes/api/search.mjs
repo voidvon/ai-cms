@@ -1,4 +1,4 @@
-import { searchAllContentPaged } from '../../services/content-search.mjs';
+import { normalizeSearchModelCodes, searchAllContentPaged } from '../../services/content-search.mjs';
 
 export default async function searchRoutes(app) {
   app.get('/search', async (request, reply) => {
@@ -17,7 +17,7 @@ export default async function searchRoutes(app) {
       page: parseInt(page),
       limit: parseInt(pageSize),
       languageCode: language ?? lang,
-      models: modelList.length ? modelList : ['product', 'news']
+      models: normalizeSearchModelCodes(modelList)
     });
 
     return { success: true, ...result };

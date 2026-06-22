@@ -19,12 +19,19 @@ import type { MediaAsset } from '@/types'
 
 const LIMIT = 50
 
+const MEDIA_PURPOSE_META = {
+  product_cover: { label: '产品封面' },
+  news_cover: { label: '新闻封面' },
+  richtext_image: { label: '富文本图片' },
+  attachment: { label: '附件' },
+} as const
+
 const PURPOSE_OPTIONS = [
   { value: 'all', label: '全部类型' },
-  { value: 'product_cover', label: '产品封面' },
-  { value: 'news_cover', label: '新闻封面' },
-  { value: 'richtext_image', label: '富文本图片' },
-  { value: 'attachment', label: '附件' },
+  ...Object.entries(MEDIA_PURPOSE_META).map(([value, meta]) => ({
+    value,
+    label: meta.label,
+  })),
 ]
 
 const STATUS_OPTIONS = [
@@ -279,10 +286,9 @@ export default function MediaAssetsPage() {
 }
 
 function formatPurpose(purpose: string) {
-  if (purpose === 'product_cover') return '产品封面'
-  if (purpose === 'news_cover') return '新闻封面'
-  if (purpose === 'richtext_image') return '富文本图片'
-  if (purpose === 'attachment') return '附件'
+  if (purpose in MEDIA_PURPOSE_META) {
+    return MEDIA_PURPOSE_META[purpose as keyof typeof MEDIA_PURPOSE_META].label
+  }
   return purpose || '-'
 }
 

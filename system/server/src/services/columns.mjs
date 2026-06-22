@@ -23,6 +23,26 @@ const RESERVED_SINGLE_PAGE_PATHS = new Set([
   '/web.config',
   '/.user.ini'
 ]);
+const COLUMN_TREE_MODEL_CONFIGS = Object.freeze({
+  product: {
+    columnType: 'list',
+    modelCode: 'product',
+    renderDriver: 'managed_column',
+    rootBasePath: '/products/'
+  },
+  news: {
+    columnType: 'list',
+    modelCode: 'news',
+    renderDriver: 'section',
+    rootBasePath: null
+  },
+  corporation: {
+    columnType: 'single',
+    modelCode: 'corporation',
+    renderDriver: 'page_tree',
+    rootBasePath: '/about/'
+  }
+});
 
 export function ensureColumnsSchema() {
   if (schemaEnsured) {
@@ -71,8 +91,17 @@ export function getColumnById(id, { languageCode = null, includeTranslations = t
   return hydrateColumns([row], { languageCode, includeTranslations })[0] || null;
 }
 
+export function getColumnTreeModelConfig(model) {
+  const config = COLUMN_TREE_MODEL_CONFIGS[String(model || '').trim()];
+  if (!config) {
+    throw new Error(`unsupported model: ${model}`);
+  }
+  return config;
+}
+
 export function listModelColumns(model, { languageCode = null } = {}) {
-  return listColumns({ languageCode, includeTranslations: true }).filter((item) => isColumnInModelTree(item, model));
+  const config = getColumnTreeModelConfig(model);
+  return listColumns({ languageCode, includeTranslations: true }).filter((item) => isColumnInModelTree(item, config));
 }
 
 export function getModelRootColumn(model, { languageCode = null } = {}) {
@@ -785,11 +814,7 @@ function inferColumnSemantics(row, rowById, semanticsById, modelCode) {
     structureKind = 'collection';
     const resolvedPath = String(resolveColumnResolvedRoutePath(row, null, rowById) || '').trim();
     const hasDetailRule = Boolean(toNullableString(row?.detail_rule));
-    renderDriver = resolvedPath.startsWith('/products/')
-      ? 'managed_column'
-      : hasDetailRule
-        ? 'section'
-        : 'collection';
+    renderDriver = inferCollectionRenderDriver({ resolvedPath, hasDetailRule });
     generationModes = ['list'];
     if (toNullableInteger(row?.content_model_id) && toNullableString(row?.detail_rule)) {
       generationModes.push('detail');
@@ -1125,20 +1150,24 @@ function createColumnsIndexes() {
   `);
 }
 
-function isColumnInModelTree(column, model) {
+function inferCollectionRenderDriver({ resolvedPath, hasDetailRule }) {
+  if (String(resolvedPath || '').trim().startsWith(COLUMN_TREE_MODEL_CONFIGS.product.rootBasePath)) {
+    return COLUMN_TREE_MODEL_CONFIGS.product.renderDriver;
+  }
+  return hasDetailRule
+    ? COLUMN_TREE_MODEL_CONFIGS.news.renderDriver
+    : 'collection';
+}
+
+function isColumnInModelTree(column, config) {
   const columnType = normalizeColumnType(column?.column_type);
   const modelCode = String(column?.model_code || '').trim();
-
-  if (model === 'product') {
-    return columnType === 'list' && modelCode === 'product';
-  }
-  if (model === 'news') {
-    return columnType === 'list' && modelCode === 'news';
-  }
-  if (model === 'corporation') {
-    return columnType === 'single' && modelCode === 'corporation';
-  }
-  return false;
+  const renderDriver = String(column?.column_semantics?.render_driver || '').trim();
+  return columnType === config.columnType
+    && (
+      renderDriver === config.renderDriver
+      || (!renderDriver && modelCode === config.modelCode)
+    );
 }
 
 function normalizePublishStatus(value) {

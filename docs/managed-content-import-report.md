@@ -1,8 +1,9 @@
-# 产品内容导入报告
+# 受管内容导入报告
 
 ## 任务概述
 
-从 spirax-global 项目的中文站点 HTML 中提取产品详细信息，并补充到数据库 `content_product_translations` 表中。
+本次处理对象实际是 `product` 模型内容。
+从 spirax-global 项目的中文站点 HTML 中提取详情信息，并补充到数据库 `content_product_translations` 表中。
 
 ## 执行时间
 
@@ -89,7 +90,7 @@
 
 ## 实施工具
 
-- **自动提取脚本**: `scripts/extract-product-content.py`
+- **自动提取脚本**: `scripts/extract-content-details.py`
 - **执行方式**: Python 3，使用正则表达式和HTML解析
 - **手动补充**: 2个产品（ID 7, 11）
 

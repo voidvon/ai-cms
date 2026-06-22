@@ -248,7 +248,7 @@ export function buildProductDetailPublicUrl(product, columnSlugPath) {
 
 - [帝国CMS栏目系统](https://www.phome.net/)
 - 重构计划：`/Users/yytest/.claude/plans/lovely-frolicking-clover.md`
-- 产品导入报告：`docs/product-content-import-report.md`
+- 内容导入报告：`docs/managed-content-import-report.md`
 
 ## 下一步行动
 

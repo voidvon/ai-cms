@@ -23,6 +23,11 @@ function getModelFieldNames(modelCode) {
   };
 }
 
+function getModelFieldNameSet(modelCode) {
+  const { mainFields, translationFields } = getModelFieldNames(modelCode);
+  return new Set([...mainFields, ...translationFields]);
+}
+
 /**
  * 构建主表字段的 SELECT 子句
  * 对于不存在的字段，使用默认值
@@ -111,7 +116,7 @@ export function listContentEntries(modelCode, {
       LEFT JOIN column_translations tc ON tc.column_id = c.id AND tc.language_id = ?
       LEFT JOIN column_translations dtc ON dtc.column_id = c.id AND dtc.language_id = ?
       ${whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : ''}
-      ORDER BY ${modelCode === 'news' ? 'e.created_at DESC, e.id DESC' : 'e.sort_order ASC, e.id DESC'}
+      ORDER BY ${buildContentEntryOrderClause(modelCode)}
       LIMIT ?
     `,
     [
@@ -207,7 +212,7 @@ export function listContentEntriesPaged(modelCode, {
       LEFT JOIN column_translations tc ON tc.column_id = c.id AND tc.language_id = ?
       LEFT JOIN column_translations dtc ON dtc.column_id = c.id AND dtc.language_id = ?
       ${where}
-      ORDER BY ${modelCode === 'news' ? 'e.created_at DESC, e.id DESC' : 'e.sort_order ASC, e.id DESC'}
+      ORDER BY ${buildContentEntryOrderClause(modelCode)}
       LIMIT ?
       OFFSET ?
     `,
@@ -541,6 +546,7 @@ function saveEntryTranslations(translationTableName, entryId, translations, now)
 function normalizeContentEntryInput(modelCode, input, { existingEntry = null } = {}) {
   const existing = existingEntry || {};
   const baseInput = input?.base || input || {};
+  const fieldNames = getModelFieldNameSet(modelCode);
   const columnId = toInteger(baseInput.column_id ?? existing.column_id, 0);
   if (columnId <= 0) {
     throw new Error('请选择所属栏目');
@@ -550,19 +556,20 @@ function normalizeContentEntryInput(modelCode, input, { existingEntry = null } =
     throw new Error('所属栏目不存在');
   }
   const defaultLanguageCode = getDefaultLanguage()?.code || 'zh-CN';
-  const images = modelCode === 'product'
+  const supportsImageGallery = fieldNames.has('images');
+  const supportsPrimaryImage = fieldNames.has('primary_image');
+  const images = supportsImageGallery
     ? normalizeImageList(baseInput.images ?? existing.images)
     : [];
-  const picture = modelCode === 'news'
-    ? normalizeSingleImage(baseInput.picture ?? baseInput.image ?? existing.picture ?? existing.image)
-    : '';
-  const primaryImage = modelCode === 'product'
-    ? (normalizeSingleImage(baseInput.primary_image ?? existing.primary_image) || images[0] || '')
-    : picture;
+  const singleImage = normalizeSingleImage(baseInput.picture ?? baseInput.image ?? existing.picture ?? existing.image);
+  const primaryImage = supportsPrimaryImage
+    ? (normalizeSingleImage(baseInput.primary_image ?? existing.primary_image) || images[0] || singleImage || '')
+    : singleImage;
   const customUrl = normalizeEntryCustomUrl(baseInput.custom_url ?? existing.custom_url);
+  const nameField = resolveTranslationNameField(baseInput, input?.translations, existing);
 
   const fallbackBase = {
-    name: modelCode === 'news' ? String(existing.title || existing.name || '') : String(existing.name || ''),
+    name: String(existing.title || existing.name || '').trim(),
     summary: String(existing.summary || ''),
     content_html: String(existing.content_html || ''),
     template_data_json: existing.template_data_json ?? existing.template_data ?? null,
@@ -576,8 +583,8 @@ function normalizeContentEntryInput(modelCode, input, { existingEntry = null } =
     defaultLanguageCode,
     existingTranslations: existing.translations || {},
     fallbackBase,
-    nameField: modelCode === 'news' ? 'title' : 'name',
-    requiredNameError: modelCode === 'news' ? '请输入默认语言的标题' : '请输入默认语言的产品名称'
+    nameField,
+    requiredNameError: '请输入默认语言的名称'
   });
 
   return {
@@ -585,8 +592,8 @@ function normalizeContentEntryInput(modelCode, input, { existingEntry = null } =
       column_id: column.id,
       custom_url: customUrl,
       code: toNullableString(baseInput.code ?? existing.code) || '',
-      images: modelCode === 'product' ? JSON.stringify(images) : EMPTY_IMAGE_LIST,
-      primary_image: modelCode === 'product' ? primaryImage : picture,
+      images: supportsImageGallery ? JSON.stringify(images) : EMPTY_IMAGE_LIST,
+      primary_image: primaryImage,
       is_visible: toBooleanInt(baseInput.is_visible ?? existing.is_visible, 1),
       is_featured_home: toBooleanInt(baseInput.is_featured_home ?? existing.is_featured_home ?? existing.is_featured, 0),
       sort_order: toInteger(baseInput.sort_order ?? existing.sort_order, 0),
@@ -663,7 +670,7 @@ function resolveDefaultTranslation(translations, defaultLanguageCode) {
 
 function mapEntryRow(modelCode, row) {
   const images = normalizeImageList(row.images);
-  const primaryImage = resolvePrimaryImage(modelCode, row.primary_image, row.images);
+  const primaryImage = resolvePrimaryImage(row.primary_image, row.images);
   const base = {
     id: toInteger(row.id, 0),
     name: row.name || '',
@@ -688,16 +695,68 @@ function mapEntryRow(modelCode, row) {
     updated_at: row.updated_at
   };
 
-  if (modelCode === 'news') {
-    return {
-      ...base,
-      title: base.name,
-      picture: primaryImage,
-      image: primaryImage,
-      is_featured: base.is_featured_home
-    };
+  return {
+    ...base,
+    title: base.name,
+    picture: primaryImage,
+    image: primaryImage,
+    is_featured: base.is_featured_home
+  };
+}
+
+export function resolveContentEntryComparator(modelCode) {
+  return hasSortableContentEntries(modelCode)
+    ? compareEntriesBySortOrder
+    : compareEntriesByCreatedAt;
+}
+
+export function resolveContentEntryDisplayTitle(item) {
+  return String(item?.title || item?.name || '').trim();
+}
+
+export function resolveContentEntryCoverImage(item) {
+  return normalizeSingleImage(item?.picture || item?.image || item?.primary_image)
+    || normalizeImageList(item?.images)[0]
+    || null;
+}
+
+function buildContentEntryOrderClause(modelCode) {
+  return hasSortableContentEntries(modelCode)
+    ? 'e.sort_order ASC, e.id DESC'
+    : 'e.created_at DESC, e.id DESC';
+}
+
+function hasSortableContentEntries(modelCode) {
+  return getModelFieldNameSet(modelCode).has('sort_order');
+}
+
+function resolveTranslationNameField(baseInput, translations, existing) {
+  if (Object.values(translations || {}).some((value) => value && Object.prototype.hasOwnProperty.call(value, 'title'))) {
+    return 'title';
   }
-  return base;
+  if (Object.prototype.hasOwnProperty.call(baseInput || {}, 'title')) {
+    return 'title';
+  }
+  if (Object.prototype.hasOwnProperty.call(existing || {}, 'title') && !Object.prototype.hasOwnProperty.call(existing || {}, 'name')) {
+    return 'title';
+  }
+  return 'name';
+}
+
+function compareEntriesByCreatedAt(left, right) {
+  const createdDiff = String(right?.created_at || '').localeCompare(String(left?.created_at || ''));
+  if (createdDiff !== 0) {
+    return createdDiff;
+  }
+  return Number(right?.id || 0) - Number(left?.id || 0);
+}
+
+function compareEntriesBySortOrder(left, right) {
+  const sortDiff = Number(left?.sort_order || 0) - Number(right?.sort_order || 0);
+  if (sortDiff !== 0) {
+    return sortDiff;
+  }
+  return Number(right?.id || 0) - Number(left?.id || 0);
 }
 
 function resolveLanguage(languageCode) {
@@ -816,7 +875,7 @@ function normalizeEntryCustomUrl(value) {
   return normalized.startsWith('/') ? `/${segments.join('/')}` : segments.join('/');
 }
 
-function resolvePrimaryImage(modelCode, primaryImage, imagesValue) {
+function resolvePrimaryImage(primaryImage, imagesValue) {
   const images = normalizeImageList(imagesValue);
   const resolved = normalizeSingleImage(primaryImage) || images[0] || '';
   return resolved;

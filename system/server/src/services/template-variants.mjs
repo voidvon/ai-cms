@@ -3,6 +3,23 @@ import { ensureTemplatesSchema, listTemplates } from './templates.mjs';
 
 let schemaEnsured = false;
 
+const LEGACY_TEMPLATE_VARIANT_COLUMNS = [
+  'home_index',
+  'co_index',
+  'produts_index',
+  'produts_sort1',
+  'produts_sort2',
+  'produts_detail',
+  'news_index',
+  'news_sort1',
+  'news_detail',
+  'service_sort1',
+  'service_detail',
+  'msg_index',
+  'contact',
+  'legacy_extra',
+];
+
 export function ensureTemplateVariantsSchema() {
   if (schemaEnsured) {
     return;
@@ -249,22 +266,7 @@ function cloneThemeTemplates(sourceThemeId, targetThemeId) {
 
 function dropLegacyThemeSchema() {
   const columns = queryAll('PRAGMA table_info(template_variants)');
-  const hasLegacyColumns = columns.some((column) => [
-    'home_index',
-    'co_index',
-    'produts_index',
-    'produts_sort1',
-    'produts_sort2',
-    'produts_detail',
-    'news_index',
-    'news_sort1',
-    'news_detail',
-    'service_sort1',
-    'service_detail',
-    'msg_index',
-    'contact',
-    'legacy_extra',
-  ].includes(column.name));
+  const hasLegacyColumns = columns.some((column) => LEGACY_TEMPLATE_VARIANT_COLUMNS.includes(column.name));
 
   if (hasLegacyColumns) {
     getDb().exec(`

@@ -29,7 +29,13 @@ export interface Language {
   updated_at?: string;
 }
 
-export interface Product {
+export interface ContentTranslationStatus {
+  language_code: string;
+  publish_status: PublishStatus;
+  has_content: boolean;
+}
+
+export interface ManagedContentItem {
   id: number;
   column_id?: number | null;
   custom_url?: string | null;
@@ -48,11 +54,11 @@ export interface Product {
   sort_order: number;
   column_name?: string;
   current_language_code?: string;
-  translation_statuses?: ProductTranslationStatus[];
-  translations?: Record<string, ProductTranslation>;
+  translation_statuses?: ContentTranslationStatus[];
+  translations?: Record<string, ManagedContentTranslation>;
 }
 
-export interface ProductTranslation {
+export interface ManagedContentTranslation {
   name: string;
   summary?: string;
   content_html?: string;
@@ -63,13 +69,7 @@ export interface ProductTranslation {
   publish_status: PublishStatus;
 }
 
-export interface ProductTranslationStatus {
-  language_code: string;
-  publish_status: PublishStatus;
-  has_content: boolean;
-}
-
-export interface News {
+export interface SectionContentItem {
   id: number;
   column_id?: number | null;
   custom_url?: string | null;
@@ -88,11 +88,11 @@ export interface News {
   created_at: string;
   column_name?: string;
   current_language_code?: string;
-  translation_statuses?: NewsTranslationStatus[];
-  translations?: Record<string, NewsTranslation>;
+  translation_statuses?: ContentTranslationStatus[];
+  translations?: Record<string, SectionContentTranslation>;
 }
 
-export interface NewsTranslation {
+export interface SectionContentTranslation {
   title: string;
   summary?: string;
   content_html?: string;
@@ -101,12 +101,6 @@ export interface NewsTranslation {
   seo_title?: string;
   seo_description?: string;
   publish_status: PublishStatus;
-}
-
-export interface NewsTranslationStatus {
-  language_code: string;
-  publish_status: PublishStatus;
-  has_content: boolean;
 }
 
 export interface ColumnNode {

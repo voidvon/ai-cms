@@ -238,7 +238,7 @@ Products:
 - Legacy product format: `/product/{id}.html` (deprecated, not generated if product has slug)
 - Products and categories must have a `slug` field to use the new URL format
 - Slug must be unique, lowercase, alphanumeric with hyphens only
-- See `docs/product-url-hierarchy-update.md` for implementation details
+- See `docs/managed-content-url-hierarchy-update.md` for implementation details
 
 News:
 - `GET /api/news` - List news (query: category_id, featured, limit, offset)
@@ -379,7 +379,7 @@ await app.register(async (instance) => {
 - **Database**: SQLite database is in root `data/` and not committed to git. Initialize it with `npm run db:init`.
 - **Authentication**: Sessions are stored in `admin_sessions` table with expiration. Both cookie-based (for web) and token-based (for API) auth are supported.
 - **Logging**: Fastify uses Pino for structured logging. Set `LOG_LEVEL=debug` for verbose output.
-- **Product URLs**: Products now use SEO-friendly slug URLs (`/products/{slug}/`). Legacy `/product/{id}.html` URLs automatically redirect (301) to the new format. See `docs/product-slug-implementation.md` for details.
+- **Product URLs**: Products now use SEO-friendly slug URLs (`/products/{slug}/`). Legacy `/product/{id}.html` URLs automatically redirect (301) to the new format. See `docs/content-node-slug-implementation.md` for details.
 
 ## Migration Notes (2026-06-08)
 

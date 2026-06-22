@@ -74,17 +74,17 @@ export function buildJsonLdOrganization(site) {
   };
 }
 
-export function buildJsonLdProduct(product, site, options = {}) {
+export function buildJsonLdStructuredContent(content, site, options = {}) {
   const baseUrl = normalizeBaseUrl(site?.web_url);
-  const imageValue = product?.photo_url || product?.primary_image || null;
+  const imageValue = content?.photo_url || content?.primary_image || null;
   const imageUrl = toAbsoluteUrl(imageValue, baseUrl);
   const organizationName = site?.company_name || site?.web_name || '';
 
   return {
     '@context': 'https://schema.org',
     '@type': 'Product',
-    name: product?.seo_title || product?.title || product?.name || '',
-    description: product?.seo_description || product?.description || product?.summary || '',
+    name: content?.seo_title || content?.title || content?.name || '',
+    description: content?.seo_description || content?.description || content?.summary || '',
     image: imageUrl,
     url: toAbsoluteUrl(options.url, baseUrl) || '',
     brand: {
@@ -98,21 +98,21 @@ export function buildJsonLdProduct(product, site, options = {}) {
   };
 }
 
-export function buildJsonLdArticle(article, site, options = {}) {
+export function buildJsonLdSectionEntry(entry, site, options = {}) {
   const baseUrl = normalizeBaseUrl(site?.web_url);
-  const imageValue = article?.photo_url || article?.picture || null;
+  const imageValue = entry?.photo_url || entry?.picture || entry?.primary_image || null;
   const imageUrl = toAbsoluteUrl(imageValue, baseUrl);
   const organizationName = site?.company_name || site?.web_name || '';
 
   return {
     '@context': 'https://schema.org',
     '@type': 'Article',
-    headline: article?.seo_title || article?.title || '',
-    description: article?.seo_description || article?.summary || article?.description || '',
+    headline: entry?.seo_title || entry?.title || entry?.name || '',
+    description: entry?.seo_description || entry?.summary || entry?.description || '',
     image: imageUrl,
     mainEntityOfPage: toAbsoluteUrl(options.url, baseUrl) || '',
-    datePublished: article?.created_at || article?.add_date || '',
-    dateModified: article?.updated_at || article?.add_date || article?.created_at || '',
+    datePublished: entry?.created_at || entry?.add_date || '',
+    dateModified: entry?.updated_at || entry?.add_date || entry?.created_at || '',
     author: {
       '@type': 'Organization',
       name: organizationName
@@ -147,26 +147,26 @@ export function generateThemeColorMetas() {
   ];
 }
 
-export function buildProductSeoMeta(product, site, options = {}) {
-  const productName = product?.name || product?.title || '';
+export function buildStructuredContentSeoMeta(content, site, options = {}) {
+  const contentName = content?.name || content?.title || '';
   const organizationName = site?.company_name || site?.web_name || '';
   return buildSeoMeta({
-    title: product?.seo_title || (productName && organizationName ? `${productName} | ${organizationName}` : productName),
-    description: product?.seo_description || product?.summary || product?.description || '',
+    title: content?.seo_title || (contentName && organizationName ? `${contentName} | ${organizationName}` : contentName),
+    description: content?.seo_description || content?.summary || content?.description || '',
     url: options.url || '',
-    image: product?.photo_url || product?.primary_image || null,
+    image: content?.photo_url || content?.primary_image || null,
     type: 'website',
     site
   });
 }
 
-export function buildArticleSeoMeta(article, site, options = {}) {
-  const title = article?.seo_title || article?.title || '';
+export function buildSectionEntrySeoMeta(entry, site, options = {}) {
+  const title = entry?.seo_title || entry?.title || entry?.name || '';
   return buildSeoMeta({
     title,
-    description: article?.seo_description || article?.summary || article?.description || '',
+    description: entry?.seo_description || entry?.summary || entry?.description || '',
     url: options.url || '',
-    image: article?.photo_url || article?.picture || null,
+    image: entry?.photo_url || entry?.picture || entry?.primary_image || null,
     type: 'article',
     site
   });

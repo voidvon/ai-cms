@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-从 spirax-global 导入知识中心文章到 content_news 表
+从 spirax-global 导入知识中心栏目文章到栏目内容表
 """
 import sqlite3
 import re
@@ -11,7 +11,7 @@ from datetime import datetime
 GLOBAL_DIST_DIR = Path("/Users/yytest/Documents/projects/spirax-global/dist/zh-cn/learn-about-steam")
 DB_PATH = Path("data/site.sqlite")
 PARENT_COLUMN_ID = 311  # 知识中心栏目ID
-CONTENT_MODEL_ID = 2  # news 模型ID
+CONTENT_MODEL_ID = 2  # 当前目标内容模型 ID
 LANGUAGE_ID = 1  # zh-CN
 
 # 分类映射（英文slug -> 中文名称）

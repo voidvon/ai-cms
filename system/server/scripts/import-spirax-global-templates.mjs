@@ -144,9 +144,6 @@ function findTemplateByCode(code) {
 }
 
 function buildTemplates() {
-  const productUiCss = readSourceCss([
-    'src/components/shared/ui/ui.css',
-  ]);
   const productPagesSourceCss = normalizeProductColumnCss(readSourceCss([
     'src/components/templates/ProductPages/ProductPages.css',
   ]));
@@ -227,56 +224,52 @@ function buildTemplates() {
 }
     `.trim()
   ].filter(Boolean).join('\n\n');
-  const productCardGridCss = `
-.product-card-grid {
-  --product-card-min-height: 190px;
+const mediaCardGridCss = `
+.media-card-grid {
   --product-card-grey-bg: #eef1f3;
-  --product-card-shadow: 0 8px 22px rgba(0, 45, 114, 0.1);
 }
 
-.product-card-grid__grid {
+.media-card-grid__grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
 }
 
-.product-card-grid__item {
+.media-card-grid__item {
   position: relative;
   display: flex;
   flex-direction: column;
-  min-height: var(--product-card-min-height);
+  overflow: hidden;
+  border-radius: 16px;
   color: inherit;
   text-decoration: none;
   background: #fff;
-  box-shadow: var(--product-card-shadow);
 }
 
-.product-card-grid__item--grey {
+.media-card-grid__item--grey {
   background: var(--product-card-grey-bg);
 }
 
-.product-card-grid__item--light-blue {
+.media-card-grid__item--light-blue {
   background: var(--sg-card-blue, #d9edf6);
-  box-shadow: none;
 }
 
-.product-card-grid__image {
+.media-card-grid__image {
   flex: 0 0 auto;
   display: block;
   width: 100%;
-  aspect-ratio: 16 / 9;
+  aspect-ratio: 16 / 10;
   object-fit: cover;
 }
 
-.product-card-grid__content {
+.media-card-grid__content {
   display: flex;
   flex: 1;
   flex-direction: column;
-  min-height: calc(var(--product-card-min-height) * 0.55);
   padding: 18px 24px;
 }
 
-.product-card-grid__link {
+.media-card-grid__link {
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -284,25 +277,22 @@ function buildTemplates() {
   text-decoration: none;
 }
 
-.product-card-grid__title {
+.media-card-grid__title {
   margin: 0;
   color: var(--sg-blue);
+  font-size: 18px;
   font-weight: 700;
   line-height: 1.24;
 }
 
-.product-card-grid__title--uppercase {
-  text-transform: uppercase;
-}
-
-.product-card-grid__desc {
+.media-card-grid__desc {
   margin-top: 14px;
   color: #41576d;
   font-size: 15px;
   line-height: 1.68;
 }
 
-.product-card-grid__desc p {
+.media-card-grid__desc p {
   margin: 0;
   display: -webkit-box;
   overflow: hidden;
@@ -311,37 +301,27 @@ function buildTemplates() {
   -webkit-line-clamp: 2;
 }
 
-.product-card-grid__cta {
-  display: inline-flex;
-  align-items: center;
-  margin-top: 18px;
-  color: var(--sg-blue);
-  font-size: 14px;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
 @media (max-width: 1024px) {
-  .product-card-grid__grid {
+  .media-card-grid__grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 720px) {
-  .product-card-grid__grid {
+  .media-card-grid__grid {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
   }
 
-  .product-card-grid__item {
+  .media-card-grid__item {
     min-height: auto;
   }
 
-  .product-card-grid__content {
+  .media-card-grid__content {
     padding: 8px;
   }
 
-  .product-card-grid--mobile-carousel .product-card-grid__grid {
+  .media-card-grid--mobile-carousel .media-card-grid__grid {
     grid-template-columns: none;
     grid-auto-columns: minmax(78vw, 1fr);
     grid-auto-flow: column;
@@ -350,7 +330,7 @@ function buildTemplates() {
     scroll-snap-type: x proximity;
   }
 
-  .product-card-grid--mobile-carousel .product-card-grid__item {
+  .media-card-grid--mobile-carousel .media-card-grid__item {
     scroll-snap-align: start;
   }
 }
@@ -370,10 +350,7 @@ function buildTemplates() {
   const productCss = readSourceCss([
     'src/components/shared/ui/ui.css',
   ]);
-  const productTemplateCss = joinCssSources([
-    productUiCss,
-    normalizeProductColumnCss(productPageCssPartitions.localCss),
-  ]);
+  const productTemplateCss = normalizeProductColumnCss(productPageCssPartitions.localCss);
   const newsSourceCss = readSourceCss([
     'src/components/templates/NewsPages/NewsPages.base.css',
     'src/components/templates/NewsPages/NewsPages.css',
@@ -484,13 +461,13 @@ function buildTemplates() {
       css_source: contentCardGridCss,
     },
     {
-      code: 'product_card_grid',
-      name: '产品卡片网格组件',
+      code: 'media_card_grid',
+      name: '图文卡片网格组件',
       type: 'component',
       sort_order: 7,
-      content: buildProductCardGridComponent(),
-      tsx_source: buildProductCardGridComponent(),
-      css_source: productCardGridCss,
+      content: buildMediaCardGridComponent(),
+      tsx_source: buildMediaCardGridComponent(),
+      css_source: mediaCardGridCss,
     },
     {
       code: 'spirax_product_image_gallery',
@@ -1510,26 +1487,24 @@ export default function Template(props) {
     topPanel: pageData?.topPanel || null,
     quickFactsTitle: 'Quick facts'
   }) : null;
-  const cards = props.component('product_card_grid', {
+  const cards = props.component('media_card_grid', {
     cards: columnMainSource.map((item) => ({
       title: item?.name || item?.title || '',
       description: item?.summary || item?.description || '',
       image: item?.image || '',
       imageAlt: item?.imageAlt || item?.name || item?.title || '',
       href: item?.url || item?.link || item?.href || '',
-      itemClassName: item?.image ? 'product-card-grid__item--grey' : 'product-card-grid__item--light-blue',
-      titleClassName: 'product-card-grid__title--uppercase'
+      itemClassName: item?.image ? '' : 'media-card-grid__item--light-blue'
     })),
-    wrapperClassName: 'product-card-grid--mobile-carousel'
+    wrapperClassName: 'media-card-grid--mobile-carousel'
   });
-  const modelsSection = props.component('product_card_grid', {
+  const modelsSection = props.component('media_card_grid', {
     cards: pageModels.map((item) => ({
       title: item?.name || item?.title || '',
       description: item?.summary || item?.description || '',
       image: item?.image || '',
       imageAlt: item?.imageAlt || item?.name || item?.title || '',
-      href: item?.url || item?.link || item?.href || '',
-      titleClassName: 'product-card-grid__title--uppercase'
+      href: item?.url || item?.link || item?.href || ''
     }))
   });
   const downloadsSection = props.component('spirax_product_download_groups', {
@@ -1920,16 +1895,16 @@ export default function Template(props) {
   const supplementalSections = props.component('spirax_supplemental_sections', {
     sections: Array.isArray(productPageData?.supplementalSections) ? productPageData.supplementalSections : []
   });
-  const relatedCards = props.component('product_card_grid', {
+  const relatedCards = props.component('media_card_grid', {
     cards: (props.relatedProductItems || []).map((item) => ({
       title: item?.name || item?.title || '',
       description: item?.summary || '',
       image: item?.image || '',
       imageAlt: item?.name || item?.title || '',
       href: item?.url || '',
-      itemClassName: 'product-card-grid__item--grey'
+      itemClassName: 'media-card-grid__item--grey'
     })),
-    wrapperClassName: 'product-card-grid--mobile-carousel'
+    wrapperClassName: 'media-card-grid--mobile-carousel'
   });
   const content = (
     <main className="sg-page-shell sg-product-page">
@@ -2075,15 +2050,21 @@ function buildButtonGlobalCss() {
 }
 
 .sg-ui-button {
+  --sg-ui-button-bg: var(--sg-ui-color-brand-dark);
+  --sg-ui-button-bg-hover: var(--sg-ui-color-brand);
+  --sg-ui-button-border: transparent;
+  --sg-ui-button-border-hover: transparent;
+  --sg-ui-button-color: #fff;
+  --sg-ui-button-color-hover: #fff;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
   min-width: max-content;
-  border: 1px solid transparent;
+  border: 1px solid var(--sg-ui-button-border);
   border-radius: 999px;
-  background: var(--sg-ui-color-brand-dark);
-  color: #fff;
+  background: var(--sg-ui-button-bg);
+  color: var(--sg-ui-button-color);
   font-size: 13px;
   font-weight: 400;
   line-height: 1;
@@ -2098,7 +2079,9 @@ function buildButtonGlobalCss() {
 
 .sg-ui-button:hover,
 .sg-ui-button:focus-visible {
-  background: var(--sg-ui-color-brand);
+  background: var(--sg-ui-button-bg-hover);
+  border-color: var(--sg-ui-button-border-hover);
+  color: var(--sg-ui-button-color-hover);
   text-decoration: none;
 }
 
@@ -2123,81 +2106,76 @@ function buildButtonGlobalCss() {
 }
 
 .sg-ui-button--primary {
-  background: var(--sg-ui-color-brand-dark);
-  color: #fff;
-}
-
-.sg-ui-button--primary:hover,
-.sg-ui-button--primary:focus-visible {
-  background: var(--sg-ui-color-brand);
+  --sg-ui-button-bg: var(--sg-ui-color-brand-dark);
+  --sg-ui-button-bg-hover: var(--sg-ui-color-brand);
+  --sg-ui-button-color: #fff;
+  --sg-ui-button-color-hover: #fff;
 }
 
 .sg-ui-button--secondary {
-  background: var(--sg-color-primary-soft);
-  color: var(--sg-color-primary-strong);
-}
-
-.sg-ui-button--secondary:hover,
-.sg-ui-button--secondary:focus-visible {
-  background: var(--sg-color-primary-soft-hover);
+  --sg-ui-button-bg: var(--sg-color-primary-soft);
+  --sg-ui-button-bg-hover: var(--sg-color-primary-soft-hover);
+  --sg-ui-button-color: var(--sg-color-primary-strong);
+  --sg-ui-button-color-hover: var(--sg-color-primary-strong);
 }
 
 .sg-ui-button--neutral {
-  border-color: rgba(255, 255, 255, 0.72);
+  --sg-ui-button-border: rgba(255, 255, 255, 0.72);
+  --sg-ui-button-border-hover: #fff;
+  --sg-ui-button-bg: #fff;
+  --sg-ui-button-bg-hover: rgba(255, 255, 255, 0.92);
+  --sg-ui-button-color: var(--sg-ui-color-brand-dark);
+  --sg-ui-button-color-hover: var(--sg-ui-color-brand-dark);
+}
+
+.sg-ui-button.sg-ui-button--neutral {
   background: #fff;
+  border-color: rgba(255, 255, 255, 0.72);
   color: var(--sg-ui-color-brand-dark);
 }
 
-.sg-ui-button--neutral:hover,
-.sg-ui-button--neutral:focus-visible {
-  border-color: #fff;
+.sg-ui-button.sg-ui-button--neutral:hover,
+.sg-ui-button.sg-ui-button--neutral:focus-visible {
   background: rgba(255, 255, 255, 0.92);
+  border-color: #fff;
+  color: var(--sg-ui-color-brand-dark);
 }
 
 .sg-ui-button--warning {
-  background: var(--sg-color-warning);
-  color: var(--sg-color-warning-contrast);
-}
-
-.sg-ui-button--warning:hover,
-.sg-ui-button--warning:focus-visible {
-  background: var(--sg-color-warning-hover);
-  color: var(--sg-color-warning-contrast);
+  --sg-ui-button-bg: var(--sg-color-warning);
+  --sg-ui-button-bg-hover: var(--sg-color-warning-hover);
+  --sg-ui-button-color: var(--sg-color-warning-contrast);
+  --sg-ui-button-color-hover: var(--sg-color-warning-contrast);
 }
 
 .sg-ui-button--outline {
-  border-color: var(--sg-ui-color-brand);
-  background: transparent;
-  color: var(--sg-ui-color-brand-dark);
-}
-
-.sg-ui-button--outline:hover,
-.sg-ui-button--outline:focus-visible {
-  background: var(--sg-ui-color-brand-tint);
+  --sg-ui-button-border: var(--sg-ui-color-brand);
+  --sg-ui-button-border-hover: var(--sg-ui-color-brand);
+  --sg-ui-button-bg: transparent;
+  --sg-ui-button-bg-hover: var(--sg-ui-color-brand-tint);
+  --sg-ui-button-color: var(--sg-ui-color-brand-dark);
+  --sg-ui-button-color-hover: var(--sg-ui-color-brand-dark);
 }
 
 .sg-ui-button--outline-light {
-  border-color: rgba(255, 255, 255, 0.8);
-  background: transparent;
-  color: #fff;
-}
-
-.sg-ui-button--outline-light:hover,
-.sg-ui-button--outline-light:focus-visible {
-  border-color: #fff;
-  background: rgba(255, 255, 255, 0.12);
-  color: #fff;
+  --sg-ui-button-border: rgba(255, 255, 255, 0.8);
+  --sg-ui-button-border-hover: #fff;
+  --sg-ui-button-bg: transparent;
+  --sg-ui-button-bg-hover: rgba(255, 255, 255, 0.12);
+  --sg-ui-button-color: #fff;
+  --sg-ui-button-color-hover: #fff;
 }
 
 .sg-ui-button--ghost,
 .sg-ui-button--link {
-  background: transparent;
-  color: var(--sg-ui-color-brand-dark);
+  --sg-ui-button-bg: transparent;
+  --sg-ui-button-color: var(--sg-ui-color-brand-dark);
+  --sg-ui-button-color-hover: var(--sg-ui-color-brand-dark);
 }
 
 .sg-ui-button--ghost:hover,
 .sg-ui-button--ghost:focus-visible {
-  background: var(--sg-ui-color-brand-tint);
+  --sg-ui-button-bg-hover: var(--sg-ui-color-brand-tint);
 }
 
 .sg-ui-button--link {
@@ -2685,35 +2663,48 @@ export default function Component(props) {
 `;
 }
 
-function buildProductCardGridComponent() {
+function buildMediaCardGridComponent() {
   return `
 import React from 'react';
 
 export default function Component(props) {
   const {
     cards = [],
-    contentClassName = 'product-card-grid__content',
-    ctaClassName = 'product-card-grid__cta',
-    descriptionClassName = 'product-card-grid__desc',
-    gridClassName = 'product-card-grid__grid',
-    imageClassName = 'product-card-grid__image',
+    contentClassName = 'media-card-grid__content',
+    descriptionClassName = 'media-card-grid__desc',
+    gridClassName = 'media-card-grid__grid',
+    imageAspectRatio = '',
+    imageClassName = 'media-card-grid__image',
     imageHeight,
     imageLoading = 'lazy',
     imageStyle,
     imageWidth,
-    itemClassName = 'product-card-grid__item',
-    linkClassName = 'product-card-grid__link',
-    titleClassName = 'product-card-grid__title',
+    itemClassName = 'media-card-grid__item',
+    linkClassName = 'media-card-grid__link',
     titleTag = 'h3',
     wrapperClassName = ''
   } = props || {};
   const TitleTag = titleTag === 'h2' ? 'h2' : 'h3';
+  const mergeClassNames = (...values) => Array.from(
+    new Set(
+      values
+        .flatMap((value) => String(value || '').split(/\\s+/))
+        .filter(Boolean)
+    )
+  ).join(' ');
+  const normalizeStyle = (value) => (value && typeof value === 'object' ? value : {});
 
   return (
-    <div className={['product-card-grid', wrapperClassName].filter(Boolean).join(' ')}>
+    <div className={['media-card-grid', wrapperClassName].filter(Boolean).join(' ')}>
       <div className={gridClassName}>
         {(Array.isArray(cards) ? cards : []).map((card, index) => {
           const href = card?.href || card?.link || '';
+          const resolvedAspectRatio = card?.imageAspectRatio || imageAspectRatio || '';
+          const resolvedImageStyle = {
+            ...(resolvedAspectRatio ? { aspectRatio: resolvedAspectRatio } : {}),
+            ...normalizeStyle(imageStyle),
+            ...normalizeStyle(card?.imageStyle)
+          };
           const body = (
             <>
               {card?.image ? (
@@ -2723,18 +2714,17 @@ export default function Component(props) {
                   height={imageHeight}
                   loading={imageLoading}
                   src={card.image}
-                  style={imageStyle}
+                  style={Object.keys(resolvedImageStyle).length > 0 ? resolvedImageStyle : undefined}
                   width={imageWidth}
                 />
               ) : null}
               <div className={contentClassName}>
-                <TitleTag className={mergeClassNames(titleClassName, card?.titleClassName)}>{card?.title || ''}</TitleTag>
+                <TitleTag className="media-card-grid__title">{card?.title || ''}</TitleTag>
                 {card?.description ? (
                   <div className={descriptionClassName}>
                     <p>{card.description}</p>
                   </div>
                 ) : null}
-                {card?.cta ? <span className={ctaClassName}>{card.cta}</span> : null}
               </div>
             </>
           );
@@ -3474,12 +3464,165 @@ import React from 'react';
 
 export const scss = String.raw\`${cssText.replace(/`/g, '\\`')}\`;
 
+const VOID_TAGS = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'param',
+  'source',
+  'track',
+  'wbr'
+]);
+
+function skipLeadingNoise(html = '', startIndex = 0) {
+  let index = startIndex;
+  while (index < html.length) {
+    const next = html.slice(index);
+    if (/^\\s+/u.test(next)) {
+      index += next.match(/^\\s+/u)?.[0]?.length || 0;
+      continue;
+    }
+    if (next.startsWith('<!--')) {
+      const commentEnd = html.indexOf('-->', index + 4);
+      if (commentEnd === -1) {
+        return html.length;
+      }
+      index = commentEnd + 3;
+      continue;
+    }
+    break;
+  }
+  return index;
+}
+
+function hasClassName(openTag = '', className = '') {
+  const classValue = openTag.match(/\\bclass\\s*=\\s*"([^"]*)"/i)?.[1]
+    || openTag.match(/\\bclass\\s*=\\s*'([^']*)'/i)?.[1]
+    || '';
+  if (!classValue || !className) {
+    return false;
+  }
+  return classValue.split(/\\s+/u).includes(className);
+}
+
+function findElementEnd(html = '', startIndex = 0, tagName = '') {
+  if (!html || startIndex < 0 || !tagName) {
+    return -1;
+  }
+  const lowerTagName = String(tagName || '').toLowerCase();
+  if (VOID_TAGS.has(lowerTagName)) {
+    const tagEnd = html.indexOf('>', startIndex);
+    return tagEnd === -1 ? -1 : tagEnd + 1;
+  }
+
+  const tokenPattern = new RegExp('<\\\\/?' + lowerTagName + '\\\\b[^>]*>', 'gi');
+  tokenPattern.lastIndex = startIndex;
+  let depth = 0;
+  let match = tokenPattern.exec(html);
+
+  while (match) {
+    const token = match[0];
+    const isClosingTag = /^<\\//.test(token);
+    const isSelfClosingTag = /\\/>$/.test(token);
+    if (isClosingTag) {
+      depth -= 1;
+      if (depth === 0) {
+        return match.index + token.length;
+      }
+    } else {
+      depth += 1;
+      if (isSelfClosingTag) {
+        depth -= 1;
+        if (depth === 0) {
+          return match.index + token.length;
+        }
+      }
+    }
+    match = tokenPattern.exec(html);
+  }
+
+  return -1;
+}
+
+function readLeadingElement(html = '') {
+  const startIndex = skipLeadingNoise(String(html || ''));
+  if (startIndex >= html.length || html[startIndex] !== '<' || html[startIndex + 1] === '/') {
+    return null;
+  }
+  const openTagEnd = html.indexOf('>', startIndex);
+  if (openTagEnd === -1) {
+    return null;
+  }
+  const openTag = html.slice(startIndex, openTagEnd + 1);
+  const tagName = openTag.match(/^<([a-z0-9:-]+)/i)?.[1] || '';
+  if (!tagName) {
+    return null;
+  }
+  const endIndex = findElementEnd(html, startIndex, tagName);
+  if (endIndex === -1) {
+    return null;
+  }
+  return {
+    startIndex,
+    endIndex,
+    openTag,
+    tagName,
+    html: html.slice(startIndex, endIndex)
+  };
+}
+
+function removeLeadingElementByClass(html = '', className = '') {
+  const source = String(html || '');
+  const leadingElement = readLeadingElement(source);
+  if (!leadingElement || !hasClassName(leadingElement.openTag, className)) {
+    return null;
+  }
+
+  return {
+    removedHtml: leadingElement.html,
+    remainingHtml: source.slice(0, leadingElement.startIndex) + source.slice(leadingElement.endIndex)
+  };
+}
+
+function extractFirstImageSrc(html = '') {
+  return String(html || '').match(/<img[^>]+src=["']([^"']+)["']/i)?.[1] || '';
+}
+
+function normalizeArticleBodyChrome(html = '') {
+  const originalHtml = String(html || '');
+  const removedBanner = removeLeadingElementByClass(originalHtml, 'banner-primary');
+  const heroImage = extractFirstImageSrc(removedBanner?.removedHtml || '');
+  let remainingHtml = removedBanner?.remainingHtml || originalHtml;
+
+  const removedBreadcrumb = removeLeadingElementByClass(remainingHtml, 'breadcrumb');
+  if (removedBreadcrumb) {
+    remainingHtml = removedBreadcrumb.remainingHtml;
+  }
+
+  return {
+    heroImage,
+    html: remainingHtml.trimStart()
+  };
+}
+
 export default function Template(props) {
   const article = props.currentArticle || props.currentContent || {};
+  const rawBodyHtml = article.bodyHtml || props.bodyHtml || '';
+  const normalizedBody = normalizeArticleBodyChrome(rawBodyHtml);
+  const heroImage = normalizedBody.heroImage || article.image || article.primaryImage || '';
   const relatedItems = Array.isArray(props.relatedArticleItems) ? props.relatedArticleItems : [];
   const masthead = props.component('spirax_short_masthead', {
-    eyebrow: props.currentColumn?.name || 'News',
+    eyebrow: props.currentColumnItem?.name || props.currentSection?.name || 'News',
     title: article.title || props.title,
+    image: heroImage,
+    imageAlt: article.title || props.title || '',
     className: 'short-masthead'
   });
   const shell = props.component('spirax_shell', {
@@ -3505,7 +3648,7 @@ export default function Template(props) {
         <div className="article-body__shell">
           <div className="article-body">
             <div className="article-body__copy">
-              <div dangerouslySetInnerHTML={{ __html: article.bodyHtml || props.bodyHtml || '' }} />
+              <div dangerouslySetInnerHTML={{ __html: normalizedBody.html }} />
             </div>
           </div>
         </div>
@@ -3541,13 +3684,164 @@ import React from 'react';
 
 export const scss = String.raw\`${cssText.replace(/`/g, '\\`')}\`;
 
+const VOID_TAGS = new Set([
+  'area',
+  'base',
+  'br',
+  'col',
+  'embed',
+  'hr',
+  'img',
+  'input',
+  'link',
+  'meta',
+  'param',
+  'source',
+  'track',
+  'wbr'
+]);
+
+function skipLeadingNoise(html = '', startIndex = 0) {
+  let index = startIndex;
+  while (index < html.length) {
+    const next = html.slice(index);
+    if (/^\\s+/u.test(next)) {
+      index += next.match(/^\\s+/u)?.[0]?.length || 0;
+      continue;
+    }
+    if (next.startsWith('<!--')) {
+      const commentEnd = html.indexOf('-->', index + 4);
+      if (commentEnd === -1) {
+        return html.length;
+      }
+      index = commentEnd + 3;
+      continue;
+    }
+    break;
+  }
+  return index;
+}
+
+function hasClassName(openTag = '', className = '') {
+  const classValue = openTag.match(/\\bclass\\s*=\\s*"([^"]*)"/i)?.[1]
+    || openTag.match(/\\bclass\\s*=\\s*'([^']*)'/i)?.[1]
+    || '';
+  if (!classValue || !className) {
+    return false;
+  }
+  return classValue.split(/\\s+/u).includes(className);
+}
+
+function findElementEnd(html = '', startIndex = 0, tagName = '') {
+  if (!html || startIndex < 0 || !tagName) {
+    return -1;
+  }
+  const lowerTagName = String(tagName || '').toLowerCase();
+  if (VOID_TAGS.has(lowerTagName)) {
+    const tagEnd = html.indexOf('>', startIndex);
+    return tagEnd === -1 ? -1 : tagEnd + 1;
+  }
+
+  const tokenPattern = new RegExp('<\\\\/?' + lowerTagName + '\\\\b[^>]*>', 'gi');
+  tokenPattern.lastIndex = startIndex;
+  let depth = 0;
+  let match = tokenPattern.exec(html);
+
+  while (match) {
+    const token = match[0];
+    const isClosingTag = /^<\\//.test(token);
+    const isSelfClosingTag = /\\/>$/.test(token);
+    if (isClosingTag) {
+      depth -= 1;
+      if (depth === 0) {
+        return match.index + token.length;
+      }
+    } else {
+      depth += 1;
+      if (isSelfClosingTag) {
+        depth -= 1;
+        if (depth === 0) {
+          return match.index + token.length;
+        }
+      }
+    }
+    match = tokenPattern.exec(html);
+  }
+
+  return -1;
+}
+
+function readLeadingElement(html = '') {
+  const startIndex = skipLeadingNoise(String(html || ''));
+  if (startIndex >= html.length || html[startIndex] !== '<' || html[startIndex + 1] === '/') {
+    return null;
+  }
+  const openTagEnd = html.indexOf('>', startIndex);
+  if (openTagEnd === -1) {
+    return null;
+  }
+  const openTag = html.slice(startIndex, openTagEnd + 1);
+  const tagName = openTag.match(/^<([a-z0-9:-]+)/i)?.[1] || '';
+  if (!tagName) {
+    return null;
+  }
+  const endIndex = findElementEnd(html, startIndex, tagName);
+  if (endIndex === -1) {
+    return null;
+  }
+  return {
+    startIndex,
+    endIndex,
+    openTag,
+    html: html.slice(startIndex, endIndex)
+  };
+}
+
+function removeLeadingElementByClass(html = '', className = '') {
+  const source = String(html || '');
+  const leadingElement = readLeadingElement(source);
+  if (!leadingElement || !hasClassName(leadingElement.openTag, className)) {
+    return null;
+  }
+  return {
+    removedHtml: leadingElement.html,
+    remainingHtml: source.slice(0, leadingElement.startIndex) + source.slice(leadingElement.endIndex)
+  };
+}
+
+function extractFirstImageSrc(html = '') {
+  return String(html || '').match(/<img[^>]+src=["']([^"']+)["']/i)?.[1] || '';
+}
+
+function normalizeServiceBodyChrome(html = '') {
+  const originalHtml = String(html || '');
+  const removedBanner = removeLeadingElementByClass(originalHtml, 'banner-primary');
+  const heroImage = extractFirstImageSrc(removedBanner?.removedHtml || '');
+  let remainingHtml = removedBanner?.remainingHtml || originalHtml;
+
+  const removedBreadcrumb = removeLeadingElementByClass(remainingHtml, 'breadcrumb');
+  if (removedBreadcrumb) {
+    remainingHtml = removedBreadcrumb.remainingHtml;
+  }
+
+  return {
+    heroImage,
+    html: remainingHtml.trimStart()
+  };
+}
+
 export default function Template(props) {
   const article = props.currentArticle || props.currentContent || {};
+  const rawBodyHtml = article.bodyHtml || props.bodyHtml || '';
+  const normalizedBody = normalizeServiceBodyChrome(rawBodyHtml);
+  const heroImage = normalizedBody.heroImage || article.image || article.primaryImage || '';
   const relatedItems = Array.isArray(props.relatedArticleItems) ? props.relatedArticleItems : [];
   const masthead = props.component('spirax_short_masthead', {
     eyebrow: 'Service',
     title: article.title || props.title,
     summary: article.summary || '',
+    image: heroImage,
+    imageAlt: article.title || props.title || '',
     className: 'short-masthead'
   });
   const shell = props.component('spirax_shell', {
@@ -3562,7 +3856,7 @@ export default function Template(props) {
       <section className="bg--white">
         <div className="wrapper wrapper--sml wrapper--pad-l">
           <div className="copy">
-            <div dangerouslySetInnerHTML={{ __html: article.bodyHtml || props.bodyHtml || '' }} />
+            <div dangerouslySetInnerHTML={{ __html: normalizedBody.html }} />
           </div>
         </div>
       </section>
@@ -3601,6 +3895,7 @@ import React from 'react';
 export default function Template(props) {
   const pageData = props.currentColumnPageData || props.pageData || {};
   const pageKind = String(pageData?.pageKind || '').trim().toLowerCase();
+  const isServiceSectionRoot = String(props.sectionDir || '').trim() === 'services';
   const cards = Array.isArray(pageData.cards) ? pageData.cards : [];
   const items = Array.isArray(pageData.items) ? pageData.items : [];
   const resources = Array.isArray(pageData.resources) ? pageData.resources : [];
@@ -3651,18 +3946,34 @@ export default function Template(props) {
     }
   });
   const gridCards = cards.length > 0 ? cards : (resources.length > 0 ? resources : (products.length > 0 ? products : (calloutCards.length > 0 ? calloutCards : promoCards)));
-  const cardGrid = gridCards.length > 0 ? props.component('spirax_content_card_grid', {
-    cards: gridCards.map((card) => ({
-      title: card?.title || '',
-      description: card?.description || '',
-      href: card?.href || card?.link || '',
-      image: card?.image || '',
-      imageAlt: card?.imageAlt || card?.title || '',
-      cta: card?.label || card?.cta || ''
-    })),
-    gridClassName: 'content-card-grid__grid content-card-grid__grid--cols-fluid',
-    wrapperClassName: 'wrapper wrapper--pad-l'
-  }) : null;
+  const cardGrid = gridCards.length > 0
+    ? (
+      isServiceSectionRoot
+        ? props.component('media_card_grid', {
+          cards: gridCards.map((card) => ({
+            title: card?.title || '',
+            description: card?.description || '',
+            href: card?.href || card?.link || '',
+            image: card?.image || '',
+            imageAlt: card?.imageAlt || card?.title || '',
+            itemClassName: card?.image ? '' : 'media-card-grid__item--light-blue'
+          })),
+          wrapperClassName: 'wrapper wrapper--pad-l'
+        })
+        : props.component('spirax_content_card_grid', {
+          cards: gridCards.map((card) => ({
+            title: card?.title || '',
+            description: card?.description || '',
+            href: card?.href || card?.link || '',
+            image: card?.image || '',
+            imageAlt: card?.imageAlt || card?.title || '',
+            cta: card?.label || card?.cta || ''
+          })),
+          gridClassName: 'content-card-grid__grid content-card-grid__grid--cols-fluid',
+          wrapperClassName: 'wrapper wrapper--pad-l'
+        })
+    )
+    : null;
   const featureGrid = features.length > 0 ? props.component('spirax_content_card_grid', {
     cards: features.map((feature) => ({
       title: feature?.title || '',

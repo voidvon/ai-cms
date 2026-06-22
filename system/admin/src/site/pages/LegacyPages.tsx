@@ -4,11 +4,11 @@ import type {
   LegacyArticleDetailPageProps,
   LegacyArticleListPageProps,
   LegacyContactPageProps,
+  LegacyCollectionDetailPageProps,
+  LegacyCollectionListPageProps,
   LegacyContentPageProps,
   LegacyHomePageProps,
   LegacyPageBaseProps,
-  LegacyProductDetailPageProps,
-  LegacyProductListPageProps,
   SeoMetaPayload,
 } from '../types'
 
@@ -108,7 +108,7 @@ function renderSeoHead(props: {
   )
 }
 
-function productLeft(props: LegacyPageBaseProps, headingTag: 'h2' | 'span' = 'h2') {
+function collectionLeft(props: LegacyPageBaseProps, headingTag: 'h2' | 'span' = 'h2') {
   const heading = headingTag === 'h2' ? '<h2><span>产品</span></h2>' : '<span>产品</span>'
   return `${heading}
         <div id="LeftMenu" class="ddsmoothmenu-v">
@@ -118,16 +118,16 @@ ${props.fragments.productsMenuHtml || ''}
         </div>`
 }
 
-function cLayoutBody(props: LegacyPageBaseProps, rightHtml: string, leftExtra = '', productHeading: 'h2' | 'span' = 'h2') {
+function cLayoutBody(props: LegacyPageBaseProps, rightHtml: string, leftExtra = '', collectionHeading: 'h2' | 'span' = 'h2') {
   return `${props.fragments.indextopHtml || ''}
 <div id="page_main" class="clearfix">
     <div class="page-right">${rightHtml}</div>
     <div class="page-left">
       <div class="left-products">
-        ${productLeft(props, productHeading)}
+        ${collectionLeft(props, collectionHeading)}
       </div>${leftExtra}
       <div class="left-search">
-        ${productHeading === 'h2' ? '<h2><span>站内搜索</span></h2>' : '<span>站内搜索</span>'}
+        ${collectionHeading === 'h2' ? '<h2><span>站内搜索</span></h2>' : '<span>站内搜索</span>'}
 ${legacySearchForm()}
       </div><div class="index-contact">
 
@@ -240,9 +240,9 @@ export function LegacyContentPage(props: LegacyContentPageProps) {
   )
 }
 
-export function LegacyProductListPage(props: LegacyProductListPageProps) {
+export function LegacyCollectionListPage(props: LegacyCollectionListPageProps) {
   const body = cLayoutBody(props, `<div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> -<a href="/valve/" > 产品 </a>-<A href="/valve/${html(props.bigId)}.html" class="F_a"> ${html(props.bigName)} </A>-${html(props.smallName)}</div>
-	  <table width="100%" border="0" cellpadding="0" cellspacing="0"><tr><td>${props.productsSmallCatHtml}</td></tr></table>
+	  <table width="100%" border="0" cellpadding="0" cellspacing="0"><tr><td>${props.collectionCategoryHtml}</td></tr></table>
       <div class="page-products"><ul class="clearfix">${props.bodyHtml}</ul><div class="page_list"><div class="list_info"></div></div></div>`)
   return (
     <html xmlns="http://www.w3.org/1999/xhtml">
@@ -258,7 +258,7 @@ export function LegacyProductListPage(props: LegacyProductListPageProps) {
   )
 }
 
-export function LegacyProductDetailPage(props: LegacyProductDetailPageProps) {
+export function LegacyCollectionDetailPage(props: LegacyCollectionDetailPageProps) {
   const body = cLayoutBody(props, `<div class="site-nav"><span>当前位置 : </span><a href="/index.html">公司主页</a> - <a href="/valve/">产品</a> - ${html(props.title)}</div>
       <table width="100%" border="0" cellpadding="0" cellspacing="0" class="in4">
 	    <tr><td width="19%" height="151" align="center" valign="top" class="in5"><img src="${html(props.image)}" alt="${html(props.title)}" width="160" height="134" /></td>
@@ -268,7 +268,7 @@ export function LegacyProductDetailPage(props: LegacyProductDetailPageProps) {
   <td height="27" colspan="2" align="left"><A href="tencent://message/?uin=${html(props.site.web_qq)}&Site=${html(props.site.company_name)}&Menu=yes" target=blank><IMG src="/images/gmzx.gif" border=0></A></td>
 </tr><tr><td height="26" colspan="2" align="left"><span class="Font_FF0000_a Font-Weight">咨询电话：${html(props.site.company_phone)}</span></td></tr>
 <tr><td height="22" colspan="2" align="left"><span class="Font_FF0000_a Font-Weight">传真：${html(props.site.company_fax)}</span></td></tr><tr></tr></table></td>
-<td width="40%" valign="top">${props.relatedProductsHtml}</td></tr></table>
+<td width="40%" valign="top">${props.relatedItemsHtml}</td></tr></table>
       <div class="page-products"><ul class="clearfix"><table width="100%" border="0"><tr>
 <td height="30" class="prod_bottom_dasheds">产品介绍</td></tr><tr>
   <td height="15" align="left" valign="top" class="prod_sp">${props.bodyHtml}<br></td>
@@ -279,7 +279,7 @@ export function LegacyProductDetailPage(props: LegacyProductDetailPageProps) {
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
         <title>{props.seoMeta?.openGraph?.title || props.title}</title>
         {renderSeoHead(props)}
-        {!props.seoMeta?.basic?.description ? <meta name="description" content={props.prodDescription} /> : null}
+        {!props.seoMeta?.basic?.description ? <meta name="description" content={props.itemDescription} /> : null}
         <meta httpEquiv="X-UA-Compatible" content="IE=EmulateIE7" />
         <meta name="classification" content={props.title} />
         <link href="/css/c.css" rel="stylesheet" type="text/css" />
@@ -355,7 +355,7 @@ ${articleSidebar(props)}</td><td width="812" valign="top" ><table width="812" bo
         <meta httpEquiv="Content-Type" content="text/html; charset=utf-8" />
         <title>{props.seoMeta?.openGraph?.title || `${props.title}_${isService ? props.columnName : props.site.web_name || ''}`}</title>
         {renderSeoHead(props)}
-        {!props.seoMeta?.basic?.description ? <meta name="description" content={props.newsDescription} /> : null}
+        {!props.seoMeta?.basic?.description ? <meta name="description" content={props.itemDescription} /> : null}
         <meta content="阀门，球阀，闸阀" name="classification" />
         <link href="/img/css.css" type="text/css" rel="stylesheet" />
         <link href="/css/webmain.css" rel="stylesheet" type="text/css" />

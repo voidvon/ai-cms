@@ -1,4 +1,4 @@
-# Footer 产品分类显示修复
+# Footer 受管栏目显示修复
 
 ## 问题描述
 
@@ -15,20 +15,15 @@ Footer 的"产品展示" section 原本只显示 8 个产品分类链接，但�
 
 ## 解决方案
 
-采用后处理方式：在静态 HTML 生成后，自动运行补丁脚本添加缺失的 3 个产品分类链接。
+这是一份历史排查记录。当前不再采用“直接补丁 `html/index.html`”的方式修复，因为这违背当前静态生成链路约束。
 
 ### 实现细节
 
-1. **补丁脚本**：`system/server/scripts/patch-footer-products.mjs`
-   - 检测"产品展示" section 的链接数量
-   - 如果少于 11 个，自动追加缺失的产品分类
-   - 幂等操作：如果已有 11 个则跳过
+1. **当前做法**：
+   - 通过模板和静态构建链路修复数据准备问题
+   - 不再保留直接修改生成产物的补丁脚本
 
-2. **集成到构建流程**：
-   - 修改 `system/server/package.json` 的 `build:static` 脚本
-   - 自动在静态生成后运行补丁
-
-3. **数据准备**（保留，用于未来模板修复）：
+2. **数据准备**（保留，用于模板修复）：
    - `buildLegacySiteColumns` 中对 `product_root` 类型栏目特殊处理
    - 用真实的产品分类数据替换其 children
    - 排除 `id=0` 的根分类，确保只取真实的产品分类
@@ -46,23 +41,14 @@ Footer 的"产品展示" section 原本只显示 8 个产品分类链接，但�
 npm --prefix system/server run build:static
 ```
 
-补丁会自动运行。
-
-### 手动运行补丁
-```bash
-node system/server/scripts/patch-footer-products.mjs
-```
-
 ## 未来改进
 
-如果 JSX 模板渲染引擎修复或升级后，可以移除补丁脚本，直接使用模板渲染：
+如果模板或静态构建逻辑仍有异常，继续沿当前模板渲染链路修复：
 
 1. 在 `renderFooterLinks` 函数中使用 `footerProductCategories` 参数
 2. 或者确保 `siteColumns` 中"产品展示"栏目的 children 数组完整传递
 
 ## 相关文件
 
-- `system/server/scripts/patch-footer-products.mjs` - 补丁脚本
 - `system/server/src/static-builder.mjs` - 数据准备逻辑
-- `system/server/package.json` - 构建脚本配置
 - 模板：数据库中的 `Spirax 公共壳层` 和 `Spirax 首页模板`

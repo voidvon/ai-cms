@@ -42,7 +42,7 @@ html/
 
 ## 数据库存储
 
-`products.images` 字段存储 JSON 数组：
+当前受管内容图片字段存储 JSON 数组，例如 `content_product.images`：
 
 ```json
 ["/uploads/images/202606/td52-cover-4x3.jpg"]

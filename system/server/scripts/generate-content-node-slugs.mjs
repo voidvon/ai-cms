@@ -1,9 +1,12 @@
 #!/usr/bin/env node
 /**
- * 自动生成产品 slug
+ * 自动生成内容节点 slug
  *
- * 根据产品 code 或 name 自动生成语义化的 slug
- * 用法：node system/server/scripts/generate-product-slugs.mjs
+ * 根据内容的 code 或 name 自动生成语义化 slug。
+ * 当前用于 columns 表中的 node_type=content 节点。
+ * 用法：
+ *   node system/server/scripts/generate-content-node-slugs.mjs
+ *   node system/server/scripts/generate-content-node-slugs.mjs --model=product
  */
 
 import Database from 'better-sqlite3';
@@ -14,9 +17,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const PROJECT_ROOT = resolve(__dirname, '../../..');
 const DB_PATH = process.env.DATABASE_PATH || resolve(PROJECT_ROOT, 'data/site.sqlite');
+const MODEL_CODE = resolveModelCode(process.argv.slice(2));
 
-console.log('🔧 开始生成产品 slug');
+console.log('🔧 开始生成内容节点 slug');
 console.log(`📁 数据库路径: ${DB_PATH}`);
+console.log(`🧩 内容模型: ${MODEL_CODE}`);
 
 const db = new Database(DB_PATH);
 
@@ -40,16 +45,15 @@ function generateSlug(text) {
 }
 
 try {
-  // 获取所有产品
-  const products = db.prepare(`
+  const contentItems = db.prepare(`
     SELECT id, name, code, slug
     FROM columns
-    WHERE model_code = 'product'
+    WHERE model_code = ?
       AND node_type = 'content'
     ORDER BY id
-  `).all();
+  `).all(MODEL_CODE);
 
-  console.log(`📊 找到 ${products.length} 个产品`);
+  console.log(`📊 找到 ${contentItems.length} 条内容`);
 
   const updateStmt = db.prepare(`
     UPDATE columns
@@ -62,19 +66,19 @@ try {
   const slugMap = new Map();
 
   db.transaction(() => {
-    for (const product of products) {
+    for (const contentItem of contentItems) {
       // 如果已有 slug，跳过
-      if (product.slug) {
+      if (contentItem.slug) {
         skipped++;
-        slugMap.set(product.slug, product.id);
+        slugMap.set(contentItem.slug, contentItem.id);
         continue;
       }
 
       // 优先使用 code，其次使用 name
-      let baseSlug = generateSlug(product.code || product.name);
+      const baseSlug = generateSlug(contentItem.code || contentItem.name);
 
       if (!baseSlug) {
-        console.warn(`⚠️  产品 ${product.id} 无法生成 slug，跳过`);
+        console.warn(`⚠️  内容 ${contentItem.id} 无法生成 slug，跳过`);
         skipped++;
         continue;
       }
@@ -88,11 +92,11 @@ try {
       }
 
       // 更新数据库
-      updateStmt.run(slug, product.id);
-      slugMap.set(slug, product.id);
+      updateStmt.run(slug, contentItem.id);
+      slugMap.set(slug, contentItem.id);
       updated++;
 
-      console.log(`✓ 产品 ${product.id}: ${product.name} -> ${slug}`);
+      console.log(`✓ 内容 ${contentItem.id}: ${contentItem.name} -> ${slug}`);
     }
   })();
 
@@ -108,4 +112,16 @@ try {
   process.exit(1);
 } finally {
   db.close();
+}
+
+function resolveModelCode(args) {
+  for (const arg of args) {
+    if (String(arg).startsWith('--model=')) {
+      const value = String(arg).slice('--model='.length).trim();
+      if (value) {
+        return value;
+      }
+    }
+  }
+  return 'product';
 }

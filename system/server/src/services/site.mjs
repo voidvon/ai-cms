@@ -1,7 +1,5 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { ensureLanguagesSchema, getDefaultLanguage, hasMultipleEnabledLanguages, listLanguages } from './languages.mjs';
-import { listNews, searchNews } from './news.mjs';
-import { listProducts, searchProducts } from './products.mjs';
 
 const SITE_TRANSLATABLE_FIELDS = [
   'web_name',
@@ -113,8 +111,6 @@ export function updateSiteConfig(input) {
   saveSiteConfigTranslations(payload.translations);
   return getSiteConfig(null, { includeTranslations: true });
 }
-
-export { listNews, searchNews, listProducts, searchProducts };
 
 function ensureSiteConfigSchema() {
   if (schemaEnsured) {
