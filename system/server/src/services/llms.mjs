@@ -74,7 +74,7 @@ export function buildLlmsFiles({ outputRoot, generatedAt = new Date().toISOStrin
 
 export function getLlmsDiagnostics({ generatedAt = new Date().toISOString(), languageCode = null } = {}) {
   const site = getSiteConfig(languageCode);
-  const siteUrl = normalizeSiteUrl(site.web_url);
+  const siteUrl = normalizeSiteUrl(site.resolved_web_url || site.web_url);
   const result = siteUrl ? collectMarkdownPages({ site, siteUrl, languageCode }) : { pages: [], publicSections: null };
   const pages = result.pages || [];
   const publicSections = result.publicSections;
@@ -86,7 +86,7 @@ export function getLlmsDiagnostics({ generatedAt = new Date().toISOString(), lan
 
   return {
     generated_at: generatedAt,
-    site_url: site.web_url || '',
+    site_url: site.resolved_web_url || site.web_url || '',
     normalized_site_url: siteUrl,
     total_pages: pages.length,
     llms_index_entry_count: llmsIndexGroups.reduce((sum, group) => sum + group.items.length, 0),

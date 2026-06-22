@@ -13,6 +13,9 @@ export type SiteConfig = {
   web_mobile?: string | null
   web_author?: string | null
   web_copyright?: string | null
+  assets_bind_host?: string | null
+  assets_port?: number | null
+  assets_public_base_url?: string | null
   seo_default_title?: string | null
   seo_default_description?: string | null
   seo_home_title?: string | null

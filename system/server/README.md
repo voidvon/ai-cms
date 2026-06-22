@@ -95,11 +95,11 @@ npm run dev            # 开发模式（自动重载）
 npm run build:static
 ```
 
-服务器默认运行在 `http://127.0.0.1:3000`
+服务器默认运行在 `http://127.0.0.1:1231`
 
 ## 环境变量
 
-- `PORT`: 服务器端口（默认: 3000）
+- `PORT`: 服务器端口（默认: 1231）
 - `HOST`: 服务器主机（默认: 127.0.0.1）
 - `DATABASE_PATH`: SQLite 数据库路径（默认: 根目录 `data/site.sqlite`）
 - `LOG_LEVEL`: 日志级别（默认: info）
@@ -119,12 +119,12 @@ npm run build:static
 ### API Token 方式
 ```bash
 # 登录获取 token
-curl -X POST http://127.0.0.1:3000/admin/api/login \
+curl -X POST http://127.0.0.1:1231/admin/api/login \
   -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"yourpassword"}'
 
 # 使用 token 访问受保护接口
-curl http://127.0.0.1:3000/api/admin/me \
+curl http://127.0.0.1:1231/api/admin/me \
   -H 'Authorization: Bearer YOUR_TOKEN_HERE'
 ```
 
@@ -204,7 +204,7 @@ npm run admin:create -- admin secret123
 登录：
 
 ```bash
-curl -X POST http://127.0.0.1:3000/api/admin/login \
+curl -X POST http://127.0.0.1:1231/api/admin/login \
   -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"secret123"}'
 ```
@@ -216,7 +216,7 @@ curl -X POST http://127.0.0.1:3000/api/admin/login \
 统一上传 API：
 
 ```bash
-curl -X POST 'http://127.0.0.1:3000/api/media/upload?purpose=news_cover' \
+curl -X POST 'http://127.0.0.1:1231/api/media/upload?purpose=news_cover' \
   -H "Authorization: Bearer <token>" \
   -F 'file=@./lo.gif'
 ```
@@ -292,7 +292,7 @@ RESET_TABLES=1 npm run db:import
 ### 端口占用
 ```bash
 # 查看端口占用
-lsof -i :3000
+lsof -i :1231
 # 或修改端口
 PORT=8080 npm start
 ```

@@ -44,7 +44,7 @@ export default function LanguageFormDialog({ open, onOpenChange, language, mode 
       return
     }
 
-    setFormData(createEmptyFormData())
+    setFormData(createEmptyFormData(mode))
   }, [language, mode, open])
 
   const derivedOutputDir = useMemo(
@@ -93,6 +93,10 @@ export default function LanguageFormDialog({ open, onOpenChange, language, mode 
     if (formData.site.site_mode === 'standalone') {
       if (formData.is_default === 1) {
         toast.error('默认语言不能配置为独立站点')
+        return
+      }
+      if (!formData.site.host.trim()) {
+        toast.error('独立站点必须填写正式域名')
         return
       }
       if (!formData.site.access_port.trim()) {
@@ -216,13 +220,19 @@ export default function LanguageFormDialog({ open, onOpenChange, language, mode 
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="host">独立域名</Label>
+                <Label htmlFor="host">{formData.site.site_mode === 'standalone' ? '独立域名 *' : '独立域名'}</Label>
                 <Input
                   id="host"
+                  required={formData.site.site_mode === 'standalone'}
                   value={formData.site.host}
                   onChange={(e) => setFormData({ ...formData, site: { ...formData.site, host: e.target.value } })}
-                  placeholder="ru.example.com"
+                  placeholder={formData.site.site_mode === 'standalone' ? 'ru.example.com' : '可留空'}
                 />
+                {formData.site.site_mode === 'standalone' ? (
+                  <div className="text-xs text-muted-foreground">
+                    独立站点必须填写正式访问域名，`sitemap`、`robots`、`llms`、canonical 会基于这个域名生成。
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -239,14 +249,18 @@ export default function LanguageFormDialog({ open, onOpenChange, language, mode 
             ) : (
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="access_port">访问端口</Label>
+                  <Label htmlFor="access_port">访问端口 *</Label>
                   <Input
                     id="access_port"
                     type="number"
+                    required={formData.site.site_mode === 'standalone'}
                     value={formData.site.access_port}
                     onChange={(e) => setFormData({ ...formData, site: { ...formData.site, access_port: e.target.value } })}
-                    placeholder="3001"
+                    placeholder="例如 1233"
                   />
+                  <div className="text-xs text-muted-foreground">
+                    独立站点必须填写访问端口，保存后会自动启动该站点监听。
+                  </div>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="bind_host">监听地址</Label>
@@ -287,7 +301,9 @@ export default function LanguageFormDialog({ open, onOpenChange, language, mode 
   )
 }
 
-function createEmptyFormData() {
+function createEmptyFormData(mode: 'create' | 'edit' = 'create') {
+  const defaultSiteMode = mode === 'create' ? 'standalone' : 'subdir'
+
   return {
     code: '',
     name: '',
@@ -297,9 +313,9 @@ function createEmptyFormData() {
     sort_order: 0,
     site: {
       host: '',
-      path_prefix: '/',
+      path_prefix: defaultSiteMode === 'standalone' ? '/' : '/',
       output_dir: 'html',
-      site_mode: 'subdir' as const,
+      site_mode: defaultSiteMode as 'subdir' | 'standalone',
       access_port: '',
       bind_host: DEFAULT_BIND_HOST,
       is_primary: 1,

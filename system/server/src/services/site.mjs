@@ -1,3 +1,4 @@
+import { HOST, PORT } from '../config.mjs';
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { ensureLanguagesSchema, getDefaultLanguage, hasMultipleEnabledLanguages, listLanguages } from './languages.mjs';
 
@@ -13,6 +14,26 @@ const SITE_TRANSLATABLE_FIELDS = [
   'seo_default_description',
   'seo_home_title',
   'seo_home_description'
+];
+
+const SITE_REQUIRED_BASE_COLUMNS = [
+  'web_name',
+  'web_url',
+  'company_name',
+  'company_address',
+  'postal_code',
+  'company_phone',
+  'company_fax',
+  'contact_person',
+  'company_email',
+  'icp_number',
+  'web_qq',
+  'web_mobile',
+  'web_copyright',
+  'web_author',
+  'assets_bind_host',
+  'assets_port',
+  'assets_public_base_url'
 ];
 
 let schemaEnsured = false;
@@ -31,7 +52,7 @@ export function getSiteConfig(languageCode = null, options = {}) {
   const resolvedLanguageCode = fallbackTranslation?.language_code || selectedLanguage.code;
   const requestedLanguageCode = selectedLanguage.code;
 
-  return {
+  const output = {
     ...merged,
     current_language_code: resolvedLanguageCode,
     requested_language_code: requestedLanguageCode,
@@ -46,6 +67,14 @@ export function getSiteConfig(languageCode = null, options = {}) {
         ])
       )
     } : {})
+  };
+
+  const siteUrl = resolveSiteBaseUrl(output, selectedLanguage.code);
+  return {
+    ...output,
+    web_url: siteUrl || output.web_url || '',
+    resolved_web_url: siteUrl || '',
+    language_site_host: resolveLanguageSiteHost(selectedLanguage.code)
   };
 }
 
@@ -77,8 +106,11 @@ export function updateSiteConfig(input) {
         web_qq,
         web_mobile,
         web_copyright,
-        web_author
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        web_author,
+        assets_bind_host,
+        assets_port,
+        assets_public_base_url
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         web_name = excluded.web_name,
         web_url = excluded.web_url,
@@ -93,7 +125,10 @@ export function updateSiteConfig(input) {
         web_qq = excluded.web_qq,
         web_mobile = excluded.web_mobile,
         web_copyright = excluded.web_copyright,
-        web_author = excluded.web_author
+        web_author = excluded.web_author,
+        assets_bind_host = excluded.assets_bind_host,
+        assets_port = excluded.assets_port,
+        assets_public_base_url = excluded.assets_public_base_url
     `,
     [
       1,
@@ -110,7 +145,10 @@ export function updateSiteConfig(input) {
       basePayload.web_qq,
       basePayload.web_mobile,
       basePayload.web_copyright,
-      basePayload.web_author
+      basePayload.web_author,
+      basePayload.assets_bind_host,
+      basePayload.assets_port,
+      basePayload.assets_public_base_url
     ]
   );
 
@@ -175,26 +213,18 @@ function ensureSiteConfigTableSchema() {
       web_qq TEXT,
       web_mobile TEXT,
       web_copyright TEXT,
-      web_author TEXT
+      web_author TEXT,
+      assets_bind_host TEXT,
+      assets_port INTEGER,
+      assets_public_base_url TEXT
     );
   `);
 
-  const requiredColumns = [
-    'web_name',
-    'web_url',
-    'company_name',
-    'company_address',
-    'postal_code',
-    'company_phone',
-    'company_fax',
-    'contact_person',
-    'company_email',
-    'icp_number',
-    'web_qq',
-    'web_mobile',
-    'web_copyright',
-    'web_author'
-  ];
+  addColumnIfMissing('site_config', 'assets_bind_host', 'TEXT');
+  addColumnIfMissing('site_config', 'assets_port', 'INTEGER');
+  addColumnIfMissing('site_config', 'assets_public_base_url', 'TEXT');
+
+  const requiredColumns = SITE_REQUIRED_BASE_COLUMNS;
   const columnNames = new Set(queryAll('PRAGMA table_info(site_config)').map((column) => String(column.name || '')));
   const missingColumns = requiredColumns.filter((columnName) => !columnNames.has(columnName));
   if (missingColumns.length > 0) {
@@ -220,7 +250,10 @@ function getBaseSiteConfig() {
         web_qq,
         web_mobile,
         web_copyright,
-        web_author
+        web_author,
+        assets_bind_host,
+        assets_port,
+        assets_public_base_url
       FROM site_config
       WHERE id = 1
     `) || {
@@ -238,7 +271,10 @@ function getBaseSiteConfig() {
       web_qq: '',
       web_mobile: '',
       web_copyright: '',
-      web_author: ''
+      web_author: '',
+      assets_bind_host: HOST,
+      assets_port: null,
+      assets_public_base_url: ''
     }
   );
   return base;
@@ -251,6 +287,23 @@ function normalizeSiteConfigInput(input) {
   }
   if (!/^https?:\/\//i.test(webUrl)) {
     throw new Error('网站地址必须以 http:// 或 https:// 开头');
+  }
+
+  const assetsPort = normalizeOptionalPort(input.assets_port);
+  const assetsPublicBaseUrl = normalizeOptionalPublicBaseUrl(input.assets_public_base_url);
+  const assetsBindHost = toNullableString(input.assets_bind_host) || HOST;
+
+  if (assetsPort != null && assetsPort === PORT) {
+    throw new Error(`资源服务端口不能与主站端口重复：${PORT}`);
+  }
+
+  const standalonePortUsed = listLanguages().some((language) => (
+    Number(language?.is_enabled || 0) === 1
+    && String(language?.site?.site_mode || '') === 'standalone'
+    && Number(language?.site?.access_port || 0) === assetsPort
+  ));
+  if (assetsPort != null && standalonePortUsed) {
+    throw new Error(`资源服务端口已被独立站点占用：${assetsPort}`);
   }
 
   return {
@@ -267,7 +320,10 @@ function normalizeSiteConfigInput(input) {
     web_qq: toNullableString(input.web_qq),
     web_mobile: toNullableString(input.web_mobile),
     web_copyright: toNullableString(input.web_copyright),
-    web_author: toNullableString(input.web_author)
+    web_author: toNullableString(input.web_author),
+    assets_bind_host: assetsBindHost,
+    assets_port: assetsPort,
+    assets_public_base_url: assetsPublicBaseUrl
   };
 }
 
@@ -520,6 +576,83 @@ function resolveLanguageForContent(languageCode) {
   };
 }
 
+function resolveSiteBaseUrl(baseConfig, languageCode) {
+  const languageSiteUrl = resolveLanguageSiteBaseUrl(languageCode, baseConfig?.web_url);
+  if (languageSiteUrl) {
+    return languageSiteUrl;
+  }
+  return normalizeAbsoluteUrl(baseConfig?.web_url);
+}
+
+function resolveLanguageSiteBaseUrl(languageCode, fallbackWebUrl = '') {
+  const requestedCode = String(languageCode || '').trim();
+  if (!requestedCode) {
+    return '';
+  }
+
+  const language = listLanguages().find((item) => item.code === requestedCode);
+  const site = language?.site || null;
+  if (!site) {
+    return '';
+  }
+
+  const baseUrl = normalizeAbsoluteUrl(fallbackWebUrl);
+  const host = normalizeHostUrl(site.host);
+  if (site.site_mode === 'standalone') {
+    if (host) {
+      return host;
+    }
+    return '';
+  }
+
+  if (!baseUrl) {
+    return '';
+  }
+
+  const pathPrefix = normalizePathPrefix(site.path_prefix);
+  if (!pathPrefix || pathPrefix === '/') {
+    return baseUrl;
+  }
+  return `${baseUrl}${pathPrefix}`;
+}
+
+function resolveLanguageSiteHost(languageCode) {
+  const requestedCode = String(languageCode || '').trim();
+  if (!requestedCode) {
+    return '';
+  }
+  const language = listLanguages().find((item) => item.code === requestedCode);
+  return normalizeHostUrl(language?.site?.host) || '';
+}
+
+function normalizeAbsoluteUrl(value) {
+  const normalized = String(value || '').trim().replace(/\/+$/g, '');
+  if (!/^https?:\/\//i.test(normalized)) {
+    return '';
+  }
+  return normalized;
+}
+
+function normalizeHostUrl(value) {
+  const normalized = String(value || '').trim().replace(/\/+$/g, '');
+  if (!normalized) {
+    return '';
+  }
+  if (/^https?:\/\//i.test(normalized)) {
+    return normalized;
+  }
+  return `https://${normalized}`;
+}
+
+function normalizePathPrefix(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized || normalized === '/') {
+    return '/';
+  }
+  const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
+  return withLeadingSlash.replace(/\/+$/g, '');
+}
+
 function resolveDefaultTranslationPayload(translations, defaultLanguageCode) {
   const code = defaultLanguageCode || 'zh-CN';
   const direct = translations[code];
@@ -577,4 +710,27 @@ function toNullableString(value) {
   }
   const normalized = String(value).trim();
   return normalized === '' ? null : normalized;
+}
+
+function normalizeOptionalPort(value) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized) {
+    return null;
+  }
+  const port = Number.parseInt(normalized, 10);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new Error('资源服务端口必须在 1-65535 之间');
+  }
+  return port;
+}
+
+function normalizeOptionalPublicBaseUrl(value) {
+  const normalized = toNullableString(value);
+  if (!normalized) {
+    return null;
+  }
+  if (!/^https?:\/\//i.test(normalized)) {
+    throw new Error('资源域名必须以 http:// 或 https:// 开头');
+  }
+  return normalized.replace(/\/+$/g, '');
 }

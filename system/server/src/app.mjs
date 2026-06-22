@@ -1,35 +1,31 @@
 import Fastify from 'fastify';
+import { createRequire } from 'node:module';
 import fastifyCookie from '@fastify/cookie';
 import fastifyMultipart from '@fastify/multipart';
 import fastifyCors from '@fastify/cors';
 import fastifySensible from '@fastify/sensible';
 import fastifyFormbody from '@fastify/formbody';
 import { HOST, PORT } from './config.mjs';
+import { createAssetsListenerManager } from './assets-listener-manager.mjs';
 import { getDb } from './db.mjs';
 import { createSiteListenerManager } from './site-listener-manager.mjs';
 import { withPortConflictDetails } from './utils/port-diagnostics.mjs';
+
+const require = createRequire(import.meta.url);
 
 getDb();
 
 export async function createApp(options = {}) {
   const publicSite = normalizePublicSiteOptions(options.publicSite);
   const app = Fastify({
-    logger: options.logger ?? {
-      level: process.env.LOG_LEVEL || 'info',
-      transport: process.env.NODE_ENV === 'development' ? {
-        target: 'pino-pretty',
-        options: {
-          translateTime: 'HH:MM:ss',
-          ignore: 'pid,hostname'
-        }
-      } : undefined
-    },
+    logger: options.logger ?? buildLoggerOptions(),
     trustProxy: true,
     ...options
   });
 
   app.decorate('publicSite', publicSite);
   app.decorate('siteListenerManager', options.siteListenerManager || null);
+  app.decorate('assetsListenerManager', options.assetsListenerManager || null);
   app.decorateRequest('session', null);
   app.decorateRequest('adminUser', null);
 
@@ -43,20 +39,24 @@ export async function createApp(options = {}) {
 
 export async function startServer() {
   const siteListenerManager = createSiteListenerManager({ logger: console });
-  const app = await createApp({ siteListenerManager });
+  const assetsListenerManager = createAssetsListenerManager({ logger: console });
+  const app = await createApp({ siteListenerManager, assetsListenerManager });
 
   try {
     await app.listen({ port: PORT, host: HOST });
+    await assetsListenerManager.sync();
     await siteListenerManager.sync();
     console.log(`🚀 Server listening on http://${HOST}:${PORT}`);
   } catch (err) {
     const enrichedError = withPortConflictDetails(err, PORT);
     app.log.error(enrichedError);
+    await assetsListenerManager.close();
     await siteListenerManager.closeAll();
     process.exit(1);
   }
 
   const shutdown = async () => {
+    await assetsListenerManager.close();
     await siteListenerManager.closeAll();
     await app.close();
     process.exit(0);
@@ -179,4 +179,34 @@ function normalizePublicSiteOptions(publicSite) {
     languageSiteId: Number.parseInt(String(publicSite.languageSiteId || ''), 10) || null,
     contentRoot
   };
+}
+
+function buildLoggerOptions() {
+  const logger = {
+    level: process.env.LOG_LEVEL || 'info'
+  };
+
+  if (process.env.NODE_ENV !== 'development' || !hasPinoPretty()) {
+    return logger;
+  }
+
+  return {
+    ...logger,
+    transport: {
+      target: 'pino-pretty',
+      options: {
+        translateTime: 'HH:MM:ss',
+        ignore: 'pid,hostname'
+      }
+    }
+  };
+}
+
+function hasPinoPretty() {
+  try {
+    require.resolve('pino-pretty');
+    return true;
+  } catch {
+    return false;
+  }
 }

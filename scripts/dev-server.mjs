@@ -50,7 +50,10 @@ async function startServer() {
     cwd: projectRoot,
     stdio: 'inherit',
     detached: useProcessGroups,
-    env: process.env
+    env: {
+      ...process.env,
+      NODE_ENV: process.env.NODE_ENV || 'development'
+    }
   });
 
   serverProcess.on('exit', (code, signal) => {

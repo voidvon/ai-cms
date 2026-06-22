@@ -12,7 +12,7 @@ export function buildSeoMeta({
   site
 }) {
   const siteConfig = site || {};
-  const baseUrl = normalizeBaseUrl(siteConfig.web_url);
+  const baseUrl = normalizeBaseUrl(siteConfig.resolved_web_url || siteConfig.web_url);
   const canonicalUrl = toAbsoluteUrl(url, baseUrl) || baseUrl || '/';
   const siteName = siteConfig.web_name || siteConfig.company_name || '';
 
@@ -52,13 +52,13 @@ export function buildSeoMeta({
 }
 
 export function buildHreflangLinks(site) {
-  const baseUrl = normalizeBaseUrl(site?.web_url);
+  const baseUrl = normalizeBaseUrl(site?.resolved_web_url || site?.web_url);
   const siteLanguage = resolveSiteLanguageSignal(site);
   return baseUrl ? [{ lang: siteLanguage || 'x-default', url: baseUrl }] : [];
 }
 
 export function buildJsonLdOrganization(site) {
-  const baseUrl = normalizeBaseUrl(site?.web_url);
+  const baseUrl = normalizeBaseUrl(site?.resolved_web_url || site?.web_url);
   const organizationName = site?.company_name || site?.web_name || '';
 
   return {
@@ -76,7 +76,7 @@ export function buildJsonLdOrganization(site) {
 }
 
 export function buildJsonLdStructuredContent(content, site, options = {}) {
-  const baseUrl = normalizeBaseUrl(site?.web_url);
+  const baseUrl = normalizeBaseUrl(site?.resolved_web_url || site?.web_url);
   const imageValue = content?.photo_url || content?.primary_image || null;
   const imageUrl = toAbsoluteUrl(imageValue, baseUrl);
   const organizationName = site?.company_name || site?.web_name || '';
@@ -100,7 +100,7 @@ export function buildJsonLdStructuredContent(content, site, options = {}) {
 }
 
 export function buildJsonLdSectionEntry(entry, site, options = {}) {
-  const baseUrl = normalizeBaseUrl(site?.web_url);
+  const baseUrl = normalizeBaseUrl(site?.resolved_web_url || site?.web_url);
   const imageValue = entry?.photo_url || entry?.picture || entry?.primary_image || null;
   const imageUrl = toAbsoluteUrl(imageValue, baseUrl);
   const organizationName = site?.company_name || site?.web_name || '';

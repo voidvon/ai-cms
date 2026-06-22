@@ -1,7 +1,9 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { ADMIN_DIST_ROOT, CONTENT_ROOT, MIME_TYPES, PROJECT_ROOT, PUBLIC_ROOT } from './config.mjs';
+import { ADMIN_DIST_ROOT, CONTENT_ROOT, MIME_TYPES, PROJECT_ROOT, PUBLIC_ROOT, UPLOADS_ROOT } from './config.mjs';
 import { getLanguageById, listLanguages } from './services/languages.mjs';
+import { getSiteConfig } from './services/site.mjs';
+import { normalizeLegacyAssetText } from './services/uploads.mjs';
 
 const ADMIN_DEV_SERVER_URL = normalizeDevServerUrl(process.env.ADMIN_DEV_SERVER_URL);
 
@@ -15,6 +17,11 @@ export async function serveStatic(request, reply, options = {}) {
 
   if (rewrittenPathname === '/admin' || rewrittenPathname.startsWith('/admin/')) {
     return serveAdminApp(request, reply, rewrittenPathname);
+  }
+
+  const sharedUploadHandled = await serveSharedUploads(request, reply, rewrittenPathname);
+  if (sharedUploadHandled) {
+    return true;
   }
 
   const contentRoot = resolveRequestContentRoot(request, options);
@@ -40,6 +47,24 @@ export async function serveStatic(request, reply, options = {}) {
   }
 
   return false;
+}
+
+export async function serveSharedUploads(request, reply, pathname = getPathname(request.url)) {
+  if (!isStaticMethod(request.method)) {
+    return false;
+  }
+
+  const normalized = normalizeSharedUploadPath(pathname);
+  if (!normalized) {
+    return false;
+  }
+
+  return serveFromCandidates(
+    UPLOADS_ROOT,
+    [normalized],
+    request,
+    reply
+  );
 }
 
 export async function serveAdminApp(request, reply, pathname = getPathname(request.url)) {
@@ -133,6 +158,27 @@ async function trySendFile(rootDir, candidate, request, reply) {
     const ext = path.extname(filePath).toLowerCase();
     const contentType = MIME_TYPES.get(ext) || 'application/octet-stream';
 
+    const devHtmlRewriter = shouldRewriteHtmlAssetUrls(contentType)
+      ? createDevelopmentHtmlAssetRewriter(request)
+      : null;
+
+    if (devHtmlRewriter) {
+      const content = await fs.promises.readFile(filePath, 'utf8');
+      const rewritten = devHtmlRewriter(content);
+      const body = Buffer.from(rewritten, 'utf8');
+
+      reply.type(contentType);
+      reply.header('Content-Length', body.byteLength);
+
+      if (request.method === 'HEAD') {
+        reply.send();
+        return true;
+      }
+
+      reply.send(body);
+      return true;
+    }
+
     reply.type(contentType);
     reply.header('Content-Length', stats.size);
 
@@ -215,12 +261,83 @@ function getSharedAssetCandidates(pathname) {
   return candidates;
 }
 
+function normalizeSharedUploadPath(pathname) {
+  const normalized = String(pathname || '').replace(/\/{2,}/g, '/');
+  if (/^\/uploads\/(?:images|skin|pdfs)\//i.test(normalized)) {
+    return normalized.replace(/^\/uploads\//i, '/');
+  }
+
+  if (/^\/upload\/(?:images|skin|pdfs)\//i.test(normalized)) {
+    return normalized.replace(/^\/upload\//i, '/');
+  }
+
+  if (/^\/uploadfile\//i.test(normalized)) {
+    return normalized.replace(/^\/uploadfile\//i, '/images/');
+  }
+
+  if (/^\/images\//i.test(normalized)) {
+    return normalized;
+  }
+  if (/^\/img\//i.test(normalized)) {
+    return normalized.replace(/^\/img\//i, '/images/');
+  }
+  if (/^\/skin\//i.test(normalized)) {
+    return normalized;
+  }
+
+  return '';
+}
+
 function normalizeDevServerUrl(value) {
   const normalized = String(value || '').trim().replace(/\/+$/, '');
   if (!/^https?:\/\//i.test(normalized)) {
     return '';
   }
   return normalized;
+}
+
+function shouldRewriteHtmlAssetUrls(contentType) {
+  return process.env.NODE_ENV === 'development' && /^text\/html\b/i.test(String(contentType || ''));
+}
+
+function createDevelopmentHtmlAssetRewriter(request) {
+  const site = getSiteConfig();
+  const assetsPort = Number(site?.assets_port || 0);
+  if (!Number.isInteger(assetsPort) || assetsPort <= 0) {
+    return null;
+  }
+
+  const protocol = String(request.protocol || request.headers['x-forwarded-proto'] || 'http').trim() || 'http';
+  const hostname = resolveRequestHostname(request);
+  if (!hostname) {
+    return null;
+  }
+
+  const internalBaseUrl = `${protocol}://${formatHostnameForUrl(hostname)}:${assetsPort}`;
+  return (html) => normalizeLegacyAssetText(html, {
+    ...site,
+    assets_public_base_url: internalBaseUrl
+  });
+}
+
+function resolveRequestHostname(request) {
+  const hostHeader = String(request.headers.host || '').trim();
+  if (!hostHeader) {
+    return '';
+  }
+
+  try {
+    return new URL(`http://${hostHeader}`).hostname || '';
+  } catch {
+    return hostHeader.replace(/:\d+$/, '');
+  }
+}
+
+function formatHostnameForUrl(hostname) {
+  if (!hostname.includes(':')) {
+    return hostname;
+  }
+  return hostname.startsWith('[') ? hostname : `[${hostname}]`;
 }
 
 function rewriteLegacyStaticPath(pathname) {

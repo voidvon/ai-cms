@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react'
 import path from 'path'
 import { ADMIN_VITE_TARGET } from '../shared/browser-targets.mjs'
 
-const apiProxyTarget = 'http://127.0.0.1:3000'
+const apiProxyTarget = 'http://127.0.0.1:1231'
 
 // https://vite.dev/config/
 export default defineConfig({

@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { CONTENT_ROOT, UPLOADS_IMAGES_ROOT, UPLOADS_PDFS_ROOT, UPLOADS_SKIN_ROOT } from '../config.mjs';
+import { UPLOADS_IMAGES_ROOT, UPLOADS_PDFS_ROOT, UPLOADS_SKIN_ROOT } from '../config.mjs';
 
 export function resolveUploadedFilePath(relativePath) {
   const normalized = normalizeSupportedUploadPath(relativePath);
@@ -22,7 +22,7 @@ export function normalizeUploadedRelativePath(relativePath) {
   return normalizeSupportedUploadPath(relativePath);
 }
 
-export function normalizeLegacyAssetText(value) {
+export function normalizeLegacyAssetText(value, siteConfig = null) {
   const input = String(value ?? '');
   if (!input) {
     return input;
@@ -30,8 +30,17 @@ export function normalizeLegacyAssetText(value) {
 
   return input.replace(
     /https?:\/\/[^/\s"'<>]+\/uploads\/(?:images|skin|pdfs)\/[^\s"'<>)]*|\/uploads\/(?:images|skin|pdfs)\/[^\s"'<>)]*/gi,
-    (matched) => normalizeUploadedRelativePath(matched)
+    (matched) => resolvePublicAssetUrl(matched, siteConfig)
   );
+}
+
+export function resolvePublicAssetUrl(relativePath, siteConfig = null) {
+  const normalized = normalizeUploadedRelativePath(relativePath);
+  if (!normalized) {
+    return '';
+  }
+  const baseUrl = String(siteConfig?.assets_public_base_url || '').trim().replace(/\/+$/g, '');
+  return baseUrl ? `${baseUrl}${normalized}` : normalized;
 }
 
 function resolveUploadCandidate(normalized) {

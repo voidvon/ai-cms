@@ -24,6 +24,7 @@ export default async function siteConfigRoutes(app) {
   }, async (request, reply) => {
     try {
       const updated = updateSiteConfig(request.body);
+      await app.assetsListenerManager?.sync?.();
       return { success: true, data: updated };
     } catch (error) {
       reply.code(400);

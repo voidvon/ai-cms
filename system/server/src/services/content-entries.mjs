@@ -61,11 +61,26 @@ function buildMainTableSelect(modelCode, alias = 'e') {
 }
 
 function getTranslationCreatedAtExpr(translationAlias, defaultTranslationAlias, entryAlias) {
-  return `coalesce(${translationAlias}.created_at, ${defaultTranslationAlias}.created_at, ${entryAlias}.created_at)`;
+  return `coalesce(${translationAlias}.created_at, ${defaultTranslationAlias}.created_at, ft.created_at, ${entryAlias}.created_at)`;
 }
 
 function getTranslationTemplateDataExpr(selectedAlias, defaultAlias) {
-  return `coalesce(${selectedAlias}.template_data_json, ${defaultAlias}.template_data_json)`;
+  return `coalesce(${selectedAlias}.template_data_json, ${defaultAlias}.template_data_json, ft.template_data_json)`;
+}
+
+function getFallbackTranslationJoin(translationTableName) {
+  return `
+      LEFT JOIN ${quoteIdentifier(translationTableName)} ft
+        ON ft.id = (
+          SELECT inner_t.id
+          FROM ${quoteIdentifier(translationTableName)} inner_t
+          INNER JOIN languages inner_l ON inner_l.id = inner_t.language_id
+          WHERE inner_t.entry_id = e.id
+          ORDER BY inner_l.sort_order ASC, inner_l.id ASC, inner_t.id ASC
+          LIMIT 1
+        )
+      LEFT JOIN languages fl ON fl.id = ft.language_id
+  `;
 }
 
 export function listContentEntries(modelCode, {
@@ -97,22 +112,23 @@ export function listContentEntries(modelCode, {
         ${buildMainTableSelect(modelCode, 'e')},
         e.created_at,
         e.updated_at,
-        ${buildNameExpr('t', 'dt')} AS name,
-        coalesce(t.summary, dt.summary, '') AS summary,
-        coalesce(t.content_html, dt.content_html, '') AS content_html,
+        coalesce(t.name, dt.name, ft.name, '') AS name,
+        coalesce(t.summary, dt.summary, ft.summary, '') AS summary,
+        coalesce(t.content_html, dt.content_html, ft.content_html, '') AS content_html,
         ${getTranslationTemplateDataExpr('t', 'dt')} AS template_data_json,
-        coalesce(t.seo_title, dt.seo_title) AS seo_title,
-        coalesce(t.seo_description, dt.seo_description) AS seo_description,
-        coalesce(t.publish_status, dt.publish_status, 'published') AS translation_publish_status,
+        coalesce(t.seo_title, dt.seo_title, ft.seo_title) AS seo_title,
+        coalesce(t.seo_description, dt.seo_description, ft.seo_description) AS seo_description,
+        coalesce(t.publish_status, dt.publish_status, ft.publish_status, 'published') AS translation_publish_status,
         ${getTranslationCreatedAtExpr('t', 'dt', 'e')} AS translation_created_at,
         coalesce(tc.name, dtc.name, '') AS column_name,
         ? AS requested_language_code,
-        coalesce(l.code, dl.code, ?) AS current_language_code
+        coalesce(l.code, dl.code, fl.code, ?) AS current_language_code
       FROM ${quoteIdentifier(tableName)} e
       LEFT JOIN ${quoteIdentifier(translationTableName)} t ON t.entry_id = e.id AND t.language_id = ?
       LEFT JOIN ${quoteIdentifier(translationTableName)} dt ON dt.entry_id = e.id AND dt.language_id = ?
       LEFT JOIN languages l ON l.id = t.language_id
       LEFT JOIN languages dl ON dl.id = dt.language_id
+      ${getFallbackTranslationJoin(translationTableName)}
       LEFT JOIN columns c ON c.id = e.column_id
       LEFT JOIN column_translations tc ON tc.column_id = c.id AND tc.language_id = ?
       LEFT JOIN column_translations dtc ON dtc.column_id = c.id AND dtc.language_id = ?
@@ -195,22 +211,23 @@ export function listContentEntriesPaged(modelCode, {
         ${buildMainTableSelect(modelCode, 'e')},
         e.created_at,
         e.updated_at,
-        ${buildNameExpr('t', 'dt')} AS name,
-        coalesce(t.summary, dt.summary, '') AS summary,
-        coalesce(t.content_html, dt.content_html, '') AS content_html,
+        coalesce(t.name, dt.name, ft.name, '') AS name,
+        coalesce(t.summary, dt.summary, ft.summary, '') AS summary,
+        coalesce(t.content_html, dt.content_html, ft.content_html, '') AS content_html,
         ${getTranslationTemplateDataExpr('t', 'dt')} AS template_data_json,
-        coalesce(t.seo_title, dt.seo_title) AS seo_title,
-        coalesce(t.seo_description, dt.seo_description) AS seo_description,
-        coalesce(t.publish_status, dt.publish_status, 'published') AS translation_publish_status,
+        coalesce(t.seo_title, dt.seo_title, ft.seo_title) AS seo_title,
+        coalesce(t.seo_description, dt.seo_description, ft.seo_description) AS seo_description,
+        coalesce(t.publish_status, dt.publish_status, ft.publish_status, 'published') AS translation_publish_status,
         ${getTranslationCreatedAtExpr('t', 'dt', 'e')} AS translation_created_at,
         coalesce(tc.name, dtc.name, '') AS column_name,
         ? AS requested_language_code,
-        coalesce(l.code, dl.code, ?) AS current_language_code
+        coalesce(l.code, dl.code, fl.code, ?) AS current_language_code
       FROM ${quoteIdentifier(tableName)} e
       LEFT JOIN ${quoteIdentifier(translationTableName)} t ON t.entry_id = e.id AND t.language_id = ?
       LEFT JOIN ${quoteIdentifier(translationTableName)} dt ON dt.entry_id = e.id AND dt.language_id = ?
       LEFT JOIN languages l ON l.id = t.language_id
       LEFT JOIN languages dl ON dl.id = dt.language_id
+      ${getFallbackTranslationJoin(translationTableName)}
       LEFT JOIN columns c ON c.id = e.column_id
       LEFT JOIN column_translations tc ON tc.column_id = c.id AND tc.language_id = ?
       LEFT JOIN column_translations dtc ON dtc.column_id = c.id AND dtc.language_id = ?
@@ -260,22 +277,23 @@ export function getContentEntryById(modelCode, id, {
         ${buildMainTableSelect(modelCode, 'e')},
         e.created_at,
         e.updated_at,
-        ${buildNameExpr('t', 'dt')} AS name,
-        coalesce(t.summary, dt.summary, '') AS summary,
-        coalesce(t.content_html, dt.content_html, '') AS content_html,
+        coalesce(t.name, dt.name, ft.name, '') AS name,
+        coalesce(t.summary, dt.summary, ft.summary, '') AS summary,
+        coalesce(t.content_html, dt.content_html, ft.content_html, '') AS content_html,
         ${getTranslationTemplateDataExpr('t', 'dt')} AS template_data_json,
-        coalesce(t.seo_title, dt.seo_title) AS seo_title,
-        coalesce(t.seo_description, dt.seo_description) AS seo_description,
-        coalesce(t.publish_status, dt.publish_status, 'published') AS translation_publish_status,
+        coalesce(t.seo_title, dt.seo_title, ft.seo_title) AS seo_title,
+        coalesce(t.seo_description, dt.seo_description, ft.seo_description) AS seo_description,
+        coalesce(t.publish_status, dt.publish_status, ft.publish_status, 'published') AS translation_publish_status,
         ${getTranslationCreatedAtExpr('t', 'dt', 'e')} AS translation_created_at,
         coalesce(tc.name, dtc.name, '') AS column_name,
         ? AS requested_language_code,
-        coalesce(l.code, dl.code, ?) AS current_language_code
+        coalesce(l.code, dl.code, fl.code, ?) AS current_language_code
       FROM ${quoteIdentifier(tableName)} e
       LEFT JOIN ${quoteIdentifier(translationTableName)} t ON t.entry_id = e.id AND t.language_id = ?
       LEFT JOIN ${quoteIdentifier(translationTableName)} dt ON dt.entry_id = e.id AND dt.language_id = ?
       LEFT JOIN languages l ON l.id = t.language_id
       LEFT JOIN languages dl ON dl.id = dt.language_id
+      ${getFallbackTranslationJoin(translationTableName)}
       LEFT JOIN columns c ON c.id = e.column_id
       LEFT JOIN column_translations tc ON tc.column_id = c.id AND tc.language_id = ?
       LEFT JOIN column_translations dtc ON dtc.column_id = c.id AND dtc.language_id = ?

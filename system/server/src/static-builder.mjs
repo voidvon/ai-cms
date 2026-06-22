@@ -35,7 +35,7 @@ import { ensureTemplatesSchema } from './services/templates.mjs';
 import { listLanguages } from './services/languages.mjs';
 import { escapeHtml } from './utils/html.mjs';
 import { looksLikeLegacyMojibake } from './utils/legacy-text.mjs';
-import { normalizeLegacyAssetText, normalizeUploadedRelativePath } from './services/uploads.mjs';
+import { normalizeLegacyAssetText, normalizeUploadedRelativePath, resolvePublicAssetUrl } from './services/uploads.mjs';
 import {
   buildSeoMeta,
   buildHreflangLinks,
@@ -147,13 +147,9 @@ function prefixRelativeHrefPaths(html, prefix) {
 
 const MANAGED_STATIC_ROOT_FILES = ['index.html', 'contact.html', 'sitemap.xml', 'robots.txt', 'llms.txt', 'llms-full.txt', 'index.md'];
 const LEGACY_MANAGED_STATIC_DIRS = ['about', 'product'];
-const SHARED_STATIC_DIRS = ['css', 'uploads'];
+const SHARED_STATIC_DIRS = ['css'];
 const SHARED_STATIC_ROOT_FILES = ['logo.svg'];
-const OBSOLETE_SHARED_STATIC_DIRS = ['js', 'JS', 'images', 'skin', 'img', 'Images', 'Skin'];
-const SHARED_UPLOAD_ASSET_DIRS = [
-  ['images', path.join('uploads', 'images')],
-  ['skin', path.join('uploads', 'skin')]
-];
+const OBSOLETE_SHARED_STATIC_DIRS = ['js', 'JS', 'images', 'skin', 'img', 'Images', 'Skin', 'uploads'];
 const STATIC_BUILD_GROUP_ORDER = ['网站页面', '栏目页', '内容页', '系统文件'];
 const CMS_TEMPLATE_BY_PAGE = {
   'legacy-home': 'spirax_home',
@@ -3344,8 +3340,6 @@ function syncStaticSupportAssets(sharedRoot, outputRoot) {
 
   cleanupObsoleteSharedStaticDirs(resolvedOutputRoot);
   syncSharedStaticDirs(resolvedSharedRoot, resolvedOutputRoot);
-  syncSharedUploadAssetDirs(resolvedSharedRoot, resolvedOutputRoot);
-  syncLegacyStaticAliasDirs(resolvedOutputRoot);
   syncSharedStaticRootFiles(resolvedSharedRoot, resolvedOutputRoot);
 }
 
@@ -3364,47 +3358,6 @@ function syncSharedStaticDirs(sharedRoot, outputRoot) {
     ].find((candidate) => fs.existsSync(candidate) && path.resolve(candidate) !== path.resolve(targetDir));
 
     if (!sourceDir) {
-      continue;
-    }
-
-    syncDirectory(sourceDir, targetDir);
-  }
-}
-
-function syncSharedUploadAssetDirs(sharedRoot, outputRoot) {
-  for (const [sourceName, targetRelativeDir] of SHARED_UPLOAD_ASSET_DIRS) {
-    const targetDir = path.join(outputRoot, targetRelativeDir);
-    const sameRootSourceDir = path.join(sharedRoot, targetRelativeDir);
-    const hasExistingTargetAssets = fs.existsSync(targetDir) && directoryHasFiles(targetDir);
-
-    if (hasExistingTargetAssets && path.resolve(sameRootSourceDir) === path.resolve(targetDir)) {
-      continue;
-    }
-
-    const sourceDir = [
-      sameRootSourceDir,
-      path.join(PUBLIC_ROOT, sourceName)
-    ].find((candidate) => fs.existsSync(candidate) && path.resolve(candidate) !== path.resolve(targetDir));
-
-    if (!sourceDir) {
-      continue;
-    }
-
-    syncDirectory(sourceDir, targetDir);
-  }
-}
-
-function syncLegacyStaticAliasDirs(outputRoot) {
-  const aliasPairs = [
-    [path.join('uploads', 'images'), 'images'],
-    [path.join('uploads', 'images'), 'img'],
-    [path.join('uploads', 'skin'), 'skin']
-  ];
-
-  for (const [sourceRelativeDir, targetRelativeDir] of aliasPairs) {
-    const sourceDir = path.join(outputRoot, sourceRelativeDir);
-    const targetDir = path.join(outputRoot, targetRelativeDir);
-    if (!fs.existsSync(sourceDir)) {
       continue;
     }
 
@@ -3620,14 +3573,14 @@ function normalizeLegacyRichTextHtml(value, siteConfig = null) {
   let output = html.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
 
   output = normalizeLegacyMetaAttributes(output);
-  output = normalizeLegacyAssetText(output);
+  output = normalizeLegacyAssetText(output, siteConfig);
 
   return output
     .replace(/href="https?:\/\/\/+"/gi, 'href="/"')
     .replace(/data-ke-src="https?:\/\/\/+"/gi, 'data-ke-src="/"')
     .replace(/https?:\/\/\/+(?=[^/"])/gi, '/')
     .replace(/(["'(=])(https?:\/\/[^/\s"'<>]+\/uploads\/(?:images|skin|pdfs)\/[^\s"'<>]+|\/uploads\/(?:images|skin|pdfs)\/[^\s"'<>]+)/gi, (_, prefix, relativePath) => {
-      return `${prefix}${normalizeUploadedRelativePath(relativePath)}`;
+      return `${prefix}${resolvePublicAssetUrl(relativePath, siteConfig)}`;
     })
     // 修正产品链接：确保所有 /products/.../slug 格式的链接都有尾部斜杠
     .replace(/href="(\/products\/[a-z0-9/-]+[a-z0-9])"/gi, (match, url) => {

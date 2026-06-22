@@ -113,7 +113,7 @@ This directory is the deployable runtime package.
 npm install
 npm --workspace system/server install --omit=dev
 npm run build:site
-PORT=3000 HOST=0.0.0.0 NODE_ENV=production npm start
+PORT=1231 HOST=0.0.0.0 NODE_ENV=production npm start
 \`\`\`
 
 ## Runtime Data

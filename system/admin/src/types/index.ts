@@ -332,6 +332,9 @@ export interface SiteConfig {
   web_mobile: string;
   web_copyright: string;
   web_author: string;
+  assets_bind_host?: string | null;
+  assets_port?: number | null;
+  assets_public_base_url?: string | null;
   seo_default_title?: string | null;
   seo_default_description?: string | null;
   seo_home_title?: string | null;

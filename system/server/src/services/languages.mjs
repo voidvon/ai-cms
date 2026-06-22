@@ -433,6 +433,9 @@ function validateLanguageSiteConfig(payload, { currentLanguageId = null } = {}) 
     if (payload.is_default) {
       throw new Error('默认语言必须保留在主站目录，不能配置为独立站点');
     }
+    if (!String(site.host || '').trim()) {
+      throw new Error('独立站点必须配置正式域名');
+    }
     if (!site.access_port) {
       throw new Error('独立站点必须配置访问端口');
     }

@@ -27,7 +27,7 @@ const SITEMAP_CHUNK_SIZE = 1000;
 
 export function buildSitemap({ outputRoot, generatedAt = new Date().toISOString(), languageCode = null } = {}) {
   const site = getSiteConfig(languageCode);
-  const siteUrl = normalizeSiteUrl(site.web_url);
+  const siteUrl = normalizeSiteUrl(site.resolved_web_url || site.web_url);
 
   if (!siteUrl) {
     return {
@@ -71,7 +71,7 @@ export function buildSitemap({ outputRoot, generatedAt = new Date().toISOString(
 
 export function getSitemapDiagnostics({ generatedAt = new Date().toISOString(), languageCode = null } = {}) {
   const site = getSiteConfig(languageCode);
-  const siteUrl = normalizeSiteUrl(site.web_url);
+  const siteUrl = normalizeSiteUrl(site.resolved_web_url || site.web_url);
   const urls = siteUrl ? collectSitemapEntries({ siteUrl, generatedAt, languageCode }) : [];
   const chunks = chunkEntries(urls, SITEMAP_CHUNK_SIZE);
   const managedItems = listContentItems('product', { visibleOnly: true, limit: 10000, languageCode });
@@ -81,7 +81,7 @@ export function getSitemapDiagnostics({ generatedAt = new Date().toISOString(), 
 
   return {
     generated_at: generatedAt,
-    site_url: site.web_url || '',
+    site_url: site.resolved_web_url || site.web_url || '',
     normalized_site_url: siteUrl,
     total_urls: urls.length,
     chunk_size: SITEMAP_CHUNK_SIZE,

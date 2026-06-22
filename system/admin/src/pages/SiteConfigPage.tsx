@@ -19,6 +19,9 @@ type SiteConfigBaseForm = {
   icp_number: string
   web_qq: string
   web_mobile: string
+  assets_bind_host: string
+  assets_port: string
+  assets_public_base_url: string
 }
 
 export default function SiteConfigPage() {
@@ -65,6 +68,9 @@ export default function SiteConfigPage() {
       icp_number: source.icp_number || '',
       web_qq: source.web_qq || '',
       web_mobile: source.web_mobile || '',
+      assets_bind_host: source.assets_bind_host || '',
+      assets_port: source.assets_port ? String(source.assets_port) : '',
+      assets_public_base_url: source.assets_public_base_url || '',
     })
     setTranslations(buildInitialTranslations(source, defaultLanguageCode, availableLanguageCodes))
     setActiveLanguage(source.requested_language_code || source.current_language_code || defaultLanguageCode)
@@ -131,69 +137,116 @@ export default function SiteConfigPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="web_url">网站地址</Label>
-                <Input
-                  id="web_url"
-                  value={baseData.web_url}
-                  onChange={(e) => setBaseData({ ...baseData, web_url: e.target.value })}
-                  placeholder="https://www.example.com"
-                />
+            <div className="rounded border p-4 space-y-4">
+              <div>
+                <div className="font-medium">基础信息</div>
+                <div className="text-sm text-muted-foreground">主站地址、联系方式和备案信息在所有语言站点之间共用。</div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="company_phone">公司电话</Label>
-                <Input
-                  id="company_phone"
-                  value={baseData.company_phone}
-                  onChange={(e) => setBaseData({ ...baseData, company_phone: e.target.value })}
-                  placeholder="请输入公司电话"
-                />
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="web_url">网站地址</Label>
+                  <Input
+                    id="web_url"
+                    value={baseData.web_url}
+                    onChange={(e) => setBaseData({ ...baseData, web_url: e.target.value })}
+                    placeholder="https://www.example.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="company_phone">公司电话</Label>
+                  <Input
+                    id="company_phone"
+                    value={baseData.company_phone}
+                    onChange={(e) => setBaseData({ ...baseData, company_phone: e.target.value })}
+                    placeholder="请输入公司电话"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="company_fax">公司传真</Label>
+                  <Input
+                    id="company_fax"
+                    value={baseData.company_fax}
+                    onChange={(e) => setBaseData({ ...baseData, company_fax: e.target.value })}
+                    placeholder="请输入公司传真"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="postal_code">邮政编码</Label>
+                  <Input
+                    id="postal_code"
+                    value={baseData.postal_code}
+                    onChange={(e) => setBaseData({ ...baseData, postal_code: e.target.value })}
+                    placeholder="请输入邮政编码"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="company_qq">QQ号</Label>
+                  <Input
+                    id="company_qq"
+                    value={baseData.web_qq}
+                    onChange={(e) => setBaseData({ ...baseData, web_qq: e.target.value })}
+                    placeholder="请输入QQ号"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="web_mobile">手机号</Label>
+                  <Input
+                    id="web_mobile"
+                    value={baseData.web_mobile}
+                    onChange={(e) => setBaseData({ ...baseData, web_mobile: e.target.value })}
+                    placeholder="请输入手机号"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="icp_number">ICP备案号</Label>
+                  <Input
+                    id="icp_number"
+                    value={baseData.icp_number}
+                    onChange={(e) => setBaseData({ ...baseData, icp_number: e.target.value })}
+                    placeholder="请输入ICP备案号"
+                  />
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="company_fax">公司传真</Label>
-                <Input
-                  id="company_fax"
-                  value={baseData.company_fax}
-                  onChange={(e) => setBaseData({ ...baseData, company_fax: e.target.value })}
-                  placeholder="请输入公司传真"
-                />
+            </div>
+
+            <div className="rounded border p-4 space-y-4">
+              <div>
+                <div className="font-medium">共享资源服务</div>
+                <div className="text-sm text-muted-foreground">
+                  根目录 `uploads/` 由这里统一提供访问。多个站点共用这一套资源服务，保存后会自动重载监听。
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="postal_code">邮政编码</Label>
-                <Input
-                  id="postal_code"
-                  value={baseData.postal_code}
-                  onChange={(e) => setBaseData({ ...baseData, postal_code: e.target.value })}
-                  placeholder="请输入邮政编码"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="company_qq">QQ号</Label>
-                <Input
-                  id="company_qq"
-                  value={baseData.web_qq}
-                  onChange={(e) => setBaseData({ ...baseData, web_qq: e.target.value })}
-                  placeholder="请输入QQ号"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="web_mobile">手机号</Label>
-                <Input
-                  id="web_mobile"
-                  value={baseData.web_mobile}
-                  onChange={(e) => setBaseData({ ...baseData, web_mobile: e.target.value })}
-                  placeholder="请输入手机号"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="icp_number">ICP备案号</Label>
-                <Input
-                  id="icp_number"
-                  value={baseData.icp_number}
-                  onChange={(e) => setBaseData({ ...baseData, icp_number: e.target.value })}
-                  placeholder="请输入ICP备案号"
-                />
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="assets_bind_host">监听地址</Label>
+                  <Input
+                    id="assets_bind_host"
+                    value={baseData.assets_bind_host}
+                    onChange={(e) => setBaseData({ ...baseData, assets_bind_host: e.target.value })}
+                    placeholder="127.0.0.1"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="assets_port">监听端口</Label>
+                  <Input
+                    id="assets_port"
+                    value={baseData.assets_port}
+                    onChange={(e) => setBaseData({ ...baseData, assets_port: e.target.value })}
+                    placeholder="1232"
+                  />
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="assets_public_base_url">对外访问域名</Label>
+                  <Input
+                    id="assets_public_base_url"
+                    value={baseData.assets_public_base_url}
+                    onChange={(e) => setBaseData({ ...baseData, assets_public_base_url: e.target.value })}
+                    placeholder="https://assets.spiraxsteam.com"
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    生成静态页时会把上传资源 URL 输出为这个域名，例如 `https://assets.spiraxsteam.com/uploads/...`
+                  </p>
+                </div>
               </div>
             </div>
             <div className="rounded border p-4 space-y-4">
@@ -344,6 +397,9 @@ function createEmptyBaseData(): SiteConfigBaseForm {
     icp_number: '',
     web_qq: '',
     web_mobile: '',
+    assets_bind_host: '',
+    assets_port: '',
+    assets_public_base_url: '',
   }
 }
 
