@@ -13,7 +13,8 @@ const SITE_TRANSLATABLE_FIELDS = [
   'seo_default_title',
   'seo_default_description',
   'seo_home_title',
-  'seo_home_description'
+  'seo_home_description',
+  'template_data_json'
 ];
 
 const SITE_REQUIRED_BASE_COLUMNS = [
@@ -44,6 +45,15 @@ export function getSiteConfig(languageCode = null, options = {}) {
   const base = getBaseSiteConfig();
   const selectedLanguage = resolveLanguageForContent(languageCode);
   const translations = loadSiteConfigTranslations();
+  const translationOutput = Object.fromEntries(
+    translations.map((item) => [
+      item.language_code,
+      {
+        ...pickTranslationFields(item),
+        template_data: parseSiteTemplateDataJson(item.template_data_json)
+      }
+    ])
+  );
   const translationMap = Object.fromEntries(translations.map((item) => [item.language_code, item]));
   const selectedTranslation = translationMap[selectedLanguage.code];
   const defaultTranslation = translationMap[selectedLanguage.default_code];
@@ -60,22 +70,25 @@ export function getSiteConfig(languageCode = null, options = {}) {
     fallback_language_code: resolvedLanguageCode !== requestedLanguageCode ? resolvedLanguageCode : null,
     is_language_fallback: resolvedLanguageCode !== requestedLanguageCode,
     ...(includeTranslations ? {
-      translations: Object.fromEntries(
-        translations.map((item) => [
-          item.language_code,
-          pickTranslationFields(item)
-        ])
-      )
+      translations: translationOutput
     } : {})
   };
 
   const siteUrl = resolveSiteBaseUrl(output, selectedLanguage.code);
   return {
     ...output,
+    template_data: parseSiteTemplateDataJson(output.template_data_json),
+    base_web_url: normalizeAbsoluteUrl(base.web_url) || '',
     web_url: siteUrl || output.web_url || '',
     resolved_web_url: siteUrl || '',
-    language_site_host: resolveLanguageSiteHost(selectedLanguage.code)
+    language_site_host: resolveLanguageSiteHost(selectedLanguage.code),
+    language_site_path_prefix: selectedLanguage?.site?.path_prefix || '/',
+    language_site_mode: selectedLanguage?.site?.site_mode || 'subdir'
   };
+}
+
+export function resolveLanguageSitePublicBaseUrl(languageCode, fallbackWebUrl = '') {
+  return resolveLanguageSiteBaseUrl(languageCode, fallbackWebUrl);
 }
 
 export function updateSiteConfig(input) {
@@ -179,6 +192,7 @@ function ensureSiteConfigSchema() {
       seo_default_description TEXT,
       seo_home_title TEXT,
       seo_home_description TEXT,
+      template_data_json TEXT,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(site_config_id, language_id),
@@ -191,6 +205,7 @@ function ensureSiteConfigSchema() {
   addColumnIfMissing('site_config_translations', 'seo_default_description', 'TEXT');
   addColumnIfMissing('site_config_translations', 'seo_home_title', 'TEXT');
   addColumnIfMissing('site_config_translations', 'seo_home_description', 'TEXT');
+  addColumnIfMissing('site_config_translations', 'template_data_json', 'TEXT');
 
   ensureDefaultSiteConfigTranslation();
   schemaEnsured = true;
@@ -377,7 +392,8 @@ function normalizeSiteConfigTranslations(translations, {
       seo_default_title: toNullableString(value?.seo_default_title ?? existing.seo_default_title),
       seo_default_description: toNullableString(value?.seo_default_description ?? existing.seo_default_description),
       seo_home_title: toNullableString(value?.seo_home_title ?? existing.seo_home_title),
-      seo_home_description: toNullableString(value?.seo_home_description ?? existing.seo_home_description)
+      seo_home_description: toNullableString(value?.seo_home_description ?? existing.seo_home_description),
+      template_data_json: normalizeSiteTemplateDataJson(value?.template_data_json ?? existing.template_data_json)
     };
     if (languageCode === defaultLanguageCode && !String(normalized.web_name || '').trim()) {
       throw new Error('默认语言的网站名称不能为空');
@@ -399,7 +415,8 @@ function normalizeSiteConfigTranslations(translations, {
       seo_default_title: toNullableString(existingTranslations?.[defaultLanguageCode]?.seo_default_title ?? baseFallback.seo_default_title),
       seo_default_description: toNullableString(existingTranslations?.[defaultLanguageCode]?.seo_default_description ?? baseFallback.seo_default_description),
       seo_home_title: toNullableString(existingTranslations?.[defaultLanguageCode]?.seo_home_title ?? baseFallback.seo_home_title),
-      seo_home_description: toNullableString(existingTranslations?.[defaultLanguageCode]?.seo_home_description ?? baseFallback.seo_home_description)
+      seo_home_description: toNullableString(existingTranslations?.[defaultLanguageCode]?.seo_home_description ?? baseFallback.seo_home_description),
+      template_data_json: normalizeSiteTemplateDataJson(existingTranslations?.[defaultLanguageCode]?.template_data_json ?? null)
     };
   }
 
@@ -428,7 +445,8 @@ function loadSiteConfigTranslations() {
         t.seo_default_title,
         t.seo_default_description,
         t.seo_home_title,
-        t.seo_home_description
+        t.seo_home_description,
+        t.template_data_json
       FROM site_config_translations t
       INNER JOIN languages l ON l.id = t.language_id
       WHERE t.site_config_id = 1
@@ -461,9 +479,10 @@ function saveSiteConfigTranslations(translations, now = new Date().toISOString()
           seo_default_description,
           seo_home_title,
           seo_home_description,
+          template_data_json,
           created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(site_config_id, language_id) DO UPDATE SET
           web_name = excluded.web_name,
           company_name = excluded.company_name,
@@ -476,6 +495,7 @@ function saveSiteConfigTranslations(translations, now = new Date().toISOString()
           seo_default_description = excluded.seo_default_description,
           seo_home_title = excluded.seo_home_title,
           seo_home_description = excluded.seo_home_description,
+          template_data_json = excluded.template_data_json,
           updated_at = excluded.updated_at
       `,
       [
@@ -492,6 +512,7 @@ function saveSiteConfigTranslations(translations, now = new Date().toISOString()
         toNullableString(translation?.seo_default_description),
         toNullableString(translation?.seo_home_title),
         toNullableString(translation?.seo_home_description),
+        normalizeSiteTemplateDataJson(translation?.template_data_json),
         now,
         now
       ]
@@ -538,9 +559,10 @@ function ensureDefaultSiteConfigTranslation() {
         seo_default_description,
         seo_home_title,
         seo_home_description,
+        template_data_json,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       1,
@@ -556,6 +578,7 @@ function ensureDefaultSiteConfigTranslation() {
       toNullableString(site.seo_default_description),
       toNullableString(site.seo_home_title),
       toNullableString(site.seo_home_description),
+      normalizeSiteTemplateDataJson(site.template_data_json),
       now,
       now
     ]
@@ -675,6 +698,8 @@ function applySiteTranslation(base, translation) {
   for (const field of SITE_TRANSLATABLE_FIELDS) {
     if (translation[field] !== undefined && translation[field] !== null) {
       output[field] = translation[field];
+    } else if (translation[field] === '') {
+      output[field] = '';
     }
   }
   return output;
@@ -692,8 +717,42 @@ function pickTranslationFields(input) {
     seo_default_title: toNullableString(input?.seo_default_title),
     seo_default_description: toNullableString(input?.seo_default_description),
     seo_home_title: toNullableString(input?.seo_home_title),
-    seo_home_description: toNullableString(input?.seo_home_description)
+    seo_home_description: toNullableString(input?.seo_home_description),
+    template_data_json: normalizeSiteTemplateDataJson(input?.template_data_json)
   };
+}
+
+function normalizeSiteTemplateDataJson(value) {
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value === 'string') {
+    const normalized = value.trim();
+    if (!normalized) {
+      return null;
+    }
+    const parsed = JSON.parse(normalized);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('site template_data_json must be a JSON object');
+    }
+    return JSON.stringify(parsed);
+  }
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return JSON.stringify(value);
+  }
+  throw new Error('site template_data_json must be a JSON object');
+}
+
+function parseSiteTemplateDataJson(value) {
+  if (!value) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function addColumnIfMissing(tableName, columnName, definition) {

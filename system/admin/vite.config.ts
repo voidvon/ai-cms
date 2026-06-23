@@ -30,6 +30,34 @@ export default defineConfig({
         target: apiProxyTarget,
         changeOrigin: true,
       },
+      '/uploads': {
+        target: apiProxyTarget,
+        changeOrigin: true,
+      },
+      '/upload': {
+        target: apiProxyTarget,
+        changeOrigin: true,
+      },
+      '/uploadfile': {
+        target: apiProxyTarget,
+        changeOrigin: true,
+      },
+      '/images': {
+        target: apiProxyTarget,
+        changeOrigin: true,
+      },
+      '/img': {
+        target: apiProxyTarget,
+        changeOrigin: true,
+      },
+      '/skin': {
+        target: apiProxyTarget,
+        changeOrigin: true,
+      },
+      '/pdfs': {
+        target: apiProxyTarget,
+        changeOrigin: true,
+      },
     },
   },
   build: {

@@ -439,7 +439,7 @@ function saveColumnTranslations(columnId, translations, now = new Date().toISOSt
           publish_status,
           created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(column_id, language_id) DO UPDATE SET
           name = excluded.name,
           summary = excluded.summary,

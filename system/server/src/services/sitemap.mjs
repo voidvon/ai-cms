@@ -15,15 +15,41 @@ import {
 } from './section-content.mjs';
 import {
   buildColumnSlugPath,
-  buildProductColumnPublicUrl,
+  buildManagedColumnPublicUrl,
   buildContentDetailUrlFromColumn
 } from './column-paths.mjs';
 import { ensureContentItemsSchema, listContentItems } from './content-items.mjs';
 import { escapeHtml } from '../utils/html.mjs';
 
-const PRODUCT_LIST_PAGE_SIZE = 14;
+const MANAGED_LIST_PAGE_SIZE = 14;
 const NEWS_LIST_PAGE_SIZE = 6;
 const SITEMAP_CHUNK_SIZE = 1000;
+
+function getRootColumnByDriver(columns, renderDriver) {
+  return columns.find((item) => (
+    item?.column_semantics?.is_root
+    && String(item?.column_semantics?.render_driver || '') === String(renderDriver || '')
+  )) || null;
+}
+
+function resolveManagedColumnModelCode(rootColumn) {
+  const modelCode = String(rootColumn?.model_code || '').trim();
+  if (!modelCode) {
+    throw new Error(`托管栏目根 ${rootColumn?.id || ''} 缺少 model_code 配置`);
+  }
+  return modelCode;
+}
+
+function listManagedColumnItems(rootColumn, { languageCode = null, visibleOnly = true, limit = 10000 } = {}) {
+  if (!rootColumn) {
+    return [];
+  }
+  return listContentItems(resolveManagedColumnModelCode(rootColumn), {
+    visibleOnly,
+    limit,
+    languageCode
+  });
+}
 
 export function buildSitemap({ outputRoot, generatedAt = new Date().toISOString(), languageCode = null } = {}) {
   const site = getSiteConfig(languageCode);
@@ -74,11 +100,11 @@ export function getSitemapDiagnostics({ generatedAt = new Date().toISOString(), 
   const siteUrl = normalizeSiteUrl(site.resolved_web_url || site.web_url);
   const urls = siteUrl ? collectSitemapEntries({ siteUrl, generatedAt, languageCode }) : [];
   const chunks = chunkEntries(urls, SITEMAP_CHUNK_SIZE);
-  const managedItems = listContentItems('product', { visibleOnly: true, limit: 10000, languageCode });
   const columns = listColumns({ languageCode });
+  const managedColumnRoot = getRootColumnByDriver(columns, 'managed_column');
+  const managedItems = listManagedColumnItems(managedColumnRoot, { visibleOnly: true, limit: 10000, languageCode });
   const pageTreeRoot = getRootColumnByDriver(columns, 'page_tree');
   const pageTreeColumns = pageTreeRoot ? listColumnNodesByRoot(pageTreeRoot.id, { languageCode }) : [];
-
   return {
     generated_at: generatedAt,
     site_url: site.resolved_web_url || site.web_url || '',
@@ -118,7 +144,7 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   });
   const managedColumnRoot = getRootColumnByDriver(columns, 'managed_column');
   const managedColumns = managedColumnRoot ? listColumnNodesByRoot(managedColumnRoot.id, { languageCode }) : [];
-  const managedItems = listContentItems('product', { visibleOnly: true, limit: 10000, languageCode });
+  const managedItems = listManagedColumnItems(managedColumnRoot, { visibleOnly: true, limit: 10000, languageCode });
   const sectionEntries = sectionContent.sectionEntries;
   const pageTreeRoot = getRootColumnByDriver(columns, 'page_tree');
   const pageTreeColumns = pageTreeRoot ? listColumnNodesByRoot(pageTreeRoot.id, { languageCode }) : [];
@@ -133,8 +159,8 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
     ?? pageTreeColumns[0]?.id
     ?? null;
 
-  addEntry(entries, siteUrl, '/', generatedAt);
-  addEntry(entries, siteUrl, '/index.html', generatedAt);
+  addEntry(entries, siteUrl, '/', generatedAt, 'home');
+  addEntry(entries, siteUrl, '/index.html', generatedAt, 'home');
 
   for (const column of columns) {
     const routePath = String(column.route_path || '').trim();
@@ -143,17 +169,17 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
       && String(column.column_semantics?.render_driver || '') !== 'page_tree'
       && routePath
     ) {
-      addEntry(entries, siteUrl, normalizeRoutePathForPublic(routePath), column.updated_at || generatedAt);
+      addEntry(entries, siteUrl, normalizeRoutePathForPublic(routePath), column.updated_at || generatedAt, 'single_page');
     }
   }
 
   if (corporationIndexId != null) {
-    addEntry(entries, siteUrl, '/about/index.html', corporationLatestDateById.get(toInteger(corporationIndexId, 0)) || generatedAt);
+    addEntry(entries, siteUrl, '/about/index.html', corporationLatestDateById.get(toInteger(corporationIndexId, 0)) || generatedAt, 'corporation');
   }
   for (const item of pageTreeColumns) {
     const id = toInteger(item.id, 0);
     if (id > 0) {
-      addEntry(entries, siteUrl, `/about/about-${id}.html`, corporationLatestDateById.get(id) || item.updated_at || generatedAt);
+      addEntry(entries, siteUrl, `/about/about-${id}.html`, corporationLatestDateById.get(id) || item.updated_at || generatedAt, 'corporation');
     }
   }
 
@@ -171,6 +197,7 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
       rootTotalRecords: rootEntries.length,
       rootLastmod: resolveLatestDate(rootEntries, generatedAt),
       renderRootAsList: shouldRenderSectionRootAsList(section),
+      pageType: section.sectionType === 'service' ? 'service_list' : 'section_list',
       getItemCount: (columnId) => sectionCountByColumn.get(columnId) || 0,
       getLastmod: (columnId) => latestSectionDateByColumn.get(columnId) || generatedAt
     });
@@ -180,7 +207,13 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
     const columnId = toInteger(item.column_id, 0);
     const section = publicSections.getSectionByColumnId(columnId);
     if (section?.rootColumn) {
-      addEntry(entries, siteUrl, buildContentDetailUrlFromColumn(item, section.rootColumn), item.created_at || generatedAt);
+      addEntry(
+        entries,
+        siteUrl,
+        buildContentDetailUrlFromColumn(item, section.rootColumn),
+        item.created_at || generatedAt,
+        section.sectionType === 'service' ? 'service_detail' : 'section_detail'
+      );
     }
   }
 
@@ -190,12 +223,12 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
       continue;
     }
     const total = managedItemCountByColumn.get(columnNodeId) || 0;
-    const pageCount = Math.max(Math.ceil(total / PRODUCT_LIST_PAGE_SIZE), 1);
+    const pageCount = Math.max(Math.ceil(total / MANAGED_LIST_PAGE_SIZE), 1);
     const lastmod = latestManagedItemDateByColumn.get(columnNodeId) || generatedAt;
-    const publicColumnUrl = buildProductColumnPublicUrl(columnNode, managedColumnMap);
-    addEntry(entries, siteUrl, publicColumnUrl, lastmod);
+    const publicColumnUrl = buildManagedColumnPublicUrl(columnNode, managedColumnMap);
+    addEntry(entries, siteUrl, publicColumnUrl, lastmod, 'managed_content_list');
     for (let pageNumber = 2; pageNumber <= pageCount; pageNumber += 1) {
-      addEntry(entries, siteUrl, `${publicColumnUrl}index-${pageNumber}.html`, lastmod);
+      addEntry(entries, siteUrl, `${publicColumnUrl}index-${pageNumber}.html`, lastmod, 'managed_content_list');
     }
   }
 
@@ -204,18 +237,11 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
     const columnPath = columnNode ? buildColumnSlugPath(columnNode, managedColumnMap) : null;
     const column = columnMap.get(toInteger(managedItem.column_id, 0));
     if (column) {
-      addEntry(entries, siteUrl, buildContentDetailUrlFromColumn(managedItem, column, columnPath), managedItem.updated_at || generatedAt);
+      addEntry(entries, siteUrl, buildContentDetailUrlFromColumn(managedItem, column, columnPath), managedItem.updated_at || generatedAt, 'managed_content_detail');
     }
   }
 
   return Array.from(entries.values());
-}
-
-function getRootColumnByDriver(columns, renderDriver) {
-  return columns.find((item) => (
-    item?.column_semantics?.is_root
-    && String(item?.column_semantics?.render_driver || '') === String(renderDriver || '')
-  )) || null;
 }
 
 function addSectionEntries({
@@ -223,6 +249,7 @@ function addSectionEntries({
   siteUrl,
   section,
   columns,
+  pageType = 'section_list',
   itemsPerPage,
   rootItemsPerPage = itemsPerPage,
   rootTotalRecords = 0,
@@ -237,7 +264,7 @@ function addSectionEntries({
       ? Math.max(Math.ceil(Number(rootTotalRecords || 0) / Math.max(toInteger(rootItemsPerPage, 1), 1)), 1)
       : 1;
     for (const publicPath of buildPaginatedSectionPaths(sectionRootUrl, pageCount, { includeIndexAlias: true })) {
-      addEntry(entries, siteUrl, publicPath, rootLastmod || getLastmod?.(toInteger(section?.rootColumnId, 0)));
+      addEntry(entries, siteUrl, publicPath, rootLastmod || getLastmod?.(toInteger(section?.rootColumnId, 0)), pageType);
     }
   }
 
@@ -248,7 +275,7 @@ function addSectionEntries({
     const lastmod = getLastmod(columnNodeId);
     const columnUrl = buildSectionColumnPublicUrl(section, columnNode);
     for (const publicPath of buildPaginatedSectionPaths(columnUrl, pageCount)) {
-      addEntry(entries, siteUrl, publicPath, lastmod);
+      addEntry(entries, siteUrl, publicPath, lastmod, pageType);
     }
   }
 }
@@ -295,7 +322,7 @@ function resolveLatestDate(items, fallback) {
   }, String(fallback || '')) || fallback;
 }
 
-function addEntry(entries, siteUrl, publicPath, lastmod) {
+function addEntry(entries, siteUrl, publicPath, lastmod, pageType = 'other') {
   const normalizedPath = normalizePublicPath(publicPath);
   const key = normalizedPath.toLowerCase();
   if (!key) {
@@ -304,7 +331,8 @@ function addEntry(entries, siteUrl, publicPath, lastmod) {
 
   entries.set(key, {
     loc: `${siteUrl}${normalizedPath}`,
-    lastmod: toSitemapDate(lastmod)
+    lastmod: toSitemapDate(lastmod),
+    type: String(pageType || 'other')
   });
 }
 
@@ -548,41 +576,12 @@ function buildPageTypeCounts(urls) {
   };
 
   for (const entry of urls) {
-    const url = entry.loc || '';
-    if (url.endsWith('/index.html') || url.endsWith('/')) {
-      if (url.endsWith('/about/index.html')) {
-        counts.corporation += 1;
-      } else if (url.endsWith('/news/index.html') || url.endsWith('/news/')) {
-        counts.section_list += 1;
-      } else if (url.endsWith('/service/index.html') || url.endsWith('/service/')) {
-        counts.service_list += 1;
-      } else if (url.endsWith('/valve/index.html')) {
-        counts.managed_content_list += 1;
-      } else if (url.endsWith('/index.html') || url.endsWith('/')) {
-        counts.home += 1;
-      }
+    const type = String(entry?.type || '').trim();
+    if (Object.prototype.hasOwnProperty.call(counts, type)) {
+      counts[type] += 1;
       continue;
     }
-
-    if (url.includes('/contact.html')) {
-      counts.contact += 1;
-    } else if (url.includes('/about/about-')) {
-      counts.corporation += 1;
-    } else if (url.includes('/news/detail/')) {
-      counts.section_detail += 1;
-    } else if (url.includes('/news/')) {
-      counts.section_list += 1;
-    } else if (url.includes('/service/detail/')) {
-      counts.service_detail += 1;
-    } else if (url.includes('/service/')) {
-      counts.service_list += 1;
-    } else if (url.includes('/product/')) {
-      counts.managed_content_detail += 1;
-    } else if (url.includes('/valve/')) {
-      counts.managed_content_list += 1;
-    } else {
-      counts.single_page += 1;
-    }
+    counts.other += 1;
   }
 
   return counts;

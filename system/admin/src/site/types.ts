@@ -111,11 +111,11 @@ export type ManagedColumnListPageProps = {
 
 export type ManagedColumnDetailPageProps = {
   site: SiteConfig
-  product: ManagedContentSummary & {
+  managedItem: ManagedContentSummary & {
     code?: string | null
     content_html?: string | null
   }
-  relatedProducts: ManagedContentSummary[]
+  relatedManagedItems: ManagedContentSummary[]
 }
 
 export type SectionListPageProps = {
@@ -161,8 +161,8 @@ export type LegacyCommonFragments = {
   bottomHtml?: string
   indexFootHtml?: string
   aboutHtml?: string
-  productsMenuHtml?: string
-  productsMenuCompactHtml?: string
+  managedMenuHtml?: string
+  managedMenuCompactHtml?: string
   aboutCategoryHtml?: string
   newsCategoryHtml?: string
   serviceCategoryHtml?: string
@@ -180,8 +180,8 @@ export type LegacyPageBaseProps = {
 
 export type LegacyHomePageProps = LegacyPageBaseProps & {
   newsIndexHtml: string
-  featuredProductsHtml: string
-  featuredProductLinksHtml: string
+  featuredManagedItemsHtml: string
+  featuredManagedItemLinksHtml: string
   serviceIndexHtml: string
 }
 

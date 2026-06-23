@@ -29,7 +29,7 @@ IGNORE_HOSTS = {
     "yandex.uz",
     "yastatic.net",
 }
-LOCAL_HOSTS = {"localhost", "127.0.0.1", "localhost:3000", "127.0.0.1:3000"}
+LOCAL_HOSTS = {"localhost", "127.0.0.1", "localhost:1231", "127.0.0.1:1231"}
 IGNORED_EXTS = {
     ".jpg",
     ".jpeg",

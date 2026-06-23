@@ -113,7 +113,7 @@ function collectionLeft(props: LegacyPageBaseProps, headingTag: 'h2' | 'span' = 
   return `${heading}
         <div id="LeftMenu" class="ddsmoothmenu-v">
           <ul>
-${props.fragments.productsMenuHtml || ''}
+${props.fragments.managedMenuHtml || ''}
           </ul>
         </div>`
 }
@@ -145,7 +145,7 @@ export function LegacyHomePage(props: LegacyHomePageProps) {
 </div><div class="index-about">
 <h2><span>关于我们</span><a href="/about"><img src="images/more.gif" width="32" height="5" alt="关于我们" /></a></h2>
 <p><img src="images/index_aboutpic.jpg" alt="关于我们" width="145" height="181" />${props.fragments.aboutHtml || ''}</div><div class="index-newproducts"><h2><a href="/valve"><img src="images/more.gif" width="32" height="5" alt="产品" /></a></h2>
-<div class="productsroll"><div id="LeftArr1"></div><div id="RightArr1"></div><ul id="ScrollBox" class="clearfix">${props.featuredProductsHtml}</ul>
+<div class="productsroll"><div id="LeftArr1"></div><div id="RightArr1"></div><ul id="ScrollBox" class="clearfix">${props.featuredManagedItemsHtml}</ul>
 <script language="javascript" type="text/javascript"><!--//--><![CDATA[//><!--
 var scrollPic_01 = new ScrollPic();
 scrollPic_01.scrollContId   = "ScrollBox";
@@ -161,7 +161,7 @@ scrollPic_01.initialize();
 //--><!]]></script> 
 </div></div><div class="index-products">
 <h2><span>产品</span><a href="/valve"><img src="images/more.gif" width="32" height="5" alt="产品" /></a></h2>
-<ul class="clearfix">${props.featuredProductLinksHtml}</ul></div></div>
+<ul class="clearfix">${props.featuredManagedItemLinksHtml}</ul></div></div>
 <div class="index-right"><div class="index-search"><h2><span>站内搜索</span></h2>
 ${legacySearchForm()}</div>
 <div class="index-jobs">
@@ -300,7 +300,7 @@ function articleSidebar(props: LegacyArticleListPageProps | LegacyArticleDetailP
 <table width="165" border="0" align="left" cellpadding="0" cellspacing="0"><tr><td width="5"><img src="/Skin/blue/Images/menu_left.jpg" width="5" height="29" /></td>
 <td width="155" align="center" background="/Skin/blue/Images/menu_bg.jpg" class="F_a Font-Weight">产品分类</td>
 <td width="5"><img src="/Skin/blue/Images/menu_right.jpg" width="5" height="29" /></td></tr><tr><td colspan="3" bgcolor="#F4F4F4" class="Corporation_left">
-${props.fragments.productsMenuHtml || ''}</td></tr></table><DIV style="clear:both;"></DIV><DIV style="PADDING-TOP:3px"></DIV>
+${props.fragments.managedMenuHtml || ''}</td></tr></table><DIV style="clear:both;"></DIV><DIV style="PADDING-TOP:3px"></DIV>
 <table width="165" border="0" align="left" cellpadding="0" cellspacing="0" class="Table_boder"><tr><td width="71" rowspan="3" align="right">
 <img src="../../Skin/blue/Images/service.jpg" width="70" height="130" /></td>
     <td width="81">&nbsp;<A href="/contact-us/" class="0a">业务联系</A></td></tr><tr>

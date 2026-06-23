@@ -48,7 +48,7 @@ export function buildColumnSlugPathFromColumnIdMap(columnId, rowById) {
   return segments;
 }
 
-export function buildProductColumnPublicUrl(column, columnMap = null) {
+export function buildManagedColumnPublicUrl(column, columnMap = null) {
   const explicitRoutePath = String(column?.route_path || '').trim();
   const id = toInteger(column?.id, 0);
   const rootColumn = resolveManagedColumnRoot(column, columnMap);

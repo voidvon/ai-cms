@@ -14,7 +14,7 @@ import {
 } from './section-content.mjs';
 import {
   buildColumnSlugPath,
-  buildProductColumnPublicUrl,
+  buildManagedColumnPublicUrl,
   buildContentDetailUrlFromColumn
 } from './column-paths.mjs';
 
@@ -25,13 +25,174 @@ const LLMS_GROUP_LIMITS = {
   '核心页面': 8,
   '单页栏目': 8,
   '公司栏目': 8,
-  '产品栏目': 18,
-  '产品详情': 12,
+  '托管栏目': 18,
+  '托管内容': 12,
   '新闻栏目': 8,
   '新闻详情': 10,
   '服务栏目': 8,
   '服务详情': 10
 };
+
+function getRootColumnByDriver(columns, renderDriver) {
+  return columns.find((item) => (
+    item?.column_semantics?.is_root
+    && String(item?.column_semantics?.render_driver || '') === String(renderDriver || '')
+  )) || null;
+}
+
+function resolveManagedColumnModelCode(rootColumn) {
+  const modelCode = String(rootColumn?.model_code || '').trim();
+  if (!modelCode) {
+    throw new Error(`托管栏目根 ${rootColumn?.id || ''} 缺少 model_code 配置`);
+  }
+  return modelCode;
+}
+
+function listManagedColumnItems(rootColumn, { languageCode = null, visibleOnly = true, limit = 10000 } = {}) {
+  if (!rootColumn) {
+    return [];
+  }
+  return listContentItems(resolveManagedColumnModelCode(rootColumn), {
+    visibleOnly,
+    limit,
+    languageCode
+  });
+}
+
+function resolveManagedColumnDisplayName(site = null, rootColumn = null) {
+  return toConfiguredText(
+    rootColumn?.name,
+    site?.template_data?.ui?.text?.managedRoot,
+    '托管内容'
+  );
+}
+
+function getLlmsText(site = null) {
+  const llmsUi = site?.template_data?.ui?.llms || {};
+  const managedColumnLabel = resolveManagedColumnDisplayName(site, null);
+  const defaults = {
+    homeSection: '核心页面',
+    singleSection: '单页栏目',
+    companySection: '公司栏目',
+    managedSection: '托管栏目',
+    managedDetailSection: '托管内容',
+    newsSection: '新闻栏目',
+    newsDetailSection: '新闻详情',
+    serviceSection: '服务栏目',
+    serviceDetailSection: '服务详情',
+    siteIndexTitle: '站点内容导览',
+    siteFullTitle: '站点全文上下文',
+    siteHome: '网站首页',
+    singleTreeHome: '单页栏目树首页。',
+    singleTreePage: '单页栏目树页面。',
+    managedHub: managedColumnLabel,
+    managedHubSummary: `${managedColumnLabel}分类导航与列表入口。`,
+    managedCategoryPrefix: `${managedColumnLabel}分类：`,
+    managedDetailPrefix: `${managedColumnLabel}详情：`,
+    sectionCategorySuffix: '栏目',
+    sectionCategoryEntrySuffix: '分类与文章入口。',
+    sectionCategoryPrefix: '',
+    sectionDetailSuffix: '详情',
+    sampleCategories: '示例分类：',
+    sampleItems: '示例内容：',
+    itemModel: '型号：',
+    itemCategory: '分类：',
+    seoTitle: 'SEO 标题：',
+    sourceUrl: 'Source URL: ',
+    generatedAt: '生成时间：',
+    siteUrl: '站点地址：',
+    company: '公司：',
+    contact: '联系方式：',
+    phone: '电话 ',
+    email: '邮箱 ',
+    contactPerson: '联系人 ',
+    address: '地址：',
+    icp: 'ICP备案：',
+    groupOrder: [
+      '核心页面',
+      '单页栏目',
+      '公司栏目',
+      '托管栏目',
+      '托管内容',
+      '新闻栏目',
+      '新闻详情',
+      '服务栏目',
+      '服务详情'
+    ],
+    listSections: ['托管栏目', '新闻栏目', '服务栏目'],
+    detailSections: ['托管内容', '新闻详情', '服务详情'],
+    siteSummary: (baseName) => baseName
+      ? `${baseName} 的公开站点内容导览，包含公司介绍、托管内容、新闻与服务信息。`
+      : '公开站点内容导览，包含公司介绍、托管内容、新闻与服务信息。'
+  };
+
+  return {
+    homeSection: toConfiguredText(llmsUi.homeSection, defaults.homeSection),
+    singleSection: toConfiguredText(llmsUi.singleSection, defaults.singleSection),
+    companySection: toConfiguredText(llmsUi.companySection, defaults.companySection),
+    managedSection: toConfiguredText(llmsUi.managedSection, defaults.managedSection),
+    managedDetailSection: toConfiguredText(llmsUi.managedDetailSection, defaults.managedDetailSection),
+    newsSection: toConfiguredText(llmsUi.newsSection, defaults.newsSection),
+    newsDetailSection: toConfiguredText(llmsUi.newsDetailSection, defaults.newsDetailSection),
+    serviceSection: toConfiguredText(llmsUi.serviceSection, defaults.serviceSection),
+    serviceDetailSection: toConfiguredText(llmsUi.serviceDetailSection, defaults.serviceDetailSection),
+    siteIndexTitle: toConfiguredText(llmsUi.siteIndexTitle, defaults.siteIndexTitle),
+    siteFullTitle: toConfiguredText(llmsUi.siteFullTitle, defaults.siteFullTitle),
+    siteHome: toConfiguredText(llmsUi.siteHome, defaults.siteHome),
+    singleTreeHome: toConfiguredText(llmsUi.singleTreeHome, defaults.singleTreeHome),
+    singleTreePage: toConfiguredText(llmsUi.singleTreePage, defaults.singleTreePage),
+    managedHub: toConfiguredText(llmsUi.managedHub, defaults.managedHub),
+    managedHubSummary: toConfiguredText(llmsUi.managedHubSummary, defaults.managedHubSummary),
+    managedCategoryPrefix: toConfiguredText(llmsUi.managedCategoryPrefix, defaults.managedCategoryPrefix),
+    managedDetailPrefix: toConfiguredText(llmsUi.managedDetailPrefix, defaults.managedDetailPrefix),
+    sectionCategorySuffix: toConfiguredText(llmsUi.sectionCategorySuffix, defaults.sectionCategorySuffix),
+    sectionCategoryEntrySuffix: toConfiguredText(llmsUi.sectionCategoryEntrySuffix, defaults.sectionCategoryEntrySuffix),
+    sectionCategoryPrefix: toConfiguredText(llmsUi.sectionCategoryPrefix, defaults.sectionCategoryPrefix),
+    sectionDetailSuffix: toConfiguredText(llmsUi.sectionDetailSuffix, defaults.sectionDetailSuffix),
+    sampleCategories: toConfiguredText(llmsUi.sampleCategories, defaults.sampleCategories),
+    sampleItems: toConfiguredText(llmsUi.sampleItems, defaults.sampleItems),
+    itemModel: toConfiguredText(llmsUi.itemModel, defaults.itemModel),
+    itemCategory: toConfiguredText(llmsUi.itemCategory, defaults.itemCategory),
+    seoTitle: toConfiguredText(llmsUi.seoTitle, defaults.seoTitle),
+    sourceUrl: toConfiguredText(llmsUi.sourceUrl, defaults.sourceUrl),
+    generatedAt: toConfiguredText(llmsUi.generatedAt, defaults.generatedAt),
+    siteUrl: toConfiguredText(llmsUi.siteUrl, defaults.siteUrl),
+    company: toConfiguredText(llmsUi.company, defaults.company),
+    contact: toConfiguredText(llmsUi.contact, defaults.contact),
+    phone: toConfiguredText(llmsUi.phone, defaults.phone),
+    email: toConfiguredText(llmsUi.email, defaults.email),
+    contactPerson: toConfiguredText(llmsUi.contactPerson, defaults.contactPerson),
+    address: toConfiguredText(llmsUi.address, defaults.address),
+    icp: toConfiguredText(llmsUi.icp, defaults.icp),
+    groupOrder: normalizeConfiguredTextArray(llmsUi.groupOrder, defaults.groupOrder),
+    listSections: normalizeConfiguredTextArray(llmsUi.listSections, defaults.listSections),
+    detailSections: normalizeConfiguredTextArray(llmsUi.detailSections, defaults.detailSections),
+    siteSummary: (baseName) => {
+      const template = toConfiguredText(llmsUi.siteSummaryTemplate, '');
+      if (template) {
+        return template.replaceAll('{siteName}', baseName || '');
+      }
+      return defaults.siteSummary(baseName);
+    }
+  };
+}
+
+function toConfiguredText(value, fallback = '') {
+  const normalized = String(value || '').trim();
+  return normalized || String(fallback || '');
+}
+
+function normalizeConfiguredTextArray(value, fallback = []) {
+  if (Array.isArray(value)) {
+    const items = value
+      .map((item) => String(item || '').trim())
+      .filter(Boolean);
+    if (items.length > 0) {
+      return items;
+    }
+  }
+  return Array.isArray(fallback) ? fallback.slice() : [];
+}
 
 export function buildLlmsFiles({ outputRoot, generatedAt = new Date().toISOString(), languageCode = null } = {}) {
   const diagnostics = getLlmsDiagnostics({ generatedAt, languageCode });
@@ -74,14 +235,15 @@ export function buildLlmsFiles({ outputRoot, generatedAt = new Date().toISOStrin
 
 export function getLlmsDiagnostics({ generatedAt = new Date().toISOString(), languageCode = null } = {}) {
   const site = getSiteConfig(languageCode);
+  const text = getLlmsText(site);
   const siteUrl = normalizeSiteUrl(site.resolved_web_url || site.web_url);
-  const result = siteUrl ? collectMarkdownPages({ site, siteUrl, languageCode }) : { pages: [], publicSections: null };
+  const result = siteUrl ? collectMarkdownPages({ site, siteUrl, languageCode, text }) : { pages: [], publicSections: null };
   const pages = result.pages || [];
   const publicSections = result.publicSections;
-  const llmsGroups = buildLlmsGroups(pages);
-  const llmsIndexGroups = buildLlmsIndexGroups(llmsGroups);
-  const llmsTxt = siteUrl ? renderLlmsTxt({ site, siteUrl, groups: llmsIndexGroups }) : '';
-  const llmsFullTxt = siteUrl ? renderLlmsFullTxt({ site, siteUrl, pages, generatedAt }) : '';
+  const llmsGroups = buildLlmsGroups(pages, text);
+  const llmsIndexGroups = buildLlmsIndexGroups(llmsGroups, text);
+  const llmsTxt = siteUrl ? renderLlmsTxt({ site, siteUrl, groups: llmsIndexGroups, text }) : '';
+  const llmsFullTxt = siteUrl ? renderLlmsFullTxt({ site, siteUrl, pages, generatedAt, text }) : '';
   const warnings = buildWarnings({ site, siteUrl, pages });
 
   return {
@@ -110,7 +272,7 @@ export function getLlmsDiagnostics({ generatedAt = new Date().toISOString(), lan
   };
 }
 
-function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
+function collectMarkdownPages({ site, siteUrl, languageCode = null, text }) {
   ensureContentItemsSchema();
   ensureColumnsSchema();
 
@@ -126,9 +288,14 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   const managedColumnRoot = getRootColumnByDriver(columns, 'managed_column');
   const pageTreeRoot = getRootColumnByDriver(columns, 'page_tree');
   const managedColumns = managedColumnRoot ? listColumnNodesByRoot(managedColumnRoot.id, { languageCode }) : [];
-  const managedItems = listContentItems('product', { visibleOnly: true, limit: 10000, languageCode });
+  const managedItems = listManagedColumnItems(managedColumnRoot, { visibleOnly: true, limit: 10000, languageCode });
   const sectionEntries = sectionContent.sectionEntries;
   const pageTreeCategories = pageTreeRoot ? listColumnNodesByRoot(pageTreeRoot.id, { languageCode }) : [];
+  const managedColumnLabel = resolveManagedColumnDisplayName(site, managedColumnRoot);
+  const managedHubTitle = toConfiguredText(text.managedHub, managedColumnLabel);
+  const managedHubSummary = toConfiguredText(text.managedHubSummary, `${managedColumnLabel}分类导航与列表入口。`);
+  const managedCategoryPrefix = toConfiguredText(text.managedCategoryPrefix, `${managedColumnLabel}分类：`);
+  const managedDetailPrefix = toConfiguredText(text.managedDetailPrefix, `${managedColumnLabel}详情：`);
 
   const managedColumnsById = new Map(managedColumns.map((item) => [toInteger(item.id, 0), item]));
   const sectionCategoriesById = sectionContent.sectionCategoryById;
@@ -136,14 +303,14 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   const pages = [];
 
   pages.push(createPage({
-    title: site.web_name || site.company_name || '网站首页',
+    title: site.web_name || site.company_name || text.siteHome,
     routePath: '/index.html',
-    section: '核心页面',
-    summary: buildSiteSummary(site),
+    section: text.homeSection,
+    summary: buildSiteSummary(site, text),
     contentLines: [
-      buildContactFact(site),
-      buildAddressFact(site),
-      buildCompanyFact(site)
+      buildContactFact(site, text),
+      buildAddressFact(site, text),
+      buildCompanyFact(site, text)
     ].filter(Boolean)
   }));
 
@@ -157,10 +324,10 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
       pages.push(createPage({
         title: column.name,
         routePath: normalizeRoutePathForPublic(routePath),
-        section: '单页栏目',
+        section: text.singleSection,
         summary: column.seo_description || extractPlainText(column.content_html),
         contentLines: [
-          column.seo_title ? `SEO 标题：${column.seo_title}` : '',
+          column.seo_title ? `${text.seoTitle}${column.seo_title}` : '',
           extractPlainText(column.content_html)
         ].filter(Boolean)
       }));
@@ -173,8 +340,8 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     pages.push(createPage({
       title: pageTreeIndex.name,
       routePath: '/about/index.html',
-      section: '公司栏目',
-      summary: extractPlainText(pageTreeIndex.content_html) || '单页栏目树首页。',
+      section: text.companySection,
+      summary: extractPlainText(pageTreeIndex.content_html) || text.singleTreeHome,
       contentLines: [extractPlainText(pageTreeIndex.content_html)].filter(Boolean)
     }));
   }
@@ -186,18 +353,22 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     pages.push(createPage({
       title: item.name,
       routePath: `/about/about-${item.id}.html`,
-      section: '公司栏目',
-      summary: extractPlainText(item.content_html) || '单页栏目树页面。',
+      section: text.companySection,
+      summary: extractPlainText(item.content_html) || text.singleTreePage,
       contentLines: [extractPlainText(item.content_html)].filter(Boolean)
     }));
   }
 
+  const managedRootRoutePath = managedColumnRoot
+    ? buildManagedColumnPublicUrl(managedColumnRoot, managedColumnsById)
+    : '/';
+
   pages.push(createPage({
-    title: '产品中心',
-    routePath: '/products/',
-    section: '产品栏目',
-    summary: '产品分类导航与产品列表入口。',
-    contentLines: buildColumnSampleLines(managedColumns)
+    title: managedHubTitle,
+    routePath: managedRootRoutePath,
+    section: text.managedSection,
+    summary: managedHubSummary,
+    contentLines: buildColumnSampleLines(managedColumns, text)
   }));
 
   for (const columnNode of managedColumns) {
@@ -206,12 +377,12 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     const columnItems = managedItems.filter((item) => toInteger(item.column_id, 0) === columnNodeId).slice(0, MAX_LIST_SAMPLE_ITEMS);
     pages.push(createPage({
       title: columnNode.name,
-      routePath: buildProductColumnPublicUrl(columnNode, managedColumnsById),
-      section: '产品栏目',
-      summary: columnNode.seo_description || `产品分类：${columnNode.name}`,
+      routePath: buildManagedColumnPublicUrl(columnNode, managedColumnsById),
+      section: text.managedSection,
+      summary: columnNode.seo_description || `${managedCategoryPrefix}${columnNode.name}`,
       contentLines: [
-        childColumns.length > 0 ? `下级分类：${childColumns.map((item) => item.name).join('、')}` : '',
-        columnItems.length > 0 ? `示例内容：${columnItems.map((item) => item.name).join('、')}` : ''
+        childColumns.length > 0 ? `${text.sampleCategories}${childColumns.map((item) => item.name).join('、')}` : '',
+        columnItems.length > 0 ? `${text.sampleItems}${columnItems.map((item) => item.name).join('、')}` : ''
       ].filter(Boolean)
     }));
   }
@@ -225,11 +396,11 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     pages.push(createPage({
       title: managedItem.name,
       routePath: buildContentDetailUrlFromColumn(managedItem, column, columnPath),
-      section: '产品详情',
-      summary: managedItem.summary || `产品详情：${managedItem.name}`,
+      section: text.managedDetailSection,
+      summary: managedItem.summary || `${managedDetailPrefix}${managedItem.name}`,
       contentLines: [
-        managedItem.code ? `型号：${managedItem.code}` : '',
-        columnNode?.name ? `分类：${columnNode.name}` : '',
+        managedItem.code ? `${text.itemModel}${managedItem.code}` : '',
+        columnNode?.name ? `${text.itemCategory}${columnNode.name}` : '',
         extractPlainText(managedItem.content_html)
       ].filter(Boolean)
     }));
@@ -243,9 +414,9 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     pages.push(createPage({
       title: section.sectionLabel,
       routePath: sectionRootUrl.endsWith('/') ? `${sectionRootUrl}index.html` : sectionRootUrl,
-      section: `${section.sectionLabel}栏目`,
-      summary: `${section.sectionLabel}分类与文章入口。`,
-      contentLines: buildColumnSampleLines(rootColumns)
+      section: `${section.sectionLabel}${text.sectionCategorySuffix}`,
+      summary: `${section.sectionLabel}${text.sectionCategoryEntrySuffix}`,
+      contentLines: buildColumnSampleLines(rootColumns, text)
     }));
 
     for (const columnNode of rootColumns) {
@@ -255,9 +426,9 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
       pages.push(createPage({
         title: columnNode.name,
         routePath: buildSectionColumnPublicUrl(section, columnNode),
-        section: `${section.sectionLabel}栏目`,
-        summary: `${section.sectionLabel}分类：${columnNode.name}`,
-        contentLines: items.length > 0 ? [`示例文章：${items.map((item) => item.title).join('、')}`] : []
+        section: `${section.sectionLabel}${text.sectionCategorySuffix}`,
+        summary: `${section.sectionLabel}${text.sectionCategoryPrefix}${columnNode.name}`,
+        contentLines: items.length > 0 ? [`${text.sampleItems}${items.map((item) => item.title).join('、')}`] : []
       }));
     }
   }
@@ -273,10 +444,10 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
     pages.push(createPage({
       title: item.title,
       routePath: buildContentDetailUrlFromColumn(item, section.rootColumn),
-      section: `${section.sectionLabel}详情`,
+      section: `${section.sectionLabel}${text.sectionDetailSuffix}`,
       summary: item.summary || item.title,
       contentLines: [
-        columnNode?.name ? `分类：${columnNode.name}` : '',
+        columnNode?.name ? `${text.itemCategory}${columnNode.name}` : '',
         extractPlainText(item.content_html)
       ].filter(Boolean)
     }));
@@ -288,18 +459,8 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null }) {
   };
 }
 
-function buildLlmsGroups(pages) {
-  const sectionOrder = [
-    '核心页面',
-    '单页栏目',
-    '公司栏目',
-    '产品栏目',
-    '产品详情',
-    '新闻栏目',
-    '新闻详情',
-    '服务栏目',
-    '服务详情'
-  ];
+function buildLlmsGroups(pages, text) {
+  const sectionOrder = Array.isArray(text?.groupOrder) ? text.groupOrder : [];
   const groups = new Map();
 
   for (const section of sectionOrder) {
@@ -318,13 +479,13 @@ function buildLlmsGroups(pages) {
     .filter((group) => group.items.length > 0);
 }
 
-function renderLlmsTxt({ site, siteUrl, groups }) {
+function renderLlmsTxt({ site, siteUrl, groups, text }) {
   const lines = [
-    `# ${site.web_name || site.company_name || '站点内容导览'}`,
-    `> ${buildSiteSummary(site)}`
+    `# ${site.web_name || site.company_name || text.siteIndexTitle}`,
+    `> ${buildSiteSummary(site, text)}`
   ];
 
-  const facts = buildSiteFactLines(site);
+  const facts = buildSiteFactLines(site, text);
   if (facts.length > 0) {
     lines.push('', ...facts.map((item) => `- ${item}`));
   }
@@ -339,12 +500,12 @@ function renderLlmsTxt({ site, siteUrl, groups }) {
   return lines.join('\n');
 }
 
-function renderLlmsFullTxt({ site, siteUrl, pages, generatedAt }) {
+function renderLlmsFullTxt({ site, siteUrl, pages, generatedAt, text }) {
   const limitedPages = pages.slice(0, MAX_FULL_TEXT_PAGES);
   const lines = [
-    `# ${site.web_name || site.company_name || '站点全文上下文'}`,
-    `> 生成时间：${generatedAt}`,
-    `> 站点地址：${siteUrl}`,
+    `# ${site.web_name || site.company_name || text.siteFullTitle}`,
+    `> ${text.generatedAt}${generatedAt}`,
+    `> ${text.siteUrl}${siteUrl}`,
     ''
   ];
 
@@ -440,74 +601,64 @@ function finalizePage({ page, siteUrl }) {
   };
 }
 
-function getRootColumnByDriver(columns, renderDriver) {
-  return columns.find((item) => (
-    item?.column_semantics?.is_root
-    && String(item?.column_semantics?.render_driver || '') === String(renderDriver || '')
-  )) || null;
-}
-
-function buildSiteSummary(site) {
+function buildSiteSummary(site, text) {
   const webName = toNullableString(site.web_name);
   const companyName = toNullableString(site.company_name);
   const baseName = webName || companyName;
-  if (baseName) {
-    return `${baseName} 的公开站点内容导览，包含公司介绍、产品、新闻与服务信息。`;
-  }
-  return '公开站点内容导览，包含公司介绍、产品、新闻与服务信息。';
+  return text.siteSummary(baseName);
 }
 
-function buildSiteFactLines(site) {
+function buildSiteFactLines(site, text) {
   return [
-    buildCompanyFact(site),
-    buildContactFact(site),
-    buildAddressFact(site),
-    site.icp_number ? `ICP备案：${site.icp_number}` : ''
+    buildCompanyFact(site, text),
+    buildContactFact(site, text),
+    buildAddressFact(site, text),
+    site.icp_number ? `${text.icp}${site.icp_number}` : ''
   ].filter(Boolean);
 }
 
-function buildCompanyFact(site) {
-  return site.company_name ? `公司：${site.company_name}` : '';
+function buildCompanyFact(site, text) {
+  return site.company_name ? `${text.company}${site.company_name}` : '';
 }
 
-function buildContactFact(site) {
+function buildContactFact(site, text) {
   const contactParts = [
-    site.company_phone ? `电话 ${site.company_phone}` : '',
-    site.company_email ? `邮箱 ${site.company_email}` : '',
-    site.contact_person ? `联系人 ${site.contact_person}` : ''
+    site.company_phone ? `${text.phone}${site.company_phone}` : '',
+    site.company_email ? `${text.email}${site.company_email}` : '',
+    site.contact_person ? `${text.contactPerson}${site.contact_person}` : ''
   ].filter(Boolean);
-  return contactParts.length > 0 ? `联系方式：${contactParts.join('，')}` : '';
+  return contactParts.length > 0 ? `${text.contact}${contactParts.join('，')}` : '';
 }
 
-function buildAddressFact(site) {
-  return site.company_address ? `地址：${site.company_address}` : '';
+function buildAddressFact(site, text) {
+  return site.company_address ? `${text.address}${site.company_address}` : '';
 }
 
-function buildColumnSampleLines(columns) {
+function buildColumnSampleLines(columns, text) {
   const names = columns.slice(0, MAX_LIST_SAMPLE_ITEMS).map((item) => item.name).filter(Boolean);
-  return names.length > 0 ? [`示例分类：${names.join('、')}`] : [];
+  return names.length > 0 ? [`${text.sampleCategories}${names.join('、')}`] : [];
 }
 
-function buildLlmsIndexGroups(groups) {
+function buildLlmsIndexGroups(groups, text) {
   return groups
     .map((group) => ({
       title: group.title,
-      items: selectLlmsGroupItems(group.title, group.items)
+      items: selectLlmsGroupItems(group.title, group.items, text)
     }))
     .filter((group) => group.items.length > 0);
 }
 
-function selectLlmsGroupItems(title, items) {
+function selectLlmsGroupItems(title, items, text) {
   const limit = LLMS_GROUP_LIMITS[title] || 8;
   if (items.length <= limit) {
     return items;
   }
 
-  if (title === '产品栏目' || title === '新闻栏目' || title === '服务栏目') {
+  if ((text?.listSections || []).includes(title)) {
     return prioritizeListPages(items, limit);
   }
 
-  if (title === '产品详情' || title === '新闻详情' || title === '服务详情') {
+  if ((text?.detailSections || []).includes(title)) {
     return prioritizeDetailPages(items, limit);
   }
 
@@ -521,7 +672,7 @@ function prioritizeListPages(items, limit) {
   for (const item of items) {
     if (
       item.route_path.endsWith('/index.html')
-      || /^\/(?:valve|news|service)\/\d+\.html$/i.test(item.route_path)
+      || /^\/(?:products|news|services)\/\d+\.html$/i.test(item.route_path)
     ) {
       topLevelEntries.push(item);
     } else {
@@ -604,7 +755,13 @@ function dedupePages(items) {
 function cleanupExistingLlmsFiles(outputRoot, publicSections) {
   const rootFiles = ['llms.txt', 'llms-full.txt', 'index.md', 'contact.md'];
   const newsSectionDirs = publicSections?.sections?.map((section) => section.dirName) || [];
-  const managedDirs = ['about', 'valve', 'product', ...newsSectionDirs];
+  const managedDirs = ['about', ...newsSectionDirs];
+  const managedRootDir = publicSections?.managedRootColumnId
+    ? String(publicSections.allById?.get(publicSections.managedRootColumnId)?.route_path || '').replace(/^\/+|\/+$/g, '')
+    : '';
+  if (managedRootDir) {
+    managedDirs.push(managedRootDir);
+  }
 
   for (const relativePath of rootFiles) {
     const filePath = path.resolve(outputRoot, relativePath);

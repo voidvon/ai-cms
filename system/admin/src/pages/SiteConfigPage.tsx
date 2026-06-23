@@ -375,6 +375,16 @@ export default function SiteConfigPage() {
                     rows={3}
                   />
                 </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="template_data_json">全站 UI JSON</Label>
+                  <Textarea
+                    id="template_data_json"
+                    value={currentTranslation.template_data_json || ''}
+                    onChange={(e) => updateTranslation({ template_data_json: e.target.value })}
+                    placeholder='例如：{"ui":{"nav":{"homeLabel":"Home"}}}'
+                    rows={8}
+                  />
+                </div>
               </div>
             </div>
 
@@ -416,6 +426,7 @@ function createEmptyTranslation(patch: Partial<SiteConfigTranslation> = {}): Sit
     seo_default_description: '',
     seo_home_title: '',
     seo_home_description: '',
+    template_data_json: '',
     ...patch,
   }
 }

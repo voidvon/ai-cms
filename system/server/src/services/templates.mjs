@@ -608,6 +608,9 @@ export function deleteTemplate(id) {
   if (dependencyInfo.bindings.length > 0) {
     throw new Error('模板已绑定到分类或站点，不能删除，请先取消模板绑定');
   }
+  if (existing.type === 'home') {
+    throw new Error('特殊模板不能删除');
+  }
   detachTemplateFromAllThemeVariants(existing);
   execute('DELETE FROM templates WHERE id = ?', [id]);
   return existing;
@@ -889,39 +892,47 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       ...props,
       currentPage: { type: 'home', title: '首页', url: '/index.html' },
       secondaryMenuItems: buildPreviewRootColumnMenuItems(),
-      newsIndexHtml: buildPreviewSectionEntryLinks('/news/detail', 10),
-      featuredProductsHtml: buildPreviewManagedContentCardsHtml(),
-      featuredProductLinksHtml: buildPreviewManagedContentLinksHtml(),
-      serviceIndexHtml: buildPreviewSectionEntryLinks('/service/detail', 10)
+      newsIndexHtml: '',
+      featuredManagedItemsHtml: buildPreviewManagedContentCardsHtml(),
+      featuredManagedItemLinksHtml: buildPreviewManagedContentLinksHtml(),
+      serviceIndexHtml: ''
     };
   }
 
-  if (effectiveMode === 'column-list') {
-    const managedRootColumn = getPreviewRootColumnByDriver('managed_column');
+  if (effectiveMode === 'list') {
+    const managedRootColumn = getPreviewManagedRootColumn();
+    const managedRootUrl = getPreviewManagedRootPublicUrl(managedRootColumn);
+    const managedRootLabel = getPreviewManagedRootLabel(managedRootColumn);
     const columnNode = getPreviewColumnNode({
       rootColumn: managedRootColumn,
       fallbackName: '示例列表栏目'
     });
-    const managedContentItems = getPreviewManagedContentItems(8);
+    const managedContentItems = getPreviewManagedContentItems(8, managedRootColumn);
+    const pagination = buildPreviewPaginationData(buildPreviewColumnUrl(columnNode), {
+      pageNumber: 2,
+      pageCount: 8,
+      totalRecords: 108,
+      pageSize: 14
+    });
     return {
       ...props,
       ...buildPreviewPageContext({
-        pageType: 'column-list',
+        pageType: 'list',
         title: columnNode.name,
-        url: `/valve/${columnNode.id}.html`,
-        section: { type: 'product', name: '产品', url: '/valve/' },
+        url: buildPreviewColumnUrl(columnNode),
+        section: { type: 'managed-column', name: managedRootLabel, url: managedRootUrl },
         column: columnNode,
         content: null
       }),
       smallName: columnNode.name,
-      primaryMenuItems: buildPreviewPrimaryMenuItems('product'),
+      primaryMenuItems: buildPreviewPrimaryMenuItems(managedRootUrl),
       bigId: columnNode.parent_id || columnNode.id,
       bigName: columnNode.name,
-      collectionCategoryHtml: `<span class="abv">【<a href="/valve/${columnNode.id}.html">${escapeHtml(columnNode.name)}</a>】</span>`,
+      collectionCategoryHtml: `<span class="abv">【<a href="${escapeHtml(buildPreviewColumnUrl(columnNode))}">${escapeHtml(columnNode.name)}</a>】</span>`,
       secondaryMenuItems: buildPreviewColumnMenuItems({
         rootColumn: managedRootColumn,
         column: columnNode,
-        baseUrl: '/valve/'
+        baseUrl: managedRootUrl
       }),
       items: managedContentItems.map((item) => ({
         id: item.id,
@@ -930,13 +941,17 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         image: normalizeUploadedRelativePath(String(item.primary_image || '').trim()),
         summary: item.summary || ''
       })),
-      pagerHtml: '<div class="page_list">共 8 条信息 1/1 页</div>'
+      pagerHtml: '',
+      pagination: pagination.pagination,
+      pagerText: pagination.pagerText
     };
   }
 
-  if (effectiveMode === 'content-detail') {
-    const managedContentItem = getPreviewManagedContentItem();
-    const managedRootColumn = getPreviewRootColumnByDriver('managed_column');
+  if (effectiveMode === 'content') {
+    const managedRootColumn = getPreviewManagedRootColumn();
+    const managedRootUrl = getPreviewManagedRootPublicUrl(managedRootColumn);
+    const managedRootLabel = getPreviewManagedRootLabel(managedRootColumn);
+    const managedContentItem = getPreviewManagedContentItem(managedRootColumn);
     const columnNode = getPreviewColumnNode({
       rootColumn: managedRootColumn,
       id: managedContentItem.column_id,
@@ -946,126 +961,32 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
     return {
       ...props,
       ...buildPreviewPageContext({
-        pageType: 'content-detail',
+        pageType: 'content',
         title: managedContentItem.name,
         url: managedContentUrl,
-        section: { type: 'product', name: '产品', url: '/valve/' },
+        section: { type: 'managed-column', name: managedRootLabel, url: managedRootUrl },
         column: columnNode,
-        content: { id: managedContentItem.id, title: managedContentItem.name, name: managedContentItem.name, type: 'product', url: managedContentUrl }
+        content: { id: managedContentItem.id, title: managedContentItem.name, name: managedContentItem.name, type: 'managed-content', url: managedContentUrl }
       }),
       title: managedContentItem.name,
-      primaryMenuItems: buildPreviewPrimaryMenuItems('product'),
+      primaryMenuItems: buildPreviewPrimaryMenuItems(managedRootUrl),
       itemDescription: managedContentItem.summary || '',
       image: normalizeUploadedRelativePath(String(managedContentItem.primary_image || '').trim()),
       code: managedContentItem.code || '',
-      relatedItemsHtml: buildPreviewManagedContentLinksHtml(4),
+      relatedItemsHtml: buildPreviewManagedContentLinksHtml(4, managedRootColumn),
       bodyHtml: managedContentItem.content_html || managedContentItem.summary || '',
       secondaryMenuItems: buildPreviewColumnMenuItems({
         rootColumn: managedRootColumn,
         column: columnNode,
-        baseUrl: '/valve/'
+        baseUrl: managedRootUrl
       })
     };
   }
 
-  if (effectiveMode === 'section-list' || effectiveMode === 'knowledge-list') {
-    const sectionConfig = buildPreviewSectionConfig(effectiveMode, template);
-    const previewSection = resolvePreviewSectionData(sectionConfig);
-    const columnNode = getPreviewColumnNode({
-      rootColumnId: sectionConfig.rootId,
-      id: previewSection.rootColumns[0]?.id || null,
-      fallbackName: '示例信息栏目'
-    });
-    const sectionEntries = previewSection.entries.slice(0, 6);
-    const columnUrl = buildPreviewSectionColumnUrl(sectionConfig, columnNode);
-    return {
-      ...props,
-      ...buildPreviewPageContext({
-        pageType: sectionConfig.pageType,
-        title: columnNode.name,
-        url: columnUrl,
-        section: { type: sectionConfig.sectionType, name: sectionConfig.sectionLabel, url: `/${sectionConfig.sectionDir}/` },
-        column: columnNode,
-        content: null
-      }),
-      section: sectionConfig.sectionType,
-      primaryMenuItems: buildPreviewPrimaryMenuItems(sectionConfig.sectionType),
-      sectionDir: sectionConfig.sectionDir,
-      sectionLabel: sectionConfig.sectionLabel,
-      sectionCategoryHtml: `<a href="${columnUrl}">${escapeHtml(columnNode.name)}</a>`,
-      secondaryMenuItems: buildPreviewColumnMenuItems({
-        rootColumnId: sectionConfig.rootId,
-        dirName: sectionConfig.sectionDir,
-        section: sectionConfig.section || null,
-        activeId: columnNode.id,
-        fallbackName: '示例分类'
-      }),
-      columnId: columnNode.id,
-      title: columnNode.name,
-      items: sectionEntries.map((item) => ({
-        id: item.id,
-        title: item.title || '',
-        url: `detail/${item.id}.html`,
-        date: formatPreviewDate(item.created_at),
-        summary: item.summary || '',
-        summaryClassName: 'Font_000000_a'
-      })),
-      pagerHtml: '<div class="page_list">共 6 条信息 1/1 页</div>'
-    };
-  }
-
-  if (effectiveMode === 'section-detail' || effectiveMode === 'knowledge-detail') {
-    const sectionConfig = buildPreviewSectionConfig(effectiveMode, template);
-    const sectionEntry = getPreviewSectionEntry(sectionConfig);
-    const columnNode = getPreviewColumnNode({
-      rootColumnId: sectionConfig.rootId,
-      id: sectionEntry.column_id,
-      fallbackName: '示例信息栏目'
-    });
-    const columnUrl = buildPreviewSectionColumnUrl(sectionConfig, columnNode);
-    return {
-      ...props,
-      ...buildPreviewPageContext({
-        pageType: sectionConfig.detailPageType,
-        title: sectionEntry.title,
-        url: `/${sectionConfig.sectionDir}/detail/${sectionEntry.id}.html`,
-        section: { type: sectionConfig.sectionType, name: sectionConfig.sectionLabel, url: `/${sectionConfig.sectionDir}/` },
-        column: columnNode,
-        content: {
-          id: sectionEntry.id,
-          title: sectionEntry.title,
-          name: sectionEntry.title,
-          type: sectionConfig.contentType,
-          url: `/${sectionConfig.sectionDir}/detail/${sectionEntry.id}.html`
-        }
-      }),
-      section: sectionConfig.sectionType,
-      primaryMenuItems: buildPreviewPrimaryMenuItems(sectionConfig.sectionType),
-      sectionDir: sectionConfig.sectionDir,
-      sectionLabel: sectionConfig.sectionLabel,
-      sectionCategoryHtml: `<a href="${columnUrl}">${escapeHtml(columnNode.name)}</a>`,
-      secondaryMenuItems: buildPreviewColumnMenuItems({
-        rootColumnId: sectionConfig.rootId,
-        dirName: sectionConfig.sectionDir,
-        section: sectionConfig.section || null,
-        activeId: columnNode.id,
-        fallbackName: '示例分类'
-      }),
-      title: sectionEntry.title,
-      itemDescription: sectionEntry.summary || '',
-      columnId: sectionEntry.column_id || columnNode.id,
-      columnName: columnNode.name,
-      bodyHtml: sectionEntry.content_html || sectionEntry.summary || '',
-      previousHtml: '<span class="Font_2e4690_a">没有上一篇</span>',
-      nextHtml: '<span class="Font_2e4690_a">没有下一篇</span>'
-    };
-  }
-
-  if (effectiveMode === 'single-page') {
+  if (effectiveMode === 'single') {
     const pageTreeRootColumn = template.type === 'single'
       ? getPreviewRootColumnByDriver('single_page')
       : getPreviewRootColumnByDriver('page_tree');
-    const pageUrlPrefix = template.type === 'single' ? '/example-page.html' : '/about/about-';
     const columnNode = getPreviewColumnNode({
       rootColumn: pageTreeRootColumn,
       fallbackName: '示例单页栏目',
@@ -1098,121 +1019,43 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
     };
   }
 
-  if (effectiveMode === 'contact-page') {
-    return {
-      ...props,
-      ...buildPreviewPageContext({
-        pageType: 'contact',
-        title: '联系我们',
-        url: '/contact-us/',
-        section: { type: 'content', name: '联系我们', url: '/contact-us/' },
-        column: null,
-        content: null
-      }),
-      primaryMenuItems: buildPreviewPrimaryMenuItems('contact'),
-      contactTableHtml: '<table><tr><td>电话</td><td>021-00000000</td></tr><tr><td>地址</td><td>示例地址</td></tr></table>'
-    };
-  }
-
   return props;
 }
 
 function inferPreviewMode(template) {
-  const previewFamily = resolveTemplatePreviewFamily(template);
   if (template.type === 'home') {
     return 'home';
   }
-  if (previewFamily === 'managed-list') {
-    return 'column-list';
-  }
-  if (previewFamily === 'section-list') {
-    return 'section-list';
-  }
-  if (previewFamily === 'knowledge-list') {
-    return 'knowledge-list';
-  }
-  if (previewFamily === 'managed-detail') {
-    return 'content-detail';
-  }
-  if (previewFamily === 'section-detail') {
-    return 'section-detail';
-  }
-  if (previewFamily === 'knowledge-detail') {
-    return 'knowledge-detail';
-  }
-  if (previewFamily === 'contact') {
-    return 'contact-page';
-  }
-  if (template.type === 'single') {
-    return 'single-page';
+  if (template.type === 'list') {
+    return 'list';
   }
   if (template.type === 'content') {
-    return 'single-page';
+    return 'content';
+  }
+  if (template.type === 'single') {
+    return 'single';
   }
   return 'generic';
-}
-
-function resolveTemplatePreviewFamily(template) {
-  const code = String(template?.code || '').toLowerCase();
-  const type = String(template?.type || '').toLowerCase();
-
-  if (type === 'list') {
-    if (matchesTemplateCode(code, ['list_product'], ['product'])) {
-      return 'managed-list';
-    }
-    if (matchesTemplateCode(code, ['list_article'], ['service'])) {
-      return 'knowledge-list';
-    }
-    if (matchesTemplateCode(code, ['list_article'], ['article', 'news'])) {
-      return 'section-list';
-    }
-  }
-
-  if (type === 'content') {
-    if (matchesTemplateCode(code, ['content_product'], ['product'])) {
-      return 'managed-detail';
-    }
-    if (matchesTemplateCode(code, ['content_article'], ['service'])) {
-      return 'knowledge-detail';
-    }
-    if (matchesTemplateCode(code, ['content_article'], ['article', 'news'])) {
-      return 'section-detail';
-    }
-    if (matchesTemplateCode(code, ['content_contact'], ['contact'])) {
-      return 'contact';
-    }
-  }
-
-  if (matchesTemplateCode(code, ['content_contact'], ['contact'])) {
-    return 'contact';
-  }
-
-  return 'generic';
-}
-
-function matchesTemplateCode(code, exactCodes = [], includeTokens = []) {
-  const normalizedCode = String(code || '').toLowerCase();
-  if (!normalizedCode) {
-    return false;
-  }
-  if (exactCodes.some((item) => normalizedCode === String(item || '').toLowerCase())) {
-    return true;
-  }
-  return includeTokens.some((token) => normalizedCode.includes(String(token || '').toLowerCase()));
 }
 
 function normalizePreviewMode(value) {
   const mode = String(value || 'auto').trim();
   const legacyToGenericMap = new Map([
-    ['product-list', 'column-list'],
-    ['product-detail', 'content-detail'],
-    ['article-list', 'section-list'],
-    ['article-detail', 'section-detail'],
-    ['service-list', 'knowledge-list'],
-    ['service-detail', 'knowledge-detail'],
-    ['content', 'single-page'],
-    ['single', 'single-page'],
-    ['contact', 'contact-page']
+    ['product-list', 'list'],
+    ['column-list', 'list'],
+    ['article-list', 'list'],
+    ['section-list', 'list'],
+    ['service-list', 'list'],
+    ['knowledge-list', 'list'],
+    ['product-detail', 'content'],
+    ['content-detail', 'content'],
+    ['article-detail', 'content'],
+    ['section-detail', 'content'],
+    ['service-detail', 'content'],
+    ['knowledge-detail', 'content'],
+    ['contact', 'single'],
+    ['contact-page', 'single'],
+    ['single-page', 'single']
   ]);
   return legacyToGenericMap.get(mode) || mode || 'auto';
 }
@@ -1255,22 +1098,57 @@ function buildPreviewPageContext({ pageType, title, url, section, column, conten
   };
 }
 
-function getPreviewManagedContentItem() {
-  return listContentItems('product', { visibleOnly: false, limit: 1 })[0] || {
+function getPreviewManagedRootColumn() {
+  return getPreviewRootColumnByDriver('managed_column');
+}
+
+function getPreviewManagedRootPublicUrl(rootColumn = null) {
+  const routePath = String(rootColumn?.route_path || '').trim();
+  if (!routePath) {
+    const firstPublicUrl = buildPreviewSiteColumns().find((item) => String(item?.url || '').trim())?.url || '/example-list/';
+    return normalizePreviewDirectoryUrl(firstPublicUrl);
+  }
+  return normalizePreviewDirectoryUrl(routePath);
+}
+
+function getPreviewManagedRootLabel(rootColumn = null) {
+  return String(rootColumn?.name || '').trim() || '托管内容';
+}
+
+function getPreviewManagedContentItem(rootColumn = null) {
+  const rows = getPreviewManagedContentItems(1, rootColumn);
+  return rows[0] || {
     id: 1,
     column_id: 1,
-    name: '示例产品',
+    name: '示例内容',
     code: 'DEMO',
-    summary: '示例产品摘要',
-    content_html: '示例产品正文',
+    summary: '示例内容摘要',
+    content_html: '示例内容正文',
     images: [],
     primary_image: ''
   };
 }
 
-function getPreviewManagedContentItems(limit = 8) {
-  const rows = listContentItems('product', { visibleOnly: false, limit });
-  return rows.length > 0 ? rows : [getPreviewManagedContentItem()];
+function getPreviewManagedContentItems(limit = 8, rootColumn = null) {
+  const resolvedRootColumn = rootColumn || getPreviewManagedRootColumn();
+  const modelCode = String(resolvedRootColumn?.model_code || '').trim();
+  const rows = modelCode
+    ? listContentItems(modelCode, { visibleOnly: false, limit })
+    : [];
+  return rows.length > 0 ? rows : [getPreviewManagedContentItemFallback()];
+}
+
+function getPreviewManagedContentItemFallback() {
+  return {
+    id: 1,
+    column_id: 1,
+    name: '示例内容',
+    code: 'DEMO',
+    summary: '示例内容摘要',
+    content_html: '示例内容正文',
+    images: [],
+    primary_image: ''
+  };
 }
 
 function getPreviewSectionEntry(sectionConfig = null) {
@@ -1350,38 +1228,6 @@ function getPreviewColumnFallback({
   };
 }
 
-function buildPreviewSectionConfig(mode, template) {
-  const isService = mode === 'service-list'
-    || mode === 'service-detail'
-    || String(template?.code || '').toLowerCase().includes('service');
-  const sections = resolvePreviewSections();
-  const resolved = isService
-    ? sections.getSectionByDirName('service') || sections.getSectionByType('service')
-    : sections.getSectionByDirName('news') || sections.getSectionByType('news');
-
-  return resolved
-    ? {
-        rootId: resolved.rootColumnId,
-        section: resolved,
-        sectionType: resolved.sectionType,
-        sectionDir: resolved.dirName,
-        sectionLabel: resolved.sectionLabel,
-        pageType: isService ? 'service-list' : 'article-list',
-        detailPageType: isService ? 'service-detail' : 'article-detail',
-        contentType: isService ? 'service-article' : 'news-article'
-      }
-    : {
-        rootId: 0,
-        section: null,
-        sectionType: isService ? 'service' : 'news',
-        sectionDir: isService ? 'service' : 'news',
-        sectionLabel: isService ? '服务' : '公司新闻',
-        pageType: isService ? 'service-list' : 'article-list',
-        detailPageType: isService ? 'service-detail' : 'article-detail',
-        contentType: isService ? 'service-article' : 'news-article'
-      };
-}
-
 function buildPreviewRootColumnMenuItems() {
   return buildPreviewSiteColumns().map((item) => ({
     label: item.name || '',
@@ -1446,9 +1292,7 @@ function buildPreviewPrimaryMenuItems(activeKey = '') {
 }
 
 function buildPreviewColumnUrl(column, rowsById = new Map()) {
-  return buildColumnPublicUrl(column, rowsById)
-    .replace(/^\/products\//, '/valve/')
-    .replace(/\/products\/(\d+)\.html$/, '/valve/$1.html');
+  return buildColumnPublicUrl(column, rowsById);
 }
 
 function resolvePreviewSections() {
@@ -1533,24 +1377,103 @@ function buildPreviewManagedContentUrl(contentItem, fallbackColumn = null) {
     || null;
 
   if (!resolvedColumn) {
-    return `/products/detail/${contentId}.html`;
+    const managedRootUrl = getPreviewManagedRootPublicUrl(getPreviewManagedRootColumn());
+    return `${managedRootUrl}detail/${contentId}.html`;
   }
 
   return buildContentDetailUrlFromColumn(contentItem, resolvedColumn);
 }
 
-function buildPreviewManagedContentCardsHtml() {
-  return getPreviewManagedContentItems(8).map((item) => (
+function buildPreviewManagedContentCardsHtml(rootColumn = null) {
+  return getPreviewManagedContentItems(8, rootColumn).map((item) => (
     `<li><img src="${escapeHtml(normalizeUploadedRelativePath(String(item.primary_image || '').trim()))}" width="120" height="120" border="0" alt="${escapeHtml(item.name || '')}"><li><a href="${escapeHtml(buildPreviewManagedContentUrl(item))}" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${escapeHtml(item.summary || '')}</li></li>`
   )).join('');
 }
 
-function buildPreviewManagedContentLinksHtml(limit = 8) {
-  return getPreviewManagedContentItems(limit).map((item) => `<li><a href="${escapeHtml(buildPreviewManagedContentUrl(item))}">${escapeHtml(item.name || '')}</a></li>`).join('');
+function buildPreviewManagedContentLinksHtml(limit = 8, rootColumn = null) {
+  return getPreviewManagedContentItems(limit, rootColumn).map((item) => `<li><a href="${escapeHtml(buildPreviewManagedContentUrl(item))}">${escapeHtml(item.name || '')}</a></li>`).join('');
 }
 
-function buildPreviewSectionEntryLinks(prefix, limit = 10) {
-  return getPreviewSectionEntries(limit).map((item) => `<li><a href="${prefix}/${item.id}.html">${escapeHtml(item.title || '')}</a></li>`).join('');
+function buildPreviewSectionEntryLinks(sectionConfig = null, limit = 10) {
+  return getPreviewSectionEntries(limit, sectionConfig).map((item) => (
+    `<li><a href="${escapeHtml(buildPreviewSectionEntryUrl(item, sectionConfig))}">${escapeHtml(item.title || '')}</a></li>`
+  )).join('');
+}
+
+function buildPreviewSectionEntryUrl(item, sectionConfig = null) {
+  const resolvedSection = sectionConfig?.section || resolvePreviewSectionData(sectionConfig).section || null;
+  if (resolvedSection?.rootColumn) {
+    return buildContentDetailUrlFromColumn(item, resolvedSection.rootColumn);
+  }
+  const dirName = String(sectionConfig?.sectionDir || 'section').replace(/^\/+|\/+$/g, '');
+  return `/${dirName}/detail/${toInteger(item?.id, 0)}.html`;
+}
+
+function normalizePreviewDirectoryUrl(publicUrl) {
+  const normalizedUrl = String(publicUrl || '').trim();
+  if (!normalizedUrl) {
+    return '/';
+  }
+  if (normalizedUrl.endsWith('/')) {
+    return normalizedUrl;
+  }
+  if (/\.html?$/i.test(normalizedUrl)) {
+    return normalizedUrl;
+  }
+  return `${normalizedUrl}/`;
+}
+
+function buildPreviewPaginationHrefs(publicUrl, pageNumber = 2, pageCount = 8) {
+  const normalizedUrl = String(publicUrl || '').trim();
+  const safePageCount = Math.max(toInteger(pageCount, 1), 1);
+  const safePageNumber = Math.min(Math.max(toInteger(pageNumber, 1), 1), safePageCount);
+  const isDirectoryStyle = normalizedUrl.endsWith('/');
+  const buildPageHref = (targetPageNumber) => {
+    if (isDirectoryStyle) {
+      return targetPageNumber <= 1 ? normalizedUrl : `${normalizedUrl}index-${targetPageNumber}.html`;
+    }
+    const match = normalizedUrl.match(/^(.*?)(\.html?)$/i);
+    if (!match) {
+      return targetPageNumber <= 1 ? normalizedUrl : `${normalizedUrl}/index-${targetPageNumber}.html`;
+    }
+    const [, prefix, extension] = match;
+    return targetPageNumber <= 1 ? normalizedUrl : `${prefix}-${targetPageNumber}${extension}`;
+  };
+
+  return {
+    firstHref: buildPageHref(1),
+    previousHref: safePageNumber > 1 ? buildPageHref(safePageNumber - 1) : '',
+    nextHref: safePageNumber < safePageCount ? buildPageHref(safePageNumber + 1) : '',
+    lastHref: buildPageHref(safePageCount)
+  };
+}
+
+function buildPreviewPaginationData(publicUrl, {
+  pageNumber = 2,
+  pageCount = 8,
+  totalRecords = 108,
+  pageSize = 14
+} = {}) {
+  const hrefs = buildPreviewPaginationHrefs(publicUrl, pageNumber, pageCount);
+  return {
+    pagination: {
+      pageNumber,
+      pageCount,
+      totalRecords,
+      pageSize,
+      ...hrefs
+    },
+    pagerText: {
+      first: '首页',
+      previous: '上一页',
+      next: '下一页',
+      last: '末页',
+      recordsPrefix: '共',
+      recordsSuffix: '条信息',
+      pageLabel: '页次：',
+      perPageSuffix: '条信息/页',
+    }
+  };
 }
 
 function formatPreviewDate(value) {
@@ -1672,7 +1595,8 @@ function pickPreviewComponentContextProps(source) {
     'siteColumns',
     'utilityColumns',
     'footerColumns',
-    'footerProductCategories',
+    'footerMeta',
+    'footerManagedColumnCategories',
     'fragments',
     'currentPage',
     'currentSection',
@@ -1680,12 +1604,12 @@ function pickPreviewComponentContextProps(source) {
     'currentColumnItem',
     'parentColumn',
     'currentContent',
-    'currentProduct',
+    'currentManagedItem',
     'currentArticle',
     'currentColumnDescription',
     'currentColumnPageData',
     'currentColumnHeroImage',
-    'currentProductPageData',
+    'currentManagedItemPageData',
     'sectionNavItems',
     'seoMeta',
     'jsonLd',
@@ -2133,8 +2057,8 @@ function buildTemplateValidationProps(template) {
       bottomHtml: '',
       indexFootHtml: '',
       aboutHtml: '',
-      productsMenuHtml: '',
-      productsMenuCompactHtml: '',
+      managedMenuHtml: '',
+      managedMenuCompactHtml: '',
       aboutCategoryHtml: '',
       newsCategoryHtml: '',
       serviceCategoryHtml: ''
@@ -2165,6 +2089,26 @@ function buildTemplateValidationProps(template) {
     },
     items: [],
     pagerHtml: '',
+    pagination: {
+      pageNumber: 1,
+      pageCount: 1,
+      totalRecords: 0,
+      pageSize: 0,
+      firstHref: '',
+      previousHref: '',
+      nextHref: '',
+      lastHref: '',
+    },
+    pagerText: {
+      first: '首页',
+      previous: '上一页',
+      next: '下一页',
+      last: '末页',
+      recordsPrefix: '共',
+      recordsSuffix: '条信息',
+      pageLabel: '页次：',
+      perPageSuffix: '条信息/页',
+    },
     title: '示例标题',
     bodyHtml: '',
     contentHtml: '',
@@ -2174,8 +2118,8 @@ function buildTemplateValidationProps(template) {
     nextHtml: '',
     sectionCategoryHtml: '',
     newsIndexHtml: '',
-    featuredProductsHtml: '',
-    featuredProductLinksHtml: '',
+    featuredManagedItemsHtml: '',
+    featuredManagedItemLinksHtml: '',
     serviceIndexHtml: '',
     collectionCategoryHtml: '',
     primaryMenuLabel: '站点导航',
@@ -2362,8 +2306,8 @@ function migrateDefaultThemeAssets() {
   }
 
   ensureThemeBindingByCode(defaultThemeId, 'site', null, 'home', 'default_home_tsx');
-  ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_PRODUCT_ID, 'list', 'default_product_list_tsx');
-  ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_PRODUCT_ID, 'content', 'default_product_detail_tsx');
+  ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_PRODUCT_ID, 'list', 'default_managed_list_tsx');
+  ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_PRODUCT_ID, 'content', 'default_managed_detail_tsx');
   ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_ARTICLE_ID, 'list', 'default_article_list_tsx');
   ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_ARTICLE_ID, 'content', 'default_article_detail_tsx');
   ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_CORPORATION_ID, 'content', 'default_content_tsx');

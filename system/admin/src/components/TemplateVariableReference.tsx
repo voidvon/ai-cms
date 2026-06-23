@@ -43,7 +43,20 @@ const tsxGroups: VariableGroup[] = [
 
 const listTsxGroup: VariableGroup = {
   title: '列表模板',
-  items: ['items.map((item) => ...)', 'item.name', 'item.url', 'pagerHtml'],
+  items: [
+    'items.map((item) => ...)',
+    'item.name',
+    'item.url',
+    'pagination.pageNumber',
+    'pagination.pageCount',
+    'pagination.totalRecords',
+    'pagination.firstHref',
+    'pagination.previousHref',
+    'pagination.nextHref',
+    'pagination.lastHref',
+    'pagerText.first',
+    "component('pagination', { pagination, pagerText })",
+  ],
 }
 
 const contentTsxGroup: VariableGroup = {
@@ -67,7 +80,6 @@ export function TemplateVariableReference({ type }: TemplateVariableReferencePro
   if (type === 'single') {
     groups.push(singleTsxGroup)
   }
-
   return (
     <aside className="rounded-md border bg-muted/20 p-3">
       <div className="text-sm font-medium">可用变量</div>

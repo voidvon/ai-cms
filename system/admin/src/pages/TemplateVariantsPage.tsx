@@ -29,18 +29,13 @@ import type { Template, TemplateVariant, TemplateVersion } from '@/types'
 
 const TemplateCodeEditor = lazy(() => import('@/components/TemplateCodeEditor').then((module) => ({ default: module.TemplateCodeEditor })))
 
-const previewModes = [
-  { value: 'auto', label: '自动场景' },
-  { value: 'home', label: '首页' },
-  { value: 'column-list', label: '列表栏目' },
-  { value: 'content-detail', label: '内容详情' },
-  { value: 'section-list', label: '信息列表' },
-  { value: 'section-detail', label: '信息详情' },
-  { value: 'knowledge-list', label: '知识列表' },
-  { value: 'knowledge-detail', label: '知识详情' },
-  { value: 'single-page', label: '单页栏目' },
-  { value: 'contact-page', label: '联系页' },
-]
+const previewModeLabelMap = {
+  auto: '自动场景',
+  home: '首页',
+  list: '列表',
+  content: '内容',
+  single: '单页',
+} as const
 
 const templateTypeLabelMap: Record<Template['type'], string> = {
   home: '首页模板',
@@ -75,11 +70,17 @@ type TemplateLibraryNode = {
   template?: Template | null
 }
 
-function resolvePreviewMode(previewMode: string): string {
-  if (previewMode !== 'auto') {
-    return previewMode
+function buildPreviewModeOptions(templateType: Template['type'] | null | undefined) {
+  const options = [{ value: 'auto', label: previewModeLabelMap.auto }]
+
+  if (templateType === 'home' || templateType === 'list' || templateType === 'content' || templateType === 'single') {
+    options.push({
+      value: templateType,
+      label: previewModeLabelMap[templateType],
+    })
   }
-  return 'auto'
+
+  return options
 }
 
 export default function TemplateVariantsPage() {
@@ -145,7 +146,6 @@ export default function TemplateVariantsPage() {
       grouped.list.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id)
       grouped.content.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id)
       grouped.single.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id)
-
       return grouped
     },
     [templates],
@@ -245,6 +245,10 @@ export default function TemplateVariantsPage() {
     () => templates.find((item) => item.id === editorTarget.templateId) || null,
     [editorTarget, templates],
   )
+  const previewModeOptions = useMemo(
+    () => buildPreviewModeOptions(selectedTemplate?.type),
+    [selectedTemplate?.type],
+  )
   const selectedTreeValue = useMemo(
     () => (selectedTemplate ? `template:${selectedTemplate.id}` : undefined),
     [selectedTemplate],
@@ -283,6 +287,13 @@ export default function TemplateVariantsPage() {
       sort_order: selectedTemplate.sort_order || 0,
     })
   }, [selectedTemplate])
+
+  useEffect(() => {
+    if (previewModeOptions.some((item) => item.value === previewMode)) {
+      return
+    }
+    setPreviewMode('auto')
+  }, [previewMode, previewModeOptions])
 
   useEffect(() => {
     if (themesError) {
@@ -530,7 +541,7 @@ export default function TemplateVariantsPage() {
   const previewMutation = useMutation({
     mutationFn: () => templatesApi.preview({
       ...buildTemplatePayload(formData),
-      preview_context: { mode: resolvePreviewMode(previewMode) },
+      preview_context: { mode: previewMode },
     }),
     onSuccess: (response) => {
       setPreviewHtml(response.data?.html || '')
@@ -610,7 +621,7 @@ export default function TemplateVariantsPage() {
     }
 
     const groupId = String(item.id)
-    const canCreate = data.kind === 'group' && ['group:home', 'group:list', 'group:content', 'group:component'].includes(groupId)
+    const canCreate = data.kind === 'group' && ['group:home', 'group:list', 'group:content', 'group:single', 'group:component'].includes(groupId)
     const canManageTemplate = data.kind === 'template' && Boolean(data.template?.id)
 
     if (!canCreate && !canManageTemplate) {
@@ -631,7 +642,7 @@ export default function TemplateVariantsPage() {
               event.stopPropagation()
               if (createTarget === 'component') {
                 createComponentMutation.mutate()
-              } else if (createTarget === 'home' || createTarget === 'list' || createTarget === 'content') {
+              } else if (createTarget === 'home' || createTarget === 'list' || createTarget === 'content' || createTarget === 'single') {
                 createMutation.mutate(createTarget)
               }
             }}
@@ -830,7 +841,7 @@ export default function TemplateVariantsPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {previewModes.map((mode) => (
+                    {previewModeOptions.map((mode) => (
                       <SelectItem key={mode.value} value={mode.value}>{mode.label}</SelectItem>
                     ))}
                   </SelectContent>

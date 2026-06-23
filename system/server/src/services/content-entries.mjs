@@ -187,7 +187,7 @@ export function listContentEntriesPaged(modelCode, {
     `
     : '';
 
-  const queryParams = hasColumnFilter && includeDescendants ? [safeColumnId, ...params] : [...params];
+  const queryParams = [...params];
   const { mainFields } = getModelFieldNames(modelCode);
 
   // 只有当字段存在时才添加过滤条件
@@ -236,7 +236,9 @@ export function listContentEntriesPaged(modelCode, {
       LIMIT ?
       OFFSET ?
     `,
-    [selectedLanguage.code, ...queryParams, safeLimit, offset]
+    hasColumnFilter && includeDescendants
+      ? [safeColumnId, selectedLanguage.code, ...queryParams, safeLimit, offset]
+      : [selectedLanguage.code, ...queryParams, safeLimit, offset]
   );
 
   const total = queryOne(

@@ -314,6 +314,7 @@ export interface SiteConfigTranslation {
   seo_default_description?: string | null;
   seo_home_title?: string | null;
   seo_home_description?: string | null;
+  template_data_json?: string | null;
 }
 
 export interface SiteConfig {

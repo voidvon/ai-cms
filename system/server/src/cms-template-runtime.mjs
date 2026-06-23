@@ -9,8 +9,8 @@ import { getTsxTemplateStyleAsset } from './tsx-template-styles.mjs';
 import { escapeHtml } from './utils/html.mjs';
 
 export function createCmsTemplateRuntime({
-  templateByPage,
-  templateTypeByPage,
+  templateByPage = {},
+  templateTypeByPage = {},
   templateClientAssetDir,
   expandLegacyCommonPlaceholders
 }) {
@@ -21,7 +21,7 @@ export function createCmsTemplateRuntime({
   let publishedTemplateMapCache = null;
 
   function renderCmsSitePage(pageName, props, templateContext, options = {}) {
-    const templateCode = templateByPage[pageName];
+    const templateCode = options.fallbackCode || templateByPage[pageName];
     const templateType = options.templateType || templateTypeByPage[pageName];
     const template = templateCode && templateType ? resolvePublishedTemplate({
       templateType,
@@ -104,8 +104,7 @@ export function createCmsTemplateRuntime({
     const withHtmlLang = injectHtmlLangAttribute(html, props);
     const withSeoHead = injectSeoHead(withHtmlLang, props);
     const withStyles = injectStylesheetLinks(withSeoHead, templateCode, renderGroup);
-    const withRuntimePlaceholder = injectGlobalInteractionScript(withStyles);
-    return injectInlineScriptAssetPlaceholders(withRuntimePlaceholder);
+    return injectInlineScriptAssetPlaceholders(withStyles);
   }
 
   function injectHtmlLangAttribute(html, props = {}) {
@@ -261,18 +260,6 @@ export function createCmsTemplateRuntime({
       return html.replace(/<\/head>/i, `${linkHtml}\n</head>`);
     }
     return `${linkHtml}\n${html}`;
-  }
-
-  function injectGlobalInteractionScript(html) {
-    const scriptHtml = buildExternalScriptPlaceholder({
-      scriptSource: GLOBAL_INTERACTION_SCRIPT,
-      assetCode: 'global-interaction',
-      attrs: { defer: true }
-    });
-    if (/<\/body>/i.test(html)) {
-      return html.replace(/<\/body>/i, `${scriptHtml}\n</body>`);
-    }
-    return `${html}\n${scriptHtml}`;
   }
 
   function injectInlineScriptAssetPlaceholders(html) {
@@ -615,530 +602,6 @@ function resolveTemplateValue(source, pathName) {
   return current ?? '';
 }
 
-const GLOBAL_INTERACTION_SCRIPT = String.raw`(() => {
-  if (typeof document === 'undefined') {
-    return;
-  }
-
-  const FOCUSABLE_SELECTOR = 'a[href], button:not([disabled]), [tabindex]:not([tabindex="-1"])';
-
-  function bindMediaQuery(mediaQuery, handler) {
-    if (typeof mediaQuery.addEventListener === 'function') {
-      mediaQuery.addEventListener('change', handler);
-      return;
-    }
-    mediaQuery.addListener(handler);
-  }
-
-  function initSiteNav(root) {
-    if (!(root instanceof HTMLElement) || root.dataset.navReady === 'true') {
-      return;
-    }
-
-    root.dataset.navReady = 'true';
-
-    const header = root.querySelector('.sg-global-nav');
-    const toggle = root.querySelector('[data-nav-toggle]');
-    const backdrop = root.querySelector('[data-nav-backdrop]');
-    const panel = root.querySelector('[data-nav-panel]');
-    const groups = Array.from(root.querySelectorAll('[data-nav-group]'));
-    const mobileQuery = window.matchMedia('(max-width: 940px)');
-    const hoverQuery = window.matchMedia('(hover: hover) and (pointer: fine)');
-
-    function syncNavOffset() {
-      if (!(header instanceof HTMLElement)) {
-        return;
-      }
-      const headerHeight = Math.ceil(header.getBoundingClientRect().height);
-      const offsetValue = String(headerHeight) + 'px';
-      root.style.setProperty('--sg-mobile-nav-offset', offsetValue);
-      if (panel instanceof HTMLElement) {
-        panel.style.setProperty('--sg-mobile-nav-offset', offsetValue);
-      }
-      if (backdrop instanceof HTMLElement) {
-        backdrop.style.setProperty('--sg-mobile-nav-offset', offsetValue);
-      }
-    }
-
-    function setPanelOpen(open) {
-      const wasOpen = root.classList.contains('is-panel-open');
-      root.classList.toggle('is-panel-open', open);
-      document.body.classList.toggle('sg-nav-open', mobileQuery.matches && open);
-      if (!(mobileQuery.matches && open)) {
-        document.body.style.overflow = '';
-      }
-
-      if (toggle instanceof HTMLButtonElement) {
-        toggle.setAttribute('aria-expanded', String(open));
-        toggle.classList.toggle('sg-nav-hamburger--active', open);
-      }
-
-      if (panel instanceof HTMLElement) {
-        panel.setAttribute('aria-hidden', String(mobileQuery.matches ? !open : false));
-      }
-
-      if (backdrop instanceof HTMLElement) {
-        backdrop.setAttribute('aria-hidden', String(!open));
-      }
-
-      if (mobileQuery.matches && open && panel instanceof HTMLElement) {
-        window.requestAnimationFrame(() => {
-          const firstFocusable = panel.querySelector(FOCUSABLE_SELECTOR);
-          if (firstFocusable instanceof HTMLElement) {
-            firstFocusable.focus();
-          }
-        });
-      }
-
-      if (mobileQuery.matches && !open && wasOpen && toggle instanceof HTMLButtonElement) {
-        window.requestAnimationFrame(() => toggle.focus());
-      }
-    }
-
-    function setGroupOpen(group, open) {
-      if (!(group instanceof HTMLElement)) {
-        return;
-      }
-      group.dataset.open = String(open);
-      group.classList.toggle('is-dismissed', false);
-
-      const groupToggle = group.querySelector('[data-nav-group-toggle]');
-      if (groupToggle instanceof HTMLButtonElement) {
-        groupToggle.setAttribute('aria-expanded', String(open));
-      }
-    }
-
-    function closeOtherGroups(activeGroup) {
-      groups.forEach((group) => {
-        if (!(group instanceof HTMLElement) || group === activeGroup) {
-          return;
-        }
-        setGroupOpen(group, false);
-      });
-    }
-
-    function resetNavState() {
-      setPanelOpen(false);
-      groups.forEach((group) => {
-        if (!(group instanceof HTMLElement)) {
-          return;
-        }
-        group.classList.remove('is-dismissed');
-        setGroupOpen(group, false);
-      });
-    }
-
-    if (toggle instanceof HTMLButtonElement && panel instanceof HTMLElement) {
-      toggle.addEventListener('click', () => {
-        const expanded = toggle.getAttribute('aria-expanded') === 'true';
-        setPanelOpen(!expanded);
-      });
-    }
-
-    if (backdrop instanceof HTMLElement) {
-      backdrop.addEventListener('click', () => {
-        if (!mobileQuery.matches) {
-          return;
-        }
-        setPanelOpen(false);
-      });
-    }
-
-    if (panel instanceof HTMLElement) {
-      panel.addEventListener('click', (event) => {
-        if (!mobileQuery.matches) {
-          return;
-        }
-        const target = event.target;
-        if (!(target instanceof Element) || !target.closest('a[href]')) {
-          return;
-        }
-        setPanelOpen(false);
-      });
-    }
-
-    groups.forEach((group) => {
-      if (!(group instanceof HTMLElement)) {
-        return;
-      }
-
-      const groupToggle = group.querySelector('[data-nav-group-toggle]');
-      if (!(groupToggle instanceof HTMLButtonElement)) {
-        return;
-      }
-
-      setGroupOpen(group, false);
-
-      groupToggle.addEventListener('click', () => {
-        const expanded = groupToggle.getAttribute('aria-expanded') === 'true';
-        if (mobileQuery.matches || !hoverQuery.matches) {
-          closeOtherGroups(group);
-          setGroupOpen(group, !expanded);
-        }
-      });
-
-      group.addEventListener('focusin', () => {
-        if (mobileQuery.matches) {
-          return;
-        }
-        closeOtherGroups(group);
-        setGroupOpen(group, true);
-      });
-
-      group.addEventListener('focusout', (event) => {
-        if (mobileQuery.matches) {
-          return;
-        }
-        const nextTarget = event.relatedTarget;
-        if (nextTarget instanceof Node && group.contains(nextTarget)) {
-          return;
-        }
-        setGroupOpen(group, false);
-      });
-
-      group.addEventListener('pointerenter', (event) => {
-        if (mobileQuery.matches || event.pointerType === 'touch') {
-          return;
-        }
-        closeOtherGroups(group);
-        setGroupOpen(group, true);
-      });
-
-      group.addEventListener('pointerleave', (event) => {
-        if (mobileQuery.matches || event.pointerType === 'touch') {
-          return;
-        }
-        setGroupOpen(group, false);
-      });
-    });
-
-    root.addEventListener('keydown', (event) => {
-      if (event.key !== 'Escape') {
-        return;
-      }
-      resetNavState();
-    });
-
-    bindMediaQuery(mobileQuery, resetNavState);
-    bindMediaQuery(hoverQuery, resetNavState);
-    window.addEventListener('resize', syncNavOffset, { passive: true });
-
-    syncNavOffset();
-    resetNavState();
-  }
-
-  function initFooterSection(section) {
-    if (!(section instanceof HTMLElement) || section.dataset.footerReady === 'true') {
-      return;
-    }
-
-    section.dataset.footerReady = 'true';
-    const toggle = section.querySelector('[data-footer-toggle]');
-    const mobileQuery = window.matchMedia('(max-width: 1050px)');
-
-    function setSectionOpen(open) {
-      section.classList.toggle('is-open', open);
-      if (toggle instanceof HTMLButtonElement) {
-        toggle.setAttribute('aria-expanded', String(open));
-      }
-    }
-
-    function resetFooterState() {
-      setSectionOpen(false);
-    }
-
-    if (toggle instanceof HTMLButtonElement) {
-      toggle.addEventListener('click', () => {
-        if (!mobileQuery.matches) {
-          return;
-        }
-        const expanded = toggle.getAttribute('aria-expanded') === 'true';
-        setSectionOpen(!expanded);
-      });
-    }
-
-    bindMediaQuery(mobileQuery, resetFooterState);
-    resetFooterState();
-  }
-
-  function escapeText(value) {
-    return String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  (function initGlobalSearch() {
-    const root = document.querySelector('[data-global-search]');
-    const input = root?.querySelector('[data-global-search-input]');
-    const clearButton = root?.querySelector('[data-global-search-clear]');
-    const state = root?.querySelector('[data-global-search-state]');
-    const resultsContainer = root?.querySelector('[data-global-search-results]');
-    const closeButtons = Array.from(root?.querySelectorAll('[data-global-search-close]') ?? []);
-    const messages = JSON.parse(root?.getAttribute('data-search-messages') || '{}');
-    const searchApiUrl = root?.getAttribute('data-search-api-url') || '/api/search';
-    let searchTimer = 0;
-    let activeQuery = '';
-
-    function applyQuery(query) {
-      const normalizedQuery = String(query || '').trim();
-      activeQuery = normalizedQuery;
-
-      if (input instanceof HTMLInputElement) {
-        input.value = normalizedQuery;
-      }
-
-      if (clearButton instanceof HTMLButtonElement) {
-        clearButton.hidden = normalizedQuery.length === 0;
-      }
-
-      window.clearTimeout(searchTimer);
-
-      if (!normalizedQuery) {
-        setIdle();
-        return;
-      }
-
-      runSearch(normalizedQuery);
-    }
-
-    function setOpen(open) {
-      if (!(root instanceof HTMLElement)) {
-        return;
-      }
-
-      root.hidden = !open;
-      root.classList.toggle('is-open', open);
-      document.body.classList.toggle('sg-search-open', open);
-
-      if (!open) {
-        return;
-      }
-
-      window.requestAnimationFrame(() => {
-        if (input instanceof HTMLInputElement) {
-          input.focus();
-        }
-      });
-    }
-
-    function setState(title, body) {
-      if (!(state instanceof HTMLElement)) {
-        return;
-      }
-
-      state.hidden = false;
-      state.innerHTML = body
-        ? '<h2>' + escapeText(title) + '</h2><p>' + escapeText(body) + '</p>'
-        : '<h2>' + escapeText(title) + '</h2>';
-    }
-
-    function setLoading() {
-      setState(messages.loadingLabel, '');
-    }
-
-    function hideState() {
-      if (state instanceof HTMLElement) {
-        state.hidden = true;
-        state.innerHTML = '';
-      }
-    }
-
-    function clearResults() {
-      if (resultsContainer instanceof HTMLElement) {
-        resultsContainer.hidden = true;
-        resultsContainer.innerHTML = '';
-      }
-    }
-
-    function setIdle() {
-      clearResults();
-      hideState();
-    }
-
-    function setUnavailable() {
-      clearResults();
-      setState(messages.unavailableTitle, messages.unavailableBody);
-    }
-
-    function formatPath(url) {
-      return url.replace(/^https?:\/\/[^/]+/i, '').replace(/\/$/, '') || '/';
-    }
-
-    function renderResults(items) {
-      if (!(resultsContainer instanceof HTMLElement)) {
-        return;
-      }
-
-      resultsContainer.innerHTML = '';
-
-      if (!items.length) {
-        resultsContainer.hidden = true;
-        setState(messages.emptyTitle, messages.emptyBody);
-        return;
-      }
-
-      if (state instanceof HTMLElement) {
-        state.hidden = true;
-      }
-
-      const fragment = document.createDocumentFragment();
-
-      items.forEach((item) => {
-        const link = document.createElement('a');
-        const title = document.createElement('h3');
-        const meta = document.createElement('p');
-        const excerpt = document.createElement('p');
-
-        link.className = 'sg-global-search__result';
-        link.href = item.url;
-
-        meta.className = 'sg-global-search__result-path';
-        meta.textContent = formatPath(item.url);
-
-        title.className = 'sg-global-search__result-title';
-        title.textContent = item.title;
-
-        excerpt.className = 'sg-global-search__result-excerpt';
-        excerpt.textContent = item.excerpt;
-
-        link.append(meta, title, excerpt);
-        link.addEventListener('click', () => setOpen(false));
-        fragment.append(link);
-      });
-
-      resultsContainer.append(fragment);
-      resultsContainer.hidden = false;
-    }
-
-    async function runSearch(query) {
-      if (query !== activeQuery) {
-        return;
-      }
-
-      if (!query) {
-        setIdle();
-        return;
-      }
-
-      try {
-        setLoading();
-
-        const response = await fetch(searchApiUrl + '?q=' + encodeURIComponent(query) + '&page=1&pageSize=12', {
-          headers: {
-            Accept: 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error('Search request failed with status ' + response.status);
-        }
-
-        const payload = await response.json();
-        const items = Array.isArray(payload?.items)
-          ? payload.items.map((item) => ({
-            excerpt: String(item?.excerpt || item?.summary || '').trim() || formatPath(item?.url || ''),
-            title: String(item?.title || '').trim() || formatPath(item?.url || ''),
-            url: String(item?.url || '').trim() || '/',
-          }))
-          : [];
-
-        if (query !== activeQuery) {
-          return;
-        }
-
-        renderResults(items);
-      } catch (error) {
-        console.error('Global search is unavailable.', error);
-
-        if (query === activeQuery) {
-          setUnavailable();
-        }
-      }
-    }
-
-    function scheduleSearch() {
-      if (!(input instanceof HTMLInputElement)) {
-        return;
-      }
-
-      activeQuery = input.value.trim();
-
-      if (clearButton instanceof HTMLButtonElement) {
-        clearButton.hidden = activeQuery.length === 0;
-      }
-
-      window.clearTimeout(searchTimer);
-
-      if (!activeQuery) {
-        setIdle();
-        return;
-      }
-
-      searchTimer = window.setTimeout(() => {
-        runSearch(activeQuery);
-      }, 180);
-    }
-
-    document.addEventListener('click', (event) => {
-      const target = event.target;
-
-      if (!(target instanceof Element)) {
-        return;
-      }
-
-      const trigger = target.closest('[data-search-open]');
-      if (!(trigger instanceof HTMLElement)) {
-        return;
-      }
-
-      event.preventDefault();
-      setOpen(true);
-    });
-
-    document.addEventListener('submit', (event) => {
-      const form = event.target;
-      if (!(form instanceof HTMLFormElement) || form.dataset.searchOpenForm !== 'true') {
-        return;
-      }
-
-      event.preventDefault();
-      const source = form.querySelector('input[name="ProductsName"], input[name="q"], input[name="keyword"], textarea[name="q"], textarea[name="keyword"]');
-      const query = source instanceof HTMLInputElement || source instanceof HTMLTextAreaElement
-        ? source.value
-        : '';
-
-      setOpen(true);
-      applyQuery(query);
-    });
-
-    closeButtons.forEach((button) => {
-      button.addEventListener('click', () => setOpen(false));
-    });
-
-    if (clearButton instanceof HTMLButtonElement && input instanceof HTMLInputElement) {
-      clearButton.addEventListener('click', () => {
-        input.value = '';
-        activeQuery = '';
-        clearButton.hidden = true;
-        setIdle();
-        input.focus();
-      });
-    }
-
-    if (input instanceof HTMLInputElement) {
-      input.addEventListener('input', scheduleSearch);
-    }
-
-    setIdle();
-  })();
-
-  document.querySelectorAll('[data-site-nav]').forEach(initSiteNav);
-  document.querySelectorAll('[data-footer-section]').forEach(initFooterSection);
-})();`;
-
 function stringifyTemplateValue(value) {
   if (value == null) {
     return '';
@@ -1170,7 +633,8 @@ function pickComponentContextProps(source) {
     'siteColumns',
     'utilityColumns',
     'footerColumns',
-    'footerProductCategories',
+    'footerMeta',
+    'footerManagedColumnCategories',
     'fragments',
     'currentPage',
     'currentSection',
@@ -1178,12 +642,12 @@ function pickComponentContextProps(source) {
     'currentColumnItem',
     'parentColumn',
     'currentContent',
-    'currentProduct',
+    'currentManagedItem',
     'currentArticle',
     'currentColumnDescription',
     'currentColumnPageData',
     'currentColumnHeroImage',
-    'currentProductPageData',
+    'currentManagedItemPageData',
     'sectionNavItems',
     'seoMeta',
     'jsonLd',

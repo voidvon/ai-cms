@@ -50,7 +50,7 @@ export function resolvePublicSectionContext(columns) {
 
   return {
     allById,
-    productRootColumnId: findRootColumnId(rows, { renderDriver: 'managed_column' }),
+    managedRootColumnId: findRootColumnId(rows, { renderDriver: 'managed_column' }),
     corporationRootColumnId: findRootColumnId(rows, { renderDriver: 'page_tree' }),
     sectionTree,
     sections: rootSections,
