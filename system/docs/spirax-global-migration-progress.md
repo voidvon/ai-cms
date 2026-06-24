@@ -70,7 +70,7 @@
 - 静态生成支持按语言输出
 - 子目录语言站点可单独生成，例如 `html/en/`
 - 静态生成会同步语言目录下的共享资源
-- 修复多语言子站生成时 `css/js/images/uploadfile` 等共享资源丢失或路径错误的问题
+- 修复多语言子站生成时 `css/js/uploads/uploadfile` 等共享资源丢失或路径错误的问题
 - 修复 `ENOENT: ... html/en/js` 这类生成异常
 - 修复 `/en/css/webmain.css` 等静态资源 404 问题
 

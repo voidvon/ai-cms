@@ -69,7 +69,7 @@ export function buildSeoMeta({
 }) {
   const siteConfig = site || {};
   const canonicalUrl = url || siteConfig.web_url;
-  const defaultImage = '/images/global/generic-header-images/header_engineers_07-60993fae75.jpg';
+  const defaultImage = '/uploads/images/global/generic-header-images/header_engineers_07-60993fae75.jpg';
   
   return {
     basic: {

@@ -947,7 +947,7 @@ export default function Template({ site, siteColumns = [], utilityColumns = [], 
 const HOME_DATA_EN = {
   title: 'Spirax Sarco Steam Solutions for Industrial Steam Systems',
   summary: 'Spirax Sarco steam expertise for industrial systems worldwide',
-  heroImage: '/images/global/generic-header-images/header_engineers_07-60993fae75.jpg',
+  heroImage: '/uploads/images/global/generic-header-images/header_engineers_07-60993fae75.jpg',
   featuredTitle: 'Explore Spirax Sarco products and solutions for the steam and condensate loop',
   solutionsIntro: 'Many visitors begin with the Spirax Sarco brand, then refine into steam traps, pressure control, flow measurement, condensate recovery or service support. The homepage should capture that brand intent first and guide international visitors into the right solution path.',
   solutionsTitle: 'Why international teams choose Spirax Sarco solutions',
@@ -962,42 +962,42 @@ const HOME_DATA_EN = {
     {
       title: 'Steam traps',
       description: 'Explore thermodynamic, thermostatic and mechanical steam trap solutions designed to protect equipment, reduce steam loss and improve condensate recovery across process and distribution applications.',
-      imageSrc: '/images/global/products/steam_traps_02-97182c4207.jpg',
+      imageSrc: '/uploads/images/global/products/steam_traps_02-97182c4207.jpg',
       href: '/products/steam-traps',
       label: 'Explore steam traps'
     },
     {
       title: 'Pressure control and valves',
       description: 'Discover pressure reducing valves, control valves and related system components that help match steam pressure, protect downstream equipment and support stable process control.',
-      imageSrc: '/images/global/products/control-valves/pressure_reducing_surplussing_valve_dp27e_01-a5e41169f1.jpg',
+      imageSrc: '/uploads/images/global/products/control-valves/pressure_reducing_surplussing_valve_dp27e_01-a5e41169f1.jpg',
       href: '/products/control-systems/pressure-reducing-and-surplussing-valves',
       label: 'View pressure control'
     },
     {
       title: 'Condensate recovery',
       description: 'Improve condensate return, reduce wasted flash steam and support more efficient steam systems with condensate pumps, recovery packages and integrated energy recovery solutions.',
-      imageSrc: '/images/global/products/easiheat_gen4-unit4_dhw_dual-4820852_main_no_refl_v3_1440x810-7101139780.jpg',
+      imageSrc: '/uploads/images/global/products/easiheat_gen4-unit4_dhw_dual-4820852_main_no_refl_v3_1440x810-7101139780.jpg',
       href: '/products/condensate-and-heat-recovery-systems',
       label: 'See recovery solutions'
     },
     {
       title: 'Flowmetering',
       description: 'Measure steam, liquids and gases with flowmetering technologies that support energy management, system balancing and more confident process decisions.',
-      imageSrc: '/images/global/products/flowmetering_02-7e67646194.jpg',
+      imageSrc: '/uploads/images/global/products/flowmetering_02-7e67646194.jpg',
       href: '/products/flowmetering',
       label: 'Explore flowmetering'
     },
     {
       title: 'Boiler controls and systems',
       description: 'Support steam quality, boiler efficiency and safer operation with boiler controls, blowdown systems, feedtanks and related boilerhouse solutions.',
-      imageSrc: '/images/global/products/boilerhouse_01-0d6d9e8d4f.jpg',
+      imageSrc: '/uploads/images/global/products/boilerhouse_01-0d6d9e8d4f.jpg',
       href: '/products/boiler-controls-and-systems',
       label: 'Explore boiler controls'
     },
     {
       title: 'Steam system services',
       description: 'Go beyond component supply with audits, monitoring, commissioning, maintenance support and engineered steam-system improvements built around plant reliability and efficiency.',
-      imageSrc: '/images/global/dotcom-home/hero/q2-2023/gettyimages-1481065126-31b88d3a67.jpg',
+      imageSrc: '/uploads/images/global/dotcom-home/hero/q2-2023/gettyimages-1481065126-31b88d3a67.jpg',
       href: '/services',
       label: 'Explore services'
     }
@@ -1034,7 +1034,7 @@ const HOME_DATA_EN = {
       kicker: 'Steam expertise',
       title: 'Build a stronger steam system foundation',
       description: 'Understand how steam quality, distribution and condensate management fit together across the full steam loop.',
-      imageSrc: '/images/global/dotcom-home/promo-carousel/campaign_benefits_of_steam-4ceaa7fc14.jpg',
+      imageSrc: '/uploads/images/global/dotcom-home/promo-carousel/campaign_benefits_of_steam-4ceaa7fc14.jpg',
       href: '/promo/benefits-of-steam',
       label: 'Discover more'
     },
@@ -1042,7 +1042,7 @@ const HOME_DATA_EN = {
       kicker: 'Energy saving',
       title: 'Energy efficiency and heat recovery',
       description: 'See practical opportunities to reduce losses, recover heat and improve plant-wide performance without sacrificing reliability.',
-      imageSrc: '/images/global/dotcom-home/promo-carousel/campaign_energy_saving_01-53e3011d6e.jpg',
+      imageSrc: '/uploads/images/global/dotcom-home/promo-carousel/campaign_energy_saving_01-53e3011d6e.jpg',
       href: '/promo/key-energy-saving-tips',
       label: 'Explore efficiency ideas'
     },
@@ -1050,7 +1050,7 @@ const HOME_DATA_EN = {
       kicker: 'Flowmetering solutions',
       title: 'Flow data that supports better decisions',
       description: 'Learn how better measurement helps validate demand, improve control and support smarter system decisions.',
-      imageSrc: '/images/global/dotcom-home/promo-carousel/campaign_flowmetering_01-ed5970301c.jpg',
+      imageSrc: '/uploads/images/global/dotcom-home/promo-carousel/campaign_flowmetering_01-ed5970301c.jpg',
       href: '/promo/flowmetering-solutions',
       label: 'Discover more'
     },
@@ -1058,13 +1058,13 @@ const HOME_DATA_EN = {
       kicker: 'Services and monitoring',
       title: 'Keep critical steam assets visible and under control',
       description: 'Combine maintainable hardware, monitoring and specialist support to strengthen uptime and cut avoidable losses.',
-      imageSrc: '/images/global/dotcom-home/hero/q2-2023/gettyimages-1481065126-31b88d3a67.jpg',
+      imageSrc: '/uploads/images/global/dotcom-home/hero/q2-2023/gettyimages-1481065126-31b88d3a67.jpg',
       href: '/services/wireless-steam-trap-monitoring',
       label: 'Discover more'
     }
   ],
   contactCallout: {
-    backgroundImage: '/images/global/contact-us/contact-us-background-a13bcb7af3.jpg',
+    backgroundImage: '/uploads/images/global/contact-us/contact-us-background-a13bcb7af3.jpg',
     title: 'Spirax Sarco steam expertise, built around your system',
     subtitle: 'Connect with Spirax Sarco specialists for product guidance, project support and local sales coordination.',
     contactLabel: 'Talk to our team',
@@ -1076,32 +1076,32 @@ const HOME_DATA_EN = {
   industries: [
     {
       title: 'Brewing and distilling',
-      imageSrc: '/images/global/industries/industry-mastheads-1440-_-810/industry-cards_brewing-772d6e6acb.jpg',
+      imageSrc: '/uploads/images/global/industries/industry-mastheads-1440-_-810/industry-cards_brewing-772d6e6acb.jpg',
       href: '/industries/brewing-and-distilling'
     },
     {
       title: 'Food and beverage',
-      imageSrc: '/images/global/industries/industry-mastheads-1440-_-810/industry-cards_food_bev-dc1d8868be.jpg',
+      imageSrc: '/uploads/images/global/industries/industry-mastheads-1440-_-810/industry-cards_food_bev-dc1d8868be.jpg',
       href: '/industries/food-and-beverage'
     },
     {
       title: 'Hospitals',
-      imageSrc: '/images/global/industries/industry-mastheads-1440-_-810/industry-cards_healthcare-c2194193bc.jpg',
+      imageSrc: '/uploads/images/global/industries/industry-mastheads-1440-_-810/industry-cards_healthcare-c2194193bc.jpg',
       href: '/industries/hospitals'
     },
     {
       title: 'Oil and gas',
-      imageSrc: '/images/global/industries/industry-mastheads-1440-_-810/industry-cards_oil_gas-e8b418a8de.jpg',
+      imageSrc: '/uploads/images/global/industries/industry-mastheads-1440-_-810/industry-cards_oil_gas-e8b418a8de.jpg',
       href: '/industries/oil-and-gas'
     },
     {
       title: 'Pharmaceutical',
-      imageSrc: '/images/global/industries/industry-mastheads-1440-_-810/industry-cards_pharma-8087e3a62f.jpg',
+      imageSrc: '/uploads/images/global/industries/industry-mastheads-1440-_-810/industry-cards_pharma-8087e3a62f.jpg',
       href: '/industries/pharmaceutical'
     },
     {
       title: 'OEM',
-      imageSrc: '/images/global/dotcom-home/split-images/81644_industry-box-1-2a0ffea765.jpg',
+      imageSrc: '/uploads/images/global/dotcom-home/split-images/81644_industry-box-1-2a0ffea765.jpg',
       href: '/industries/oem'
     }
   ]

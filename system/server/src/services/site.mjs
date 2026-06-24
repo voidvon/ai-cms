@@ -1,6 +1,7 @@
 import { HOST, PORT } from '../config.mjs';
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { ensureLanguagesSchema, getDefaultLanguage, hasMultipleEnabledLanguages, listLanguages } from './languages.mjs';
+import { normalizeTemplateDataAssetsDeep } from './template-data-assets.mjs';
 
 const SITE_TRANSLATABLE_FIELDS = [
   'web_name',
@@ -735,10 +736,10 @@ function normalizeSiteTemplateDataJson(value) {
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new Error('site template_data_json must be a JSON object');
     }
-    return JSON.stringify(parsed);
+    return JSON.stringify(normalizeSiteTemplateDataObject(parsed));
   }
   if (typeof value === 'object' && !Array.isArray(value)) {
-    return JSON.stringify(value);
+    return JSON.stringify(normalizeSiteTemplateDataObject(value));
   }
   throw new Error('site template_data_json must be a JSON object');
 }
@@ -749,10 +750,20 @@ function parseSiteTemplateDataJson(value) {
   }
   try {
     const parsed = JSON.parse(value);
-    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? normalizeSiteTemplateDataObject(parsed)
+      : null;
   } catch {
     return null;
   }
+}
+
+function normalizeSiteTemplateDataObject(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return value;
+  }
+
+  return normalizeTemplateDataAssetsDeep(value);
 }
 
 function addColumnIfMissing(tableName, columnName, definition) {

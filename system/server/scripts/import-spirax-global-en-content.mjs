@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execute, queryAll, queryOne } from '../src/db.mjs';
 import { UPLOADS_IMAGES_ROOT } from '../src/config.mjs';
+import { normalizeUploadedRelativePath } from '../src/services/uploads.mjs';
 import { createLanguage, listLanguages, updateLanguage } from '../src/services/languages.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -595,9 +596,11 @@ function rewriteImportedAssetHtml(html) {
     return '';
   }
 
+  assertNoLegacyImageAssetPath(input);
+
   const assetPaths = new Set();
   const rewritten = input.replace(
-    /\b(?:src|href|poster)=["'](\/images\/[^"']+)["']/gi,
+    /\b(?:src|href|poster)=["']((?:https?:\/\/[^/"'\s<>]+)?\/uploads\/images\/[^"']+)["']/gi,
     (matched, assetPath) => {
       const normalized = syncImageAsset(assetPath);
       assetPaths.add(normalized);
@@ -605,24 +608,26 @@ function rewriteImportedAssetHtml(html) {
     }
   );
 
-  rewritten.replace(/url\((['"]?)(\/images\/[^)'"]+)\1\)/gi, (_, quote, assetPath) => {
+  rewritten.replace(/url\((['"]?)((?:https?:\/\/[^/"'\s<>]+)?\/uploads\/images\/[^)'"]+)\1\)/gi, (_, quote, assetPath) => {
     assetPaths.add(syncImageAsset(assetPath));
     return _;
   });
 
-  return rewritten.replace(/url\((['"]?)(\/images\/[^)'"]+)\1\)/gi, (_, quote, assetPath) => {
+  return rewritten.replace(/url\((['"]?)((?:https?:\/\/[^/"'\s<>]+)?\/uploads\/images\/[^)'"]+)\1\)/gi, (_, quote, assetPath) => {
     const normalized = syncImageAsset(assetPath);
     return `url(${quote}${normalized}${quote})`;
   });
 }
 
 function syncImageAsset(assetPath) {
-  const normalized = String(assetPath || '').trim();
-  if (!normalized.startsWith('/images/')) {
-    return normalized;
+  const normalized = normalizeUploadedRelativePath(assetPath);
+  const legacyValue = String(assetPath || '').trim();
+  if (!normalized) {
+    assertNoLegacyImageAssetPath(legacyValue);
+    return legacyValue;
   }
 
-  const relativePath = normalized.replace(/^\/images\//, '');
+  const relativePath = normalized.replace(/^\/uploads\/images\//, '');
   const targetPath = path.join(UPLOADS_IMAGES_ROOT, relativePath);
   if (!fs.existsSync(targetPath)) {
     const sourcePath = resolveSourceImagePath(relativePath);
@@ -636,6 +641,13 @@ function syncImageAsset(assetPath) {
   }
 
   return `/uploads/images/${relativePath}`;
+}
+
+function assertNoLegacyImageAssetPath(value) {
+  const normalized = String(value || '').trim();
+  if (normalized.includes('/images/')) {
+    throw new Error(`Legacy /images asset path is no longer supported in import-spirax-global-en-content: ${normalized}`);
+  }
 }
 
 function resolveSourceImagePath(relativePath) {

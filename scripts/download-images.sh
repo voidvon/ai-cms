@@ -16,8 +16,8 @@ mkdir -p "$UPLOADS_DIR/images/global/dotcom-home/hero/q2-2023"
 # 固定图片列表
 declare -a FIXED_IMAGES=(
   "/logo.svg"
-  "/images/global/generic-header-images/header_engineers_07-60993fae75.jpg"
-  "/images/global/dotcom-home/hero/q2-2023/gettyimages-1481065126-31b88d3a67.jpg"
+  "/uploads/images/global/generic-header-images/header_engineers_07-60993fae75.jpg"
+  "/uploads/images/global/dotcom-home/hero/q2-2023/gettyimages-1481065126-31b88d3a67.jpg"
 )
 
 SUCCESS_COUNT=0
@@ -31,7 +31,7 @@ for img_path in "${FIXED_IMAGES[@]}"; do
   if [ "$img_path" = "/logo.svg" ]; then
     output_file="public/logo.svg"
   else
-    output_file="$UPLOADS_DIR/images${img_path#/images}"
+    output_file="html${img_path}"
   fi
   url="$BASE_URL$img_path"
 

@@ -3,6 +3,7 @@ import { getColumnById } from './columns.mjs';
 import { ensureContentModelStorageSchema, getContentTableName, getTranslationTableName } from './content-model-storage.mjs';
 import { getDefaultLanguage, listLanguages } from './languages.mjs';
 import { normalizeUploadedRelativePath } from './uploads.mjs';
+import { normalizeTemplateDataAssetsDeep } from './template-data-assets.mjs';
 
 const EMPTY_IMAGE_LIST = '[]';
 
@@ -863,13 +864,13 @@ function normalizeTemplateDataJson(value) {
     if (!trimmed) {
       return null;
     }
-    JSON.parse(trimmed);
-    return trimmed;
+    const parsed = JSON.parse(trimmed);
+    return JSON.stringify(normalizeTemplateDataAssetsDeep(parsed));
   }
   if (typeof value !== 'object') {
     throw new Error('template_data_json must be a JSON object or array');
   }
-  return JSON.stringify(value);
+  return JSON.stringify(normalizeTemplateDataAssetsDeep(value));
 }
 
 function parseTemplateDataJson(value) {
@@ -878,7 +879,7 @@ function parseTemplateDataJson(value) {
   }
   try {
     const parsed = JSON.parse(value);
-    return parsed && typeof parsed === 'object' ? parsed : null;
+    return parsed && typeof parsed === 'object' ? normalizeTemplateDataAssetsDeep(parsed) : null;
   } catch {
     return null;
   }
