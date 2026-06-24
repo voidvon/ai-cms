@@ -996,17 +996,20 @@ function buildShellGlobalCss(cssText) {
 
 @media (max-width: 1050px) {
   .sg-site-footer__title--desktop {
-    display: block;
-    margin: 0 0 18px;
+    display: none;
   }
 
   .sg-site-footer__trigger--mobile {
-    display: none !important;
+    display: flex !important;
   }
 
   .sg-site-footer__list {
-    display: block;
+    display: none;
     padding: 0 0 18px;
+  }
+
+  .sg-site-footer__section.is-open .sg-site-footer__list {
+    display: block;
   }
 }
 
