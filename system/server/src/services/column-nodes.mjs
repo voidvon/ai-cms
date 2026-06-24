@@ -1,5 +1,6 @@
 import {
   createManualColumn,
+  deleteColumnRecord,
   deleteManualColumn,
   ensureColumnsSchema,
   getColumnTreeModelConfig,
@@ -554,7 +555,7 @@ export function deleteColumnNode(model, id) {
     throw new Error('请先删除或移动子分类');
   }
 
-  deleteManualColumn(column.id);
+  deleteColumnRecord(column.id);
   return mapColumnToNode(column, getModelRootColumn(model));
 }
 
@@ -573,7 +574,7 @@ export function deleteColumnNodeInRoot(rootColumnId, id) {
     throw new Error('请先删除或移动子分类');
   }
 
-  deleteManualColumn(column.id);
+  deleteColumnRecord(column.id);
   return mapColumnToNode(column, rootContext.rootColumn);
 }
 

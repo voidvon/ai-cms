@@ -248,6 +248,16 @@ export function deleteManualColumn(id) {
   }
   assertEditableManualColumn(existing);
 
+  deleteColumnRecord(id);
+  return existing;
+}
+
+export function deleteColumnRecord(id) {
+  const existing = getColumnByIdRaw(id);
+  if (!existing) {
+    return null;
+  }
+
   const childCount = queryOne(
     'SELECT COUNT(*) AS value FROM columns WHERE parent_id = ?',
     [id]

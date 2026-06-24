@@ -1,0 +1,15 @@
+{
+  "name": "spiraxsarcocn-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "MCP adapter for the Spirax Sarco CN CMS.",
+  "scripts": {
+    "start": "node src/index.mjs",
+    "dev": "node --watch src/index.mjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.13.2",
+    "zod": "^4.4.3"
+  }
+}
