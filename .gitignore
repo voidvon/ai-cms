@@ -11,6 +11,8 @@ node_modules/
 /system/admin/site-dist
 /system/server/generated/**
 /system/server/generated-debug/**
+/mcp/.env
+/mcp/*.local.env
 
 /data/site.sqlite*
 /data/*.bak

@@ -1,6 +1,6 @@
 # AI CMS MCP
 
-## 当前定位
+## 定位
 
 这是 CMS 的第一阶段 MCP 适配层。
 
@@ -10,6 +10,24 @@
 - 向 AI 客户端暴露稳定的工具接口
 - 不直接读写数据库
 - 不重写栏目、内容、模板或静态发布逻辑
+
+## 包形态
+
+这个目录现在可以直接作为 npm 包发布，默认包名：
+
+- `ai-cms-mcp`
+
+发布后，客户端可以直接通过可执行命令启动：
+
+```bash
+ai-cms-mcp
+```
+
+不需要额外构建步骤。
+
+正式发布流程见：
+
+- [PUBLISHING.md](/Users/yytest/Documents/projects/spiraxsarcocn/mcp/PUBLISHING.md)
 
 ## 环境变量
 
@@ -23,6 +41,15 @@
 服务启动时会自动尝试读取：
 
 - `mcp/.env`
+
+正式环境建议不要把 token 写进仓库，而是在 MCP 客户端配置里注入：
+
+```env
+CMS_BASE_URL=https://cms.example.com
+CMS_TOKEN=replace-with-production-token
+```
+
+仓库中只应保留 `.env.example`，不要提交真实的 `mcp/.env`。
 
 ## 当前工具范围
 
@@ -67,7 +94,7 @@
 - `delete_template_binding`
 - `build_static`
 
-## 启动
+## 本地启动
 
 ```bash
 npm --prefix mcp install
@@ -78,6 +105,49 @@ CMS_BASE_URL=http://127.0.0.1:3000 CMS_TOKEN=your-token npm --prefix mcp run sta
 
 ```bash
 npm --prefix mcp run start
+```
+
+## 作为 npm 包使用
+
+如果后续发布到私有 npm 或公网 npm，客户端可以直接调用包命令。
+
+全局安装示例：
+
+```bash
+npm install -g ai-cms-mcp
+```
+
+然后在 MCP 客户端里配置：
+
+```json
+{
+  "mcpServers": {
+    "ai-cms": {
+      "command": "ai-cms-mcp",
+      "env": {
+        "CMS_BASE_URL": "https://cms.example.com",
+        "CMS_TOKEN": "replace-with-production-token"
+      }
+    }
+  }
+}
+```
+
+如果不想全局安装，也可以用 `npx`：
+
+```json
+{
+  "mcpServers": {
+    "ai-cms": {
+      "command": "npx",
+      "args": ["-y", "ai-cms-mcp"],
+      "env": {
+        "CMS_BASE_URL": "https://cms.example.com",
+        "CMS_TOKEN": "replace-with-production-token"
+      }
+    }
+  }
+}
 ```
 
 ## 连接本地 AI 客户端
@@ -99,11 +169,24 @@ CMS_TOKEN=your-token
 
 如果你的客户端支持为 MCP server 配置环境变量，直接把这两个变量写进去即可。
 
+## 发布前检查
+
+```bash
+npm --prefix mcp run check
+npm --prefix mcp run pack:dry-run
+```
+
+建议正式发布前至少确认：
+
+- 包内只包含 `src/`、`README.md`、`.env.example`
+- `CMS_BASE_URL` 指向正式后台域名
+- `CMS_TOKEN` 使用专门的 AI token，而不是超级管理员长期 token
+
 ## 当前验证结果
 
 - `npm --prefix mcp install` 已完成
 - `node mcp/src/index.mjs` 在提供环境变量后可正常启动
-- 当前还没有对接具体 AI 客户端配置文件示例
+- 包已具备 npm 发布所需的 `bin` 和 `files` 配置
 
 ## 当前限制
 

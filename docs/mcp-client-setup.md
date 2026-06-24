@@ -1,5 +1,15 @@
 # MCP 客户端接入说明
 
+## 支持两种接入方式
+
+当前 `AI CMS` MCP 支持两种启动方式：
+
+1. 直接指向仓库源码里的 `mcp/src/index.mjs`
+2. 安装 `ai-cms-mcp` npm 包后，用包命令启动
+
+本地开发建议用源码模式。  
+正式环境或多机复用建议用 npm 包模式。
+
 ## 前提
 
 当前仓库的 MCP server 位于：
@@ -20,7 +30,7 @@
 1. 在 MCP 客户端配置里显式传环境变量
 2. 在仓库内创建 `mcp/.env`
 
-## 推荐做法
+## 本地源码模式
 
 先在仓库中创建：
 
@@ -61,6 +71,53 @@ node /Users/yytest/Documents/projects/spiraxsarcocn/mcp/src/index.mjs
 ```
 
 如果你已经使用 `mcp/.env`，则可只保留命令和参数，不必在客户端里重复写环境变量。
+
+## npm 包模式
+
+如果后续你将 `mcp/` 发布为私有 npm 包或公网 npm 包，推荐改用包命令：
+
+```bash
+npm install -g ai-cms-mcp
+```
+
+客户端配置示例：
+
+```json
+{
+  "mcpServers": {
+    "ai-cms": {
+      "command": "ai-cms-mcp",
+      "env": {
+        "CMS_BASE_URL": "https://cms.example.com",
+        "CMS_TOKEN": "replace-with-production-token"
+      }
+    }
+  }
+}
+```
+
+如果不想全局安装，也可以用：
+
+```json
+{
+  "mcpServers": {
+    "ai-cms": {
+      "command": "npx",
+      "args": ["-y", "ai-cms-mcp"],
+      "env": {
+        "CMS_BASE_URL": "https://cms.example.com",
+        "CMS_TOKEN": "replace-with-production-token"
+      }
+    }
+  }
+}
+```
+
+正式环境建议：
+
+- `CMS_BASE_URL` 指向正式后台域名
+- `CMS_TOKEN` 使用专门的 AI token
+- 不把生产 token 写入仓库内的 `.env`
 
 ## 当前工具范围
 

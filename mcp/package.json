@@ -1,10 +1,24 @@
 {
   "name": "ai-cms-mcp",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "type": "module",
   "description": "MCP adapter for AI CMS.",
+  "bin": {
+    "ai-cms-mcp": "bin/ai-cms-mcp"
+  },
+  "files": [
+    "bin",
+    "src",
+    "README.md",
+    ".env.example"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
+    "check": "node --check src/index.mjs && node --check src/cms-client.mjs && node --check src/config.mjs && node --check src/env-file.mjs && node --check src/tools/index.mjs",
+    "pack:dry-run": "npm pack --dry-run",
     "start": "node src/index.mjs",
     "dev": "node --watch src/index.mjs"
   },
