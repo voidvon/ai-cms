@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { buildToolResult } from './result-utils.mjs';
 
 const COLUMN_NODE_BASE_FIELD_NAMES = new Set([
   'parent_id',
@@ -72,18 +73,6 @@ const deleteColumnNodeSchema = {
 
 function normalizeBoolean(value) {
   return value ? 'true' : undefined;
-}
-
-function buildToolResult(response, meta = {}) {
-  return {
-    content: [{
-      type: 'text',
-      text: JSON.stringify({
-        ...response,
-        mcp_meta: meta
-      }, null, 2)
-    }]
-  };
 }
 
 function sanitizeTranslations(translations) {
@@ -177,7 +166,7 @@ export function registerColumnNodeTools(server, cmsClient) {
           language: languageCode
         }
       });
-      return buildToolResult(response);
+      return buildToolResult(response, {}, 'column');
     }
   );
 
@@ -195,7 +184,7 @@ export function registerColumnNodeTools(server, cmsClient) {
           language: languageCode
         }
       });
-      return buildToolResult(response);
+      return buildToolResult(response, {}, 'column');
     }
   );
 
@@ -214,7 +203,7 @@ export function registerColumnNodeTools(server, cmsClient) {
           includeTranslations: normalizeBoolean(includeTranslations)
         }
       });
-      return buildToolResult(response);
+      return buildToolResult(response, {}, 'column');
     }
   );
 
@@ -238,7 +227,7 @@ export function registerColumnNodeTools(server, cmsClient) {
         supported_base_fields: sanitized.supportedBaseFields,
         supported_flat_fields: sanitized.supportedFlatFields,
         supported_translation_fields: sanitized.supportedTranslationFields
-      });
+      }, 'column');
     }
   );
 
@@ -262,7 +251,7 @@ export function registerColumnNodeTools(server, cmsClient) {
         supported_base_fields: sanitized.supportedBaseFields,
         supported_flat_fields: sanitized.supportedFlatFields,
         supported_translation_fields: sanitized.supportedTranslationFields
-      });
+      }, 'column');
     }
   );
 

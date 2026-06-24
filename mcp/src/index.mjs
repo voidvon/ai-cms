@@ -7,7 +7,7 @@ import { registerCmsTools } from './tools/index.mjs';
 
 function createServer() {
   const server = new McpServer({
-    name: 'spiraxsarcocn-cms',
+    name: 'ai-cms',
     version: '0.1.0'
   });
 
@@ -29,7 +29,7 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('[spiraxsarcocn-mcp] Failed to start MCP server');
+  console.error('[ai-cms-mcp] Failed to start MCP server');
   console.error(error);
   process.exit(1);
 });

@@ -69,7 +69,7 @@ export async function startServer() {
 async function registerCommonPlugins(app) {
   await app.register(fastifySensible);
   await app.register(fastifyCookie, {
-    secret: process.env.COOKIE_SECRET || 'spiraxsarcocn-server-secret-key-change-in-production',
+    secret: process.env.COOKIE_SECRET || 'ai-cms-server-secret-key-change-in-production',
     parseOptions: {}
   });
 

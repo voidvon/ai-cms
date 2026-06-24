@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { buildToolResult } from './result-utils.mjs';
 
 const getContentModelSchema = {
   id: z.union([z.number().int().positive(), z.string().trim().min(1)])
@@ -18,7 +19,7 @@ export function registerContentModelTools(server, cmsClient) {
     },
     async () => {
       const response = await cmsClient.get('/api/content-models');
-      return { content: [{ type: 'text', text: JSON.stringify(response, null, 2) }] };
+      return buildToolResult(response);
     }
   );
 
@@ -31,7 +32,7 @@ export function registerContentModelTools(server, cmsClient) {
     },
     async ({ id }) => {
       const response = await cmsClient.get(`/api/content-models/${id}`);
-      return { content: [{ type: 'text', text: JSON.stringify(response, null, 2) }] };
+      return buildToolResult(response);
     }
   );
 
@@ -44,7 +45,7 @@ export function registerContentModelTools(server, cmsClient) {
     },
     async ({ id }) => {
       const response = await cmsClient.get(`/api/content-models/${id}/fields`);
-      return { content: [{ type: 'text', text: JSON.stringify(response, null, 2) }] };
+      return buildToolResult(response);
     }
   );
 }

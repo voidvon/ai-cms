@@ -1,5 +1,5 @@
 {
-  "name": "www-spiraxsarcocn-root",
+  "name": "ai-cms",
   "private": true,
   "workspaces": [
     "system/server",

@@ -1,9 +1,9 @@
 {
-  "name": "spiraxsarcocn-mcp",
+  "name": "ai-cms-mcp",
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "MCP adapter for the Spirax Sarco CN CMS.",
+  "description": "MCP adapter for AI CMS.",
   "scripts": {
     "start": "node src/index.mjs",
     "dev": "node --watch src/index.mjs"

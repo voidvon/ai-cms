@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { buildToolResult } from './result-utils.mjs';
 
 const modelCodeField = z.string().trim().min(1);
 const itemIdField = z.union([z.number().int().positive(), z.string().trim().min(1)]);
@@ -99,18 +100,6 @@ async function sanitizeContentPayload(cmsClient, modelCode, payload) {
   };
 }
 
-function buildToolResult(response, meta = {}) {
-  return {
-    content: [{
-      type: 'text',
-      text: JSON.stringify({
-        ...response,
-        mcp_meta: meta
-      }, null, 2)
-    }]
-  };
-}
-
 export function registerContentItemTools(server, cmsClient) {
   server.registerTool(
     'search_content_items',
@@ -129,7 +118,7 @@ export function registerContentItemTools(server, cmsClient) {
           language: languageCode
         }
       });
-      return buildToolResult(response);
+      return buildToolResult(response, {}, 'content-item');
     }
   );
 
@@ -147,7 +136,7 @@ export function registerContentItemTools(server, cmsClient) {
           includeTranslations: normalizeBoolean(includeTranslations)
         }
       });
-      return buildToolResult(response);
+      return buildToolResult(response, {}, 'content-item');
     }
   );
 
@@ -164,7 +153,7 @@ export function registerContentItemTools(server, cmsClient) {
       return buildToolResult(response, {
         ignored_base_fields: sanitized.ignoredBaseFields,
         supported_base_fields: sanitized.supportedBaseFields
-      });
+      }, 'content-item');
     }
   );
 
@@ -181,7 +170,7 @@ export function registerContentItemTools(server, cmsClient) {
       return buildToolResult(response, {
         ignored_base_fields: sanitized.ignoredBaseFields,
         supported_base_fields: sanitized.supportedBaseFields
-      });
+      }, 'content-item');
     }
   );
 

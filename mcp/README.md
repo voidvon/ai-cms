@@ -1,4 +1,4 @@
-# SpiraxSarcoCN CMS MCP
+# AI CMS MCP
 
 ## 当前定位
 
@@ -44,6 +44,27 @@
 - `create_content_item`
 - `update_content_item`
 - `delete_content_item`
+- `list_templates`
+- `get_template`
+- `create_template`
+- `update_template`
+- `preview_template`
+- `publish_template`
+- `list_template_versions`
+- `get_template_version`
+- `restore_template_version`
+- `get_template_dependencies`
+- `delete_template`
+- `list_template_variants`
+- `get_selected_template_variant`
+- `get_template_variant`
+- `create_template_variant`
+- `update_template_variant`
+- `select_template_variant`
+- `delete_template_variant`
+- `list_template_bindings`
+- `upsert_template_binding`
+- `delete_template_binding`
 - `build_static`
 
 ## 启动
@@ -90,7 +111,26 @@ CMS_TOKEN=your-token
 - 还没有审计日志
 - 还没有 dry-run / preview
 - 还没有高风险操作确认
-- 还没有模板相关工具
 - 内容写工具会按模型字段定义裁剪 `base` 字段，并在返回中附带 `mcp_meta.ignored_base_fields`
 - 栏目和栏目节点写工具也会返回 `mcp_meta`，用于提示被忽略字段和当前支持字段
+- 模板工具默认返回摘要；只有显式传 `includeHeavyFields=true` 时，模板源码和版本源码才会回传
 - 删除类工具会在 `mcp_meta` 中附带 `dangerous_operation: true`
+
+## 上下文控制建议
+
+AI 对话接 MCP 时，上下文消耗主要来自“返回结果太大”，而不是工具数量本身。
+
+当前建议：
+
+- 优先让 AI 先调用列表工具，再按 id 调详情
+- 默认避免一次性读取整站栏目、整页 `content_html`、整段模板源码
+- 对高频管理动作，优先使用轻量工具，例如：
+  - `list_template_variants`
+  - `list_template_bindings`
+  - `list_column_nodes`
+- 对删除、切主题、静态发布这类动作，只返回必要结果和 `mcp_meta`
+
+如果后续你希望继续压缩上下文占用，下一步应做两类增强：
+
+1. 给大对象工具增加 `summaryOnly` / `includeHeavyFields` 开关
+2. 给列表类工具增加更强的分页、筛选和字段裁剪能力

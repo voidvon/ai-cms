@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { buildToolResult } from './result-utils.mjs';
 
 const COLUMN_BASE_FIELD_NAMES = new Set([
   'name',
@@ -47,18 +48,6 @@ const updateColumnSchema = {
 
 function normalizeBoolean(value) {
   return value ? 'true' : undefined;
-}
-
-function buildToolResult(response, meta = {}) {
-  return {
-    content: [{
-      type: 'text',
-      text: JSON.stringify({
-        ...response,
-        mcp_meta: meta
-      }, null, 2)
-    }]
-  };
 }
 
 function sanitizeTranslations(translations) {
@@ -132,7 +121,7 @@ export function registerColumnsTools(server, cmsClient) {
           includeTranslations: normalizeBoolean(includeTranslations)
         }
       });
-      return buildToolResult(response);
+      return buildToolResult(response, {}, 'column');
     }
   );
 
@@ -150,7 +139,7 @@ export function registerColumnsTools(server, cmsClient) {
           includeTranslations: normalizeBoolean(includeTranslations)
         }
       });
-      return buildToolResult(response);
+      return buildToolResult(response, {}, 'column');
     }
   );
 
@@ -169,7 +158,7 @@ export function registerColumnsTools(server, cmsClient) {
         ignored_translation_fields: sanitized.ignoredTranslationFields,
         supported_base_fields: sanitized.supportedBaseFields,
         supported_translation_fields: sanitized.supportedTranslationFields
-      });
+      }, 'column');
     }
   );
 
@@ -188,7 +177,7 @@ export function registerColumnsTools(server, cmsClient) {
         ignored_translation_fields: sanitized.ignoredTranslationFields,
         supported_base_fields: sanitized.supportedBaseFields,
         supported_translation_fields: sanitized.supportedTranslationFields
-      });
+      }, 'column');
     }
   );
 }
