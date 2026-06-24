@@ -3,6 +3,7 @@ import { ensureLanguagesSchema, getDefaultLanguage, listLanguages } from './lang
 import { ensureTemplatesSchema } from './templates.mjs';
 import { ensureContentModelsSchema, getContentModelById } from './content-models.mjs';
 import { resolveRelativePublicPath } from './column-paths.mjs';
+import { normalizeTemplateDataAssetsDeep } from './template-data-assets.mjs';
 
 let schemaEnsured = false;
 
@@ -1094,13 +1095,13 @@ function normalizeTemplateDataJson(value) {
     if (!trimmed) {
       return null;
     }
-    JSON.parse(trimmed);
-    return trimmed;
+    const parsed = JSON.parse(trimmed);
+    return JSON.stringify(normalizeTemplateDataValueDeep(parsed));
   }
   if (typeof value !== 'object') {
     throw new Error('template_data_json must be a JSON object or array');
   }
-  return JSON.stringify(value);
+  return JSON.stringify(normalizeTemplateDataValueDeep(value));
 }
 
 function parseTemplateDataJson(value) {
@@ -1109,10 +1110,14 @@ function parseTemplateDataJson(value) {
   }
   try {
     const parsed = JSON.parse(value);
-    return parsed && typeof parsed === 'object' ? parsed : null;
+    return parsed && typeof parsed === 'object' ? normalizeTemplateDataValueDeep(parsed) : null;
   } catch {
     return null;
   }
+}
+
+function normalizeTemplateDataValueDeep(value, key = '') {
+  return normalizeTemplateDataAssetsDeep(value, key);
 }
 
 function ensureColumnTranslationsSchema() {

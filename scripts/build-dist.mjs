@@ -12,6 +12,7 @@ async function main() {
   await writeDistPackageJson();
 
   await copyServer();
+  await copyShared();
   await copyAdminDist();
   await copyAdminSiteSource();
   await copyPublicAssets();
@@ -45,6 +46,10 @@ async function copyServer() {
   await copyDir('system/server/views');
   await copyDir('system/server/import');
   await copyDir('system/server/README.md');
+}
+
+async function copyShared() {
+  await copyDir('system/shared');
 }
 
 async function copyAdminDist() {
@@ -86,6 +91,10 @@ async function writeDistPackageJson() {
     name: 'spiraxsarcocn-dist',
     private: true,
     type: 'module',
+    workspaces: [
+      'system/server',
+      'system/admin'
+    ],
     scripts: {
       start: 'node server.mjs',
       'build:site': 'npm --prefix system/server run build:static',
@@ -111,7 +120,6 @@ This directory is the deployable runtime package.
 
 \`\`\`bash
 npm install
-npm --workspace system/server install --omit=dev
 npm run build:site
 PORT=1231 HOST=0.0.0.0 NODE_ENV=production npm start
 \`\`\`

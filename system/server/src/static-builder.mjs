@@ -33,6 +33,7 @@ import {
 import { getSiteConfig, resolveLanguageSitePublicBaseUrl } from './services/site.mjs';
 import { ensureTemplatesSchema } from './services/templates.mjs';
 import { listLanguages } from './services/languages.mjs';
+import { resolveNormalizedTemplateImagePath } from './services/template-data-assets.mjs';
 import { escapeHtml } from './utils/html.mjs';
 import { looksLikeLegacyMojibake } from './utils/legacy-text.mjs';
 import { normalizeLegacyAssetText, normalizeUploadedRelativePath, resolvePublicAssetUrl } from './services/uploads.mjs';
@@ -3147,7 +3148,7 @@ function normalizeLegacyColumnPageData(value) {
         ...value.hero,
         title: String(value.hero.title || value.title || '').trim(),
         summary: String(value.hero.summary || value.summary || '').trim(),
-        image: String(value.hero.image || value.mastheadImage || value.heroImage || '').trim()
+        image: resolveNormalizedLegacyImagePath(value.hero.image || value.mastheadImage || value.heroImage || '')
       }
     : null;
 
@@ -3157,14 +3158,16 @@ function normalizeLegacyColumnPageData(value) {
     summary: String(value.summary || '').trim(),
     pageKind,
     listPageSize: normalizeInteger(value.listPageSize, 0),
-    heroImage: normalizeUploadedRelativePath(String(value.heroImage || '').trim()),
-    mastheadImage: normalizeUploadedRelativePath(String(value.mastheadImage || value.heroImage || '').trim()),
+    heroImage: resolveNormalizedLegacyImagePath(value.heroImage || ''),
+    mastheadImage: resolveNormalizedLegacyImagePath(value.mastheadImage || value.heroImage || ''),
     hero,
     columnNavTitle: String(value.columnNavTitle || '').trim(),
     intro: normalizeLegacyLooseParagraphs(value.intro),
     overview: Array.isArray(value.overview) ? value.overview.filter(Boolean).map((item) => String(item).trim()).filter(Boolean) : [],
     benefits: Array.isArray(value.benefits) ? value.benefits.filter(Boolean) : [],
     cards: Array.isArray(value.cards) ? value.cards.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
+    featuredCards: Array.isArray(value.featuredCards) ? value.featuredCards.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
+    heroActions: Array.isArray(value.heroActions) ? value.heroActions.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
     models: Array.isArray(value.models) ? value.models.filter(Boolean) : [],
     downloads: Array.isArray(value.downloads) ? value.downloads.filter(Boolean) : [],
     supplementalSections: Array.isArray(value.supplementalSections) ? value.supplementalSections.filter(Boolean) : [],
@@ -3179,6 +3182,11 @@ function normalizeLegacyColumnPageData(value) {
     features: Array.isArray(value.features) ? value.features.filter(Boolean) : [],
     calloutCards: Array.isArray(value.calloutCards) ? value.calloutCards.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
     promoCards: Array.isArray(value.promoCards) ? value.promoCards.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
+    valuePoints: Array.isArray(value.valuePoints) ? value.valuePoints.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
+    industries: Array.isArray(value.industries) ? value.industries.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
+    brandProofItems: Array.isArray(value.brandProofItems) ? value.brandProofItems.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
+    resultsStripItems: Array.isArray(value.resultsStripItems) ? value.resultsStripItems.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
+    faqItems: Array.isArray(value.faqItems) ? value.faqItems.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
     filterGroups: Array.isArray(value.filterGroups) ? value.filterGroups.filter(Boolean) : [],
     jobs: Array.isArray(value.jobs) ? value.jobs.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
     jobsSummary: String(value.jobsSummary || '').trim(),
@@ -3193,7 +3201,7 @@ function normalizeLegacyColumnPageData(value) {
     faq: value.faq && typeof value.faq === 'object' ? value.faq : null,
     answerSummary: value.answerSummary && typeof value.answerSummary === 'object' ? value.answerSummary : null,
     technicalReview: value.technicalReview && typeof value.technicalReview === 'object' ? value.technicalReview : null,
-    featureImage: normalizeUploadedRelativePath(String(value.featureImage || '').trim()),
+    featureImage: resolveNormalizedLegacyImagePath(value.featureImage || ''),
     slides: Array.isArray(value.slides) ? value.slides.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
     featureHeading: value.featureHeading && typeof value.featureHeading === 'object' ? value.featureHeading : null,
     introBlock: value.introBlock && typeof value.introBlock === 'object'
@@ -3204,7 +3212,10 @@ function normalizeLegacyColumnPageData(value) {
     supportList: value.supportList && typeof value.supportList === 'object' ? value.supportList : null,
     frame: value.frame && typeof value.frame === 'object' ? value.frame : null,
     promo: value.promo && typeof value.promo === 'object' ? normalizeLegacyPageLinkFields(value.promo) : null,
-    spotlight: value.spotlight && typeof value.spotlight === 'object' ? value.spotlight : null
+    spotlight: value.spotlight && typeof value.spotlight === 'object' ? value.spotlight : null,
+    aboutCta: value.aboutCta && typeof value.aboutCta === 'object' ? normalizeLegacyPageLinkFields(value.aboutCta) : null,
+    latestProducts: value.latestProducts && typeof value.latestProducts === 'object' ? normalizeLegacyPageLinkFields(value.latestProducts) : null,
+    contactCallout: value.contactCallout && typeof value.contactCallout === 'object' ? normalizeLegacyPageLinkFields(value.contactCallout) : null
   };
 }
 
@@ -3229,7 +3240,16 @@ function normalizeLegacyPageLinkFields(item) {
       normalized[key] = normalizeLegacyInternalHref(normalized[key]);
     }
   }
+  for (const key of ['image', 'imageSrc', 'imageUrl', 'heroImage', 'mastheadImage', 'backgroundImage', 'featureImage']) {
+    if (key in normalized) {
+      normalized[key] = normalizeUploadedRelativePath(normalized[key]) || normalized[key];
+    }
+  }
   return normalized;
+}
+
+function resolveNormalizedLegacyImagePath(value) {
+  return resolveNormalizedTemplateImagePath(value);
 }
 
 function normalizeLegacyInternalHref(value) {

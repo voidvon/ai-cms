@@ -65,19 +65,19 @@ html/
 迁移旧路径：
 
 ```bash
-npm --prefix system/server run db:migrate-uploads -- --write
+当前仓库已完成模板数据图片路径迁移，不再保留独立迁移脚本。
 ```
 
 干跑检查：
 
 ```bash
-npm --prefix system/server run db:migrate-uploads
+使用数据库查询或 `rg` 检查是否仍有旧 `/images/...` 引用。
 ```
 
 检查是否仍有旧产品路径：
 
 ```bash
-rg -n "/images/global/products|public/images/global/products" .
+rg -n "/images/global/products|public/images/global/products|/uploadfile/|/img/" .
 ```
 
 ## 注意事项

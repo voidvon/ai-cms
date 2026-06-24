@@ -424,7 +424,7 @@ const localizationOverrides = {
   }
 };
 
-const staticDirsToSync = ['embedded-tools', 'pagefind', 'pdfs'];
+const staticDirsToSync = ['pagefind', 'pdfs'];
 
 const existingColumns = listColumns({ includeTranslations: true });
 const columnByRoutePath = new Map(

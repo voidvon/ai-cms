@@ -504,7 +504,7 @@ function walk(dir, files) {
     }
     const fullPath = path.join(dir, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === '_astro' || entry.name === 'pagefind' || entry.name === 'images' || entry.name === 'embedded-tools' || entry.name === 'pdfs') {
+      if (entry.name === '_astro' || entry.name === 'pagefind' || entry.name === 'images' || entry.name === 'pdfs') {
         continue;
       }
       walk(fullPath, files);

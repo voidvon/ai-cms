@@ -1,19 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { UPLOADS_IMAGES_ROOT } from '../src/config.mjs';
+import { normalizeUploadedRelativePath } from '../src/services/uploads.mjs';
 import { createContentItem, listContentItems } from '../src/services/content-items.mjs';
 import { getDefaultLanguage } from '../src/services/languages.mjs';
 import { listColumns } from '../src/services/columns.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const projectRoot = path.resolve(__dirname, '../../..');
 const sourceRoot = process.env.SPIRAX_GLOBAL_DIR
   ? path.resolve(process.env.SPIRAX_GLOBAL_DIR)
   : '/Volumes/DATA/Space/spirax-global';
 const sourceDocsRoot = path.join(sourceRoot, 'docs', 'zh-cn');
 const sourceDistRoot = path.join(sourceRoot, 'dist', 'zh-cn');
-const htmlRoot = path.join(projectRoot, 'html');
 const defaultLanguageCode = getDefaultLanguage()?.code || 'zh-CN';
 const MODEL_CODE = 'product';
 
@@ -190,43 +190,42 @@ function collectReferencedImagePaths(parsed) {
 }
 
 function mapImagePath(value) {
-  const normalized = String(value || '').trim();
-  if (!normalized.startsWith('/images/')) {
+  const normalized = normalizeUploadedRelativePath(value);
+  const legacyValue = String(value || '').trim();
+  if (!normalized) {
+    assertNoLegacyImageAssetPath(legacyValue);
     return '';
-  }
-
-  const relativePath = normalized.replace(/^\/+/, '');
-  const currentTarget = path.join(htmlRoot, relativePath);
-  if (fs.existsSync(currentTarget)) {
-    return normalized;
-  }
-
-  const uploadsAlias = normalized.replace(/^\/images\/global\/products\//, '/uploads/images/202606/');
-  const uploadsTarget = path.join(htmlRoot, uploadsAlias.replace(/^\/+/, ''));
-  if (fs.existsSync(uploadsTarget)) {
-    return uploadsAlias;
   }
 
   return normalized;
 }
 
 function syncAsset(publicPath) {
-  const normalized = String(publicPath || '').trim();
-  if (!normalized.startsWith('/images/')) {
+  const normalized = normalizeUploadedRelativePath(publicPath);
+  const legacyValue = String(publicPath || '').trim();
+  if (!normalized) {
+    assertNoLegacyImageAssetPath(legacyValue);
     return '';
   }
-  const relativePath = normalized.replace(/^\/+/, '');
-  const targetPath = path.join(htmlRoot, relativePath);
+  const relativePath = normalized.replace(/^\/uploads\/images\//, '');
+  const targetPath = path.join(UPLOADS_IMAGES_ROOT, relativePath);
   if (fs.existsSync(targetPath)) {
-    return relativePath;
+    return `/uploads/images/${relativePath}`;
   }
-  const sourcePath = path.join(sourceDistRoot, relativePath);
+  const sourcePath = path.join(sourceDistRoot, 'images', relativePath);
   if (!fs.existsSync(sourcePath)) {
     return '';
   }
   fs.mkdirSync(path.dirname(targetPath), { recursive: true });
   fs.copyFileSync(sourcePath, targetPath);
-  return relativePath;
+  return `/uploads/images/${relativePath}`;
+}
+
+function assertNoLegacyImageAssetPath(value) {
+  const normalized = String(value || '').trim();
+  if (normalized.includes('/images/')) {
+    throw new Error(`Legacy /images asset path is no longer supported in import-spirax-global-missing-content-details: ${normalized}`);
+  }
 }
 
 function parseSourceMdx(filePath) {

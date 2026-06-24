@@ -1,4 +1,4 @@
-import { Outlet, useNavigate, useLocation } from 'react-router-dom'
+import { Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { authApi } from '@/api/auth'
 import { ChevronDown, LogOut, Moon, Sun } from 'lucide-react'
@@ -51,8 +51,7 @@ export default function DashboardLayout() {
   }
 
   if (!user?.success) {
-    navigate('/login')
-    return null
+    return <Navigate to="/login" replace />
   }
 
   const handleLogout = async () => {
@@ -86,6 +85,7 @@ export default function DashboardLayout() {
         { path: '/admins', label: '管理员' },
         { path: '/static-gen', label: '静态生成' },
         { path: '/site-config', label: '网站配置' },
+        { path: '/bulk-replace', label: '批量替换' },
         { path: '/sitemap-diagnostics', label: 'Sitemap 诊断' },
         { path: '/llms-diagnostics', label: 'LLMS 诊断' },
       ]

@@ -169,7 +169,7 @@ ${legacySearchForm()}</div>
 <ul>${props.serviceIndexHtml}</ul>
 </div><div class="index-contact"><h2><span>联系我们</span></h2><p>
 地址: ${html(props.site.company_address)}<br>电话: ${html(props.site.company_phone)}<br>传真: ${html(props.site.company_fax)}<br>手机: ${html(props.site.web_mobile)}<br>邮箱: ${html(props.site.company_email)}</p>
-</div><A href="tencent://message/?uin=${html(props.site.web_qq)}&Site=${html(props.site.company_name)}&Menu=yes" target=blank><IMG alt=${html(props.site.company_name)}在线客服 src="/images/13_online.gif" border="0"></A></div>
+</div><a href="tencent://message/?uin=${html(props.site.web_qq)}&Site=${html(props.site.company_name)}&Menu=yes" target="_blank" rel="noreferrer">在线客服</a></div>
 </div> ${props.fragments.indexFootHtml || ''}</div>`
 
   return (
@@ -265,7 +265,7 @@ export function LegacyCollectionDetailPage(props: LegacyCollectionDetailPageProp
 <td width="41%" valign="top" class="in5"><table width="100%" height="151" border="0"">
   <tr><td width="24%" height="20" class="Font-Weight">产品名称：</td><td width="76%" class="Font_2E4690_a Font-Weight">${html(props.title)}</td></tr><tr>
   <td height="20" class="Font-Weight">产品型号：</td><td class="Font-Weight Font_2E4690_a">${html(props.code)}</td></tr><tr>
-  <td height="27" colspan="2" align="left"><A href="tencent://message/?uin=${html(props.site.web_qq)}&Site=${html(props.site.company_name)}&Menu=yes" target=blank><IMG src="/images/gmzx.gif" border=0></A></td>
+  <td height="27" colspan="2" align="left"><a href="tencent://message/?uin=${html(props.site.web_qq)}&Site=${html(props.site.company_name)}&Menu=yes" target="_blank" rel="noreferrer">在线咨询</a></td>
 </tr><tr><td height="26" colspan="2" align="left"><span class="Font_FF0000_a Font-Weight">咨询电话：${html(props.site.company_phone)}</span></td></tr>
 <tr><td height="22" colspan="2" align="left"><span class="Font_FF0000_a Font-Weight">传真：${html(props.site.company_fax)}</span></td></tr><tr></tr></table></td>
 <td width="40%" valign="top">${props.relatedItemsHtml}</td></tr></table>
@@ -328,7 +328,6 @@ ${articleSidebar(props)}</td><td width="${isService ? '821' : '812'}" valign="to
         {renderSeoHead(props)}
         {!props.seoMeta?.basic?.description ? <meta name="description" content={props.title || label} /> : null}
         <meta content="阀门，球阀，闸阀" name="classification" />
-        <link href="/img/css.css" type="text/css" rel="stylesheet" />
         <link href="/css/webmain.css" rel="stylesheet" type="text/css" />
       </head>
       <body onContextMenu={() => false} onMouseDown={() => false} dangerouslySetInnerHTML={raw(body)} />
@@ -357,7 +356,6 @@ ${articleSidebar(props)}</td><td width="812" valign="top" ><table width="812" bo
         {renderSeoHead(props)}
         {!props.seoMeta?.basic?.description ? <meta name="description" content={props.itemDescription} /> : null}
         <meta content="阀门，球阀，闸阀" name="classification" />
-        <link href="/img/css.css" type="text/css" rel="stylesheet" />
         <link href="/css/webmain.css" rel="stylesheet" type="text/css" />
       </head>
       <body onContextMenu={() => false} onCopy={() => false} onCut={() => false} onSelect={() => false} dangerouslySetInnerHTML={raw(body)} />

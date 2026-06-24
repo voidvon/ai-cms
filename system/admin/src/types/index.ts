@@ -377,3 +377,78 @@ export interface ApiResponse<T> {
   pagination?: PaginationInfo;
   message?: string;
 }
+
+export interface BulkReplaceFieldOption {
+  field_name: string;
+  field_label: string;
+  field_type?: string;
+}
+
+export interface BulkReplaceModelOption {
+  code: string;
+  name: string;
+  mainFields: BulkReplaceFieldOption[];
+  translationFields: BulkReplaceFieldOption[];
+}
+
+export interface BulkReplaceOptions {
+  contentModels: BulkReplaceModelOption[];
+  templateFields: Array<{
+    value: string;
+    label: string;
+  }>;
+  templateTypes: Array<{
+    value: string;
+    label: string;
+  }>;
+}
+
+export interface BulkReplaceMatchItem {
+  id: number;
+  language_code?: string | null;
+  name?: string;
+  code?: string;
+  type?: string;
+  before_excerpt: string;
+  after_excerpt: string;
+  hit_count: number;
+}
+
+export interface BulkReplaceResult {
+  target: 'content' | 'template';
+  mode: 'preview' | 'execute';
+  scope?: 'content_main' | 'content_translation';
+  model_code?: string;
+  model_name?: string;
+  field_name?: string;
+  field_label?: string;
+  template_field?: string;
+  template_type?: string | null;
+  match_mode: 'plain' | 'regex';
+  replace_mode: 'replace' | 'overwrite';
+  match_case: boolean;
+  language_code?: string | null;
+  total_rows: number;
+  total_hits: number;
+  affected_ids: number[];
+  matches: BulkReplaceMatchItem[];
+}
+
+export interface BulkReplacePreviewPayload {
+  target: 'content' | 'template';
+  scope?: 'content_main' | 'content_translation';
+  model_code?: string;
+  field_name?: string;
+  language_code?: string;
+  template_field?: string;
+  template_type?: string;
+  search: string;
+  replace: string;
+  match_mode: 'plain' | 'regex';
+  replace_mode: 'replace' | 'overwrite';
+  match_case: boolean;
+}
+
+export interface BulkReplaceExecutePayload extends BulkReplacePreviewPayload {
+  confirm_execution: boolean;
+}

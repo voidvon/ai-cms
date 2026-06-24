@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 import { UPLOADS_IMAGES_ROOT, UPLOADS_PDFS_ROOT, UPLOADS_SKIN_ROOT } from '../config.mjs';
 
@@ -11,9 +10,6 @@ export function resolveUploadedFilePath(relativePath) {
   const candidate = resolveUploadCandidate(normalized);
   if (!candidate) {
     return null;
-  }
-  if (fs.existsSync(candidate)) {
-    return candidate;
   }
   return candidate;
 }

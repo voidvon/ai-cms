@@ -15,6 +15,10 @@ export async function serveStatic(request, reply, options = {}) {
     return false;
   }
 
+  if (isDisabledStaticPath(rewrittenPathname)) {
+    return false;
+  }
+
   if (rewrittenPathname === '/admin' || rewrittenPathname.startsWith('/admin/')) {
     return serveAdminApp(request, reply, rewrittenPathname);
   }
@@ -203,6 +207,10 @@ function isUnsafePath(pathname) {
   return path.normalize(pathname).includes('..');
 }
 
+function isDisabledStaticPath(pathname) {
+  return pathname === '/embedded-tools' || pathname.startsWith('/embedded-tools/');
+}
+
 function isStaticMethod(method) {
   return method === 'GET' || method === 'HEAD';
 }
@@ -242,7 +250,7 @@ function getStaticCandidates(pathname) {
 function getSharedAssetCandidates(pathname) {
   const normalized = String(pathname || '').replace(/\/{2,}/g, '/');
   const match = normalized.match(
-    /^\/([^/]+)\/(css|js|images|img|skin|upload|uploads|assets)(\/.*)?$/i
+    /^\/([^/]+)\/(css|js|skin|upload|uploads|assets)(\/.*)?$/i
   );
 
   if (!match) {
@@ -251,14 +259,7 @@ function getSharedAssetCandidates(pathname) {
 
   const [, , assetDir, suffix = ''] = match;
   const strippedPath = `/${assetDir}${suffix}`;
-  const candidates = [strippedPath];
-
-  const rewrittenStrippedPath = rewriteLegacyStaticPath(strippedPath);
-  if (rewrittenStrippedPath !== strippedPath) {
-    candidates.push(rewrittenStrippedPath);
-  }
-
-  return candidates;
+  return [strippedPath];
 }
 
 function normalizeSharedUploadPath(pathname) {
@@ -269,17 +270,6 @@ function normalizeSharedUploadPath(pathname) {
 
   if (/^\/upload\/(?:images|skin|pdfs)\//i.test(normalized)) {
     return normalized.replace(/^\/upload\//i, '/');
-  }
-
-  if (/^\/uploadfile\//i.test(normalized)) {
-    return normalized.replace(/^\/uploadfile\//i, '/images/');
-  }
-
-  if (/^\/images\//i.test(normalized)) {
-    return normalized;
-  }
-  if (/^\/img\//i.test(normalized)) {
-    return normalized.replace(/^\/img\//i, '/images/');
   }
   if (/^\/skin\//i.test(normalized)) {
     return normalized;
@@ -338,8 +328,4 @@ function formatHostnameForUrl(hostname) {
     return hostname;
   }
   return hostname.startsWith('[') ? hostname : `[${hostname}]`;
-}
-
-function rewriteLegacyStaticPath(pathname) {
-  return String(pathname || '').replace(/\/{2,}/g, '/');
 }
