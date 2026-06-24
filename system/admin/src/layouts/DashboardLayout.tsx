@@ -195,8 +195,8 @@ export default function DashboardLayout() {
             </BreadcrumbList>
           </Breadcrumb>
         </header>
-        <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden p-4">
-          <div className="min-h-0 flex-1 overflow-hidden">
+        <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+          <div className="min-h-0 flex-1">
             <Outlet />
           </div>
         </main>

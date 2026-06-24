@@ -12,6 +12,7 @@ async function main() {
   await writeDistPackageJson();
 
   await copyServer();
+  await copyShared();
   await copyAdminDist();
   await copyAdminSiteSource();
   await copyPublicAssets();
@@ -45,6 +46,10 @@ async function copyServer() {
   await copyDir('system/server/views');
   await copyDir('system/server/import');
   await copyDir('system/server/README.md');
+}
+
+async function copyShared() {
+  await copyDir('system/shared');
 }
 
 async function copyAdminDist() {

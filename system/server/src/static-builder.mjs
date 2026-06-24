@@ -263,6 +263,7 @@ function sanitizeRenderGroupPart(value) {
 export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cleanExisting = false, languageCode = null } = {}) {
   getDb();
   const targetLanguages = resolveStaticBuildLanguages(languageCode);
+  console.log(`[static-builder] Starting static build for ${targetLanguages.length} language(s)`);
 
   // 先获取 columns 用于动态生成 section 列表
   const columns = listColumns({ languageCode: targetLanguages[0]?.code || null });
@@ -287,6 +288,7 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
   for (const language of targetLanguages) {
     const normalizedOutputRoot = resolveLanguageOutputRoot(outputRoot, language);
     const results = [];
+    console.log(`[static-builder] Language ${language.code}: output -> ${normalizedOutputRoot}`);
 
     // 初始化全局栏目目录映射和栏目映射
     const templateContext = getLegacyTemplateContext(language.code);
@@ -302,20 +304,34 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
     }
 
     for (const target of resolvedTargets) {
-      results.push(target.execute({
+      const startedAt = Date.now();
+      console.log(`[static-builder] ${language.code}: start -> ${target.label}`);
+      const buildResult = target.execute({
         outputRoot: normalizedOutputRoot,
         languageCode: language.code,
         templateContext,
         finalizeAssets: false
-      }));
+      });
+      const elapsedMs = Date.now() - startedAt;
+      console.log(
+        `[static-builder] ${language.code}: done -> ${target.label} `
+        + `(${buildResult.filesWritten} files, ${buildResult.recordsProcessed} records, ${elapsedMs}ms)`
+      );
+      results.push(buildResult);
     }
     if (requiresTemplateRuntime) {
+      console.log(`[static-builder] ${language.code}: building shared TSX assets`);
       buildRegisteredTsxAssets(normalizedOutputRoot);
     }
+    console.log(`[static-builder] ${language.code}: syncing shared static assets`);
     syncStaticSupportAssets(sharedAssetRoot, normalizedOutputRoot);
 
     const languageTotalFiles = results.reduce((sum, item) => sum + item.filesWritten, 0);
     const languageTotalRecords = results.reduce((sum, item) => sum + item.recordsProcessed, 0);
+    console.log(
+      `[static-builder] ${language.code}: completed `
+      + `(${languageTotalFiles} files, ${languageTotalRecords} records)`
+    );
     totalFiles += languageTotalFiles;
     totalRecords += languageTotalRecords;
     languageBuilds.push({
