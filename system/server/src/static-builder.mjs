@@ -2228,6 +2228,17 @@ function buildLegacyManagedColumnDetailPageProps({ templateContext, rootColumn =
   const contentImages = normalizeManagedContentImages(managedItem);
   const columnPageData = normalizeLegacyColumnPageData(columnNode?.template_data);
   let managedContentPageData = normalizeLegacyColumnPageData(managedItem?.template_data);
+  const sharedSpecOptions = buildSharedSpecOptions(managedItem?.spec_options);
+
+  if (sharedSpecOptions.length > 0) {
+    managedContentPageData = {
+      ...(managedContentPageData || {}),
+      topPanel: {
+        ...((managedContentPageData?.topPanel && typeof managedContentPageData.topPanel === 'object') ? managedContentPageData.topPanel : {}),
+        specOptions: sharedSpecOptions
+      }
+    };
+  }
 
   // 修正 pageData.brandPathSection.cards 中的 URL，确保使用完整路径并添加尾部斜杠
   if (managedContentPageData?.brandPathSection?.cards && Array.isArray(managedContentPageData.brandPathSection.cards)) {
@@ -4261,4 +4272,18 @@ function formatLegacyDateOnly(value) {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
+}
+
+function buildSharedSpecOptions(values) {
+  if (!Array.isArray(values)) {
+    return [];
+  }
+
+  return values
+    .map((value) => String(value || '').trim())
+    .filter(Boolean)
+    .map((value) => ({
+      label: value,
+      value
+    }));
 }

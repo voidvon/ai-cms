@@ -5,6 +5,7 @@ import { execute, queryAll, queryOne } from '../src/db.mjs';
 import { UPLOADS_IMAGES_ROOT } from '../src/config.mjs';
 import { normalizeUploadedRelativePath } from '../src/services/uploads.mjs';
 import { createLanguage, listLanguages, updateLanguage } from '../src/services/languages.mjs';
+import { normalizePageDataSpecOptions } from './lib/spec-option-normalizer.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -427,6 +428,10 @@ function resolveSourceMetadata(routePath) {
     ...(title ? { title } : {}),
     ...(summary ? { summary } : {})
   };
+  const normalizedPageData = normalizePageDataSpecOptions(
+    Object.keys(pageData).length > 0 ? pageData : null,
+    languageCode
+  );
   const contentHtml = mdxMetadata?.contentHtml || htmlMetadata?.contentHtml || '';
 
   return {
@@ -435,7 +440,7 @@ function resolveSourceMetadata(routePath) {
     seoTitle: coalesceString(mdxMetadata?.seoTitle, htmlMetadata?.seoTitle, title),
     seoDescription: coalesceString(mdxMetadata?.seoDescription, htmlMetadata?.seoDescription, summary),
     description: coalesceString(mdxMetadata?.description, htmlMetadata?.description, summary),
-    pageData: Object.keys(pageData).length > 0 ? pageData : null,
+    pageData: normalizedPageData,
     contentHtml
   };
 }

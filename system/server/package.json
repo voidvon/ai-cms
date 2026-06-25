@@ -16,6 +16,8 @@
     "db:sync:list-meta": "node scripts/sync-spirax-global-list-column-meta.mjs",
     "db:sync:content-meta": "node scripts/sync-spirax-global-content-meta.mjs",
     "db:sync:single-meta": "node scripts/sync-spirax-global-single-column-meta.mjs",
+    "db:migrate:product-spec-options": "node scripts/migrate-product-spec-options-to-main-table.mjs",
+    "db:fix:en-spec-options": "node scripts/fix-en-product-spec-options.mjs",
     "db:repair-encoding": "node scripts/repair-legacy-encoding.mjs --write",
     "admin:create": "node scripts/create-admin.mjs",
     "build:static": "node scripts/build-static.mjs"

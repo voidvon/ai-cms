@@ -39,6 +39,7 @@ function buildMainTableSelect(modelCode, alias = 'e') {
     'custom_url',
     'code',
     'images',
+    'spec_options_json',
     'primary_image',
     'is_visible',
     'is_featured_home',
@@ -51,6 +52,7 @@ function buildMainTableSelect(modelCode, alias = 'e') {
     } else {
       // 字段不存在，返回默认值
       if (field === 'images') return `'[]' AS ${field}`;
+      if (field === 'spec_options_json') return `'[]' AS ${field}`;
       if (field === 'is_visible') return `1 AS ${field}`;
       if (field === 'is_featured_home') return `0 AS ${field}`;
       if (field === 'sort_order') return `0 AS ${field}`;
@@ -372,6 +374,7 @@ export function createContentEntry(modelCode, input) {
   appendMainTableField(insertFields, insertValues, 'custom_url', payload.base.custom_url, mainFields);
   appendMainTableField(insertFields, insertValues, 'code', payload.base.code, mainFields);
   appendMainTableField(insertFields, insertValues, 'images', payload.base.images, mainFields);
+  appendMainTableField(insertFields, insertValues, 'spec_options_json', payload.base.spec_options_json, mainFields);
   appendMainTableField(insertFields, insertValues, 'primary_image', payload.base.primary_image, mainFields);
   appendMainTableField(insertFields, insertValues, 'is_visible', payload.base.is_visible, mainFields);
   appendMainTableField(insertFields, insertValues, 'is_featured_home', payload.base.is_featured_home, mainFields);
@@ -418,6 +421,7 @@ export function updateContentEntry(modelCode, id, input) {
   appendMainTableAssignment(updateAssignments, updateValues, 'custom_url', payload.base.custom_url, mainFields);
   appendMainTableAssignment(updateAssignments, updateValues, 'code', payload.base.code, mainFields);
   appendMainTableAssignment(updateAssignments, updateValues, 'images', payload.base.images, mainFields);
+  appendMainTableAssignment(updateAssignments, updateValues, 'spec_options_json', payload.base.spec_options_json, mainFields);
   appendMainTableAssignment(updateAssignments, updateValues, 'primary_image', payload.base.primary_image, mainFields);
   appendMainTableAssignment(updateAssignments, updateValues, 'is_visible', payload.base.is_visible, mainFields);
   appendMainTableAssignment(updateAssignments, updateValues, 'is_featured_home', payload.base.is_featured_home, mainFields);
@@ -584,9 +588,13 @@ function normalizeContentEntryInput(modelCode, input, { existingEntry = null } =
   const defaultLanguageCode = getDefaultLanguage()?.code || 'zh-CN';
   const supportsImageGallery = fieldNames.has('images');
   const supportsPrimaryImage = fieldNames.has('primary_image');
+  const supportsSpecOptions = fieldNames.has('spec_options_json');
   const images = supportsImageGallery
     ? normalizeImageList(baseInput.images ?? existing.images)
     : [];
+  const specOptions = supportsSpecOptions
+    ? normalizeSpecOptionsJson(baseInput.spec_options_json ?? existing.spec_options_json)
+    : '[]';
   const singleImage = normalizeSingleImage(baseInput.picture ?? baseInput.image ?? existing.picture ?? existing.image);
   const primaryImage = supportsPrimaryImage
     ? (normalizeSingleImage(baseInput.primary_image ?? existing.primary_image) || images[0] || singleImage || '')
@@ -619,6 +627,7 @@ function normalizeContentEntryInput(modelCode, input, { existingEntry = null } =
       custom_url: customUrl,
       code: toNullableString(baseInput.code ?? existing.code) || '',
       images: supportsImageGallery ? JSON.stringify(images) : EMPTY_IMAGE_LIST,
+      spec_options_json: specOptions,
       primary_image: primaryImage,
       is_visible: toBooleanInt(baseInput.is_visible ?? existing.is_visible, 1),
       is_featured_home: toBooleanInt(baseInput.is_featured_home ?? existing.is_featured_home ?? existing.is_featured, 0),
@@ -697,6 +706,7 @@ function resolveDefaultTranslation(translations, defaultLanguageCode) {
 function mapEntryRow(modelCode, row) {
   const images = normalizeImageList(row.images);
   const primaryImage = resolvePrimaryImage(row.primary_image, row.images);
+  const specOptions = parseSpecOptionsJson(row.spec_options_json);
   const requestedLanguageCode = row.requested_language_code || row.current_language_code || null;
   const resolvedLanguageCode = row.current_language_code || requestedLanguageCode;
   const base = {
@@ -706,6 +716,8 @@ function mapEntryRow(modelCode, row) {
     content_html: row.content_html || '',
     template_data_json: row.template_data_json || null,
     template_data: parseTemplateDataJson(row.template_data_json),
+    spec_options_json: normalizeSpecOptionsJson(row.spec_options_json),
+    spec_options: specOptions,
     seo_title: row.seo_title ?? null,
     seo_description: row.seo_description ?? null,
     custom_url: row.custom_url || null,
@@ -871,6 +883,39 @@ function normalizeTemplateDataJson(value) {
     throw new Error('template_data_json must be a JSON object or array');
   }
   return JSON.stringify(normalizeTemplateDataAssetsDeep(value));
+}
+
+function normalizeSpecOptionsJson(value) {
+  if (value == null || value === '') {
+    return '[]';
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return '[]';
+    }
+    const parsed = JSON.parse(trimmed);
+    if (!Array.isArray(parsed)) {
+      throw new Error('spec_options_json must be a JSON array');
+    }
+    return JSON.stringify(
+      parsed
+        .map((item) => String(item || '').trim())
+        .filter(Boolean)
+    );
+  }
+  if (!Array.isArray(value)) {
+    throw new Error('spec_options_json must be a JSON array');
+  }
+  return JSON.stringify(value.map((item) => String(item || '').trim()).filter(Boolean));
+}
+
+function parseSpecOptionsJson(value) {
+  try {
+    return JSON.parse(normalizeSpecOptionsJson(value));
+  } catch {
+    return [];
+  }
 }
 
 function parseTemplateDataJson(value) {

@@ -1,5 +1,5 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
-import { ensureContentModelFieldsSchema, mergeModelFieldConfigs } from './content-model-fields.mjs';
+import { ensureContentModelFieldsSchema, mergeModelFieldConfigs, upsertConfiguredModelField } from './content-model-fields.mjs';
 
 const BUILTIN_MODELS = [
   {
@@ -26,6 +26,7 @@ const FIELD_LABELS = {
   content_html: '正文内容',
   requirements_html: '具体要求',
   images: '产品图片',
+  spec_options_json: '产品规格',
   picture: '图片',
   is_featured_home: '首页推荐',
   is_visible: '显示',
@@ -218,6 +219,48 @@ function ensureBuiltinContentModels() {
         ]
       );
     }
+  });
+
+  ensureBuiltinModelFields();
+}
+
+function ensureBuiltinModelFields() {
+  upsertConfiguredModelField('product', 'images', {
+    field_label: '产品图片',
+    field_type: 'images',
+    is_required: 0,
+    is_listed: 1,
+    is_editable: 1,
+    is_translatable: 0,
+    is_searchable: 0,
+    is_system: 1,
+    sort_order: 30,
+    settings_json: null
+  }, {
+    field_name: 'images',
+    field_label: '产品图片',
+    field_type: 'images',
+    is_required: 0,
+    sort_order: 30
+  });
+
+  upsertConfiguredModelField('product', 'spec_options_json', {
+    field_label: '产品规格',
+    field_type: 'text',
+    is_required: 0,
+    is_listed: 1,
+    is_editable: 1,
+    is_translatable: 0,
+    is_searchable: 0,
+    is_system: 1,
+    sort_order: 35,
+    settings_json: null
+  }, {
+    field_name: 'spec_options_json',
+    field_label: '产品规格',
+    field_type: 'text',
+    is_required: 0,
+    sort_order: 35
   });
 }
 

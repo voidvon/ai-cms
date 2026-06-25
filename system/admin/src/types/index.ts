@@ -51,6 +51,8 @@ export interface ManagedContentItem {
   template_data_json?: string | null;
   template_data?: Record<string, unknown> | null;
   images?: string[];
+  spec_options_json?: string | null;
+  spec_options?: string[];
   primary_image?: string;
   is_featured_home: number;
   is_visible: number;

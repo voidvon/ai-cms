@@ -207,10 +207,11 @@ export default function ContentItemFormDialog({
           <Tabs value={activeLanguage} onValueChange={setActiveLanguage} className="rounded border p-4">
             <div className="space-y-3">
               <div>
-                <div className="font-medium">语言内容</div>
-                <div className="text-sm text-muted-foreground">{meta.languageDescription}</div>
+                <div className="font-medium">内容信息</div>
+                <div className="text-sm text-muted-foreground">基础信息与多语言内容分栏编辑。</div>
               </div>
               <TabsList className="w-full justify-start">
+                <TabsTrigger value="base">基础信息</TabsTrigger>
                 {languages.map((language) => (
                   <TabsTrigger key={language.id} value={language.code}>
                     {language.name}
@@ -219,6 +220,185 @@ export default function ContentItemFormDialog({
                 ))}
               </TabsList>
             </div>
+
+            <TabsContent value="base">
+              <div className="rounded border p-4 space-y-4">
+                <div>
+                  <div className="font-medium">基础字段</div>
+                  <div className="text-sm text-muted-foreground">这些字段不区分语言，所有语言共用同一份数据。</div>
+                </div>
+                {isFieldVisible(fieldMap, 'code') ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="code">{getFieldLabel(fieldMap, 'code', capabilities.codeFieldLabel)}</Label>
+                    <Input
+                      id="code"
+                      value={String(baseData.code || '')}
+                      disabled={!isFieldEditable(fieldMap, 'code')}
+                      onChange={(e) => setBaseData({ ...baseData, code: e.target.value })}
+                      placeholder="请输入产品编号"
+                    />
+                  </div>
+                ) : null}
+                {isFieldVisible(fieldMap, 'column_id') ? (
+                  <div className="space-y-2">
+                    <Label>{getFieldLabel(fieldMap, 'column_id', '所属栏目')}</Label>
+                    <Select
+                      value={baseData.column_id ? String(baseData.column_id) : ''}
+                      disabled={!isFieldEditable(fieldMap, 'column_id')}
+                      onValueChange={(value) => setBaseData({ ...baseData, column_id: Number.parseInt(value, 10) || undefined })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={meta.columnPlaceholder} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {modelColumns.map((column) => (
+                          <SelectItem key={column.id} value={String(column.id)}>
+                            {column.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : null}
+                <div className="space-y-2">
+                  <Label htmlFor="custom_url">自定义文件名</Label>
+                  <Input
+                    id="custom_url"
+                    value={String(baseData.custom_url || '')}
+                    onChange={(e) => setBaseData({ ...baseData, custom_url: e.target.value })}
+                    placeholder="留空则按栏目规则生成，例如 abcd/index.html"
+                  />
+                </div>
+                {capabilities.primaryImageFieldName === 'picture' && isFieldVisible(fieldMap, 'picture') ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="picture">{getFieldLabel(fieldMap, 'picture', capabilities.primaryImageFieldLabel)}</Label>
+                    <div className={!isFieldEditable(fieldMap, 'picture') ? 'pointer-events-none opacity-70' : ''}>
+                      <ImageUploadField
+                        id="picture"
+                        value={String(baseData.picture || '')}
+                        onChange={(picture) => setBaseData({ ...baseData, picture })}
+                        purpose={capabilities.primaryImagePurpose}
+                        placeholder="请输入封面图片路径"
+                      />
+                    </div>
+                  </div>
+                ) : null}
+                {capabilities.primaryImageFieldName === 'images' && isFieldVisible(fieldMap, 'images') ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="images">{getFieldLabel(fieldMap, 'images', capabilities.primaryImageFieldLabel)}</Label>
+                    <div className={!isFieldEditable(fieldMap, 'images') ? 'pointer-events-none opacity-70' : ''}>
+                      <ImagesUploadField
+                        id="images"
+                        value={Array.isArray(baseData.images) ? baseData.images as string[] : []}
+                        onChange={(images) => setBaseData({ ...baseData, images })}
+                        purpose={capabilities.primaryImagePurpose}
+                        placeholder="请输入产品图片路径"
+                      />
+                    </div>
+                  </div>
+                ) : null}
+                {modelCode === 'product' && isFieldVisible(fieldMap, 'spec_options_json') ? (
+                  <div className="space-y-2">
+                    <Label htmlFor="spec_options_json">{getFieldLabel(fieldMap, 'spec_options_json', '产品规格')}</Label>
+                    <Textarea
+                      id="spec_options_json"
+                      value={formatSpecOptionsTextareaValue(baseData.spec_options_json)}
+                      disabled={!isFieldEditable(fieldMap, 'spec_options_json')}
+                      onChange={(e) => setBaseData({ ...baseData, spec_options_json: parseSpecOptionsTextareaValue(e.target.value) })}
+                      placeholder={'每行一个规格，例如：\n1/2" (1232600)\nDN15 (1457130001)'}
+                      rows={6}
+                    />
+                    <div className="text-xs text-muted-foreground">非翻译字段。所有语言共用同一份规格数据，一行一个值。</div>
+                  </div>
+                ) : null}
+
+                {capabilities.supportsCreatedAt ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    {isFieldVisible(fieldMap, 'is_featured_home') ? (
+                      <div className="space-y-2">
+                        <Label htmlFor="is_featured_home">{getFieldLabel(fieldMap, 'is_featured_home', '推荐')}</Label>
+                        <Select
+                          value={String(baseData.is_featured_home ?? 0)}
+                          disabled={!isFieldEditable(fieldMap, 'is_featured_home')}
+                          onValueChange={(value) => setBaseData({ ...baseData, is_featured_home: parseInt(value, 10) })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">是</SelectItem>
+                            <SelectItem value="0">否</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : null}
+                    {isFieldVisible(fieldMap, 'created_at') ? (
+                      <div className="space-y-2">
+                        <Label htmlFor="created_at">{getFieldLabel(fieldMap, 'created_at', '创建时间')}</Label>
+                        <Input
+                          id="created_at"
+                          value={String(baseData.created_at || '')}
+                          disabled={!isFieldEditable(fieldMap, 'created_at')}
+                          onChange={(e) => setBaseData({ ...baseData, created_at: e.target.value })}
+                          placeholder="2026-06-13T12:00:00.000Z"
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-4">
+                    {capabilities.supportsVisibility && isFieldVisible(fieldMap, 'is_visible') ? (
+                      <div className="space-y-2">
+                        <Label htmlFor="is_visible">{getFieldLabel(fieldMap, 'is_visible', '显示状态')}</Label>
+                        <Select
+                          value={String(baseData.is_visible ?? 1)}
+                          disabled={!isFieldEditable(fieldMap, 'is_visible')}
+                          onValueChange={(value) => setBaseData({ ...baseData, is_visible: parseInt(value, 10) })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">显示</SelectItem>
+                            <SelectItem value="0">隐藏</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : null}
+                    {isFieldVisible(fieldMap, 'is_featured_home') ? (
+                      <div className="space-y-2">
+                        <Label htmlFor="is_featured_home">{getFieldLabel(fieldMap, 'is_featured_home', '推荐')}</Label>
+                        <Select
+                          value={String(baseData.is_featured_home ?? 0)}
+                          disabled={!isFieldEditable(fieldMap, 'is_featured_home')}
+                          onValueChange={(value) => setBaseData({ ...baseData, is_featured_home: parseInt(value, 10) })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">是</SelectItem>
+                            <SelectItem value="0">否</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    ) : null}
+                    {capabilities.supportsSortOrder && isFieldVisible(fieldMap, 'sort_order') ? (
+                      <div className="space-y-2">
+                        <Label htmlFor="sort_order">{getFieldLabel(fieldMap, 'sort_order', '排序')}</Label>
+                        <Input
+                          id="sort_order"
+                          type="number"
+                          disabled={!isFieldEditable(fieldMap, 'sort_order')}
+                          value={Number(baseData.sort_order ?? 0)}
+                          onChange={(e) => setBaseData({ ...baseData, sort_order: parseInt(e.target.value, 10) || 0 })}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                )}
+              </div>
+            </TabsContent>
 
             {languages.map((language) => {
               const translation = translations[language.code] || createEmptyTranslation(modelCode)
@@ -337,169 +517,6 @@ export default function ContentItemFormDialog({
             })}
           </Tabs>
 
-          <div className="rounded border p-4 space-y-4">
-            <div>
-              <div className="font-medium">基础字段</div>
-              <div className="text-sm text-muted-foreground">这些字段不区分语言，所有语言共用同一份数据。</div>
-            </div>
-            {isFieldVisible(fieldMap, 'code') ? (
-              <div className="space-y-2">
-                <Label htmlFor="code">{getFieldLabel(fieldMap, 'code', capabilities.codeFieldLabel)}</Label>
-                <Input
-                  id="code"
-                  value={String(baseData.code || '')}
-                  disabled={!isFieldEditable(fieldMap, 'code')}
-                  onChange={(e) => setBaseData({ ...baseData, code: e.target.value })}
-                  placeholder="请输入产品编号"
-                />
-              </div>
-            ) : null}
-            {isFieldVisible(fieldMap, 'column_id') ? (
-              <div className="space-y-2">
-                <Label>{getFieldLabel(fieldMap, 'column_id', '所属栏目')}</Label>
-                <Select
-                  value={baseData.column_id ? String(baseData.column_id) : ''}
-                  disabled={!isFieldEditable(fieldMap, 'column_id')}
-                  onValueChange={(value) => setBaseData({ ...baseData, column_id: Number.parseInt(value, 10) || undefined })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={meta.columnPlaceholder} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {modelColumns.map((column) => (
-                      <SelectItem key={column.id} value={String(column.id)}>
-                        {column.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
-            <div className="space-y-2">
-              <Label htmlFor="custom_url">自定义文件名</Label>
-              <Input
-                id="custom_url"
-                value={String(baseData.custom_url || '')}
-                onChange={(e) => setBaseData({ ...baseData, custom_url: e.target.value })}
-                placeholder="留空则按栏目规则生成，例如 abcd/index.html"
-              />
-            </div>
-            {capabilities.primaryImageFieldName === 'picture' && isFieldVisible(fieldMap, 'picture') ? (
-              <div className="space-y-2">
-                <Label htmlFor="picture">{getFieldLabel(fieldMap, 'picture', capabilities.primaryImageFieldLabel)}</Label>
-                <div className={!isFieldEditable(fieldMap, 'picture') ? 'pointer-events-none opacity-70' : ''}>
-                  <ImageUploadField
-                    id="picture"
-                    value={String(baseData.picture || '')}
-                    onChange={(picture) => setBaseData({ ...baseData, picture })}
-                    purpose={capabilities.primaryImagePurpose}
-                    placeholder="请输入封面图片路径"
-                  />
-                </div>
-              </div>
-            ) : null}
-            {capabilities.primaryImageFieldName === 'images' && isFieldVisible(fieldMap, 'images') ? (
-              <div className="space-y-2">
-                <Label htmlFor="images">{getFieldLabel(fieldMap, 'images', capabilities.primaryImageFieldLabel)}</Label>
-                <div className={!isFieldEditable(fieldMap, 'images') ? 'pointer-events-none opacity-70' : ''}>
-                  <ImagesUploadField
-                    id="images"
-                    value={Array.isArray(baseData.images) ? baseData.images as string[] : []}
-                    onChange={(images) => setBaseData({ ...baseData, images })}
-                    purpose={capabilities.primaryImagePurpose}
-                    placeholder="请输入产品图片路径"
-                  />
-                </div>
-              </div>
-            ) : null}
-
-            {capabilities.supportsCreatedAt ? (
-              <div className="grid grid-cols-2 gap-4">
-                {isFieldVisible(fieldMap, 'is_featured_home') ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="is_featured_home">{getFieldLabel(fieldMap, 'is_featured_home', '推荐')}</Label>
-                    <Select
-                      value={String(baseData.is_featured_home ?? 0)}
-                      disabled={!isFieldEditable(fieldMap, 'is_featured_home')}
-                      onValueChange={(value) => setBaseData({ ...baseData, is_featured_home: parseInt(value, 10) })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1">是</SelectItem>
-                        <SelectItem value="0">否</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : null}
-                {isFieldVisible(fieldMap, 'created_at') ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="created_at">{getFieldLabel(fieldMap, 'created_at', '创建时间')}</Label>
-                    <Input
-                      id="created_at"
-                      value={String(baseData.created_at || '')}
-                      disabled={!isFieldEditable(fieldMap, 'created_at')}
-                      onChange={(e) => setBaseData({ ...baseData, created_at: e.target.value })}
-                      placeholder="2026-06-13T12:00:00.000Z"
-                    />
-                  </div>
-                ) : null}
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-4">
-                {capabilities.supportsVisibility && isFieldVisible(fieldMap, 'is_visible') ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="is_visible">{getFieldLabel(fieldMap, 'is_visible', '显示状态')}</Label>
-                    <Select
-                      value={String(baseData.is_visible ?? 1)}
-                      disabled={!isFieldEditable(fieldMap, 'is_visible')}
-                      onValueChange={(value) => setBaseData({ ...baseData, is_visible: parseInt(value, 10) })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1">显示</SelectItem>
-                        <SelectItem value="0">隐藏</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : null}
-                {isFieldVisible(fieldMap, 'is_featured_home') ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="is_featured_home">{getFieldLabel(fieldMap, 'is_featured_home', '推荐')}</Label>
-                    <Select
-                      value={String(baseData.is_featured_home ?? 0)}
-                      disabled={!isFieldEditable(fieldMap, 'is_featured_home')}
-                      onValueChange={(value) => setBaseData({ ...baseData, is_featured_home: parseInt(value, 10) })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="1">是</SelectItem>
-                        <SelectItem value="0">否</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : null}
-                {capabilities.supportsSortOrder && isFieldVisible(fieldMap, 'sort_order') ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="sort_order">{getFieldLabel(fieldMap, 'sort_order', '排序')}</Label>
-                    <Input
-                      id="sort_order"
-                      type="number"
-                      disabled={!isFieldEditable(fieldMap, 'sort_order')}
-                      value={Number(baseData.sort_order ?? 0)}
-                      onChange={(e) => setBaseData({ ...baseData, sort_order: parseInt(e.target.value, 10) || 0 })}
-                    />
-                  </div>
-                ) : null}
-              </div>
-            )}
-          </div>
-
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               取消
@@ -547,6 +564,7 @@ function createEmptyBaseData(modelCode: SupportedModelCode, defaultColumnId?: nu
     column_id: defaultColumnId,
     custom_url: '',
     images: [] as string[],
+    spec_options_json: [] as string[],
     is_featured_home: 0,
     is_visible: 1,
     sort_order: 0,
@@ -572,6 +590,7 @@ function createBaseDataFromItem(modelCode: SupportedModelCode, item: ContentItem
     column_id: managedItem.column_id || undefined,
     custom_url: managedItem.custom_url || '',
     images: Array.isArray(managedItem.images) ? managedItem.images : [],
+    spec_options_json: Array.isArray(managedItem.spec_options) ? managedItem.spec_options : [],
     is_featured_home: managedItem.is_featured_home || 0,
     is_visible: managedItem.is_visible || 1,
     sort_order: managedItem.sort_order || 0,
@@ -646,4 +665,28 @@ function buildInitialTranslations(
 
 function getFormModelCapabilities(modelCode: SupportedModelCode): FormModelCapabilities {
   return FORM_MODEL_CAPABILITIES[modelCode]
+}
+
+function formatSpecOptionsTextareaValue(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || '').trim()).filter(Boolean).join('\n')
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value)
+      if (Array.isArray(parsed)) {
+        return parsed.map((item) => String(item || '').trim()).filter(Boolean).join('\n')
+      }
+    } catch {
+      return value
+    }
+  }
+  return ''
+}
+
+function parseSpecOptionsTextareaValue(value: string) {
+  return String(value || '')
+    .split(/\r?\n/u)
+    .map((item) => item.trim())
+    .filter(Boolean)
 }

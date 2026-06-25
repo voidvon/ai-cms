@@ -31,6 +31,7 @@ function getFieldDefinition(fieldName) {
     'custom_url': 'TEXT',
     'code': 'TEXT',
     'images': `TEXT NOT NULL DEFAULT '[]'`,
+    'spec_options_json': `TEXT NOT NULL DEFAULT '[]'`,
     'primary_image': 'TEXT',
     'is_visible': 'INTEGER NOT NULL DEFAULT 1',
     'is_featured_home': 'INTEGER NOT NULL DEFAULT 0',
