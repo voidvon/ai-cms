@@ -111,6 +111,23 @@ npm --prefix mcp publish --registry=https://your-registry.example.com
 - 后续补操作审计
 - 后续补高风险操作确认
 
+## 模板发布核对
+
+远端模板改动后，发布流程必须按下面顺序确认：
+
+1. `update_template`
+2. `publish_template`
+3. `build_static`
+4. 抓取线上 HTML
+5. 核对 live DOM 和 CSS selector 是否匹配
+
+如果用户反馈“我这边看还是旧的”，优先排查：
+
+- 外层页面类名是否和 CSS 前缀一致
+- 是否只改了 draft 没有发布
+- 是否发布后没有重新生成静态页
+- 是否命中了 CDN / 浏览器缓存
+
 ## 当前状态
 
 当前包已经具备：

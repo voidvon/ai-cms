@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { buildToolResult } from './result-utils.mjs';
 
 const buildStaticSchema = {
   section: z.string().trim().optional(),
@@ -10,18 +11,24 @@ export function registerBuildTools(server, cmsClient) {
     'build_static',
     {
       title: 'Build Static Site',
-      description: 'Trigger the existing CMS static generation endpoint.',
+      description: 'Trigger the existing CMS static generation endpoint. Defaults to building only the EN site unless language is explicitly provided.',
       inputSchema: buildStaticSchema
     },
     async ({ section, language }) => {
+      const requestedLanguage = String(language || '').trim();
+      const effectiveLanguage = requestedLanguage || 'en';
       const response = await cmsClient.post('/admin/build/generate', {
         query: {
           section,
-          language
+          language: effectiveLanguage
         },
-        body: {}
+        body: {},
+        timeoutMs: 300000
       });
-      return { content: [{ type: 'text', text: JSON.stringify(response, null, 2) }] };
+      return buildToolResult(response, {
+        default_language_applied: !requestedLanguage,
+        effective_language: effectiveLanguage
+      }, 'static-build');
     }
   );
 }

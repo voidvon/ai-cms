@@ -94,6 +94,13 @@ CMS_TOKEN=replace-with-production-token
 - `delete_template_binding`
 - `build_static`
 
+`build_static` 当前默认行为：
+
+- 如果不传 `language`，MCP 会默认按 `en` 调用静态生成
+- 只有显式传入其他语言时，才会构建对应语言
+
+这样做的原因是当前模板改动通常只需要先验证英文站，避免默认全语言生成导致耗时过长。
+
 ## 本地启动
 
 ```bash
@@ -198,6 +205,7 @@ npm --prefix mcp run pack:dry-run
 - 栏目和栏目节点写工具也会返回 `mcp_meta`，用于提示被忽略字段和当前支持字段
 - 模板工具默认返回摘要；只有显式传 `includeHeavyFields=true` 时，模板源码和版本源码才会回传
 - 删除类工具会在 `mcp_meta` 中附带 `dangerous_operation: true`
+- `build_static` 会在 `mcp_meta` 中附带 `effective_language`；未传 `language` 时默认值为 `en`
 
 ## 上下文控制建议
 
@@ -217,3 +225,22 @@ AI 对话接 MCP 时，上下文消耗主要来自“返回结果太大”，而
 
 1. 给大对象工具增加 `summaryOnly` / `includeHeavyFields` 开关
 2. 给列表类工具增加更强的分页、筛选和字段裁剪能力
+
+## 远端模板验证
+
+修改远端模板时，不要只看模板源码是否已更新，必须按这个顺序核对：
+
+1. 先确认修改落在远端 `draft`，再确认已 `publish`
+2. 再重新执行 `build_static`
+3. 再抓取线上 HTML，确认实际 DOM
+4. 再核对 CSS 选择器是否命中该 DOM
+
+如果页面视觉没变化，优先怀疑：
+
+- 选择器没命中
+- 外层页面类名不对
+- 只更新了 draft，没发布到 published
+- 只发布了模板，没重新生成静态页
+- 命中了旧缓存而不是新产物
+
+对产品页这类模板，尤其要先确认页面外层类名和样式前缀一致，再判断样式细节。

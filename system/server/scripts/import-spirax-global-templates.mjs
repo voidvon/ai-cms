@@ -422,6 +422,15 @@ const mediaCardGridCss = `
       css_source: buildButtonGlobalCss(),
     },
     {
+      code: 'tag',
+      name: '标签组件',
+      type: 'component',
+      sort_order: 4,
+      content: buildTagComponent(),
+      tsx_source: buildTagComponent(),
+      css_source: buildTagCss(),
+    },
+    {
       code: 'short_masthead',
       name: 'Spirax 短横幅组件',
       type: 'component',
@@ -962,9 +971,49 @@ function joinCssSources(parts) {
 }
 
 function normalizeProductColumnCss(cssText) {
-  return String(cssText || '')
+  const normalizedCss = String(cssText || '')
     .replace(/product-[^-]+-layout/g, 'product-column-layout')
     .replace(/product-[^-]+-sidebar/g, 'product-column-sidebar');
+
+  const productSpecLayoutOverrides = `
+.sg-product-page .product-top-panel__spec-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  align-items: stretch;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.sg-product-page .product-top-panel__spec-option {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  cursor: pointer;
+}
+
+.sg-product-page .product-top-panel__spec-tag {
+  display: inline-flex;
+  width: 100%;
+  min-height: 36px;
+  max-width: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 6px 10px;
+  text-align: left;
+  line-height: 1.2;
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .sg-product-page .product-top-panel__spec-options {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+}
+`;
+
+  return joinCssSources([normalizedCss, productSpecLayoutOverrides]);
 }
 
 function extractTemplateSourceParts(content) {
@@ -2356,6 +2405,71 @@ export default function Component(props) {
 `;
 }
 
+function buildTagComponent() {
+  return `
+import React from 'react';
+
+export default function Component(props) {
+  const {
+    id,
+    name = '',
+    value = '',
+    label = '',
+    children = null,
+    className = '',
+    inputClassName = '',
+    surfaceClassName = '',
+    type = 'radio',
+    checked,
+    defaultChecked = false,
+    disabled = false,
+    ...rest
+  } = props || {};
+  const domProps = Object.fromEntries(
+    Object.entries(rest).filter(([key]) => (
+      key === 'title'
+      || key === 'role'
+      || key === 'tabIndex'
+      || key.startsWith('data-')
+      || key.startsWith('aria-')
+    ))
+  );
+  const wrapperClasses = [
+    'sg-ui-tag',
+    className || '',
+    disabled ? 'sg-ui-tag--disabled' : ''
+  ].filter(Boolean).join(' ');
+  const inputClasses = [
+    'sg-ui-tag__input',
+    inputClassName || ''
+  ].filter(Boolean).join(' ');
+  const surfaceClasses = [
+    'sg-ui-tag__surface',
+    surfaceClassName || ''
+  ].filter(Boolean).join(' ');
+  const content = children ?? label ?? '';
+  const inputProps = checked === undefined
+    ? { defaultChecked }
+    : { checked, readOnly: true };
+
+  return (
+    <label {...domProps} className={wrapperClasses} htmlFor={id}>
+      <input
+        {...inputProps}
+        className={inputClasses}
+        disabled={disabled}
+        id={id}
+        name={name}
+        type={type}
+        value={value}
+      />
+      <span className={surfaceClasses}>{content}</span>
+    </label>
+  );
+}
+`;
+}
+
 function buildButtonGlobalCss() {
   return `
 .sg-ui-button,
@@ -2522,6 +2636,72 @@ function buildButtonGlobalCss() {
 
 .sg-ui-button--disabled,
 .sg-ui-button:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+}
+`;
+}
+
+function buildTagCss() {
+  return `
+.sg-ui-tag {
+  display: inline-flex;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.sg-ui-tag__input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sg-ui-tag__surface {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  max-width: 100%;
+  padding: 0 12px;
+  border: 1px solid #c6d3de;
+  border-radius: var(--sg-radius-soft);
+  background: #fff;
+  color: var(--sg-ui-color-text-1);
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
+  transition:
+    border-color 0.16s ease,
+    background-color 0.16s ease,
+    color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+.sg-ui-tag:hover .sg-ui-tag__surface {
+  border-color: var(--sg-ui-color-brand);
+  color: var(--sg-ui-color-brand-dark);
+}
+
+.sg-ui-tag__input:focus-visible + .sg-ui-tag__surface {
+  outline: 0;
+  box-shadow: var(--sg-ui-focus-ring);
+}
+
+.sg-ui-tag__input:checked + .sg-ui-tag__surface {
+  border-color: var(--sg-ui-color-brand-dark);
+  background: var(--sg-ui-color-brand-dark);
+  color: #fff;
+}
+
+.sg-ui-tag--disabled,
+.sg-ui-tag__input:disabled + .sg-ui-tag__surface {
   opacity: 0.52;
   cursor: not-allowed;
 }
@@ -3965,19 +4145,22 @@ export default function Component(props) {
   const product = props?.product || {};
   const title = props?.title || product?.title || '';
   const topPanel = props?.topPanel && typeof props.topPanel === 'object' ? props.topPanel : {};
-  const quickFactsTitle = props?.quickFactsTitle || 'Quick facts';
+  const siteUi = props?.site?.template_data?.ui || {};
+  const productUi = siteUi?.product || {};
+  const quickFactsTitle = props?.quickFactsTitle || productUi.quickFactsTitle || 'Quick facts';
   const images = Array.isArray(product?.images) && product.images.length > 0
     ? product.images.map((src) => ({ src, alt: title }))
     : [{ src: product?.primaryImage || props?.image || '/skin/dfpic.gif', alt: title }];
   const highlights = Array.isArray(topPanel?.highlights) ? topPanel.highlights.filter(Boolean) : [];
   const quickFacts = Array.isArray(topPanel?.quickFacts) ? topPanel.quickFacts.filter((item) => item?.label || item?.value) : [];
   const specOptions = Array.isArray(topPanel?.specOptions) ? topPanel.specOptions.filter((item) => item?.label || item?.value) : [];
-  const hasForm = Boolean(topPanel?.ctaHref && topPanel?.ctaLabel);
+  const hasForm = Boolean(topPanel?.ctaLabel);
   const hasDetails = highlights.length > 0 || quickFacts.length > 0;
   const defaultSpecOption = specOptions[0];
   const fieldIdPrefix = props?.fieldIdPrefix || 'product';
   const specificationFieldId = \`\${fieldIdPrefix}-specification\`;
   const quantityFieldId = \`\${fieldIdPrefix}-quantity\`;
+  const contactHref = '/contact-us/';
   const gallery = props.component('product_image_gallery', {
     images,
     label: \`\${title || 'Product'} gallery\`,
@@ -3999,34 +4182,35 @@ export default function Component(props) {
               <h2 className="product-top-panel__title">{title}</h2>
               {topPanel?.description || product?.summary ? <p className="product-top-panel__description">{topPanel?.description || product.summary}</p> : null}
               {hasForm ? (
-                <form action={topPanel.ctaHref} className="product-top-panel__form" method="get">
+                <form action={contactHref} className="product-top-panel__form" method="get">
                   <input name="product" type="hidden" value={title || ''} />
                   <div className="product-top-panel__form-fields">
                     {specOptions.length > 0 ? (
                       <fieldset className="sg-ui-field product-top-panel__spec">
-                        <legend className="sg-ui-field__label">{topPanel.specLabel || 'Specification'}</legend>
+                        <legend className="sg-ui-field__label">{topPanel.specLabel || productUi.specificationLabel || 'Specification'}</legend>
                         <div className="product-top-panel__spec-options" id={specificationFieldId} role="radiogroup">
                           {specOptions.map((option, index) => {
                             const optionId = \`\${specificationFieldId}-\${index}\`;
                             return (
-                              <label className="product-top-panel__spec-option" htmlFor={optionId} key={option?.value || option?.label || index}>
-                                <input
-                                  className="product-top-panel__spec-input"
-                                  defaultChecked={option?.value === defaultSpecOption?.value}
-                                  id={optionId}
-                                  name="spec"
-                                  type="radio"
-                                  value={option?.value || option?.label || ''}
-                                />
-                                <span className="product-top-panel__spec-tag">{option?.label || option?.value || ''}</span>
-                              </label>
+                              props.component('tag', {
+                                id: optionId,
+                                className: 'product-top-panel__spec-option',
+                                inputClassName: 'product-top-panel__spec-input',
+                                surfaceClassName: 'product-top-panel__spec-tag',
+                                key: option?.value || option?.label || index,
+                                name: 'spec',
+                                defaultChecked: option?.value === defaultSpecOption?.value,
+                                type: 'radio',
+                                value: option?.value || option?.label || '',
+                                children: option?.label || option?.value || ''
+                              })
                             );
                           })}
                         </div>
                       </fieldset>
                     ) : null}
                     <div className="sg-ui-field">
-                      <label className="sg-ui-field__label" htmlFor={quantityFieldId}>{topPanel.quantityLabel || 'Quantity'}</label>
+                      <label className="sg-ui-field__label" htmlFor={quantityFieldId}>{topPanel.quantityLabel || productUi.quantityLabel || 'Quantity'}</label>
                       <input
                         className="sg-ui-input"
                         defaultValue={String(topPanel.quantityDefault ?? 1)}
@@ -4040,7 +4224,7 @@ export default function Component(props) {
                   </div>
                   <div className="product-top-panel__actions">
                     {props.component('button', {
-                      href: topPanel.ctaHref,
+                      href: contactHref,
                       className: 'product-top-panel__cta',
                       children: topPanel.ctaLabel
                     })}

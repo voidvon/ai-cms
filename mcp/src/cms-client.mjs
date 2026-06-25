@@ -44,9 +44,12 @@ export class CmsClient {
     this.timeoutMs = timeoutMs;
   }
 
-  async request(method, path, { query, body } = {}) {
+  async request(method, path, { query, body, timeoutMs } = {}) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+    const effectiveTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0
+      ? timeoutMs
+      : this.timeoutMs;
+    const timeout = setTimeout(() => controller.abort(), effectiveTimeoutMs);
 
     try {
       const response = await fetch(buildUrl(this.baseUrl, path, query), {
@@ -65,7 +68,7 @@ export class CmsClient {
       return payload;
     } catch (error) {
       if (error?.name === 'AbortError') {
-        throw new Error(`CMS API request timed out after ${this.timeoutMs}ms`);
+        throw new Error(`CMS API request timed out after ${effectiveTimeoutMs}ms`);
       }
       throw error;
     } finally {
