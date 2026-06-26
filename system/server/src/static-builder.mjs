@@ -2119,6 +2119,9 @@ function buildLegacySectionRootPageProps({ templateContext, section, allItems, c
   };
   const pageTitle = pageData?.title || rootColumn?.name || section?.sectionLabel || '';
   const pageSummary = pageContent?.seo_description || pageContent?.summary || pageData?.summary || templateContext.site.seo_default_description || pageTitle;
+  const robots = shouldNoindexEmptySectionRootList(section, Array.isArray(allItems) ? allItems.length : 0)
+    ? 'noindex, follow'
+    : 'index, follow';
 
   return {
     ...buildLegacyCommonProps(templateContext),
@@ -2161,6 +2164,7 @@ function buildLegacySectionRootPageProps({ templateContext, section, allItems, c
       description: pageSummary,
       url: sectionUrl,
       image: pageData?.mastheadImage || pageData?.heroImage || rootColumnPrimaryImage,
+      robots,
       site: templateContext.site
     }),
     jsonLd: buildJsonLdOrganization(templateContext.site),
@@ -2403,7 +2407,7 @@ function buildLegacyManagedColumnDetailPageProps({ templateContext, rootColumn =
     };
   }
 
-  const managedContentUrl = buildManagedContentUrl({ id: normalizeInteger(managedItem.id, 0), slug: managedItem.slug, column_id: managedItem.column_id });
+  const managedContentUrl = buildManagedContentUrl(managedItem);
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
@@ -3013,6 +3017,9 @@ function buildLegacySectionRootListPageProps({
     || rootColumn?.seo_description
     || '';
   const pageTitle = rootPageData?.title || rootColumn?.name || section?.sectionLabel || '';
+  const robots = shouldNoindexEmptySectionRootList(section, totalRecords)
+    ? 'noindex, follow'
+    : 'index, follow';
 
   return {
     ...buildLegacyCommonProps(templateContext),
@@ -3080,6 +3087,7 @@ function buildLegacySectionRootListPageProps({
       description: rootColumn?.seo_description || rootSummary || templateContext.site.seo_default_description || pageTitle,
       url: sectionUrl,
       image: rootHeroImage,
+      robots,
       site: templateContext.site
     }),
     jsonLd: buildJsonLdOrganization(templateContext.site),
@@ -3087,6 +3095,10 @@ function buildLegacySectionRootListPageProps({
     themeColorMetas: generateThemeColorMetas(),
     hreflangLinks: buildHreflangLinks(templateContext.site, { url: sectionUrl })
   };
+}
+
+function shouldNoindexEmptySectionRootList(section, totalRecords) {
+  return Number(totalRecords || 0) <= 0;
 }
 
 function buildLegacySectionRootColumnLinks({ templateContext, section, columnNode, columnBuckets }) {

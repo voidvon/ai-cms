@@ -113,7 +113,7 @@ function getLlmsText(site = null) {
     aiCrawlerSection: 'AI crawler guidance',
     aiCrawlerIntro: 'AI search crawlers may use this public content for discovery, summarization and citation when they respect robots.txt, canonical URLs and normal rate limits.',
     aiCrawlerAgents: 'Preferred AI search user agents: GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot and PerplexityBot.',
-    aiCrawlerCanonical: 'Use canonical page URLs and the markdown links listed here when citing content.',
+    aiCrawlerCanonical: 'Use the markdown links here as machine-readable mirrors. For attribution, indexing and deduplication, use each page\'s canonical HTML URL or the HTML source URL noted with the entry.',
     usageSection: 'Usage and attribution',
     usageSummary: 'Public page content may be referenced by AI assistants for answer generation, summaries and source discovery with clear attribution.',
     usageAttribution: 'Attribute cited information to Spirax Sarco and link to the source URL shown for each page.',
@@ -175,7 +175,7 @@ function getLlmsText(site = null) {
     aiCrawlerSection: 'AI crawler 说明',
     aiCrawlerIntro: 'AI 搜索爬虫可在遵守 robots.txt、canonical URL 和正常抓取频率的前提下，用公开内容进行发现、摘要和引用。',
     aiCrawlerAgents: '建议支持的 AI 搜索 User-Agent：GPTBot、OAI-SearchBot、ChatGPT-User、ClaudeBot、PerplexityBot。',
-    aiCrawlerCanonical: '引用内容时应优先使用 canonical 页面 URL 和本文件列出的 markdown 链接。',
+    aiCrawlerCanonical: '本文件中的 markdown 链接用于机器读取；做引用、归因和去重时，应优先使用页面 canonical HTML URL，或条目旁标注的 HTML Source URL。',
     usageSection: '使用与署名',
     usageSummary: '公开页面内容可供 AI 助手用于答案生成、摘要和来源发现，但应保留清晰署名。',
     usageAttribution: '引用信息时请署名站点主体，并链接到每个页面标注的 Source URL。',
@@ -385,7 +385,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null, text }) {
 
   pages.push(createPage({
     title: site.web_name || site.company_name || text.siteHome,
-    routePath: '/index.html',
+    routePath: '/',
     section: text.homeSection,
     summary: buildSiteSummary(site, text),
     contentLines: [
@@ -420,7 +420,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null, text }) {
   if (pageTreeIndex) {
     pages.push(createPage({
       title: pageTreeIndex.name,
-      routePath: '/about/index.html',
+      routePath: '/about/',
       section: text.companySection,
       summary: extractPlainText(pageTreeIndex.content_html) || text.singleTreeHome,
       contentLines: [extractPlainText(pageTreeIndex.content_html)].filter(Boolean)
@@ -494,7 +494,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null, text }) {
 
     pages.push(createPage({
       title: section.sectionLabel,
-      routePath: sectionRootUrl.endsWith('/') ? `${sectionRootUrl}index.html` : sectionRootUrl,
+      routePath: sectionRootUrl,
       section: formatLabelWithSuffix(section.sectionLabel, text.sectionCategorySuffix, text),
       summary: formatLabelWithSuffix(section.sectionLabel, text.sectionCategoryEntrySuffix, text),
       contentLines: buildColumnSampleLines(rootColumns, text)
@@ -584,7 +584,7 @@ function renderLlmsTxt({ site, siteUrl, groups, text }) {
   for (const group of groups) {
     lines.push('', `## ${group.title}`);
     for (const item of group.items) {
-      lines.push(`- [${item.title}](${siteUrl}${item.markdown_path}): ${item.summary}`);
+      lines.push(`- [${item.title}](${siteUrl}${item.markdown_path}): ${item.summary} HTML Source: ${item.public_url}`);
     }
   }
 
@@ -986,7 +986,10 @@ function normalizeRoutePathForPublic(routePath) {
     return '';
   }
   if (trimmed === '/') {
-    return '/index.html';
+    return '/';
+  }
+  if (/\/index\.html$/i.test(trimmed) || trimmed === '/index.html') {
+    return normalizePublicPath(trimmed.replace(/\/index\.html$/i, '/') || '/');
   }
   if (/\.html?$/i.test(trimmed)) {
     return normalizePublicPath(trimmed);
@@ -996,30 +999,92 @@ function normalizeRoutePathForPublic(routePath) {
 
 function normalizePublicPath(value) {
   const normalized = `/${String(value || '').trim().replace(/^\/+/, '')}`.replace(/\/{2,}/g, '/');
-  return normalized === '/index' ? '/index.html' : normalized;
+  if (normalized === '/index' || normalized === '/index.html') {
+    return '/';
+  }
+  if (/\/index\.html$/i.test(normalized)) {
+    return normalized.replace(/\/index\.html$/i, '/');
+  }
+  return normalized;
 }
 
 function extractPlainText(value) {
-  return truncateText(
-    String(value || '')
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/p>/gi, '\n')
-      .replace(/<\/div>/gi, '\n')
-      .replace(/<\/li>/gi, '\n')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&nbsp;/gi, ' ')
-      .replace(/&quot;/gi, '"')
-      .replace(/&#39;/gi, "'")
-      .replace(/&lt;/gi, '<')
-      .replace(/&gt;/gi, '>')
-      .replace(/&amp;/gi, '&')
-      .replace(/\r/g, '')
-      .replace(/[ \t]+\n/g, '\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .replace(/[ \t]{2,}/g, ' ')
-      .trim(),
-    4000
-  );
+  const plainText = String(value || '')
+    .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<noscript\b[^>]*>[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<\/li>/gi, '\n')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&times;/gi, '×')
+    .replace(/&amp;/gi, '&')
+    .replace(/\r/g, '')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]{2,}/g, ' ')
+    .trim();
+
+  return truncateText(cleanExtractedText(plainText), 4000);
+}
+
+function cleanExtractedText(value) {
+  const lines = String(value || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const cleaned = [];
+
+  for (const line of lines) {
+    if (isUiNoiseLine(line)) {
+      continue;
+    }
+    if (cleaned[cleaned.length - 1] === line) {
+      continue;
+    }
+    cleaned.push(line);
+  }
+
+  return cleaned.join('\n');
+}
+
+function isUiNoiseLine(line) {
+  const normalized = String(line || '').trim();
+  if (!normalized) {
+    return true;
+  }
+
+  if (/^(Close|Copy)$/i.test(normalized)) {
+    return true;
+  }
+
+  if (/^(Open|Copy Open)\s+(WhatsApp|Messenger|Telegram)$/i.test(normalized)) {
+    return true;
+  }
+
+  if (/^(WhatsApp|WeCom|Messenger|Telegram)\s+×$/i.test(normalized)) {
+    return true;
+  }
+
+  if (/^(WhatsApp|WeCom|Messenger|Telegram)$/i.test(normalized)) {
+    return true;
+  }
+
+  if (/^@\w[\w.-]*$/i.test(normalized)) {
+    return true;
+  }
+
+  if (/^\+[\d\s().-]{6,}$/i.test(normalized)) {
+    return true;
+  }
+
+  return false;
 }
 
 function normalizeMarkdownParagraph(value) {

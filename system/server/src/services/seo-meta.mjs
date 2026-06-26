@@ -1,5 +1,6 @@
 import { listLanguages } from './languages.mjs';
 import { resolveLanguageSitePublicBaseUrl } from './site.mjs';
+import { normalizeUploadedRelativePath } from './uploads.mjs';
 
 /**
  * SEO元数据服务
@@ -12,6 +13,7 @@ export function buildSeoMeta({
   url,
   image,
   type = 'website',
+  robots = 'index, follow',
   site
 }) {
   const siteConfig = site || {};
@@ -26,7 +28,7 @@ export function buildSeoMeta({
   return {
     basic: {
       description: finalDescription,
-      robots: 'index, follow',
+      robots: String(robots || 'index, follow').trim() || 'index, follow',
       canonical: canonicalUrl
     },
     openGraph: {
@@ -360,6 +362,13 @@ function toAbsoluteUrl(value, baseUrl) {
   const normalized = String(value || '').trim();
   if (!normalized) {
     return '';
+  }
+  const normalizedUploadPath = normalizeUploadedRelativePath(normalized);
+  if (normalizedUploadPath) {
+    if (!baseUrl) {
+      return normalizedUploadPath;
+    }
+    return `${baseUrl}${normalizedUploadPath}`;
   }
   if (/^https?:\/\//i.test(normalized)) {
     return normalized;

@@ -160,7 +160,6 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
     ?? null;
 
   addEntry(entries, siteUrl, '/', generatedAt, 'home');
-  addEntry(entries, siteUrl, '/index.html', generatedAt, 'home');
 
   for (const column of columns) {
     const routePath = String(column.route_path || '').trim();
@@ -174,7 +173,7 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   }
 
   if (corporationIndexId != null) {
-    addEntry(entries, siteUrl, '/about/index.html', corporationLatestDateById.get(toInteger(corporationIndexId, 0)) || generatedAt, 'corporation');
+    addEntry(entries, siteUrl, '/about/', corporationLatestDateById.get(toInteger(corporationIndexId, 0)) || generatedAt, 'corporation');
   }
   for (const item of pageTreeColumns) {
     const id = toInteger(item.id, 0);
@@ -259,11 +258,11 @@ function addSectionEntries({
   getLastmod
 }) {
   const sectionRootUrl = buildSectionColumnPublicUrl(section, section?.rootColumn);
-  if (sectionRootUrl) {
+  if (sectionRootUrl && shouldIncludeSectionRootInSitemap(section, rootTotalRecords)) {
     const pageCount = renderRootAsList
       ? Math.max(Math.ceil(Number(rootTotalRecords || 0) / Math.max(toInteger(rootItemsPerPage, 1), 1)), 1)
       : 1;
-    for (const publicPath of buildPaginatedSectionPaths(sectionRootUrl, pageCount, { includeIndexAlias: true })) {
+    for (const publicPath of buildPaginatedSectionPaths(sectionRootUrl, pageCount)) {
       addEntry(entries, siteUrl, publicPath, rootLastmod || getLastmod?.(toInteger(section?.rootColumnId, 0)), pageType);
     }
   }
@@ -278,6 +277,10 @@ function addSectionEntries({
       addEntry(entries, siteUrl, publicPath, lastmod, pageType);
     }
   }
+}
+
+function shouldIncludeSectionRootInSitemap(section, rootTotalRecords) {
+  return Number(rootTotalRecords || 0) > 0;
 }
 
 function buildPaginatedSectionPaths(publicUrl, pageCount, { includeIndexAlias = false } = {}) {
@@ -349,10 +352,8 @@ function normalizePublicPath(value) {
   if (!normalized) {
     return '';
   }
-  if (normalized === '/') {
-    return '/';
-  }
-  return normalized.startsWith('/') ? normalized : `/${normalized}`;
+  const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
+  return normalizeIndexDocumentPublicPath(withLeadingSlash);
 }
 
 function normalizeRoutePathForPublic(routePath) {
@@ -360,13 +361,19 @@ function normalizeRoutePathForPublic(routePath) {
   if (!normalized) {
     return '/';
   }
-  if (normalized === '/') {
+  const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
+  return normalizeIndexDocumentPublicPath(withLeadingSlash);
+}
+
+function normalizeIndexDocumentPublicPath(value) {
+  const normalized = String(value || '').trim().replace(/\/{2,}/g, '/');
+  if (!normalized || normalized === '/' || normalized === '/index.html') {
     return '/';
   }
-  if (normalized.endsWith('/')) {
-    return normalized;
+  if (/\/index\.html$/i.test(normalized)) {
+    return normalized.replace(/\/index\.html$/i, '/');
   }
-  return normalized.startsWith('/') ? normalized : `/${normalized}`;
+  return normalized;
 }
 
 function toSitemapDate(value) {
