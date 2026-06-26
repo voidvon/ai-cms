@@ -3732,7 +3732,7 @@ export default function Component(props) {
     contentClassName = 'media-card-grid__content',
     descriptionClassName = 'media-card-grid__desc',
     gridClassName = 'media-card-grid__grid',
-    imageAspectRatio = '',
+    imageAspectRatio = '4 / 3',
     imageClassName = 'media-card-grid__image',
     imageHeight,
     imageLoading = 'lazy',
@@ -3752,6 +3752,15 @@ export default function Component(props) {
     )
   ).join(' ');
   const normalizeStyle = (value) => (value && typeof value === 'object' ? value : {});
+  const pickObjectFit = (style) => {
+    if (!style || typeof style !== 'object') {
+      return undefined;
+    }
+    if (typeof style.objectFit === 'string' && style.objectFit.trim()) {
+      return style.objectFit;
+    }
+    return undefined;
+  };
 
   return (
     <div className={['media-card-grid', wrapperClassName].filter(Boolean).join(' ')}>
@@ -3760,23 +3769,43 @@ export default function Component(props) {
           const href = card?.href || card?.link || '';
           const resolvedAspectRatio = card?.imageAspectRatio || imageAspectRatio || '';
           const resolvedImageStyle = {
-            ...(resolvedAspectRatio ? { aspectRatio: resolvedAspectRatio } : {}),
             ...normalizeStyle(imageStyle),
             ...normalizeStyle(card?.imageStyle)
           };
-          const body = (
-            <>
-              {card?.image ? (
+          const resolvedObjectFit = pickObjectFit(resolvedImageStyle) || 'cover';
+          const imageNode = card?.image ? (
+            resolvedAspectRatio ? (
+              <div style={{ aspectRatio: resolvedAspectRatio, overflow: 'hidden' }}>
                 <img
                   alt={card?.imageAlt || card?.title || ''}
                   className={imageClassName}
                   height={imageHeight}
                   loading={imageLoading}
                   src={card.image}
-                  style={Object.keys(resolvedImageStyle).length > 0 ? resolvedImageStyle : undefined}
+                  style={{
+                    ...resolvedImageStyle,
+                    width: '100%',
+                    height: '100%',
+                    objectFit: resolvedObjectFit
+                  }}
                   width={imageWidth}
                 />
-              ) : null}
+              </div>
+            ) : (
+              <img
+                alt={card?.imageAlt || card?.title || ''}
+                className={imageClassName}
+                height={imageHeight}
+                loading={imageLoading}
+                src={card.image}
+                style={Object.keys(resolvedImageStyle).length > 0 ? resolvedImageStyle : undefined}
+                width={imageWidth}
+              />
+            )
+          ) : null;
+          const body = (
+            <>
+              {imageNode}
               <div className={contentClassName}>
                 <TitleTag className="media-card-grid__title">{card?.title || ''}</TitleTag>
                 {card?.description ? (
