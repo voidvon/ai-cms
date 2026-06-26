@@ -8,6 +8,7 @@ import fastifyFormbody from '@fastify/formbody';
 import { HOST, PORT } from './config.mjs';
 import { createAssetsListenerManager } from './assets-listener-manager.mjs';
 import { getDb } from './db.mjs';
+import { applySecurityHeaders } from './services/security-headers.mjs';
 import { createSiteListenerManager } from './site-listener-manager.mjs';
 import { withPortConflictDetails } from './utils/port-diagnostics.mjs';
 
@@ -89,6 +90,11 @@ async function registerCommonPlugins(app) {
 }
 
 async function registerCommonHooks(app) {
+  app.addHook('onSend', async (request, reply, payload) => {
+    applySecurityHeaders(reply);
+    return payload;
+  });
+
   app.addHook('onRequest', async (request, reply) => {
     const { authHook } = await import('./middleware/auth.mjs');
     await authHook(request, reply);

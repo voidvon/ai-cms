@@ -16,6 +16,8 @@
     "build:site": "npm --prefix system/server run build:static",
     "db:init": "npm --prefix system/server run db:init",
     "admin:create": "npm --prefix system/server run admin:create --",
+    "test:server": "npm --prefix system/server run test",
+    "test": "npm run test:server",
     "build:dist": "npm run build:admin && node scripts/build-dist.mjs",
     "build": "npm run build:dist"
   }

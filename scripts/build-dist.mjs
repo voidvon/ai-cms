@@ -42,6 +42,7 @@ async function copyServer() {
   await copyDir('system/server/package.json');
   await copyDir('system/server/src');
   await copyDir('system/server/scripts');
+  await copyDir('system/server/tests');
   await copyDir('system/server/schema');
   await copyDir('system/server/views');
   await copyDir('system/server/import');

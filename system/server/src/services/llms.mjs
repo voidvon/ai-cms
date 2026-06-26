@@ -70,7 +70,71 @@ function resolveManagedColumnDisplayName(site = null, rootColumn = null) {
 function getLlmsText(site = null) {
   const llmsUi = site?.template_data?.ui?.llms || {};
   const managedColumnLabel = resolveManagedColumnDisplayName(site, null);
-  const defaults = {
+  const languageCode = String(site?.requested_language_code || site?.current_language_code || '').trim();
+  const isEnglish = /^en(?:-|$)/i.test(languageCode);
+  const defaults = isEnglish ? {
+    homeSection: 'Core pages',
+    singleSection: 'Single pages',
+    companySection: 'Company pages',
+    managedSection: 'Managed categories',
+    managedDetailSection: 'Managed details',
+    newsSection: 'News categories',
+    newsDetailSection: 'News details',
+    serviceSection: 'Service categories',
+    serviceDetailSection: 'Service details',
+    siteIndexTitle: 'Site content guide',
+    siteFullTitle: 'Site full-text context',
+    siteHome: 'Website home',
+    singleTreeHome: 'Page tree home.',
+    singleTreePage: 'Page tree page.',
+    managedHub: managedColumnLabel,
+    managedHubSummary: `${managedColumnLabel} category navigation and listing entry.`,
+    managedCategoryPrefix: `${managedColumnLabel} category: `,
+    managedDetailPrefix: `${managedColumnLabel} detail: `,
+    sectionCategorySuffix: ' categories',
+    sectionCategoryEntrySuffix: ' category and article entry.',
+    sectionCategoryPrefix: '',
+    sectionDetailSuffix: ' details',
+    sampleCategories: 'Sample categories',
+    sampleItems: 'Sample items',
+    itemModel: 'Model',
+    itemCategory: 'Category',
+    seoTitle: 'SEO title',
+    sourceUrl: 'Source URL',
+    generatedAt: 'Generated at',
+    siteUrl: 'Site URL',
+    company: 'Company',
+    contact: 'Contact',
+    phone: 'Phone',
+    email: 'Email',
+    contactPerson: 'Contact person',
+    address: 'Address',
+    icp: 'ICP',
+    aiCrawlerSection: 'AI crawler guidance',
+    aiCrawlerIntro: 'AI search crawlers may use this public content for discovery, summarization and citation when they respect robots.txt, canonical URLs and normal rate limits.',
+    aiCrawlerAgents: 'Preferred AI search user agents: GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot and PerplexityBot.',
+    aiCrawlerCanonical: 'Use canonical page URLs and the markdown links listed here when citing content.',
+    usageSection: 'Usage and attribution',
+    usageSummary: 'Public page content may be referenced by AI assistants for answer generation, summaries and source discovery with clear attribution.',
+    usageAttribution: 'Attribute cited information to Spirax Sarco and link to the source URL shown for each page.',
+    usageRestriction: 'Do not present generated summaries as official product documentation, safety instructions or engineering specifications without linking to the original source.',
+    groupOrder: [
+      'Core pages',
+      'Single pages',
+      'Company pages',
+      'Managed categories',
+      'Managed details',
+      'News categories',
+      'News details',
+      'Service categories',
+      'Service details'
+    ],
+    listSections: ['Managed categories', 'News categories', 'Service categories'],
+    detailSections: ['Managed details', 'News details', 'Service details'],
+    siteSummary: (baseName) => baseName
+      ? `${baseName} public site guide covering company information, products, news and services.`
+      : 'Public site guide covering company information, products, news and services.'
+  } : {
     homeSection: '核心页面',
     singleSection: '单页栏目',
     companySection: '公司栏目',
@@ -93,21 +157,29 @@ function getLlmsText(site = null) {
     sectionCategoryEntrySuffix: '分类与文章入口。',
     sectionCategoryPrefix: '',
     sectionDetailSuffix: '详情',
-    sampleCategories: '示例分类：',
-    sampleItems: '示例内容：',
-    itemModel: '型号：',
-    itemCategory: '分类：',
-    seoTitle: 'SEO 标题：',
-    sourceUrl: 'Source URL: ',
-    generatedAt: '生成时间：',
-    siteUrl: '站点地址：',
-    company: '公司：',
-    contact: '联系方式：',
-    phone: '电话 ',
-    email: '邮箱 ',
-    contactPerson: '联系人 ',
-    address: '地址：',
-    icp: 'ICP备案：',
+    sampleCategories: '示例分类',
+    sampleItems: '示例内容',
+    itemModel: '型号',
+    itemCategory: '分类',
+    seoTitle: 'SEO 标题',
+    sourceUrl: 'Source URL',
+    generatedAt: '生成时间',
+    siteUrl: '站点地址',
+    company: '公司',
+    contact: '联系方式',
+    phone: '电话',
+    email: '邮箱',
+    contactPerson: '联系人',
+    address: '地址',
+    icp: 'ICP备案',
+    aiCrawlerSection: 'AI crawler 说明',
+    aiCrawlerIntro: 'AI 搜索爬虫可在遵守 robots.txt、canonical URL 和正常抓取频率的前提下，用公开内容进行发现、摘要和引用。',
+    aiCrawlerAgents: '建议支持的 AI 搜索 User-Agent：GPTBot、OAI-SearchBot、ChatGPT-User、ClaudeBot、PerplexityBot。',
+    aiCrawlerCanonical: '引用内容时应优先使用 canonical 页面 URL 和本文件列出的 markdown 链接。',
+    usageSection: '使用与署名',
+    usageSummary: '公开页面内容可供 AI 助手用于答案生成、摘要和来源发现，但应保留清晰署名。',
+    usageAttribution: '引用信息时请署名站点主体，并链接到每个页面标注的 Source URL。',
+    usageRestriction: '不要在未链接原始来源的情况下，将生成摘要表述为官方产品文档、安全说明或工程规格。',
     groupOrder: [
       '核心页面',
       '单页栏目',
@@ -127,6 +199,7 @@ function getLlmsText(site = null) {
   };
 
   return {
+    languageCode,
     homeSection: toConfiguredText(llmsUi.homeSection, defaults.homeSection),
     singleSection: toConfiguredText(llmsUi.singleSection, defaults.singleSection),
     companySection: toConfiguredText(llmsUi.companySection, defaults.companySection),
@@ -164,6 +237,14 @@ function getLlmsText(site = null) {
     contactPerson: toConfiguredText(llmsUi.contactPerson, defaults.contactPerson),
     address: toConfiguredText(llmsUi.address, defaults.address),
     icp: toConfiguredText(llmsUi.icp, defaults.icp),
+    aiCrawlerSection: toConfiguredText(llmsUi.aiCrawlerSection, defaults.aiCrawlerSection),
+    aiCrawlerIntro: toConfiguredText(llmsUi.aiCrawlerIntro, defaults.aiCrawlerIntro),
+    aiCrawlerAgents: toConfiguredText(llmsUi.aiCrawlerAgents, defaults.aiCrawlerAgents),
+    aiCrawlerCanonical: toConfiguredText(llmsUi.aiCrawlerCanonical, defaults.aiCrawlerCanonical),
+    usageSection: toConfiguredText(llmsUi.usageSection, defaults.usageSection),
+    usageSummary: toConfiguredText(llmsUi.usageSummary, defaults.usageSummary),
+    usageAttribution: toConfiguredText(llmsUi.usageAttribution, defaults.usageAttribution),
+    usageRestriction: toConfiguredText(llmsUi.usageRestriction, defaults.usageRestriction),
     groupOrder: normalizeConfiguredTextArray(llmsUi.groupOrder, defaults.groupOrder),
     listSections: normalizeConfiguredTextArray(llmsUi.listSections, defaults.listSections),
     detailSections: normalizeConfiguredTextArray(llmsUi.detailSections, defaults.detailSections),
@@ -293,9 +374,9 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null, text }) {
   const pageTreeCategories = pageTreeRoot ? listColumnNodesByRoot(pageTreeRoot.id, { languageCode }) : [];
   const managedColumnLabel = resolveManagedColumnDisplayName(site, managedColumnRoot);
   const managedHubTitle = toConfiguredText(text.managedHub, managedColumnLabel);
-  const managedHubSummary = toConfiguredText(text.managedHubSummary, `${managedColumnLabel}分类导航与列表入口。`);
-  const managedCategoryPrefix = toConfiguredText(text.managedCategoryPrefix, `${managedColumnLabel}分类：`);
-  const managedDetailPrefix = toConfiguredText(text.managedDetailPrefix, `${managedColumnLabel}详情：`);
+  const managedHubSummary = toConfiguredText(text.managedHubSummary, `${managedColumnLabel} category navigation and listing entry.`);
+  const managedCategoryPrefix = toConfiguredText(text.managedCategoryPrefix, `${managedColumnLabel} category: `);
+  const managedDetailPrefix = toConfiguredText(text.managedDetailPrefix, `${managedColumnLabel} detail: `);
 
   const managedColumnsById = new Map(managedColumns.map((item) => [toInteger(item.id, 0), item]));
   const sectionCategoriesById = sectionContent.sectionCategoryById;
@@ -327,7 +408,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null, text }) {
         section: text.singleSection,
         summary: column.seo_description || extractPlainText(column.content_html),
         contentLines: [
-          column.seo_title ? `${text.seoTitle}${column.seo_title}` : '',
+          column.seo_title ? formatFact(text.seoTitle, column.seo_title) : '',
           extractPlainText(column.content_html)
         ].filter(Boolean)
       }));
@@ -379,10 +460,10 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null, text }) {
       title: columnNode.name,
       routePath: buildManagedColumnPublicUrl(columnNode, managedColumnsById),
       section: text.managedSection,
-      summary: columnNode.seo_description || `${managedCategoryPrefix}${columnNode.name}`,
+      summary: columnNode.seo_description || formatPrefixedText(managedCategoryPrefix, columnNode.name),
       contentLines: [
-        childColumns.length > 0 ? `${text.sampleCategories}${childColumns.map((item) => item.name).join('、')}` : '',
-        columnItems.length > 0 ? `${text.sampleItems}${columnItems.map((item) => item.name).join('、')}` : ''
+        childColumns.length > 0 ? formatFact(text.sampleCategories, joinNames(childColumns.map((item) => item.name), text)) : '',
+        columnItems.length > 0 ? formatFact(text.sampleItems, joinNames(columnItems.map((item) => item.name), text)) : ''
       ].filter(Boolean)
     }));
   }
@@ -397,10 +478,10 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null, text }) {
       title: managedItem.name,
       routePath: buildContentDetailUrlFromColumn(managedItem, column, columnPath),
       section: text.managedDetailSection,
-      summary: managedItem.summary || `${managedDetailPrefix}${managedItem.name}`,
+      summary: managedItem.summary || formatPrefixedText(managedDetailPrefix, managedItem.name),
       contentLines: [
-        managedItem.code ? `${text.itemModel}${managedItem.code}` : '',
-        columnNode?.name ? `${text.itemCategory}${columnNode.name}` : '',
+        managedItem.code ? formatFact(text.itemModel, managedItem.code) : '',
+        columnNode?.name ? formatFact(text.itemCategory, columnNode.name) : '',
         extractPlainText(managedItem.content_html)
       ].filter(Boolean)
     }));
@@ -414,8 +495,8 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null, text }) {
     pages.push(createPage({
       title: section.sectionLabel,
       routePath: sectionRootUrl.endsWith('/') ? `${sectionRootUrl}index.html` : sectionRootUrl,
-      section: `${section.sectionLabel}${text.sectionCategorySuffix}`,
-      summary: `${section.sectionLabel}${text.sectionCategoryEntrySuffix}`,
+      section: formatLabelWithSuffix(section.sectionLabel, text.sectionCategorySuffix, text),
+      summary: formatLabelWithSuffix(section.sectionLabel, text.sectionCategoryEntrySuffix, text),
       contentLines: buildColumnSampleLines(rootColumns, text)
     }));
 
@@ -426,9 +507,9 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null, text }) {
       pages.push(createPage({
         title: columnNode.name,
         routePath: buildSectionColumnPublicUrl(section, columnNode),
-        section: `${section.sectionLabel}${text.sectionCategorySuffix}`,
-        summary: `${section.sectionLabel}${text.sectionCategoryPrefix}${columnNode.name}`,
-        contentLines: items.length > 0 ? [`${text.sampleItems}${items.map((item) => item.title).join('、')}`] : []
+        section: formatLabelWithSuffix(section.sectionLabel, text.sectionCategorySuffix, text),
+        summary: formatSectionCategorySummary(section.sectionLabel, text.sectionCategoryPrefix, columnNode.name, text),
+        contentLines: items.length > 0 ? [formatFact(text.sampleItems, joinNames(items.map((item) => item.title), text))] : []
       }));
     }
   }
@@ -444,10 +525,10 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null, text }) {
     pages.push(createPage({
       title: item.title,
       routePath: buildContentDetailUrlFromColumn(item, section.rootColumn),
-      section: `${section.sectionLabel}${text.sectionDetailSuffix}`,
+      section: formatLabelWithSuffix(section.sectionLabel, text.sectionDetailSuffix, text),
       summary: item.summary || item.title,
       contentLines: [
-        columnNode?.name ? `${text.itemCategory}${columnNode.name}` : '',
+        columnNode?.name ? formatFact(text.itemCategory, columnNode.name) : '',
         extractPlainText(item.content_html)
       ].filter(Boolean)
     }));
@@ -490,6 +571,16 @@ function renderLlmsTxt({ site, siteUrl, groups, text }) {
     lines.push('', ...facts.map((item) => `- ${item}`));
   }
 
+  const guidance = buildAiCrawlerGuidanceLines(text);
+  if (guidance.length > 0) {
+    lines.push('', `## ${text.aiCrawlerSection}`, ...guidance.map((item) => `- ${item}`));
+  }
+
+  const usage = buildUsageGuidanceLines(text);
+  if (usage.length > 0) {
+    lines.push('', `## ${text.usageSection}`, ...usage.map((item) => `- ${item}`));
+  }
+
   for (const group of groups) {
     lines.push('', `## ${group.title}`);
     for (const item of group.items) {
@@ -504,10 +595,20 @@ function renderLlmsFullTxt({ site, siteUrl, pages, generatedAt, text }) {
   const limitedPages = pages.slice(0, MAX_FULL_TEXT_PAGES);
   const lines = [
     `# ${site.web_name || site.company_name || text.siteFullTitle}`,
-    `> ${text.generatedAt}${generatedAt}`,
-    `> ${text.siteUrl}${siteUrl}`,
+    `> ${formatFact(text.generatedAt, generatedAt)}`,
+    `> ${formatFact(text.siteUrl, siteUrl)}`,
     ''
   ];
+
+  const guidance = buildAiCrawlerGuidanceLines(text);
+  if (guidance.length > 0) {
+    lines.push(`## ${text.aiCrawlerSection}`, ...guidance.map((item) => `- ${item}`), '');
+  }
+
+  const usage = buildUsageGuidanceLines(text);
+  if (usage.length > 0) {
+    lines.push(`## ${text.usageSection}`, ...usage.map((item) => `- ${item}`), '');
+  }
 
   for (const page of limitedPages) {
     lines.push(`## ${page.title}`);
@@ -613,30 +714,107 @@ function buildSiteFactLines(site, text) {
     buildCompanyFact(site, text),
     buildContactFact(site, text),
     buildAddressFact(site, text),
-    site.icp_number ? `${text.icp}${site.icp_number}` : ''
+    site.icp_number ? formatFact(text.icp, site.icp_number) : ''
   ].filter(Boolean);
 }
 
+function buildAiCrawlerGuidanceLines(text) {
+  return [
+    text.aiCrawlerIntro,
+    text.aiCrawlerAgents,
+    text.aiCrawlerCanonical
+  ].map((item) => String(item || '').trim()).filter(Boolean);
+}
+
+function buildUsageGuidanceLines(text) {
+  return [
+    text.usageSummary,
+    text.usageAttribution,
+    text.usageRestriction
+  ].map((item) => String(item || '').trim()).filter(Boolean);
+}
+
 function buildCompanyFact(site, text) {
-  return site.company_name ? `${text.company}${site.company_name}` : '';
+  return site.company_name ? formatFact(text.company, site.company_name) : '';
 }
 
 function buildContactFact(site, text) {
   const contactParts = [
-    site.company_phone ? `${text.phone}${site.company_phone}` : '',
-    site.company_email ? `${text.email}${site.company_email}` : '',
-    site.contact_person ? `${text.contactPerson}${site.contact_person}` : ''
+    site.company_phone ? formatFact(text.phone, site.company_phone) : '',
+    site.company_email ? formatFact(text.email, site.company_email) : '',
+    site.contact_person ? formatFact(text.contactPerson, site.contact_person) : ''
   ].filter(Boolean);
-  return contactParts.length > 0 ? `${text.contact}${contactParts.join('，')}` : '';
+  return contactParts.length > 0 ? formatFact(text.contact, contactParts.join(resolveListDelimiter(text))) : '';
 }
 
 function buildAddressFact(site, text) {
-  return site.company_address ? `${text.address}${site.company_address}` : '';
+  return site.company_address ? formatFact(text.address, site.company_address) : '';
 }
 
 function buildColumnSampleLines(columns, text) {
   const names = columns.slice(0, MAX_LIST_SAMPLE_ITEMS).map((item) => item.name).filter(Boolean);
-  return names.length > 0 ? [`${text.sampleCategories}${names.join('、')}`] : [];
+  return names.length > 0 ? [formatFact(text.sampleCategories, joinNames(names, text))] : [];
+}
+
+function formatFact(label, value) {
+  const normalizedLabel = String(label || '').trim().replace(/[：:]\s*$/g, '');
+  const normalizedValue = String(value || '').trim();
+  if (!normalizedLabel || !normalizedValue) {
+    return normalizedValue || normalizedLabel;
+  }
+  return `${normalizedLabel}: ${normalizedValue}`;
+}
+
+function formatPrefixedText(prefix, value) {
+  const normalizedPrefix = String(prefix || '').trim();
+  const normalizedValue = String(value || '').trim();
+  if (!normalizedPrefix || !normalizedValue) {
+    return normalizedValue || normalizedPrefix;
+  }
+  if (/[：:]\s*$/.test(normalizedPrefix)) {
+    return `${normalizedPrefix.replace(/\s*$/g, '')} ${normalizedValue}`;
+  }
+  return `${normalizedPrefix.replace(/\s+$/g, '')} ${normalizedValue}`;
+}
+
+function formatLabelWithSuffix(label, suffix, text) {
+  const normalizedLabel = String(label || '').trim();
+  const normalizedSuffix = String(suffix || '').trim();
+  if (!normalizedLabel || !normalizedSuffix) {
+    return normalizedLabel || normalizedSuffix;
+  }
+  if (isEnglishLlmsText(text) && /^[a-z]/i.test(normalizedSuffix)) {
+    return `${normalizedLabel} ${normalizedSuffix}`;
+  }
+  return `${normalizedLabel}${normalizedSuffix}`;
+}
+
+function formatSectionCategorySummary(sectionLabel, prefix, columnName, text) {
+  const label = String(sectionLabel || '').trim();
+  const normalizedPrefix = String(prefix || '').trim();
+  const name = String(columnName || '').trim();
+  if (!label && !name) {
+    return '';
+  }
+  if (!normalizedPrefix) {
+    return isEnglishLlmsText(text) ? [label, name].filter(Boolean).join(' ') : `${label}${name}`;
+  }
+  return `${label}${formatPrefixedText(normalizedPrefix, name)}`;
+}
+
+function joinNames(items, text) {
+  return items
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)
+    .join(resolveListDelimiter(text));
+}
+
+function resolveListDelimiter(text) {
+  return isEnglishLlmsText(text) ? ', ' : '、';
+}
+
+function isEnglishLlmsText(text) {
+  return /^en(?:-|$)/i.test(String(text?.languageCode || '').trim());
 }
 
 function buildLlmsIndexGroups(groups, text) {

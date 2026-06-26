@@ -36,11 +36,12 @@ import { listLanguages } from './services/languages.mjs';
 import { resolveNormalizedTemplateImagePath } from './services/template-data-assets.mjs';
 import { escapeHtml } from './utils/html.mjs';
 import { looksLikeLegacyMojibake } from './utils/legacy-text.mjs';
-import { normalizeLegacyAssetText, normalizeUploadedRelativePath, resolvePublicAssetUrl } from './services/uploads.mjs';
+import { normalizeLegacyAssetText, normalizeUploadedRelativePath, resolvePublicAssetUrl, resolveUploadedFilePath } from './services/uploads.mjs';
 import {
   buildSeoMeta,
   buildHreflangLinks,
   buildJsonLdOrganization,
+  buildJsonLdPageGraph,
   buildJsonLdStructuredContent,
   buildJsonLdSectionEntry,
   buildStructuredContentSeoMeta,
@@ -57,6 +58,7 @@ const DEFAULT_NEWS_LIST_PAGE_SIZE = 6;
 let globalColumnSlugMap = new Map();
 let globalManagedColumnMap = new Map(); // 托管内容栏目映射
 let globalColumnMap = new Map(); // 栏目映射
+const imageDimensionCache = new Map();
 
 /**
  * 设置全局分类目录映射
@@ -195,13 +197,139 @@ const OBSOLETE_SHARED_STATIC_DIRS = ['js', 'JS', 'images', 'skin', 'img', 'Image
 const STATIC_BUILD_GROUP_ORDER = ['网站页面', '栏目页', '内容页', '系统文件'];
 const TEMPLATE_CLIENT_ASSET_DIR = path.join('assets', 'cms-templates');
 const {
-  renderCmsSitePage,
+  renderCmsSitePage: renderCmsTemplatePage,
   cleanupTemplateClientBundles,
   buildRegisteredTsxAssets
 } = createCmsTemplateRuntime({
   templateClientAssetDir: TEMPLATE_CLIENT_ASSET_DIR,
   expandLegacyCommonPlaceholders
 });
+
+function renderCmsSitePage(templateCode, props, templateContext, options = {}) {
+  return renderCmsTemplatePage(templateCode, withStructuredDataGraph(props, templateContext), templateContext, options);
+}
+
+function withStructuredDataGraph(props, templateContext) {
+  if (!props || typeof props !== 'object') {
+    return props;
+  }
+  const page = props.currentPage || {
+    type: props.pageType || '',
+    title: props.title || props.seoMeta?.openGraph?.title || '',
+    url: props.seoMeta?.basic?.canonical || '/'
+  };
+  const schemaType = resolveStructuredDataSchemaType(props, templateContext, page);
+  return {
+    ...props,
+    jsonLd: buildJsonLdPageGraph({
+      site: templateContext?.site || props.site,
+      page: {
+        ...page,
+        schemaType
+      },
+      schemaType,
+      seoMeta: props.seoMeta,
+      existingJsonLd: props.jsonLd,
+      breadcrumbs: buildStructuredDataBreadcrumbs(props),
+      image: props.currentColumnHeroImage || props.currentSectionHeroImage || props.image || '',
+      description: props.description || props.itemDescription || props.currentColumnDescription || ''
+    })
+  };
+}
+
+function resolveStructuredDataSchemaType(props, templateContext, page) {
+  const site = templateContext?.site || props?.site || {};
+  const schemaConfig = site?.template_data?.seo?.schema || {};
+  const pageType = String(page?.type || props?.pageType || '').trim();
+  const sectionType = String(props?.currentSection?.type || '').trim();
+  const columnType = String(props?.currentColumnItem?.type || props?.currentColumn?.type || '').trim();
+  const contentType = String(props?.currentContent?.type || '').trim();
+
+  return firstNonEmpty(
+    props?.schemaType,
+    props?.schema_type,
+    props?.jsonLdType,
+    props?.json_ld_type,
+    page?.schemaType,
+    page?.schema_type,
+    page?.jsonLdType,
+    page?.json_ld_type,
+    resolveTemplateDataSchemaType(props?.currentColumnItem?.templateData || props?.currentColumnItem?.template_data),
+    resolveTemplateDataSchemaType(props?.currentColumn?.templateData || props?.currentColumn?.template_data),
+    resolveTemplateDataSchemaType(props?.currentContent?.templateData || props?.currentContent?.template_data),
+    lookupConfiguredSchemaType(schemaConfig?.pageTypes || schemaConfig?.page_types, pageType),
+    lookupConfiguredSchemaType(schemaConfig?.sectionTypes || schemaConfig?.section_types, sectionType),
+    lookupConfiguredSchemaType(schemaConfig?.columnTypes || schemaConfig?.column_types, columnType),
+    lookupConfiguredSchemaType(schemaConfig?.contentTypes || schemaConfig?.content_types, contentType),
+    schemaConfig?.defaultPageType,
+    schemaConfig?.default_page_type,
+    'WebPage'
+  );
+}
+
+function resolveTemplateDataSchemaType(templateData) {
+  if (!templateData || typeof templateData !== 'object' || Array.isArray(templateData)) {
+    return '';
+  }
+  return firstNonEmpty(
+    templateData.schemaType,
+    templateData.schema_type,
+    templateData.jsonLdType,
+    templateData.json_ld_type,
+    templateData.seo?.schemaType,
+    templateData.seo?.schema_type,
+    templateData.seo?.jsonLdType,
+    templateData.seo?.json_ld_type,
+    templateData.seo?.schema?.type,
+    templateData.seo?.schema?.pageType,
+    templateData.seo?.schema?.page_type,
+    templateData.schema?.type,
+    templateData.schema?.pageType,
+    templateData.schema?.page_type
+  );
+}
+
+function lookupConfiguredSchemaType(configMap, key) {
+  if (!configMap || typeof configMap !== 'object' || Array.isArray(configMap)) {
+    return '';
+  }
+  const normalizedKey = String(key || '').trim();
+  if (!normalizedKey) {
+    return '';
+  }
+  return configMap[normalizedKey] || configMap[normalizedKey.toLowerCase()] || '';
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    const normalized = String(value || '').trim();
+    if (normalized) {
+      return normalized;
+    }
+  }
+  return '';
+}
+
+function buildStructuredDataBreadcrumbs(props) {
+  const items = [];
+  const addItem = (item) => {
+    const name = String(item?.name || item?.title || '').trim();
+    const url = String(item?.url || '').trim();
+    if (!name || !url) {
+      return;
+    }
+    items.push({ name, url });
+  };
+
+  addItem(props.currentSection);
+  for (const item of Array.isArray(props.currentColumn) ? props.currentColumn : []) {
+    addItem(item);
+  }
+  addItem(props.parentColumn);
+  addItem(props.currentContent);
+
+  return items;
+}
 
 function buildRenderGroup({ key, pageKind, columnKind, familyKey }) {
   return {
@@ -1393,8 +1521,8 @@ function buildLegacyHomePageProps(templateContext) {
     currentColumnPageData: homePageData,
     currentColumnHeroImage: homePageData?.mastheadImage || homePageData?.heroImage || homePrimaryImage,
     currentColumnDescription: homePageData?.summary || '',
-    contentHtml: normalizeLegacyRichTextHtml(homeColumn?.content_html, templateContext.site) || '',
-    bodyHtml: normalizeLegacyRichTextHtml(homeColumn?.content_html, templateContext.site) || '',
+    contentHtml: normalizeLegacyBodyHtml(homeColumn?.content_html, templateContext.site, { fallbackAlt: homePageData?.title || templateContext.site.web_name }) || '',
+    bodyHtml: normalizeLegacyBodyHtml(homeColumn?.content_html, templateContext.site, { fallbackAlt: homePageData?.title || templateContext.site.web_name }) || '',
     seoMeta: buildSeoMeta({
       title: templateContext.site.seo_home_title || templateContext.site.seo_default_title || templateContext.site.web_name || '',
       description: templateContext.site.seo_home_description || templateContext.site.seo_default_description || templateContext.site.company_name || templateContext.site.web_name || '',
@@ -1404,7 +1532,7 @@ function buildLegacyHomePageProps(templateContext) {
     jsonLd: buildJsonLdOrganization(templateContext.site),
     faviconLinks: generateFaviconLinks(),
     themeColorMetas: generateThemeColorMetas(),
-    hreflangLinks: buildHreflangLinks(templateContext.site)
+    hreflangLinks: buildHreflangLinks(templateContext.site, { url: '/' })
   };
 }
 
@@ -1864,7 +1992,7 @@ function buildLegacyContactPageProps(templateContext) {
     jsonLd: buildJsonLdOrganization(templateContext.site),
     faviconLinks: generateFaviconLinks(),
     themeColorMetas: generateThemeColorMetas(),
-    hreflangLinks: buildHreflangLinks(templateContext.site)
+    hreflangLinks: buildHreflangLinks(templateContext.site, { url: contactUrl })
   };
 }
 
@@ -1894,7 +2022,7 @@ function buildLegacyContentPageProps(templateContext, item) {
       parentColumnUrl: parentColumn ? `/about/about-${normalizeInteger(parentColumn.id, 0)}.html` : ''
     }),
     title: item.name || '',
-    contentHtml: normalizeLegacyRichTextHtml(pageContent?.content_html, templateContext.site) || '',
+    contentHtml: normalizeLegacyBodyHtml(pageContent?.content_html, templateContext.site, { fallbackAlt: item.name }) || '',
     secondaryMenuItems: buildLegacyCorporationMenuItems(templateContext.corporationCategories, normalizeInteger(item.id, 0)),
     seoMeta: buildSeoMeta({
       title: pageContent?.seo_title || (item.name && pageTitleBase ? `${item.name} | ${pageTitleBase}` : item.name || pageTitleBase),
@@ -1905,7 +2033,7 @@ function buildLegacyContentPageProps(templateContext, item) {
     jsonLd: buildJsonLdOrganization(templateContext.site),
     faviconLinks: generateFaviconLinks(),
     themeColorMetas: generateThemeColorMetas(),
-    hreflangLinks: buildHreflangLinks(templateContext.site)
+    hreflangLinks: buildHreflangLinks(templateContext.site, { url: pageUrl })
   };
 }
 
@@ -1949,8 +2077,8 @@ function buildLegacySingleColumnPageProps(templateContext, column) {
     templateDataJson: pageContent?.template_data_json || null,
     currentColumnPageData: columnPageData,
     currentColumnHeroImage: columnPageData?.mastheadImage || columnPageData?.heroImage || columnPrimaryImage,
-    contentHtml: normalizeLegacyRichTextHtml(pageContent?.content_html, templateContext.site) || '',
-    bodyHtml: normalizeLegacyRichTextHtml(pageContent?.content_html, templateContext.site) || '',
+    contentHtml: normalizeLegacyBodyHtml(pageContent?.content_html, templateContext.site, { fallbackAlt: column.name }) || '',
+    bodyHtml: normalizeLegacyBodyHtml(pageContent?.content_html, templateContext.site, { fallbackAlt: column.name }) || '',
     itemDescription: pageContent?.seo_description || '',
     description: pageContent?.seo_description || '',
     seoMeta: buildSeoMeta({
@@ -1963,7 +2091,7 @@ function buildLegacySingleColumnPageProps(templateContext, column) {
     jsonLd: buildJsonLdOrganization(templateContext.site),
     faviconLinks: generateFaviconLinks(),
     themeColorMetas: generateThemeColorMetas(),
-    hreflangLinks: buildHreflangLinks(templateContext.site)
+    hreflangLinks: buildHreflangLinks(templateContext.site, { url })
   };
 }
 
@@ -2023,8 +2151,8 @@ function buildLegacySectionRootPageProps({ templateContext, section, allItems, c
     pageData,
     currentColumnPageData: pageData,
     currentColumnHeroImage: pageData?.mastheadImage || pageData?.heroImage || rootColumnPrimaryImage,
-    contentHtml: normalizeLegacyRichTextHtml(pageContent?.content_html, templateContext.site) || '',
-    bodyHtml: normalizeLegacyRichTextHtml(pageContent?.content_html, templateContext.site) || '',
+    contentHtml: normalizeLegacyBodyHtml(pageContent?.content_html, templateContext.site, { fallbackAlt: pageTitle }) || '',
+    bodyHtml: normalizeLegacyBodyHtml(pageContent?.content_html, templateContext.site, { fallbackAlt: pageTitle }) || '',
     itemDescription: pageContent?.seo_description || pageData?.summary || '',
     description: pageContent?.seo_description || pageData?.summary || '',
     secondaryMenuItems: buildSectionMenuItems(templateContext, section.dirName, 0),
@@ -2038,7 +2166,7 @@ function buildLegacySectionRootPageProps({ templateContext, section, allItems, c
     jsonLd: buildJsonLdOrganization(templateContext.site),
     faviconLinks: generateFaviconLinks(),
     themeColorMetas: generateThemeColorMetas(),
-    hreflangLinks: buildHreflangLinks(templateContext.site)
+    hreflangLinks: buildHreflangLinks(templateContext.site, { url: sectionUrl })
   };
 }
 
@@ -2132,7 +2260,7 @@ function buildLegacyManagedColumnListPageProps({ templateContext, rootColumn = n
     }
   }
 
-  const normalizedColumnBodyHtml = normalizeLegacyRichTextHtml(columnPageContent?.content_html, templateContext.site) || '';
+  const normalizedColumnBodyHtml = normalizeLegacyBodyHtml(columnPageContent?.content_html, templateContext.site, { fallbackAlt: columnNode.name }) || '';
   const enrichedColumnBody = buildLegacyContentSectionNavigation(normalizedColumnBodyHtml);
   const columnHeroImage = columnPageData?.mastheadImage
     || columnPageData?.heroImage
@@ -2199,7 +2327,7 @@ function buildLegacyManagedColumnListPageProps({ templateContext, rootColumn = n
     jsonLd: buildJsonLdOrganization(templateContext.site),
     faviconLinks: generateFaviconLinks(),
     themeColorMetas: generateThemeColorMetas(),
-    hreflangLinks: buildHreflangLinks(templateContext.site)
+    hreflangLinks: buildHreflangLinks(templateContext.site, { url: columnUrl })
   };
 }
 
@@ -2223,7 +2351,7 @@ function buildLegacyManagedColumnDetailPageProps({ templateContext, rootColumn =
     fallbackColumns: rootLevelCategories.length > 0 ? rootLevelCategories : [columnNode].filter(Boolean),
     columnMap
   });
-  const normalizedBodyHtml = normalizeLegacyRichTextHtml(managedItem.content_html, templateContext.site) || '';
+  const normalizedBodyHtml = normalizeLegacyBodyHtml(managedItem.content_html, templateContext.site, { fallbackAlt: managedItem.name }) || '';
   const enrichedBody = buildLegacyContentSectionNavigation(normalizedBodyHtml);
   const contentImages = normalizeManagedContentImages(managedItem);
   const columnPageData = normalizeLegacyColumnPageData(columnNode?.template_data);
@@ -2342,7 +2470,7 @@ function buildLegacyManagedColumnDetailPageProps({ templateContext, rootColumn =
     jsonLd: buildJsonLdStructuredContent(managedItem, templateContext.site, { url: managedContentUrl }),
     faviconLinks: generateFaviconLinks(),
     themeColorMetas: generateThemeColorMetas(),
-    hreflangLinks: buildHreflangLinks(templateContext.site)
+    hreflangLinks: buildHreflangLinks(templateContext.site, { url: managedContentUrl })
   };
 }
 
@@ -2449,7 +2577,7 @@ function buildLegacySectionContentListPageProps({
     jsonLd: buildJsonLdOrganization(templateContext.site),
     faviconLinks: generateFaviconLinks(),
     themeColorMetas: generateThemeColorMetas(),
-    hreflangLinks: buildHreflangLinks(templateContext.site)
+    hreflangLinks: buildHreflangLinks(templateContext.site, { url: columnUrl })
   };
 }
 
@@ -2506,12 +2634,12 @@ function buildLegacySectionContentDetailPageProps({ templateContext, section, se
     itemDescription: resolveRenderableContentSummary(item) || '',
     columnId: normalizeInteger(item.column_id, 0),
     columnName: columnNode?.name || '',
-    bodyHtml: normalizeLegacyRichTextHtml(item.content_html, templateContext.site) || '',
+    bodyHtml: normalizeLegacyBodyHtml(item.content_html, templateContext.site, { fallbackAlt: item.title }) || '',
     currentArticle: {
       id: normalizeInteger(item.id, 0),
       title: item.title || '',
       summary: resolveRenderableContentSummary(item),
-      bodyHtml: normalizeLegacyRichTextHtml(item.content_html, templateContext.site) || '',
+      bodyHtml: normalizeLegacyBodyHtml(item.content_html, templateContext.site, { fallbackAlt: item.title }) || '',
       image: resolveLegacyContentPreviewImage(item),
       date: formatLegacyDateOnly(item.created_at),
       url: articleUrl
@@ -2532,7 +2660,7 @@ function buildLegacySectionContentDetailPageProps({ templateContext, section, se
     jsonLd: buildJsonLdSectionEntry(item, templateContext.site, { url: articleUrl }),
     faviconLinks: generateFaviconLinks(),
     themeColorMetas: generateThemeColorMetas(),
-    hreflangLinks: buildHreflangLinks(templateContext.site)
+    hreflangLinks: buildHreflangLinks(templateContext.site, { url: articleUrl })
   };
 }
 
@@ -2596,7 +2724,9 @@ function normalizeTemplateSection(section) {
     images,
     image: normalizeUploadedRelativePath(String(section.image || images[0] || '').trim()),
     seoDescription: section.seoDescription || '',
-    description: section.description || section.summary || ''
+    description: section.description || section.summary || '',
+    template_data: section.template_data || null,
+    templateData: section.template_data || null
   };
 }
 
@@ -2615,7 +2745,9 @@ function normalizeTemplateColumn(columnNode, options = {}) {
     parentId: normalizeInteger(columnNode.parent_id, 0),
     parentName: options.parent?.name || '',
     images,
-    seoDescription: columnNode.seo_description || ''
+    seoDescription: columnNode.seo_description || '',
+    template_data: columnNode.template_data || null,
+    templateData: columnNode.template_data || null
   };
 }
 
@@ -2702,7 +2834,9 @@ function normalizeTemplateContent(content, options = {}) {
     type: options.type || '',
     title,
     name: content.name || title,
-    url: options.url || ''
+    url: options.url || '',
+    template_data: content.template_data || null,
+    templateData: content.template_data || null
   };
 }
 
@@ -2951,7 +3085,7 @@ function buildLegacySectionRootListPageProps({
     jsonLd: buildJsonLdOrganization(templateContext.site),
     faviconLinks: generateFaviconLinks(),
     themeColorMetas: generateThemeColorMetas(),
-    hreflangLinks: buildHreflangLinks(templateContext.site)
+    hreflangLinks: buildHreflangLinks(templateContext.site, { url: sectionUrl })
   };
 }
 
@@ -4142,11 +4276,217 @@ function normalizeLegacyRichTextHtml(value, siteConfig = null) {
     });
 }
 
+function normalizeLegacyBodyHtml(value, siteConfig = null, options = {}) {
+  const normalized = normalizeLegacyRichTextHtml(value, siteConfig);
+  if (!normalized) {
+    return '';
+  }
+  return normalizeLegacyImageAltText(stripLegacyBodyChrome(normalized), options);
+}
+
+function stripLegacyBodyChrome(value) {
+  let output = String(value || '').trim();
+  if (!output) {
+    return '';
+  }
+
+  output = unwrapLegacyBodyShell(output);
+
+  let previous = '';
+  while (output && output !== previous) {
+    previous = output;
+    output = stripLeadingLegacyBodyChromeBlock(output).trim();
+    output = unwrapLegacyBodyShell(output).trim();
+  }
+
+  return output;
+}
+
+function unwrapLegacyBodyShell(value) {
+  const html = String(value || '').trim();
+  const shell = matchSingleRootElement(html);
+  if (!shell || !isLegacyBodyShellOpeningTag(shell.openingTag)) {
+    return html;
+  }
+  return shell.inner.trim();
+}
+
+function stripLeadingLegacyBodyChromeBlock(value) {
+  const html = String(value || '').trim();
+  if (!html) {
+    return '';
+  }
+
+  const leadingComment = html.match(/^<!--[\s\S]*?-->\s*/);
+  if (leadingComment) {
+    return html.slice(leadingComment[0].length);
+  }
+
+  const match = matchLeadingHtmlElement(html);
+  if (!match || !isLegacyBodyChromeOpeningTag(match.openingTag)) {
+    return html;
+  }
+  return html.slice(match.endIndex);
+}
+
+function matchSingleRootElement(html, tagName) {
+  const match = matchLeadingHtmlElement(html, tagName);
+  if (!match) {
+    return null;
+  }
+  if (html.slice(match.endIndex).trim()) {
+    return null;
+  }
+  return match;
+}
+
+function matchLeadingHtmlElement(html, requiredTagName = null) {
+  const value = String(html || '');
+  const leading = value.match(/^\s*<([a-z][a-z0-9:-]*)(?:\s[^>]*)?>/i);
+  if (!leading) {
+    return null;
+  }
+
+  const tagName = leading[1].toLowerCase();
+  if (requiredTagName && tagName !== String(requiredTagName).toLowerCase()) {
+    return null;
+  }
+  if (isVoidHtmlElement(tagName)) {
+    return {
+      tagName,
+      openingTag: leading[0],
+      inner: '',
+      endIndex: leading[0].length
+    };
+  }
+
+  const tagPattern = new RegExp(`<\\/?${escapeRegExp(tagName)}\\b[^>]*>`, 'gi');
+  let depth = 0;
+  let current;
+  while ((current = tagPattern.exec(value))) {
+    const rawTag = current[0];
+    const isClosing = /^<\//.test(rawTag);
+    const isSelfClosing = /\/\s*>$/.test(rawTag);
+    if (!isClosing) {
+      depth += 1;
+      if (isSelfClosing) {
+        depth -= 1;
+      }
+    } else {
+      depth -= 1;
+    }
+    if (depth === 0) {
+      const endIndex = tagPattern.lastIndex;
+      return {
+        tagName,
+        openingTag: leading[0],
+        inner: value.slice(leading[0].length, current.index),
+        endIndex
+      };
+    }
+  }
+
+  return null;
+}
+
+function isLegacyBodyShellOpeningTag(openingTag) {
+  const tag = String(openingTag || '');
+  return /\bclass\s*=\s*["'][^"']*\b(?:sg-page-shell|sg-content-shell|sg-generated-hub|sg-info-page|sg-service-page|sg-careers-page|sg-story-page|customer-story-page)\b/i.test(tag);
+}
+
+function isLegacyBodyChromeOpeningTag(openingTag) {
+  const tag = String(openingTag || '');
+  return /\bclass\s*=\s*["'][^"']*\b(?:banner-primary|breadcrumb|sg-digital-page__hero|sg-careers-hero|sg-story-page__hero|sg-story-page__hero-content|sg-resource-detail__hero)\b/i.test(tag)
+    || /\bdata-component\s*=\s*["'][^"']*(?:masthead|breadcrumb)[^"']*["']/i.test(tag);
+}
+
+function isVoidHtmlElement(tagName) {
+  return new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'source', 'track', 'wbr'])
+    .has(String(tagName || '').toLowerCase());
+}
+
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeLegacyImageAltText(value, options = {}) {
+  const html = String(value || '');
+  if (!html || !/<img\b/i.test(html)) {
+    return html;
+  }
+  return html.replace(/<img\b[^>]*>/gi, (tag) => normalizeLegacyImageAltTag(tag, options));
+}
+
+function normalizeLegacyImageAltTag(tag, options = {}) {
+  const currentAlt = tag.match(/\s+alt(?:\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+)))?/i);
+  const currentAltText = currentAlt ? String(currentAlt[1] ?? currentAlt[2] ?? currentAlt[3] ?? '').trim() : '';
+  if (currentAltText) {
+    return tag;
+  }
+
+  const src = tag.match(/\s+src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i);
+  const generatedAlt = buildLegacyImageAltText(src ? (src[1] ?? src[2] ?? src[3]) : '', options);
+  if (!generatedAlt) {
+    return tag;
+  }
+  const escapedAlt = escapeHtmlAttribute(generatedAlt);
+
+  if (currentAlt) {
+    return `${tag.slice(0, currentAlt.index)} alt="${escapedAlt}"${tag.slice(currentAlt.index + currentAlt[0].length)}`;
+  }
+  return tag.replace(/\s*\/?>$/, (ending) => ` alt="${escapedAlt}"${ending}`);
+}
+
+function buildLegacyImageAltText(src, options = {}) {
+  const fallback = normalizeImageAltPhrase(options?.fallbackAlt);
+  const sourcePhrase = normalizeImageAltPhrase(resolveImageNameFromUrl(src));
+  if (sourcePhrase && fallback && !phrasesOverlap(sourcePhrase, fallback)) {
+    return `${sourcePhrase} - ${fallback}`;
+  }
+  return sourcePhrase || fallback;
+}
+
+function resolveImageNameFromUrl(src) {
+  const value = String(src || '').trim();
+  if (!value) {
+    return '';
+  }
+  const withoutQuery = value.split(/[?#]/)[0] || '';
+  const filename = decodeURIComponent((withoutQuery.split('/').pop() || '').trim());
+  return filename.replace(/\.[a-z0-9]{2,5}$/i, '');
+}
+
+function normalizeImageAltPhrase(value) {
+  let phrase = String(value || '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\b[a-f0-9]{8,}\b/gi, ' ')
+    .replace(/\b(?:jpg|jpeg|png|gif|webp|avif|svg)\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!phrase) {
+    return '';
+  }
+  phrase = phrase.replace(/\bfig\s+(\d+)\s+(\d+)\s+(\d+)\b/gi, 'Figure $1.$2.$3');
+  phrase = phrase.replace(/\bequation\s+(\d+)\s+(\d+)\b/gi, 'Equation $1.$2');
+  phrase = phrase.replace(/\bmod\s+(\d+)\b/gi, 'Module $1');
+  return phrase.charAt(0).toUpperCase() + phrase.slice(1);
+}
+
+function phrasesOverlap(left, right) {
+  const normalize = (value) => String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const leftValue = normalize(left);
+  const rightValue = normalize(right);
+  return Boolean(leftValue && rightValue && (leftValue.includes(rightValue) || rightValue.includes(leftValue)));
+}
+
 function finalizeSiteHtmlOutput(html, siteConfig = null) {
   let output = String(html || '');
   if (!output) {
     return '';
   }
+
+  output = normalizeHtmlImageLoading(output);
+  output = normalizeHtmlImageDimensions(output);
 
   output = output.replace(/(https?:\/\/[^/\s"'<>]+\/[A-Za-z0-9_-]+)https?:\/\/[^/\s"'<>]+(\/uploads\/(?:images|skin|pdfs)\/[^\s"'<>]+)/gi, (_, basePrefix, assetPath) => {
     const normalizedAssetUrl = resolvePublicAssetUrl(assetPath, siteConfig);
@@ -4159,6 +4499,261 @@ function finalizeSiteHtmlOutput(html, siteConfig = null) {
   }
 
   return prefixSiteInternalRootPaths(output, pathPrefix);
+}
+
+function normalizeHtmlImageLoading(value) {
+  const html = String(value || '');
+  if (!html || !/<img\b/i.test(html)) {
+    return html;
+  }
+  return html.replace(/<img\b[^>]*>/gi, (tag) => normalizeHtmlImageLoadingTag(tag));
+}
+
+function normalizeHtmlImageLoadingTag(tag) {
+  if (/\s+loading\s*=/i.test(tag) || shouldKeepImageEager(tag)) {
+    return tag;
+  }
+  return tag.replace(/\s*\/?>$/, (ending) => ` loading="lazy"${ending}`);
+}
+
+function shouldKeepImageEager(tag) {
+  const src = tag.match(/\s+src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i);
+  const srcValue = String(src ? (src[1] ?? src[2] ?? src[3]) : '');
+  return /logo\.svg|favicon|apple-touch-icon/i.test(srcValue)
+    || /\b(?:sg-global-nav__brand-mark|sg-short-masthead__image|banner-primary__image)\b/i.test(tag)
+    || /\s+fetchPriority\s*=\s*["']high["']/i.test(tag)
+    || /\s+fetchpriority\s*=\s*["']high["']/i.test(tag);
+}
+
+function normalizeHtmlImageDimensions(value) {
+  const html = String(value || '');
+  if (!html || !/<img\b/i.test(html)) {
+    return html;
+  }
+  return html.replace(/<img\b[^>]*>/gi, (tag) => normalizeHtmlImageDimensionTag(tag));
+}
+
+function normalizeHtmlImageDimensionTag(tag) {
+  const hasWidth = /\s+width\s*=/i.test(tag);
+  const hasHeight = /\s+height\s*=/i.test(tag);
+  if (hasWidth && hasHeight) {
+    return tag;
+  }
+
+  const src = tag.match(/\s+src\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/i);
+  const dimensions = resolveImageDimensions(src ? (src[1] ?? src[2] ?? src[3]) : '', tag);
+  if (!dimensions?.width || !dimensions?.height) {
+    return tag;
+  }
+
+  let output = tag;
+  if (!hasWidth) {
+    output = output.replace(/\s*\/?>$/, (ending) => ` width="${dimensions.width}"${ending}`);
+  }
+  if (!hasHeight) {
+    output = output.replace(/\s*\/?>$/, (ending) => ` height="${dimensions.height}"${ending}`);
+  }
+  return output;
+}
+
+function resolveImageDimensions(src, tag = '') {
+  const value = String(src || '').trim();
+  if (!value) {
+    return inferImageDimensionsFromTag(tag);
+  }
+
+  const localPath = resolveStaticImageFilePath(value);
+  if (localPath && fs.existsSync(localPath)) {
+    const dimensions = readImageDimensions(localPath);
+    if (dimensions) {
+      return dimensions;
+    }
+  }
+
+  return inferImageDimensionsFromTag(tag) || inferImageDimensionsFromUrl(value) || inferExternalImageDimensions(value, tag);
+}
+
+function resolveStaticImageFilePath(src) {
+  const uploadedPath = resolveUploadedFilePath(src);
+  if (uploadedPath) {
+    return uploadedPath;
+  }
+
+  const value = String(src || '').trim();
+  const legacySkin = value.match(/^(?:https?:\/\/[^/]+)?\/skin\/(.+)$/i);
+  if (legacySkin) {
+    return path.resolve(PROJECT_ROOT, 'uploads', 'skin', legacySkin[1].replace(/^\/+/, ''));
+  }
+  return null;
+}
+
+function readImageDimensions(filePath) {
+  const cacheKey = path.resolve(filePath);
+  if (imageDimensionCache.has(cacheKey)) {
+    return imageDimensionCache.get(cacheKey);
+  }
+
+  let dimensions = null;
+  try {
+    const buffer = fs.readFileSync(cacheKey);
+    dimensions = readRasterImageDimensions(buffer) || readSvgImageDimensions(buffer);
+  } catch {
+    dimensions = null;
+  }
+
+  imageDimensionCache.set(cacheKey, dimensions);
+  return dimensions;
+}
+
+function readRasterImageDimensions(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 12) {
+    return null;
+  }
+
+  if (buffer.readUInt32BE(0) === 0x89504e47 && buffer.toString('ascii', 12, 16) === 'IHDR') {
+    return normalizeImageDimensions(buffer.readUInt32BE(16), buffer.readUInt32BE(20));
+  }
+
+  if (buffer[0] === 0xff && buffer[1] === 0xd8) {
+    return readJpegImageDimensions(buffer);
+  }
+
+  if (buffer.toString('ascii', 0, 6) === 'GIF87a' || buffer.toString('ascii', 0, 6) === 'GIF89a') {
+    return normalizeImageDimensions(buffer.readUInt16LE(6), buffer.readUInt16LE(8));
+  }
+
+  if (buffer.toString('ascii', 0, 4) === 'RIFF' && buffer.toString('ascii', 8, 12) === 'WEBP') {
+    return readWebpImageDimensions(buffer);
+  }
+
+  if (buffer.toString('ascii', 4, 8) === 'ftyp' && /avif|avis/.test(buffer.toString('ascii', 8, 32))) {
+    return readIsoBmffImageDimensions(buffer);
+  }
+
+  return null;
+}
+
+function readJpegImageDimensions(buffer) {
+  let offset = 2;
+  while (offset + 9 < buffer.length) {
+    if (buffer[offset] !== 0xff) {
+      offset += 1;
+      continue;
+    }
+    const marker = buffer[offset + 1];
+    if (marker === 0xd9 || marker === 0xda) {
+      break;
+    }
+    const length = buffer.readUInt16BE(offset + 2);
+    if (length < 2 || offset + 2 + length > buffer.length) {
+      break;
+    }
+    if (
+      (marker >= 0xc0 && marker <= 0xc3)
+      || (marker >= 0xc5 && marker <= 0xc7)
+      || (marker >= 0xc9 && marker <= 0xcb)
+      || (marker >= 0xcd && marker <= 0xcf)
+    ) {
+      return normalizeImageDimensions(buffer.readUInt16BE(offset + 7), buffer.readUInt16BE(offset + 5));
+    }
+    offset += 2 + length;
+  }
+  return null;
+}
+
+function readWebpImageDimensions(buffer) {
+  const chunkType = buffer.toString('ascii', 12, 16);
+  if (chunkType === 'VP8 ' && buffer.length >= 30) {
+    return normalizeImageDimensions(buffer.readUInt16LE(26) & 0x3fff, buffer.readUInt16LE(28) & 0x3fff);
+  }
+  if (chunkType === 'VP8L' && buffer.length >= 25) {
+    const bits = buffer.readUInt32LE(21);
+    return normalizeImageDimensions((bits & 0x3fff) + 1, ((bits >> 14) & 0x3fff) + 1);
+  }
+  if (chunkType === 'VP8X' && buffer.length >= 30) {
+    return normalizeImageDimensions(readUInt24LE(buffer, 24) + 1, readUInt24LE(buffer, 27) + 1);
+  }
+  return null;
+}
+
+function readIsoBmffImageDimensions(buffer) {
+  const text = buffer.toString('latin1');
+  const index = text.indexOf('ispe');
+  if (index < 0 || index + 20 > buffer.length) {
+    return null;
+  }
+  return normalizeImageDimensions(buffer.readUInt32BE(index + 12), buffer.readUInt32BE(index + 16));
+}
+
+function readSvgImageDimensions(buffer) {
+  const text = buffer.toString('utf8', 0, Math.min(buffer.length, 4096));
+  if (!/<svg\b/i.test(text)) {
+    return null;
+  }
+
+  const width = parseSvgLength(text.match(/\bwidth\s*=\s*["']([^"']+)["']/i)?.[1]);
+  const height = parseSvgLength(text.match(/\bheight\s*=\s*["']([^"']+)["']/i)?.[1]);
+  if (width && height) {
+    return normalizeImageDimensions(width, height);
+  }
+
+  const viewBox = text.match(/\bviewBox\s*=\s*["']([^"']+)["']/i)?.[1];
+  if (!viewBox) {
+    return null;
+  }
+  const parts = viewBox.trim().split(/[\s,]+/).map(Number).filter(Number.isFinite);
+  return parts.length === 4 ? normalizeImageDimensions(parts[2], parts[3]) : null;
+}
+
+function inferImageDimensionsFromTag(tag) {
+  const ratio = String(tag || '').match(/\baspect-ratio\s*:\s*(\d+(?:\.\d+)?)\s*\/\s*(\d+(?:\.\d+)?)/i);
+  if (!ratio) {
+    return null;
+  }
+  const width = Number(ratio[1]);
+  const height = Number(ratio[2]);
+  return normalizeImageDimensions(width, height);
+}
+
+function inferImageDimensionsFromUrl(src) {
+  const filename = resolveImageNameFromUrl(src);
+  const match = filename.match(/(?:^|[^0-9])(\d{2,5})\s*x\s*(\d{2,5})(?:[^0-9]|$)/i);
+  return match ? normalizeImageDimensions(Number(match[1]), Number(match[2])) : null;
+}
+
+function inferExternalImageDimensions(src, tag = '') {
+  const value = String(src || '').trim();
+  if (!/^https?:\/\//i.test(value)) {
+    return null;
+  }
+  if (/\.svg(?:[?#]|$)/i.test(value)) {
+    return normalizeImageDimensions(96, 96);
+  }
+  if (/\b(?:quote|quotes|case-studies)\b/i.test(value)) {
+    return normalizeImageDimensions(1440, 810);
+  }
+  if (/\bicon\b/i.test(value) || /\bmetric-icon\b/i.test(tag)) {
+    return normalizeImageDimensions(96, 96);
+  }
+  return null;
+}
+
+function normalizeImageDimensions(width, height) {
+  const normalizedWidth = Math.round(Number(width));
+  const normalizedHeight = Math.round(Number(height));
+  if (!Number.isFinite(normalizedWidth) || !Number.isFinite(normalizedHeight) || normalizedWidth <= 0 || normalizedHeight <= 0) {
+    return null;
+  }
+  return { width: normalizedWidth, height: normalizedHeight };
+}
+
+function readUInt24LE(buffer, offset) {
+  return buffer[offset] + (buffer[offset + 1] << 8) + (buffer[offset + 2] << 16);
+}
+
+function parseSvgLength(value) {
+  const match = String(value || '').trim().match(/^(\d+(?:\.\d+)?)/);
+  return match ? Number(match[1]) : 0;
 }
 
 function prefixSiteInternalRootPaths(html, pathPrefix) {
@@ -4227,6 +4822,9 @@ function sanitizeLegacyMetaContent(value, type) {
   if (!normalized) {
     return '';
   }
+  if (type === 'description' && !shouldSanitizeLegacyMetaDescription(normalized)) {
+    return normalized;
+  }
   if (!looksLikeLegacyMojibake(normalized)) {
     return normalized;
   }
@@ -4237,6 +4835,17 @@ function sanitizeLegacyMetaContent(value, type) {
     .filter((item) => item && !looksLikeLegacyMojibake(item));
 
   return Array.from(new Set(parts)).join(' ');
+}
+
+function shouldSanitizeLegacyMetaDescription(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return false;
+  }
+  return /<\s*(?:!doctype|html|head|body|meta|title|link|script|style)\b/i.test(normalized)
+    || /\b(?:name|property|content|charset|http-equiv)\s*=/i.test(normalized)
+    || /width\s*=\s*device-width/i.test(normalized)
+    || /&(?:quot|lt|gt|#34|#60|#62);/i.test(normalized);
 }
 
 function escapeHtmlAttribute(value) {

@@ -208,8 +208,9 @@ export function createCmsTemplateRuntime({
       appendTag(lines, 'meta', item);
     }
 
-    if (props?.jsonLd && typeof props.jsonLd === 'object') {
-      lines.push(`<script type="application/ld+json">${escapeHtml(JSON.stringify(props.jsonLd))}</script>`);
+    const jsonLd = serializeJsonLd(props?.jsonLd);
+    if (jsonLd) {
+      lines.push(`<script type="application/ld+json">${jsonLd}</script>`);
     }
 
     return lines.join('\n');
@@ -613,6 +614,19 @@ function stringifyTemplateValue(value) {
     return String(value);
   }
   return '';
+}
+
+function serializeJsonLd(value) {
+  if (!value || typeof value !== 'object') {
+    return '';
+  }
+
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/>/g, '\\u003e')
+    .replace(/&/g, '\\u0026')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
 }
 
 function mergeComponentProps(baseProps, extraProps) {
