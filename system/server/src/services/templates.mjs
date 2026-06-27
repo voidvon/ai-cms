@@ -11,6 +11,7 @@ import { buildColumnPublicUrl, buildSectionColumnPublicUrl, resolvePublicSection
 import { buildSectionContentContext, getSectionTopLevelCategories } from './section-content.mjs';
 import { buildContentDetailUrlFromColumn } from './column-paths.mjs';
 import { normalizeUploadedRelativePath } from './uploads.mjs';
+import { getSiteConfig, normalizeLanguageSitePathPrefix, prefixLanguageSitePath } from './site.mjs';
 
 export const TEMPLATE_TYPES = ['home', 'list', 'content', 'single', 'component'];
 export const TEMPLATE_ENGINES = ['tsx'];
@@ -774,10 +775,13 @@ export function renderTemplatePreview(input) {
   const previewState = {
     styleAssets: new Map()
   };
-  const html = ensurePreviewBaseHref(injectPreviewTsxStyles(
-    renderPreviewTemplate(template, props, components, 0, previewState),
-    previewState.styleAssets
-  ));
+  const html = finalizePreviewHtmlOutput(
+    ensurePreviewBaseHref(injectPreviewTsxStyles(
+      renderPreviewTemplate(template, props, components, 0, previewState),
+      previewState.styleAssets
+    )),
+    props.site
+  );
   return { html };
 }
 
@@ -884,31 +888,33 @@ function normalizeTemplateInput(input) {
 
 function buildTemplatePreviewProps(template, previewContext = {}) {
   const mode = normalizePreviewMode(previewContext?.mode);
-  const props = buildTemplateValidationProps(template);
+  const languageCode = String(previewContext?.language_code || previewContext?.languageCode || '').trim() || null;
+  const site = getSiteConfig(languageCode);
+  const props = buildTemplateValidationProps(template, site);
   const effectiveMode = mode === 'auto' ? inferPreviewMode(template) : mode;
 
   if (effectiveMode === 'home') {
     return {
       ...props,
-      currentPage: { type: 'home', title: '首页', url: '/index.html' },
-      secondaryMenuItems: buildPreviewRootColumnMenuItems(),
+      currentPage: { type: 'home', title: '首页', url: prefixPreviewSitePath('/index.html', site) },
+      secondaryMenuItems: buildPreviewRootColumnMenuItems(site),
       newsIndexHtml: '',
-      featuredManagedItemsHtml: buildPreviewManagedContentCardsHtml(),
-      featuredManagedItemLinksHtml: buildPreviewManagedContentLinksHtml(),
+      featuredManagedItemsHtml: buildPreviewManagedContentCardsHtml(site),
+      featuredManagedItemLinksHtml: buildPreviewManagedContentLinksHtml(8, null, site),
       serviceIndexHtml: ''
     };
   }
 
   if (effectiveMode === 'list') {
     const managedRootColumn = getPreviewManagedRootColumn();
-    const managedRootUrl = getPreviewManagedRootPublicUrl(managedRootColumn);
+    const managedRootUrl = getPreviewManagedRootPublicUrl(managedRootColumn, site);
     const managedRootLabel = getPreviewManagedRootLabel(managedRootColumn);
     const columnNode = getPreviewColumnNode({
       rootColumn: managedRootColumn,
       fallbackName: '示例列表栏目'
     });
     const managedContentItems = getPreviewManagedContentItems(8, managedRootColumn);
-    const pagination = buildPreviewPaginationData(buildPreviewColumnUrl(columnNode), {
+    const pagination = buildPreviewPaginationData(buildPreviewColumnUrl(columnNode, new Map(), site), {
       pageNumber: 2,
       pageCount: 8,
       totalRecords: 108,
@@ -919,25 +925,26 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       ...buildPreviewPageContext({
         pageType: 'list',
         title: columnNode.name,
-        url: buildPreviewColumnUrl(columnNode),
+        url: buildPreviewColumnUrl(columnNode, new Map(), site),
         section: { type: 'managed-column', name: managedRootLabel, url: managedRootUrl },
         column: columnNode,
         content: null
       }),
       smallName: columnNode.name,
-      primaryMenuItems: buildPreviewPrimaryMenuItems(managedRootUrl),
+      primaryMenuItems: buildPreviewPrimaryMenuItems(managedRootUrl, site),
       bigId: columnNode.parent_id || columnNode.id,
       bigName: columnNode.name,
-      collectionCategoryHtml: `<span class="abv">【<a href="${escapeHtml(buildPreviewColumnUrl(columnNode))}">${escapeHtml(columnNode.name)}</a>】</span>`,
+      collectionCategoryHtml: `<span class="abv">【<a href="${escapeHtml(buildPreviewColumnUrl(columnNode, new Map(), site))}">${escapeHtml(columnNode.name)}</a>】</span>`,
       secondaryMenuItems: buildPreviewColumnMenuItems({
         rootColumn: managedRootColumn,
         column: columnNode,
-        baseUrl: managedRootUrl
+        baseUrl: managedRootUrl,
+        site
       }),
       items: managedContentItems.map((item) => ({
         id: item.id,
         name: item.name || '',
-        url: buildPreviewManagedContentUrl(item, managedRootColumn),
+        url: buildPreviewManagedContentUrl(item, managedRootColumn, site),
         image: normalizeUploadedRelativePath(String(item.primary_image || '').trim()),
         summary: item.summary || ''
       })),
@@ -949,7 +956,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
 
   if (effectiveMode === 'content') {
     const managedRootColumn = getPreviewManagedRootColumn();
-    const managedRootUrl = getPreviewManagedRootPublicUrl(managedRootColumn);
+    const managedRootUrl = getPreviewManagedRootPublicUrl(managedRootColumn, site);
     const managedRootLabel = getPreviewManagedRootLabel(managedRootColumn);
     const managedContentItem = getPreviewManagedContentItem(managedRootColumn);
     const columnNode = getPreviewColumnNode({
@@ -957,7 +964,7 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       id: managedContentItem.column_id,
       fallbackName: '示例列表栏目'
     });
-    const managedContentUrl = buildPreviewManagedContentUrl(managedContentItem, managedRootColumn);
+    const managedContentUrl = buildPreviewManagedContentUrl(managedContentItem, managedRootColumn, site);
     return {
       ...props,
       ...buildPreviewPageContext({
@@ -969,16 +976,17 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         content: { id: managedContentItem.id, title: managedContentItem.name, name: managedContentItem.name, type: 'managed-content', url: managedContentUrl }
       }),
       title: managedContentItem.name,
-      primaryMenuItems: buildPreviewPrimaryMenuItems(managedRootUrl),
+      primaryMenuItems: buildPreviewPrimaryMenuItems(managedRootUrl, site),
       itemDescription: managedContentItem.summary || '',
       image: normalizeUploadedRelativePath(String(managedContentItem.primary_image || '').trim()),
       code: managedContentItem.code || '',
-      relatedItemsHtml: buildPreviewManagedContentLinksHtml(4, managedRootColumn),
+      relatedItemsHtml: buildPreviewManagedContentLinksHtml(4, managedRootColumn, site),
       bodyHtml: managedContentItem.content_html || managedContentItem.summary || '',
       secondaryMenuItems: buildPreviewColumnMenuItems({
         rootColumn: managedRootColumn,
         column: columnNode,
-        baseUrl: managedRootUrl
+        baseUrl: managedRootUrl,
+        site
       })
     };
   }
@@ -997,14 +1005,16 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
       ...buildPreviewPageContext({
         pageType: 'content',
         title: columnNode.name,
-        url: template.type === 'single' ? '/example-page.html' : `/about/about-${columnNode.id}.html`,
+        url: template.type === 'single'
+          ? prefixPreviewSitePath('/example-page.html', site)
+          : prefixPreviewSitePath(`/about/about-${columnNode.id}.html`, site),
         section: template.type === 'single'
-          ? { type: 'content', name: '单页栏目', url: '/example-page.html' }
-          : { type: 'corporation', name: '公司栏目', url: '/about/' },
+          ? { type: 'content', name: '单页栏目', url: prefixPreviewSitePath('/example-page.html', site) }
+          : { type: 'corporation', name: '公司栏目', url: prefixPreviewSitePath('/about/', site) },
         column: columnNode,
         content: null
       }),
-      primaryMenuItems: buildPreviewPrimaryMenuItems(template.type === 'single' ? 'contact' : 'corporation'),
+      primaryMenuItems: buildPreviewPrimaryMenuItems(template.type === 'single' ? 'contact' : 'corporation', site),
       title: columnNode.name,
       contentHtml: columnNode.content_html || '公司栏目内容预览',
       secondaryMenuItems: template.type === 'single'
@@ -1012,8 +1022,9 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
         : buildPreviewColumnMenuItems({
             rootColumn: pageTreeRootColumn,
             activeId: columnNode.id,
-            baseUrl: '/about/',
-            detailPattern: '/about/about-{id}.html',
+            baseUrl: prefixPreviewSitePath('/about/', site),
+            detailPattern: prefixPreviewSitePath('/about/about-{id}.html', site),
+            site,
             fallbackName: '示例单页栏目'
           })
     };
@@ -1102,13 +1113,21 @@ function getPreviewManagedRootColumn() {
   return getPreviewRootColumnByDriver('managed_column');
 }
 
-function getPreviewManagedRootPublicUrl(rootColumn = null) {
+function prefixPreviewSitePath(url, site = null, options = {}) {
+  return prefixLanguageSitePath(url, normalizeLanguageSitePathPrefix(site?.language_site_path_prefix), {
+    allowApi: false,
+    allowAssets: false,
+    ...options
+  });
+}
+
+function getPreviewManagedRootPublicUrl(rootColumn = null, site = null) {
   const routePath = String(rootColumn?.route_path || '').trim();
   if (!routePath) {
-    const firstPublicUrl = buildPreviewSiteColumns().find((item) => String(item?.url || '').trim())?.url || '/example-list/';
+    const firstPublicUrl = buildPreviewSiteColumns(site).find((item) => String(item?.url || '').trim())?.url || prefixPreviewSitePath('/example-list/', site);
     return normalizePreviewDirectoryUrl(firstPublicUrl);
   }
-  return normalizePreviewDirectoryUrl(routePath);
+  return normalizePreviewDirectoryUrl(prefixPreviewSitePath(routePath, site));
 }
 
 function getPreviewManagedRootLabel(rootColumn = null) {
@@ -1228,21 +1247,24 @@ function getPreviewColumnFallback({
   };
 }
 
-function buildPreviewRootColumnMenuItems() {
-  return buildPreviewSiteColumns().map((item) => ({
+function buildPreviewRootColumnMenuItems(site = null) {
+  return buildPreviewSiteColumns(site).map((item) => ({
     label: item.name || '',
     url: item.url || '',
     active: false
   })).filter((item) => item.url);
 }
 
-function buildPreviewSiteColumns() {
+function buildPreviewSiteColumns(site = null) {
   const rows = listColumns();
 
   if (rows.length === 0) {
     return PREVIEW_FALLBACK_SITE_COLUMNS.map((item) => ({
       ...item,
-      children: Array.isArray(item.children) ? item.children.map((child) => ({ ...child })) : []
+      url: prefixPreviewSitePath(item.url || '', site),
+      children: Array.isArray(item.children)
+        ? item.children.map((child) => ({ ...child, url: prefixPreviewSitePath(child.url || '', site) }))
+        : []
     }));
   }
 
@@ -1253,7 +1275,7 @@ function buildPreviewSiteColumns() {
     parentId: toInteger(item.parent_id, 0),
     columnType: item.column_type || '',
     modelCode: item.model_code || '',
-    url: buildPreviewColumnUrl(item, publicSections)
+    url: buildPreviewColumnUrl(item, publicSections, site)
   })).filter((item) => item.id !== 0);
 
   const childrenByParentId = new Map();
@@ -1283,16 +1305,16 @@ function buildPreviewSiteColumns() {
     .filter((item) => item.url);
 }
 
-function buildPreviewPrimaryMenuItems(activeKey = '') {
-  const items = buildPreviewRootColumnMenuItems();
+function buildPreviewPrimaryMenuItems(activeKey = '', site = null) {
+  const items = buildPreviewRootColumnMenuItems(site);
   return items.map((item) => ({
     ...item,
     active: !activeKey ? Boolean(item.active) : item.url === activeKey || item.key === activeKey
   }));
 }
 
-function buildPreviewColumnUrl(column, rowsById = new Map()) {
-  return buildColumnPublicUrl(column, rowsById);
+function buildPreviewColumnUrl(column, rowsById = new Map(), site = null) {
+  return prefixPreviewSitePath(buildColumnPublicUrl(column, rowsById), site);
 }
 
 function resolvePreviewSections() {
@@ -1319,7 +1341,7 @@ function buildPreviewColumnMenuItems(options = {}) {
     url: detailPattern
       ? detailPattern.replace('{id}', String(toInteger(item.id, 0)))
       : (options.section
-          ? buildSectionColumnPublicUrl(options.section, item)
+          ? prefixPreviewSitePath(buildSectionColumnPublicUrl(options.section, item), options.site)
           : `${baseUrl}${toInteger(item.id, 0)}.html`),
     active: toInteger(item.id, 0) === toInteger(options.activeId, currentColumn?.id || 0)
   }));
@@ -1327,9 +1349,9 @@ function buildPreviewColumnMenuItems(options = {}) {
 
 function buildPreviewSectionColumnUrl(sectionConfig, columnNode) {
   if (sectionConfig?.section && columnNode) {
-    return buildSectionColumnPublicUrl(sectionConfig.section, columnNode);
+    return prefixPreviewSitePath(buildSectionColumnPublicUrl(sectionConfig.section, columnNode), sectionConfig?.site);
   }
-  return `/${String(sectionConfig?.sectionDir || 'news').replace(/^\/+|\/+$/g, '')}/${toInteger(columnNode?.id, 0)}.html`;
+  return prefixPreviewSitePath(`/${String(sectionConfig?.sectionDir || 'news').replace(/^\/+|\/+$/g, '')}/${toInteger(columnNode?.id, 0)}.html`, sectionConfig?.site);
 }
 
 function resolvePreviewSectionData(sectionConfig = null) {
@@ -1370,28 +1392,28 @@ function parsePreviewLegacyExtra(value) {
   }
 }
 
-function buildPreviewManagedContentUrl(contentItem, fallbackColumn = null) {
+function buildPreviewManagedContentUrl(contentItem, fallbackColumn = null, site = null) {
   const contentId = toInteger(contentItem?.id, 0);
   const resolvedColumn = listColumns().find((item) => toInteger(item?.id, 0) === toInteger(contentItem?.column_id, 0))
     || fallbackColumn
     || null;
 
   if (!resolvedColumn) {
-    const managedRootUrl = getPreviewManagedRootPublicUrl(getPreviewManagedRootColumn());
+    const managedRootUrl = getPreviewManagedRootPublicUrl(getPreviewManagedRootColumn(), site);
     return `${managedRootUrl}detail/${contentId}.html`;
   }
 
-  return buildContentDetailUrlFromColumn(contentItem, resolvedColumn);
+  return prefixPreviewSitePath(buildContentDetailUrlFromColumn(contentItem, resolvedColumn), site);
 }
 
-function buildPreviewManagedContentCardsHtml(rootColumn = null) {
+function buildPreviewManagedContentCardsHtml(site = null, rootColumn = null) {
   return getPreviewManagedContentItems(8, rootColumn).map((item) => (
-    `<li><img src="${escapeHtml(normalizeUploadedRelativePath(String(item.primary_image || '').trim()))}" width="120" height="120" border="0" alt="${escapeHtml(item.name || '')}"><li><a href="${escapeHtml(buildPreviewManagedContentUrl(item))}" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${escapeHtml(item.summary || '')}</li></li>`
+    `<li><img src="${escapeHtml(normalizeUploadedRelativePath(String(item.primary_image || '').trim()))}" width="120" height="120" border="0" alt="${escapeHtml(item.name || '')}"><li><a href="${escapeHtml(buildPreviewManagedContentUrl(item, rootColumn, site))}" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${escapeHtml(item.summary || '')}</li></li>`
   )).join('');
 }
 
-function buildPreviewManagedContentLinksHtml(limit = 8, rootColumn = null) {
-  return getPreviewManagedContentItems(limit, rootColumn).map((item) => `<li><a href="${escapeHtml(buildPreviewManagedContentUrl(item))}">${escapeHtml(item.name || '')}</a></li>`).join('');
+function buildPreviewManagedContentLinksHtml(limit = 8, rootColumn = null, site = null) {
+  return getPreviewManagedContentItems(limit, rootColumn).map((item) => `<li><a href="${escapeHtml(buildPreviewManagedContentUrl(item, rootColumn, site))}">${escapeHtml(item.name || '')}</a></li>`).join('');
 }
 
 function buildPreviewSectionEntryLinks(sectionConfig = null, limit = 10) {
@@ -1403,10 +1425,10 @@ function buildPreviewSectionEntryLinks(sectionConfig = null, limit = 10) {
 function buildPreviewSectionEntryUrl(item, sectionConfig = null) {
   const resolvedSection = sectionConfig?.section || resolvePreviewSectionData(sectionConfig).section || null;
   if (resolvedSection?.rootColumn) {
-    return buildContentDetailUrlFromColumn(item, resolvedSection.rootColumn);
+    return prefixPreviewSitePath(buildContentDetailUrlFromColumn(item, resolvedSection.rootColumn), sectionConfig?.site);
   }
   const dirName = String(sectionConfig?.sectionDir || 'section').replace(/^\/+|\/+$/g, '');
-  return `/${dirName}/detail/${toInteger(item?.id, 0)}.html`;
+  return prefixPreviewSitePath(`/${dirName}/detail/${toInteger(item?.id, 0)}.html`, sectionConfig?.site);
 }
 
 function normalizePreviewDirectoryUrl(publicUrl) {
@@ -1597,6 +1619,7 @@ function pickPreviewComponentContextProps(source) {
     'footerColumns',
     'footerMeta',
     'footerManagedColumnCategories',
+    'columnTag',
     'fragments',
     'currentPage',
     'currentSection',
@@ -2035,21 +2058,35 @@ function extractLiteralComponentReferences(content) {
   return Array.from(refs).filter(Boolean);
 }
 
-function buildTemplateValidationProps(template) {
+function buildTemplateValidationProps(template, siteConfig = null) {
+  const scopedHomeUrl = prefixPreviewSitePath('/', siteConfig);
+  const scopedParentUrl = prefixPreviewSitePath('/parent.html', siteConfig);
+  const scopedCurrentUrl = prefixPreviewSitePath('/current.html', siteConfig);
+  const scopedDetailUrl = prefixPreviewSitePath('/detail.html', siteConfig);
+  const siteTemplateData = siteConfig?.template_data && typeof siteConfig.template_data === 'object' && !Array.isArray(siteConfig.template_data)
+    ? siteConfig.template_data
+    : {};
   const common = {
     site: {
-      web_name: '示例网站',
-      company_name: '示例公司',
-      company_phone: '021-00000000',
-      company_fax: '021-00000001',
-      web_mobile: '13800000000',
-      company_email: 'demo@example.com',
-      company_address: '示例地址',
-      web_url: '/',
-      icp_number: '',
-      web_qq: '',
-      web_author: '',
-      web_copyright: ''
+      web_name: siteConfig?.web_name || '示例网站',
+      company_name: siteConfig?.company_name || '示例公司',
+      company_phone: siteConfig?.company_phone || '021-00000000',
+      company_fax: siteConfig?.company_fax || '021-00000001',
+      web_mobile: siteConfig?.web_mobile || '13800000000',
+      company_email: siteConfig?.company_email || 'demo@example.com',
+      company_address: siteConfig?.company_address || '示例地址',
+      web_url: scopedHomeUrl,
+      base_web_url: siteConfig?.base_web_url || '',
+      resolved_web_url: siteConfig?.resolved_web_url || scopedHomeUrl,
+      requested_language_code: siteConfig?.requested_language_code || siteConfig?.current_language_code || '',
+      current_language_code: siteConfig?.current_language_code || siteConfig?.requested_language_code || '',
+      resolved_language_code: siteConfig?.resolved_language_code || siteConfig?.current_language_code || siteConfig?.requested_language_code || '',
+      icp_number: siteConfig?.icp_number || '',
+      web_qq: siteConfig?.web_qq || '',
+      web_author: siteConfig?.web_author || '',
+      web_copyright: siteConfig?.web_copyright || '',
+      template_data: siteTemplateData,
+      language_site_path_prefix: normalizeLanguageSitePathPrefix(siteConfig?.language_site_path_prefix)
     },
     fragments: {
       indextopHtml: '',
@@ -2063,23 +2100,23 @@ function buildTemplateValidationProps(template) {
       newsCategoryHtml: '',
       serviceCategoryHtml: ''
     },
-    currentPage: { type: template.type || '', title: template.name || '', url: '/' },
+    currentPage: { type: template.type || '', title: template.name || '', url: scopedHomeUrl },
     currentSection: { type: '', name: '', url: '' },
     currentColumn: [
-      { id: 1, type: 'demo', name: '父级分类', url: '/parent.html', parentId: 0, parentName: '', seoDescription: '' },
-      { id: 2, type: 'demo', name: '当前分类', url: '/current.html', parentId: 1, parentName: '父级分类', seoDescription: '' }
+      { id: 1, type: 'demo', name: '父级分类', url: scopedParentUrl, parentId: 0, parentName: '', seoDescription: '' },
+      { id: 2, type: 'demo', name: '当前分类', url: scopedCurrentUrl, parentId: 1, parentName: '父级分类', seoDescription: '' }
     ],
-    currentColumnItem: { id: 2, type: 'demo', name: '当前分类', url: '/current.html', parentId: 1, parentName: '父级分类', seoDescription: '' },
-    parentColumn: { id: 1, type: 'demo', name: '父级分类', url: '/parent.html', parentId: 0, parentName: '', seoDescription: '' },
-    currentContent: { id: 1, type: 'demo', title: '示例内容', name: '示例内容', url: '/detail.html' },
-    siteColumns: buildPreviewSiteColumns(),
+    currentColumnItem: { id: 2, type: 'demo', name: '当前分类', url: scopedCurrentUrl, parentId: 1, parentName: '父级分类', seoDescription: '' },
+    parentColumn: { id: 1, type: 'demo', name: '父级分类', url: scopedParentUrl, parentId: 0, parentName: '', seoDescription: '' },
+    currentContent: { id: 1, type: 'demo', title: '示例内容', name: '示例内容', url: scopedDetailUrl },
+    siteColumns: buildPreviewSiteColumns(siteConfig),
     component: () => null,
-    primaryMenuItems: buildPreviewPrimaryMenuItems('home'),
+    primaryMenuItems: buildPreviewPrimaryMenuItems('home', siteConfig),
     item: {
       id: 1,
       name: '示例产品',
       title: '示例标题',
-      url: '/detail.html',
+      url: scopedDetailUrl,
       image: '',
       summary: '示例摘要',
       summaryClassName: '',
@@ -2145,6 +2182,22 @@ function buildTemplateValidationProps(template) {
   };
 
   return common;
+}
+
+function finalizePreviewHtmlOutput(html, siteConfig = null) {
+  const output = String(html || '');
+  const pathPrefix = normalizeLanguageSitePathPrefix(siteConfig?.language_site_path_prefix);
+  if (!output || pathPrefix === '/') {
+    return output;
+  }
+
+  return output.replace(/(\b(?:href|action|content|data-search-api-url)=["'])(\/[^"']*)(["'])/gi, (match, prefix, url, suffix) => {
+    const rewritten = prefixLanguageSitePath(url, pathPrefix, {
+      allowApi: false,
+      allowAssets: false
+    });
+    return `${prefix}${rewritten}${suffix}`;
+  });
 }
 
 function formatTemplateValidationError(error) {

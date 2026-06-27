@@ -28,15 +28,28 @@ export function listContentItems(modelCode, {
   featured = false,
   visibleOnly = true,
   limit = 20,
+  columnId = null,
+  includeDescendants = false,
   languageCode = null
 } = {}) {
   const normalizedModelCode = requireContentModelCode(modelCode);
-  return listContentEntries(normalizedModelCode, {
-    featured,
-    visibleOnly,
-    limit,
-    languageCode
-  }).sort(resolveContentItemComparator(normalizedModelCode));
+  const safeColumnId = Number.isInteger(Number(columnId)) ? Number(columnId) : null;
+  const items = safeColumnId && safeColumnId > 0
+    ? listContentEntriesPaged(normalizedModelCode, {
+      page: 1,
+      limit,
+      columnId: safeColumnId,
+      includeDescendants,
+      visibleOnly,
+      languageCode
+    }).items
+    : listContentEntries(normalizedModelCode, {
+      featured,
+      visibleOnly,
+      limit,
+      languageCode
+    });
+  return items.sort(resolveContentItemComparator(normalizedModelCode));
 }
 
 export function listContentItemsAdmin(modelCode, {

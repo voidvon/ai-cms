@@ -60,7 +60,7 @@ export const templatesApi = {
     return response.data
   },
 
-  preview: async (data: Partial<Template> & { preview_context?: { mode?: string } }) => {
+  preview: async (data: Partial<Template> & { preview_context?: { mode?: string; language_code?: string } }) => {
     const response = await apiClient.post<ApiResponse<TemplatePreview>>('/templates/preview', data)
     return response.data
   },

@@ -2,6 +2,7 @@ import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Ellipsis, Pencil, Plus, Trash2 } from 'lucide-react'
 import { templateVariantsApi, templatesApi } from '@/api/advanced'
+import { languagesApi } from '@/api/languages'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -91,6 +92,7 @@ export default function TemplateVariantsPage() {
   const [versionPopoverOpen, setVersionPopoverOpen] = useState(false)
   const [versionPreview, setVersionPreview] = useState<TemplateVersion | null>(null)
   const [previewMode, setPreviewMode] = useState('auto')
+  const [previewLanguageCode, setPreviewLanguageCode] = useState('')
   const [editorTab, setEditorTab] = useState('tsx')
   const [deleteThemeDialogOpen, setDeleteThemeDialogOpen] = useState(false)
   const [templateDeleteDialogOpen, setTemplateDeleteDialogOpen] = useState(false)
@@ -111,7 +113,25 @@ export default function TemplateVariantsPage() {
     queryKey: ['themes'],
     queryFn: () => templateVariantsApi.list(),
   })
+  const { data: languagesData } = useQuery({
+    queryKey: ['languages'],
+    queryFn: () => languagesApi.list(),
+  })
   const themes = themesData?.data ?? []
+  const languages = languagesData?.data ?? []
+  const enabledLanguages = useMemo(
+    () => languages.filter((item) => Number(item.is_enabled || 0) === 1),
+    [languages],
+  )
+  const defaultPreviewLanguageCode = useMemo(
+    () => enabledLanguages.find((item) => Number(item.is_default || 0) === 1)?.code || enabledLanguages[0]?.code || '',
+    [enabledLanguages],
+  )
+  useEffect(() => {
+    if (!previewLanguageCode && defaultPreviewLanguageCode) {
+      setPreviewLanguageCode(defaultPreviewLanguageCode)
+    }
+  }, [defaultPreviewLanguageCode, previewLanguageCode])
   const selectedTheme = useMemo(
     () => themes.find((item) => item.is_selected === 1) || themes[0] || null,
     [themes],
@@ -541,7 +561,10 @@ export default function TemplateVariantsPage() {
   const previewMutation = useMutation({
     mutationFn: () => templatesApi.preview({
       ...buildTemplatePayload(formData),
-      preview_context: { mode: previewMode },
+      preview_context: {
+        mode: previewMode,
+        language_code: previewLanguageCode || undefined,
+      },
     }),
     onSuccess: (response) => {
       setPreviewHtml(response.data?.html || '')
@@ -843,6 +866,16 @@ export default function TemplateVariantsPage() {
                   <SelectContent>
                     {previewModeOptions.map((mode) => (
                       <SelectItem key={mode.value} value={mode.value}>{mode.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={previewLanguageCode || defaultPreviewLanguageCode} onValueChange={setPreviewLanguageCode}>
+                  <SelectTrigger className="w-[138px]">
+                    <SelectValue placeholder="预览语言" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {enabledLanguages.map((language) => (
+                      <SelectItem key={language.id} value={language.code}>{language.name}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>

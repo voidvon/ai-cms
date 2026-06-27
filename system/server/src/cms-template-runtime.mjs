@@ -649,6 +649,7 @@ function pickComponentContextProps(source) {
     'footerColumns',
     'footerMeta',
     'footerManagedColumnCategories',
+    'columnTag',
     'fragments',
     'currentPage',
     'currentSection',

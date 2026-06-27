@@ -30,7 +30,12 @@ import {
   buildContentDetailUrlFromColumn,
   buildContentDetailPathFromColumn
 } from './services/column-paths.mjs';
-import { getSiteConfig, resolveLanguageSitePublicBaseUrl } from './services/site.mjs';
+import {
+  getSiteConfig,
+  normalizeLanguageSitePathPrefix,
+  prefixLanguageSitePath,
+  resolveLanguageSitePublicBaseUrl
+} from './services/site.mjs';
 import { ensureTemplatesSchema } from './services/templates.mjs';
 import { listLanguages } from './services/languages.mjs';
 import { resolveNormalizedTemplateImagePath } from './services/template-data-assets.mjs';
@@ -99,6 +104,24 @@ function buildArticleUrl(entry, templateContext, sectionOverride = null) {
   return buildContentDetailUrlFromColumn(entry, section.rootColumn);
 }
 
+function prefixSitePathForContext(url, site = null, options = {}) {
+  return prefixLanguageSitePath(url, site?.language_site_path_prefix || '/', options);
+}
+
+function buildSiteScopedManagedContentUrl(contentItem, site = null, columnSlugPath = null) {
+  return prefixSitePathForContext(buildManagedContentUrl(contentItem, columnSlugPath), site, {
+    allowApi: false,
+    allowAssets: false
+  });
+}
+
+function buildSiteScopedArticleUrl(entry, templateContext, sectionOverride = null) {
+  return prefixSitePathForContext(buildArticleUrl(entry, templateContext, sectionOverride), templateContext?.site, {
+    allowApi: false,
+    allowAssets: false
+  });
+}
+
 function filterManagedRootColumn(columns, rootColumn) {
   const rootColumnId = normalizeInteger(rootColumn?.id, 0);
   if (rootColumnId <= 0) {
@@ -147,7 +170,7 @@ function resolveManagedColumnRootPublicUrl(templateContext = null) {
   if (!templateContext?.managedColumnRoot) {
     return '';
   }
-  return buildLegacyColumnUrl(templateContext.managedColumnRoot, templateContext.publicSections) || '';
+  return buildLegacyColumnUrl(templateContext.managedColumnRoot, templateContext.publicSections, templateContext.site) || '';
 }
 
 function getManagedColumnRootPath(rootColumn) {
@@ -173,6 +196,13 @@ function getSectionEntries(templateContext, section) {
 
 function buildSectionCategoryUrl(dirName, columnNode) {
   return buildSectionColumnPublicUrl({ dirName }, columnNode);
+}
+
+function buildSiteScopedSectionCategoryUrl(dirName, columnNode, site = null) {
+  return prefixSitePathForContext(buildSectionCategoryUrl(dirName, columnNode), site, {
+    allowApi: false,
+    allowAssets: false
+  });
 }
 
 function prefixRelativeHrefPaths(html, prefix) {
@@ -1138,7 +1168,7 @@ function buildLegacyCommonProps(templateContext) {
   const sectionEntries = Array.isArray(templateContext.sectionEntries)
     ? templateContext.sectionEntries.map((item) => ({
       ...item,
-      url: buildArticleUrl(item, templateContext)
+      url: buildSiteScopedArticleUrl(item, templateContext)
     }))
     : [];
 
@@ -1159,14 +1189,14 @@ function buildLegacyCommonProps(templateContext) {
         id: subCat.id,
         name: subCat.name,
         dir_name: subCat.dir_name,
-        url: buildLegacyManagedColumnUrl(subCat, columnMap)
+        url: buildLegacyManagedColumnUrl(subCat, columnMap, templateContext.site)
       }));
 
     return {
       id: cat.id,
       name: cat.name,
       dir_name: cat.dir_name,
-      url: buildLegacyManagedColumnUrl(cat, columnMap),
+      url: buildLegacyManagedColumnUrl(cat, columnMap, templateContext.site),
       children // 添加二级分类
     };
   });
@@ -1199,36 +1229,37 @@ function buildLegacyCommonProps(templateContext) {
   const normalizedFooterColumns = [
     buildFooterSectionColumn({
       title: footerLabels.homeLinks,
-      url: '/',
-      children: buildConfiguredFooterLinks(templateContext.site?.template_data?.ui?.footer?.homeLinks)
+      url: prefixSitePathForContext('/', templateContext.site, { allowApi: false, allowAssets: false }),
+      children: buildConfiguredFooterLinks(templateContext.site?.template_data?.ui?.footer?.homeLinks, templateContext.site)
     }),
     buildFooterSectionColumn({
       title: footerLabels.managedRoot,
-      url: resolveManagedColumnRootPublicUrl(templateContext) || '/',
-      children: buildConfiguredFooterLinks(templateContext.site?.template_data?.ui?.footer?.managedRoot).length > 0
-        ? buildConfiguredFooterLinks(templateContext.site?.template_data?.ui?.footer?.managedRoot)
+      url: resolveManagedColumnRootPublicUrl(templateContext) || prefixSitePathForContext('/', templateContext.site, { allowApi: false, allowAssets: false }),
+      children: buildConfiguredFooterLinks(templateContext.site?.template_data?.ui?.footer?.managedRoot, templateContext.site).length > 0
+        ? buildConfiguredFooterLinks(templateContext.site?.template_data?.ui?.footer?.managedRoot, templateContext.site)
         : footerManagedColumnCategories
     }),
     buildFooterSectionColumn({
       title: footerLabels.industries,
-      url: '/industries/',
-      children: buildConfiguredFooterLinks(templateContext.site?.template_data?.ui?.footer?.industries)
+      url: prefixSitePathForContext('/industries/', templateContext.site, { allowApi: false, allowAssets: false }),
+      children: buildConfiguredFooterLinks(templateContext.site?.template_data?.ui?.footer?.industries, templateContext.site)
     }),
     buildFooterSectionColumn({
       title: footerLabels.services,
-      url: '/services/',
-      children: buildConfiguredFooterLinks(templateContext.site?.template_data?.ui?.footer?.services)
+      url: prefixSitePathForContext('/services/', templateContext.site, { allowApi: false, allowAssets: false }),
+      children: buildConfiguredFooterLinks(templateContext.site?.template_data?.ui?.footer?.services, templateContext.site)
     }),
     buildFooterSectionColumn({
       title: footerLabels.about,
-      url: '/about-us/',
-      children: buildConfiguredFooterLinks(templateContext.site?.template_data?.ui?.footer?.about)
+      url: prefixSitePathForContext('/about-us/', templateContext.site, { allowApi: false, allowAssets: false }),
+      children: buildConfiguredFooterLinks(templateContext.site?.template_data?.ui?.footer?.about, templateContext.site)
     })
   ].filter(Boolean);
 
   return {
     site: templateContext.site,
     columns: templateContext.columns,
+    columnTag: createTemplateColumnTag(templateContext),
     sectionEntries,
     sectionCategories: templateContext.sectionCategories,
     managedColumnCategories: templateContext.managedColumnCategories,
@@ -1245,22 +1276,74 @@ function buildLegacyCommonProps(templateContext) {
       bottomHtml: '',
       indexFootHtml: '',
       aboutHtml: '',
-      managedMenuHtml: buildLegacyManagedColumnMenu(templateContext.managedColumnCategories),
-      managedMenuCompactHtml: buildLegacyManagedColumnMenuCompact(templateContext.managedColumnCategories),
-      aboutCategoryHtml: buildLegacyAboutCategoryList(templateContext.corporationCategories),
+      managedMenuHtml: buildLegacyManagedColumnMenu(templateContext.managedColumnCategories, templateContext.site),
+      managedMenuCompactHtml: buildLegacyManagedColumnMenuCompact(templateContext.managedColumnCategories, templateContext.site),
+      aboutCategoryHtml: buildLegacyAboutCategoryList(templateContext.corporationCategories, templateContext.site),
       newsCategoryHtml: buildSectionCategoryListHtml(templateContext, 'news'),
       serviceCategoryHtml: buildSectionCategoryListHtml(templateContext, 'service')
     }
   };
 }
 
-function buildConfiguredFooterLinks(items = []) {
+function createTemplateColumnTag(templateContext) {
+  const safeLanguageCode = String(
+    templateContext?.site?.requested_language_code
+    || templateContext?.site?.current_language_code
+    || templateContext?.languageCode
+    || ''
+  ).trim() || null;
+
+  return ({ id, columnId, limit = 20, visibleOnly = true } = {}) => {
+    const targetColumnId = normalizeInteger(columnId ?? id, 0);
+    if (targetColumnId <= 0) {
+      return [];
+    }
+
+    const column = templateContext?.columns.find((item) => normalizeInteger(item?.id, 0) === targetColumnId) || null;
+    const modelCode = String(column?.model_code || '').trim();
+    if (!modelCode) {
+      return [];
+    }
+
+    return listContentItems(modelCode, {
+      visibleOnly,
+      limit: Math.min(Math.max(normalizeInteger(limit, 20), 1), 200),
+      columnId: targetColumnId,
+      languageCode: safeLanguageCode
+    })
+      .map((item) => {
+        const templateData = item?.template_data && typeof item.template_data === 'object'
+          ? item.template_data
+          : null;
+        const title = String(item?.name || item?.title || '').trim();
+        const summary = normalizeRenderableLegacyText(item?.summary || '');
+        const image = resolveLegacyContentPreviewImage(item);
+        return {
+          id: normalizeInteger(item?.id, 0),
+          columnId: normalizeInteger(item?.column_id, 0),
+          name: title,
+          title,
+          summary,
+          description: summary,
+          image: image || '',
+          imageAlt: title,
+          url: buildSiteScopedManagedContentUrl(item, templateContext.site),
+          templateData
+        };
+      });
+  };
+}
+
+function buildConfiguredFooterLinks(items = [], site = null) {
   return Array.isArray(items)
     ? items
       .filter((item) => item && typeof item === 'object')
       .map((item) => ({
         name: String(item.name || '').trim(),
-        url: String(item.url || '').trim(),
+        url: prefixSitePathForContext(String(item.url || '').trim(), site, {
+          allowApi: false,
+          allowAssets: false
+        }),
         openInNewTab: item.openInNewTab === true
       }))
       .filter((item) => item.name && item.url)
@@ -1394,7 +1477,7 @@ function normalizeLanguageSwitcherPagePath(url, currentPathPrefix = '/') {
   }
   const withoutOrigin = value.replace(/^https?:\/\/[^/]+/i, '');
   let normalized = withoutOrigin.startsWith('/') ? withoutOrigin : `/${withoutOrigin}`;
-  const normalizedPrefix = normalizeLanguageOutputPrefix(currentPathPrefix);
+  const normalizedPrefix = normalizeLanguageSitePathPrefix(currentPathPrefix);
   if (normalizedPrefix !== '/' && (normalized === normalizedPrefix || normalized.startsWith(`${normalizedPrefix}/`))) {
     normalized = normalized.slice(normalizedPrefix.length) || '/';
   }
@@ -1425,10 +1508,10 @@ function expandLegacyCommonPlaceholders(value, templateContext) {
     .replaceAll('#HOPE_WebMsn#', site.web_mobile || '')
     .replaceAll('#HOPE_Webauthor#', site.web_author || '')
     .replaceAll('#HOPE_Copyright#', site.web_copyright || '')
-    .replaceAll('#HOPE_ManagedCat()#', buildLegacyManagedColumnMenu(templateContext.managedColumnCategories))
-    .replaceAll('#HOPE_ManagedCat2()#', buildLegacyManagedColumnMenuCompact(templateContext.managedColumnCategories));
+    .replaceAll('#HOPE_ManagedCat()#', buildLegacyManagedColumnMenu(templateContext.managedColumnCategories, site))
+    .replaceAll('#HOPE_ManagedCat2()#', buildLegacyManagedColumnMenuCompact(templateContext.managedColumnCategories, site));
 
-  html = html.replace(/#HOPE_aboutCat\((\d+)\)#/gi, () => buildLegacyAboutCategoryList(templateContext.corporationCategories));
+  html = html.replace(/#HOPE_aboutCat\((\d+)\)#/gi, () => buildLegacyAboutCategoryList(templateContext.corporationCategories, site));
   html = html.replace(/#HOPE_NewsCat\((\d+)\s*,\s*(\d+)\)#/gi, (_, id, dirCode) => {
     const dirName = normalizeInteger(dirCode, 1) === 2 ? 'services' : 'news';
     if (normalizeInteger(id, 0) > 0) {
@@ -1443,7 +1526,7 @@ function expandLegacyCommonPlaceholders(value, templateContext) {
 
 function buildLegacyHomePageProps(templateContext) {
   const homeColumn = templateContext.columns.find((item) => normalizeInteger(item?.id, 0) === 117) || null;
-  const homePageData = normalizeLegacyColumnPageData(homeColumn?.template_data);
+  const homePageData = normalizeLegacyColumnPageData(homeColumn?.template_data, templateContext.site);
   const homePrimaryImage = getPrimaryTemplateImage(homeColumn);
   const featuredManagedItems = (templateContext.managedColumnRoot
     ? listManagedColumnItems(templateContext.managedColumnRoot, {
@@ -1475,7 +1558,7 @@ function buildLegacyHomePageProps(templateContext) {
         id: item.id,
         name: item.name || '',
         title: item.name || '',
-        url: buildManagedContentUrl(item),
+        url: buildSiteScopedManagedContentUrl(item, templateContext.site),
         image: normalizeUploadedRelativePath(String(images[0] || '').trim()),
         images: images.map((entry) => normalizeUploadedRelativePath(String(entry || '').trim())).filter(Boolean),
         summary: item.summary || ''
@@ -1488,7 +1571,7 @@ function buildLegacyHomePageProps(templateContext) {
     .map((item) => ({
       id: item.id,
       title: item.title || '',
-      url: buildArticleUrl(item, templateContext, newsSection),
+      url: buildSiteScopedArticleUrl(item, templateContext, newsSection),
       image: resolveLegacyContentPreviewImage(item),
       summary: resolveRenderableContentSummary(item),
       date: formatLegacyDateOnly(item.created_at)
@@ -1498,7 +1581,7 @@ function buildLegacyHomePageProps(templateContext) {
     .map((item) => ({
       id: item.id,
       title: item.title || '',
-      url: buildArticleUrl(item, templateContext, serviceSection),
+      url: buildSiteScopedArticleUrl(item, templateContext, serviceSection),
       image: resolveLegacyContentPreviewImage(item),
       summary: resolveRenderableContentSummary(item),
       date: formatLegacyDateOnly(item.created_at)
@@ -1508,11 +1591,11 @@ function buildLegacyHomePageProps(templateContext) {
     siteColumns: buildTemplateContextSiteColumns(templateContext, {
       activeColumnId: normalizeInteger(homeColumn?.id, 0)
     }),
-    secondaryMenuItems: buildLegacyRootColumnMenuItems(templateContext.columns),
-    newsIndexHtml: buildLegacyIndexNews(),
-    featuredManagedItemsHtml: buildLegacyIndexFeaturedManagedItems(),
-    featuredManagedItemLinksHtml: buildLegacyIndexFeaturedManagedItemLinks(),
-    serviceIndexHtml: buildLegacyServiceIndex(),
+    secondaryMenuItems: buildLegacyRootColumnMenuItems(templateContext.columns, templateContext),
+    newsIndexHtml: buildLegacyIndexNews(templateContext.site),
+    featuredManagedItemsHtml: buildLegacyIndexFeaturedManagedItems(templateContext.site),
+    featuredManagedItemLinksHtml: buildLegacyIndexFeaturedManagedItemLinks(templateContext.site),
+    serviceIndexHtml: buildLegacyServiceIndex(templateContext.site),
     homeFeaturedManagedItems: featuredManagedItems,
     homeNewsItems,
     homeServiceItems,
@@ -1526,7 +1609,7 @@ function buildLegacyHomePageProps(templateContext) {
     seoMeta: buildSeoMeta({
       title: templateContext.site.seo_home_title || templateContext.site.seo_default_title || templateContext.site.web_name || '',
       description: templateContext.site.seo_home_description || templateContext.site.seo_default_description || templateContext.site.company_name || templateContext.site.web_name || '',
-      url: '/',
+      url: prefixSitePathForContext('/', templateContext.site, { allowApi: false, allowAssets: false }),
       site: templateContext.site
     }),
     jsonLd: buildJsonLdOrganization(templateContext.site),
@@ -1536,8 +1619,8 @@ function buildLegacyHomePageProps(templateContext) {
   };
 }
 
-function buildLegacyRootColumnMenuItems(columns) {
-  return buildLegacySiteColumns(columns).map((item) => ({
+function buildLegacyRootColumnMenuItems(columns, templateContext = null) {
+  return buildLegacySiteColumns(columns, { templateContext }).map((item) => ({
     label: item.name || '',
     url: item.url || '',
     active: false
@@ -1773,7 +1856,7 @@ function buildHeaderSectionChildren(rows, section, activeColumnId, { sectionEntr
       active: false,
       showInNav: 1,
       sortOrder: normalizeInteger(item.sort_order, 0),
-      url: buildArticleUrl(item, templateContext || { publicSections: { getSectionByColumnId: () => section } }, section)
+      url: buildSiteScopedArticleUrl(item, templateContext || { publicSections: { getSectionByColumnId: () => section }, site: null }, section)
     }));
 }
 
@@ -1781,6 +1864,7 @@ function buildLegacySiteColumns(columns, options = {}) {
   const rows = Array.isArray(columns) ? columns : [];
   const publicSections = resolvePublicSectionContext(rows);
   const activeColumnId = normalizeInteger(options.activeColumnId, 0);
+  const currentSite = options.templateContext?.site || null;
   const managedRootColumnId = normalizeInteger(options.templateContext?.managedColumnRoot?.id, 0);
   const managedRootModelCode = String(options.templateContext?.managedColumnRoot?.model_code || '').trim();
   const managedCategoryMap = new Map(
@@ -1800,7 +1884,7 @@ function buildLegacySiteColumns(columns, options = {}) {
     showInNav: normalizeInteger(item?.is_visible, 1),
     sortOrder: normalizeInteger(item?.sort_order, 0),
     customUrl: String(item?.custom_url || '').trim(),
-    url: buildLegacyColumnUrl(item, publicSections)
+    url: buildLegacyColumnUrl(item, publicSections, options.templateContext?.site || null)
   })).filter((item) => item.id !== 0);
 
   const topLevelNavRows = normalizedRows
@@ -1817,7 +1901,14 @@ function buildLegacySiteColumns(columns, options = {}) {
   const candidateNavRows = normalizedRows
     .concat(groupedNavRows)
     .filter((item) => item?.url && !String(item?.customUrl || '').startsWith('#'));
-  const candidateNavRowByUrl = new Map(candidateNavRows.map((item) => [normalizeUrlPath(item.url), item]));
+  const candidateNavRowByUrl = new Map();
+  for (const item of candidateNavRows) {
+    const normalizedCandidateUrl = normalizeSiteNavigationMatchPath(item.url, currentSite);
+    if (!normalizedCandidateUrl || candidateNavRowByUrl.has(normalizedCandidateUrl)) {
+      continue;
+    }
+    candidateNavRowByUrl.set(normalizedCandidateUrl, item);
+  }
   const navRows = configuredMainItems.length > 0
     ? configuredMainItems
       .map((item, index) => {
@@ -1825,7 +1916,7 @@ function buildLegacySiteColumns(columns, options = {}) {
         if (!url) {
           return null;
         }
-        const base = candidateNavRowByUrl.get(normalizeUrlPath(url)) || null;
+        const base = candidateNavRowByUrl.get(normalizeSiteNavigationMatchPath(url, currentSite)) || null;
         return {
           ...(base || {
             id: 0,
@@ -1868,7 +1959,7 @@ function buildLegacySiteColumns(columns, options = {}) {
             sourceId: normalizeInteger(cat.id, 0),
             active: false,
             showInNav: 1,
-            url: buildLegacyManagedColumnUrl(cat, managedCategoryMap)
+            url: buildLegacyManagedColumnUrl(cat, managedCategoryMap, options.templateContext?.site || null)
           }))
         : [];
     } else if (item.renderDriver === 'section') {
@@ -1911,6 +2002,31 @@ function normalizeUrlPath(value = '') {
     return normalized.slice(0, -10) || '/';
   }
   return normalized;
+}
+
+function normalizeSiteNavigationMatchPath(value = '', site = null) {
+  const normalized = normalizeUrlPath(value);
+  if (!normalized.startsWith('/')) {
+    return normalized;
+  }
+
+  const prefixed = prefixSitePathForContext(normalized, site, {
+    allowApi: false,
+    allowAssets: false
+  });
+  const normalizedPrefixed = normalizeUrlPath(prefixed);
+  if (!normalizedPrefixed.startsWith('/')) {
+    return normalizedPrefixed;
+  }
+
+  const normalizedPrefix = normalizeLanguageSitePathPrefix(site?.language_site_path_prefix || '/');
+  if (normalizedPrefix === '/' || normalizedPrefixed === normalizedPrefix) {
+    return normalizedPrefixed;
+  }
+
+  return normalizedPrefixed.startsWith(`${normalizedPrefix}/`)
+    ? normalizedPrefixed.slice(normalizedPrefix.length) || '/'
+    : normalizedPrefixed;
 }
 
 function resolveConfiguredNavLabel(item, navLabels = {}, managedContext = {}) {
@@ -1962,8 +2078,11 @@ function resolveManagedRootRoutePath(managedContext = {}) {
   return routePath.endsWith('/') ? routePath : `${routePath}/`;
 }
 
-function buildLegacyColumnUrl(column, rowsById = new Map()) {
-  return buildColumnPublicUrl(column, rowsById);
+function buildLegacyColumnUrl(column, rowsById = new Map(), site = null) {
+  return prefixSitePathForContext(buildColumnPublicUrl(column, rowsById), site, {
+    allowApi: false,
+    allowAssets: false
+  });
 }
 
 function buildLegacyContactPageProps(templateContext) {
@@ -1972,7 +2091,9 @@ function buildLegacyContactPageProps(templateContext) {
   const contactPage = contactColumn
     ? resolveDedicatedColumnPageContent(contactColumn, templateContext.languageCode)
     : null;
-  const contactUrl = contactColumn ? buildLegacyColumnUrl(contactColumn, templateContext.publicSections) || '/contact.html' : '/contact.html';
+  const contactUrl = contactColumn
+    ? buildLegacyColumnUrl(contactColumn, templateContext.publicSections, templateContext.site) || prefixSitePathForContext('/contact.html', templateContext.site, { allowApi: false, allowAssets: false })
+    : prefixSitePathForContext('/contact.html', templateContext.site, { allowApi: false, allowAssets: false });
   const pageTitleBase = templateContext.site.company_name || templateContext.site.web_name || '';
   return {
     ...buildLegacyCommonProps(templateContext),
@@ -1999,7 +2120,8 @@ function buildLegacyContactPageProps(templateContext) {
 function buildLegacyContentPageProps(templateContext, item) {
   const uiText = getLegacyUiText(templateContext);
   const parentColumn = templateContext.corporationCategories.find((entry) => normalizeInteger(entry.id, 0) === normalizeInteger(item.parent_id, 0)) || null;
-  const pageUrl = `/about/about-${normalizeInteger(item.id, 0)}.html`;
+  const pageUrl = prefixSitePathForContext(`/about/about-${normalizeInteger(item.id, 0)}.html`, templateContext.site, { allowApi: false, allowAssets: false });
+  const sectionUrl = prefixSitePathForContext('/about/', templateContext.site, { allowApi: false, allowAssets: false });
   const pageTitleBase = templateContext.site.company_name || templateContext.site.web_name || '';
   const pageContent = resolveDedicatedColumnPageContent(item, templateContext.languageCode);
   return {
@@ -2008,22 +2130,22 @@ function buildLegacyContentPageProps(templateContext, item) {
       pageType: 'content',
       title: item.name || '',
       url: pageUrl,
-      section: { type: 'page-tree', name: uiText.pageTree, url: '/about/' },
+      section: { type: 'page-tree', name: uiText.pageTree, url: sectionUrl },
       columnChain: buildTemplateColumnChain({
         column: item,
         columns: templateContext.corporationCategories,
         type: 'page-tree',
-        urlBuilder: (columnItem) => `/about/about-${normalizeInteger(columnItem.id, 0)}.html`
+        urlBuilder: (columnItem) => prefixSitePathForContext(`/about/about-${normalizeInteger(columnItem.id, 0)}.html`, templateContext.site, { allowApi: false, allowAssets: false })
       }),
       columnType: 'page-tree',
       columnUrl: pageUrl,
       parentColumn,
       parentColumnType: 'page-tree',
-      parentColumnUrl: parentColumn ? `/about/about-${normalizeInteger(parentColumn.id, 0)}.html` : ''
+      parentColumnUrl: parentColumn ? prefixSitePathForContext(`/about/about-${normalizeInteger(parentColumn.id, 0)}.html`, templateContext.site, { allowApi: false, allowAssets: false }) : ''
     }),
     title: item.name || '',
     contentHtml: normalizeLegacyBodyHtml(pageContent?.content_html, templateContext.site, { fallbackAlt: item.name }) || '',
-    secondaryMenuItems: buildLegacyCorporationMenuItems(templateContext.corporationCategories, normalizeInteger(item.id, 0)),
+    secondaryMenuItems: buildLegacyCorporationMenuItems(templateContext.corporationCategories, normalizeInteger(item.id, 0), templateContext.site),
     seoMeta: buildSeoMeta({
       title: pageContent?.seo_title || (item.name && pageTitleBase ? `${item.name} | ${pageTitleBase}` : item.name || pageTitleBase),
       description: pageContent?.seo_description || pageContent?.summary || templateContext.site.seo_default_description || item.name || '',
@@ -2038,15 +2160,15 @@ function buildLegacyContentPageProps(templateContext, item) {
 }
 
 function buildLegacySingleColumnPageProps(templateContext, column) {
-  const url = buildLegacyColumnUrl(column, templateContext.publicSections);
-  const columnPageData = normalizeLegacyColumnPageData(column?.template_data);
+  const url = buildLegacyColumnUrl(column, templateContext.publicSections, templateContext.site);
+  const columnPageData = normalizeLegacyColumnPageData(column?.template_data, templateContext.site);
   const pageContent = resolveDedicatedColumnPageContent(column, templateContext.languageCode);
   const columnPrimaryImage = getPrimaryTemplateImage(column);
   const columnChain = buildTemplateColumnChain({
     column,
     columns: templateContext.columns.filter((item) => String(item.column_type || '') === 'single' && String(item.model_code || '') !== 'corporation'),
     type: 'content',
-    urlBuilder: (columnItem) => buildLegacyColumnUrl(columnItem)
+    urlBuilder: (columnItem) => buildLegacyColumnUrl(columnItem, templateContext.publicSections, templateContext.site)
   });
   return {
     ...buildLegacyCommonProps(templateContext),
@@ -2099,7 +2221,7 @@ function buildLegacySectionRootPageProps({ templateContext, section, allItems, c
   const sectionUrl = `/${String(section?.dirName || '').trim().replace(/^\/+|\/+$/g, '')}/`;
   const rootColumn = section?.rootColumn || null;
   const pageContent = resolveDedicatedColumnPageContent(rootColumn, templateContext.languageCode);
-  const rootPageData = normalizeLegacyColumnPageData(rootColumn?.template_data);
+  const rootPageData = normalizeLegacyColumnPageData(rootColumn?.template_data, templateContext.site);
   const rootColumnPrimaryImage = getPrimaryTemplateImage(rootColumn);
   const topLevelColumns = Array.isArray(columnList) ? columnList : getSectionTopLevelCategories(templateContext, section);
   const buckets = columnBuckets instanceof Map ? columnBuckets : groupBy(allItems || [], (item) => normalizeInteger(item.column_id, 0));
@@ -2182,11 +2304,11 @@ function buildLegacyManagedColumnListPageProps({ templateContext, rootColumn = n
   if (!columnMap) {
     columnMap = new Map(templateContext.managedColumnCategories.map((item) => [normalizeInteger(item.id, 0), item]));
   }
-  const columnUrl = buildLegacyManagedColumnUrl(columnNode, columnMap);
+  const columnUrl = buildLegacyManagedColumnUrl(columnNode, columnMap, templateContext.site);
   const rootManagedColumn = rootColumn || null;
   const rootManagedColumnUrl = rootManagedColumn
-    ? buildLegacyColumnUrl(rootManagedColumn, templateContext.publicSections)
-    : buildLegacyManagedColumnUrl(columnNode, columnMap);
+    ? buildLegacyColumnUrl(rootManagedColumn, templateContext.publicSections, templateContext.site)
+    : buildLegacyManagedColumnUrl(columnNode, columnMap, templateContext.site);
   const rootManagedColumnName = String(rootManagedColumn?.name || '').trim() || uiText.managedRoot;
   const rootManagedColumnPrimaryImage = getPrimaryTemplateImage(rootManagedColumn);
   const columnPrimaryImage = getPrimaryTemplateImage(columnNode);
@@ -2196,9 +2318,10 @@ function buildLegacyManagedColumnListPageProps({ templateContext, rootColumn = n
     currentColumn: columnNode,
     currentParent: parent,
     fallbackColumns: rootLevelCategories.length > 0 ? rootLevelCategories : [columnNode].filter(Boolean),
-    columnMap
+    columnMap,
+    site: templateContext.site
   });
-  let columnPageData = normalizeLegacyColumnPageData(columnNode?.template_data);
+  let columnPageData = normalizeLegacyColumnPageData(columnNode?.template_data, templateContext.site);
 
   // 修正 pageData.cards 中的子分类 URL，使用完整的层级路径
   if (columnPageData && Array.isArray(columnPageData.cards) && columnPageData.cards.length > 0) {
@@ -2221,8 +2344,8 @@ function buildLegacyManagedColumnListPageProps({ templateContext, rootColumn = n
           if (matchingChild) {
             return {
               ...card,
-              href: buildLegacyManagedColumnUrl(matchingChild, columnMap),
-              link: buildLegacyManagedColumnUrl(matchingChild, columnMap)
+              href: buildLegacyManagedColumnUrl(matchingChild, columnMap, templateContext.site),
+              link: buildLegacyManagedColumnUrl(matchingChild, columnMap, templateContext.site)
             };
           }
           return card;
@@ -2253,9 +2376,9 @@ function buildLegacyManagedColumnListPageProps({ templateContext, rootColumn = n
           if (matchingManagedItem) {
             return {
               ...model,
-              href: buildManagedContentUrl(matchingManagedItem),
-              link: buildManagedContentUrl(matchingManagedItem),
-              url: buildManagedContentUrl(matchingManagedItem)
+              href: buildSiteScopedManagedContentUrl(matchingManagedItem, templateContext.site),
+              link: buildSiteScopedManagedContentUrl(matchingManagedItem, templateContext.site),
+              url: buildSiteScopedManagedContentUrl(matchingManagedItem, templateContext.site)
             };
           }
           return model;
@@ -2283,7 +2406,7 @@ function buildLegacyManagedColumnListPageProps({ templateContext, rootColumn = n
           column: columnNode,
           columns: templateContext.managedColumnCategories,
           type: 'managed-column',
-          urlBuilder: (item) => buildLegacyManagedColumnUrl(item, columnMap)
+          urlBuilder: (item) => buildLegacyManagedColumnUrl(item, columnMap, templateContext.site)
         }),
         rootManagedColumn,
         {
@@ -2295,12 +2418,12 @@ function buildLegacyManagedColumnListPageProps({ templateContext, rootColumn = n
       columnUrl,
       parentColumn: parent,
       parentColumnType: 'managed-column',
-      parentColumnUrl: parent ? buildLegacyManagedColumnUrl(parent, columnMap) : ''
+      parentColumnUrl: parent ? buildLegacyManagedColumnUrl(parent, columnMap, templateContext.site) : ''
     }),
     smallName: columnNode.name || '',
     bigId: normalizeInteger(parent?.id, columnNode.id),
     bigName: parent?.name || columnNode.name || '',
-    collectionCategoryHtml: buildLegacyManagedColumnSmallCategories(rootLevelCategories.length > 0 ? rootLevelCategories : [columnNode]),
+    collectionCategoryHtml: buildLegacyManagedColumnSmallCategories(rootLevelCategories.length > 0 ? rootLevelCategories : [columnNode], templateContext.site),
     secondaryMenuItems: columnNavigation.items,
     secondaryMenuTitle: columnNavigation.title,
     secondaryMenuParentUrl: columnNavigation.parentUrl,
@@ -2310,12 +2433,12 @@ function buildLegacyManagedColumnListPageProps({ templateContext, rootColumn = n
     pageData: columnPageData,
     bodyHtml: enrichedColumnBody.html,
     sectionNavItems: enrichedColumnBody.items,
-    items: buildLegacyManagedColumnListItems(pageItems),
+    items: buildLegacyManagedColumnListItems(pageItems, templateContext.site),
     managedCardItems: pageItems.map((item) => ({
       id: normalizeInteger(item.id, 0),
       name: item.name || '',
       title: item.name || '',
-      url: buildManagedContentUrl(item),
+      url: buildSiteScopedManagedContentUrl(item, templateContext.site),
       image: normalizeUploadedRelativePath(String(item.primary_image || '').trim()),
       summary: item.summary || '',
       code: item.code || ''
@@ -2343,8 +2466,8 @@ function buildLegacyManagedColumnDetailPageProps({ templateContext, rootColumn =
   const columnMap = new Map(templateContext.managedColumnCategories.map((item) => [normalizeInteger(item.id, 0), item]));
   const rootManagedColumn = rootColumn || null;
   const rootManagedColumnUrl = rootManagedColumn
-    ? buildLegacyColumnUrl(rootManagedColumn, templateContext.publicSections)
-    : buildLegacyManagedColumnUrl(columnNode, columnMap);
+    ? buildLegacyColumnUrl(rootManagedColumn, templateContext.publicSections, templateContext.site)
+    : buildLegacyManagedColumnUrl(columnNode, columnMap, templateContext.site);
   const rootManagedColumnName = String(rootManagedColumn?.name || '').trim() || uiText.managedRoot;
   const rootManagedColumnPathPrefix = String(rootManagedColumnUrl || '').trim();
 
@@ -2353,13 +2476,14 @@ function buildLegacyManagedColumnDetailPageProps({ templateContext, rootColumn =
     currentColumn: columnNode,
     currentParent: parent,
     fallbackColumns: rootLevelCategories.length > 0 ? rootLevelCategories : [columnNode].filter(Boolean),
-    columnMap
+    columnMap,
+    site: templateContext.site
   });
   const normalizedBodyHtml = normalizeLegacyBodyHtml(managedItem.content_html, templateContext.site, { fallbackAlt: managedItem.name }) || '';
   const enrichedBody = buildLegacyContentSectionNavigation(normalizedBodyHtml);
   const contentImages = normalizeManagedContentImages(managedItem);
-  const columnPageData = normalizeLegacyColumnPageData(columnNode?.template_data);
-  let managedContentPageData = normalizeLegacyColumnPageData(managedItem?.template_data);
+  const columnPageData = normalizeLegacyColumnPageData(columnNode?.template_data, templateContext.site);
+  let managedContentPageData = normalizeLegacyColumnPageData(managedItem?.template_data, templateContext.site);
   const sharedSpecOptions = buildSharedSpecOptions(managedItem?.spec_options);
 
   if (sharedSpecOptions.length > 0) {
@@ -2372,42 +2496,7 @@ function buildLegacyManagedColumnDetailPageProps({ templateContext, rootColumn =
     };
   }
 
-  // 修正 pageData.brandPathSection.cards 中的 URL，确保使用完整路径并添加尾部斜杠
-  if (managedContentPageData?.brandPathSection?.cards && Array.isArray(managedContentPageData.brandPathSection.cards)) {
-    managedContentPageData = {
-      ...managedContentPageData,
-      brandPathSection: {
-        ...managedContentPageData.brandPathSection,
-        cards: managedContentPageData.brandPathSection.cards.map((card) => {
-          if (!card.href) return card;
-
-          const matchingColumn = templateContext.managedColumnCategories.find((item) =>
-            item.dir_name && (
-              card.href.endsWith(`/${item.dir_name}`)
-              || card.href.includes(`/${item.dir_name}/`)
-            )
-          );
-          if (matchingColumn) {
-            return {
-              ...card,
-              href: buildLegacyManagedColumnUrl(matchingColumn, columnMap)
-            };
-          }
-
-          if (rootManagedColumnPathPrefix && card.href.startsWith(rootManagedColumnPathPrefix) && !card.href.endsWith('/') && !card.href.endsWith('.html')) {
-            return {
-              ...card,
-              href: card.href + '/'
-            };
-          }
-
-          return card;
-        })
-      }
-    };
-  }
-
-  const managedContentUrl = buildManagedContentUrl(managedItem);
+  const managedContentUrl = buildSiteScopedManagedContentUrl(managedItem, templateContext.site);
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
@@ -2420,7 +2509,7 @@ function buildLegacyManagedColumnDetailPageProps({ templateContext, rootColumn =
           column: columnNode,
           columns: templateContext.managedColumnCategories,
           type: 'managed-column',
-          urlBuilder: (item) => buildLegacyManagedColumnUrl(item, columnMap)
+          urlBuilder: (item) => buildLegacyManagedColumnUrl(item, columnMap, templateContext.site)
         }),
         rootManagedColumn,
         {
@@ -2429,10 +2518,10 @@ function buildLegacyManagedColumnDetailPageProps({ templateContext, rootColumn =
         }
       ),
       columnType: 'managed-column',
-      columnUrl: columnNode ? buildLegacyManagedColumnUrl(columnNode, columnMap) : '',
+      columnUrl: columnNode ? buildLegacyManagedColumnUrl(columnNode, columnMap, templateContext.site) : '',
       parentColumn: parent,
       parentColumnType: 'managed-column',
-      parentColumnUrl: parent ? buildLegacyManagedColumnUrl(parent, columnMap) : '',
+      parentColumnUrl: parent ? buildLegacyManagedColumnUrl(parent, columnMap, templateContext.site) : '',
       content: managedItem,
       contentType: 'structured-content',
       contentUrl: managedContentUrl
@@ -2460,7 +2549,7 @@ function buildLegacyManagedColumnDetailPageProps({ templateContext, rootColumn =
       id: item.id,
       name: item.name || '',
       title: item.name || '',
-      url: buildManagedContentUrl(item),
+      url: buildSiteScopedManagedContentUrl(item, templateContext.site),
       image: normalizeUploadedRelativePath(String(item.primary_image || '').trim()),
       summary: item.summary || ''
     })),
@@ -2497,7 +2586,7 @@ function buildLegacySectionContentListPageProps({
   const sectionDir = resolvedSectionConfig.dirName;
   const sectionLabel = resolvedSectionConfig.sectionLabel;
   const sectionPrimaryImage = getPrimaryTemplateImage(resolvedSectionConfig.rootColumn);
-  const columnPageData = normalizeLegacyColumnPageData(columnNode?.template_data);
+  const columnPageData = normalizeLegacyColumnPageData(columnNode?.template_data, templateContext.site);
   const columnPrimaryImage = getPrimaryTemplateImage(columnNode);
   const columnHeroImage = columnPageData?.mastheadImage
     || columnPageData?.heroImage
@@ -2510,7 +2599,7 @@ function buildLegacySectionContentListPageProps({
     || resolvedSectionConfig.rootColumn?.summary
     || resolvedSectionConfig.rootColumn?.seo_description
     || '';
-  const columnUrl = buildSectionCategoryUrl(sectionDir, columnNode);
+  const columnUrl = buildSiteScopedSectionCategoryUrl(sectionDir, columnNode, templateContext.site);
   return {
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
@@ -2531,7 +2620,7 @@ function buildLegacySectionContentListPageProps({
         column: columnNode,
         columns: templateContext.sectionCategories,
         type: 'section',
-        urlBuilder: (columnItem) => buildSectionCategoryUrl(sectionDir, columnItem)
+        urlBuilder: (columnItem) => buildSiteScopedSectionCategoryUrl(sectionDir, columnItem, templateContext.site)
       }),
       columnType: 'section',
       columnUrl
@@ -2542,7 +2631,7 @@ function buildLegacySectionContentListPageProps({
     sectionCategoryHtml: buildSectionCategoryListHtml(templateContext, sectionDir),
     secondaryMenuItems: buildSectionMenuItems(templateContext, sectionDir, normalizeInteger(columnNode?.id, 0)),
     secondaryMenuTitle: resolvedSectionConfig.rootColumn?.name || sectionLabel || uiText.categoryDirectory,
-    secondaryMenuParentUrl: `/${sectionDir}/`,
+    secondaryMenuParentUrl: prefixSitePathForContext(`/${sectionDir}/`, templateContext.site, { allowApi: false, allowAssets: false }),
     currentSectionHeroImage: sectionPrimaryImage,
     currentColumnDescription: normalizeRenderableLegacyText(columnSummary),
     currentColumnPageData: columnPageData,
@@ -2557,7 +2646,7 @@ function buildLegacySectionContentListPageProps({
     articleCardItems: pageItems.map((item) => ({
       id: item.id,
       title: item.title || '',
-      url: buildContentDetailUrlFromColumn(item, columnNode),
+      url: prefixSitePathForContext(buildContentDetailUrlFromColumn(item, columnNode), templateContext.site, { allowApi: false, allowAssets: false }),
       image: resolveLegacyContentPreviewImage(item),
       summary: resolveRenderableContentSummary(item),
       date: formatLegacyDateOnly(item.created_at)
@@ -2595,8 +2684,9 @@ function buildLegacySectionContentDetailPageProps({ templateContext, section, se
   const sectionLabel = resolvedSectionConfig.sectionLabel;
   const sectionPrimaryImage = getPrimaryTemplateImage(resolvedSectionConfig.rootColumn);
   const articleUrl = resolvedSectionConfig.rootColumn
-    ? buildContentDetailUrlFromColumn(item, resolvedSectionConfig.rootColumn)
-    : `/news/detail/${normalizeInteger(item.id, 0)}.html`;
+    ? prefixSitePathForContext(buildContentDetailUrlFromColumn(item, resolvedSectionConfig.rootColumn), templateContext.site, { allowApi: false, allowAssets: false })
+    : prefixSitePathForContext(`/news/detail/${normalizeInteger(item.id, 0)}.html`, templateContext.site, { allowApi: false, allowAssets: false });
+  const sectionUrl = prefixSitePathForContext(`/${sectionDir}/`, templateContext.site, { allowApi: false, allowAssets: false });
   const relatedArticles = getSectionEntries(templateContext, resolvedSectionConfig)
     .filter((entry) => normalizeInteger(entry.column_id, 0) === normalizeInteger(item.column_id, 0) && normalizeInteger(entry.id, 0) !== normalizeInteger(item.id, 0))
     .slice(0, 3);
@@ -2610,7 +2700,7 @@ function buildLegacySectionContentDetailPageProps({ templateContext, section, se
         id: normalizeInteger(resolvedSectionConfig.rootColumn?.id, 0),
         type: resolvedSectionConfig.sectionType || 'section',
         name: sectionLabel,
-        url: `/${sectionDir}/`,
+        url: sectionUrl,
         images: Array.isArray(resolvedSectionConfig.rootColumn?.images) ? resolvedSectionConfig.rootColumn.images : [],
         image: sectionPrimaryImage,
         seoDescription: resolvedSectionConfig.rootColumn?.seo_description || '',
@@ -2620,10 +2710,10 @@ function buildLegacySectionContentDetailPageProps({ templateContext, section, se
         column: columnNode,
         columns: templateContext.sectionCategories,
         type: 'section',
-        urlBuilder: (columnItem) => buildSectionCategoryUrl(sectionDir, columnItem)
+        urlBuilder: (columnItem) => buildSiteScopedSectionCategoryUrl(sectionDir, columnItem, templateContext.site)
       }),
       columnType: 'section',
-      columnUrl: columnNode ? buildSectionCategoryUrl(sectionDir, columnNode) : '',
+      columnUrl: columnNode ? buildSiteScopedSectionCategoryUrl(sectionDir, columnNode, templateContext.site) : '',
       content: item,
       contentType: 'structured-content',
       contentUrl: articleUrl
@@ -2652,8 +2742,8 @@ function buildLegacySectionContentDetailPageProps({ templateContext, section, se
       id: entry.id,
       title: entry.title || '',
       url: resolvedSectionConfig.rootColumn
-        ? buildContentDetailUrlFromColumn(entry, resolvedSectionConfig.rootColumn)
-        : `/news/detail/${normalizeInteger(entry.id, 0)}.html`,
+        ? prefixSitePathForContext(buildContentDetailUrlFromColumn(entry, resolvedSectionConfig.rootColumn), templateContext.site, { allowApi: false, allowAssets: false })
+        : prefixSitePathForContext(`/news/detail/${normalizeInteger(entry.id, 0)}.html`, templateContext.site, { allowApi: false, allowAssets: false }),
       image: resolveLegacyContentPreviewImage(entry),
       summary: resolveRenderableContentSummary(entry),
       date: formatLegacyDateOnly(entry.created_at)
@@ -2856,8 +2946,11 @@ function buildSectionSeoTitle(title, site) {
   return `${normalizedTitle} | ${siteTitleBase}`;
 }
 
-function buildLegacyManagedColumnUrl(columnNode, columnMap = null) {
-  return buildManagedColumnPublicUrl(columnNode, columnMap);
+function buildLegacyManagedColumnUrl(columnNode, columnMap = null, site = null) {
+  return prefixSitePathForContext(buildManagedColumnPublicUrl(columnNode, columnMap), site, {
+    allowApi: false,
+    allowAssets: false
+  });
 }
 
 function normalizeLegacyTemplateMarkup(value, site) {
@@ -2866,24 +2959,24 @@ function normalizeLegacyTemplateMarkup(value, site) {
     .replace(/\bhref=(["'])\/(?:Search|search)\.asp(?:\?action=search)?\1/gi, 'href="#" data-search-open="true"');
 }
 
-function buildLegacyManagedColumnMenu(categories) {
+function buildLegacyManagedColumnMenu(categories, site = null) {
   const roots = categories.filter((item) => normalizeInteger(item.parent_id, 0) === 0 && normalizeInteger(item.id, 0) !== 0);
   const columnMap = new Map(categories.map((item) => [normalizeInteger(item.id, 0), item]));
-  return `<table width="100%" border="0" align="center" cellpadding="0" cellspacing="0">${roots.map((item) => `<li><a href="${escapeHtml(buildLegacyManagedColumnUrl(item, columnMap))}"><span>${escapeHtml(item.name || '')}</span></a></li>`).join('')}</table>`;
+  return `<table width="100%" border="0" align="center" cellpadding="0" cellspacing="0">${roots.map((item) => `<li><a href="${escapeHtml(buildLegacyManagedColumnUrl(item, columnMap, site))}"><span>${escapeHtml(item.name || '')}</span></a></li>`).join('')}</table>`;
 }
 
-function buildLegacyManagedColumnMenuCompact(categories) {
+function buildLegacyManagedColumnMenuCompact(categories, site = null) {
   const roots = categories.filter((item) => normalizeInteger(item.parent_id, 0) === 0 && normalizeInteger(item.id, 0) !== 0);
   const columnMap = new Map(categories.map((item) => [normalizeInteger(item.id, 0), item]));
-  return roots.map((item, index) => `${index > 0 ? '&nbsp;' : ''}<a href="${escapeHtml(buildLegacyManagedColumnUrl(item, columnMap))}">${escapeHtml(item.name || '')}</a> |`).join('');
+  return roots.map((item, index) => `${index > 0 ? '&nbsp;' : ''}<a href="${escapeHtml(buildLegacyManagedColumnUrl(item, columnMap, site))}">${escapeHtml(item.name || '')}</a> |`).join('');
 }
 
-function buildLegacyAboutCategoryList(categories) {
+function buildLegacyAboutCategoryList(categories, site = null) {
   const items = categories.filter((item) => normalizeInteger(item.parent_id, 0) === 0);
   let html = '<table width="80%" border="0" align="center" cellpadding="0" cellspacing="0">';
   items.forEach((item, index) => {
     const isLast = index === items.length - 1;
-    const href = `about-${item.id}.html`;
+    const href = prefixSitePathForContext(`/about/about-${item.id}.html`, site, { allowApi: false, allowAssets: false });
     html += '<tr>';
     html += `<td width="15%" height="25" align="center"${isLast ? '' : ' class="p1"'}></td>`;
     html += `<td width="85%"${isLast ? '' : ' class="p1"'}>&nbsp;<a href="${escapeHtml(href)}" class="0a">${escapeHtml(item.name || '')}</a></td>`;
@@ -2893,12 +2986,12 @@ function buildLegacyAboutCategoryList(categories) {
   return html;
 }
 
-function buildLegacyCorporationMenuItems(categories, activeId = 0) {
+function buildLegacyCorporationMenuItems(categories, activeId = 0, site = null) {
   return categories
     .filter((item) => normalizeInteger(item.parent_id, 0) === 0)
     .map((item) => ({
       label: item.name || '',
-      url: `/about/about-${normalizeInteger(item.id, 0)}.html`,
+      url: prefixSitePathForContext(`/about/about-${normalizeInteger(item.id, 0)}.html`, site, { allowApi: false, allowAssets: false }),
       active: normalizeInteger(item.id, 0) === normalizeInteger(activeId, 0)
     }));
 }
@@ -2913,7 +3006,7 @@ function buildSectionCategoryListHtml(templateContext, dirName) {
     const isLast = index === items.length - 1;
     html += '<tr>';
     html += `<td width="15%" height="25" align="center"${isLast ? '' : ' class="p1"'}><img src="/Skin/blue/Images/Co_left_ico.gif" width="15" height="13" /></td>`;
-    html += `<td width="85%"${isLast ? '' : ' class="p1"'}>&nbsp;<a href="${buildSectionCategoryUrl(dirName, item)}" class="0a">${escapeHtml(item.name || '')}</a></td>`;
+    html += `<td width="85%"${isLast ? '' : ' class="p1"'}>&nbsp;<a href="${buildSiteScopedSectionCategoryUrl(dirName, item, templateContext.site)}" class="0a">${escapeHtml(item.name || '')}</a></td>`;
     html += '</tr>';
   });
   html += '</table>';
@@ -2927,7 +3020,7 @@ function buildSectionMenuItems(templateContext, dirName, activeId = 0) {
   }
   return getSectionTopLevelCategories(templateContext, section).map((item) => ({
       label: item.name || '',
-      url: buildSectionCategoryUrl(dirName, item),
+      url: buildSiteScopedSectionCategoryUrl(dirName, item, templateContext.site),
       active: normalizeInteger(item.id, 0) === normalizeInteger(activeId, 0)
     }));
 }
@@ -2947,12 +3040,12 @@ function buildLegacySectionRootPageData({
   columnBuckets
 }) {
   const rootColumn = section?.rootColumn || null;
-  const existing = normalizeLegacyColumnPageData(rootColumn?.template_data) || {};
+  const existing = normalizeLegacyColumnPageData(rootColumn?.template_data, templateContext.site) || {};
   const safeColumnBuckets = columnBuckets instanceof Map ? columnBuckets : new Map();
   const generatedCards = (directRootItems || []).map((item) => ({
     title: item.title || '',
     description: resolveRenderableContentSummary(item),
-    href: buildArticleUrl(item, templateContext, section),
+      href: buildSiteScopedArticleUrl(item, templateContext, section),
     image: resolveLegacyContentPreviewImage(item),
     imageAlt: item.title || '',
     cta: ''
@@ -2973,7 +3066,7 @@ function buildLegacySectionRootPageData({
   const generatedColumnCards = (topLevelColumns || []).map((columnNode) => ({
     title: columnNode.name || '',
     description: columnNode.seo_description || columnNode.summary || '',
-    href: buildSectionCategoryUrl(section.dirName, columnNode),
+    href: buildSiteScopedSectionCategoryUrl(section.dirName, columnNode, templateContext.site),
     image: '',
     imageAlt: columnNode.name || '',
     cta: ''
@@ -3005,8 +3098,8 @@ function buildLegacySectionRootListPageProps({
   const uiText = getLegacyUiText(templateContext);
   const rootColumn = section?.rootColumn || null;
   const sectionDir = String(section?.dirName || '').trim();
-  const sectionUrl = `/${sectionDir.replace(/^\/+|\/+$/g, '')}/`;
-  const rootPageData = normalizeLegacyColumnPageData(rootColumn?.template_data);
+  const sectionUrl = prefixSitePathForContext(`/${sectionDir.replace(/^\/+|\/+$/g, '')}/`, templateContext.site, { allowApi: false, allowAssets: false });
+  const rootPageData = normalizeLegacyColumnPageData(rootColumn?.template_data, templateContext.site);
   const rootPrimaryImage = getPrimaryTemplateImage(rootColumn);
   const rootHeroImage = rootPageData?.mastheadImage
     || rootPageData?.heroImage
@@ -3066,7 +3159,7 @@ function buildLegacySectionRootListPageProps({
     articleCardItems: pageItems.map((item) => ({
       id: item.id,
       title: item.title || '',
-      url: buildArticleUrl(item, templateContext, section),
+      url: buildSiteScopedArticleUrl(item, templateContext, section),
       image: resolveLegacyContentPreviewImage(item),
       summary: resolveRenderableContentSummary(item),
       date: formatLegacyDateOnly(item.created_at)
@@ -3112,7 +3205,7 @@ function buildLegacySectionRootColumnLinks({ templateContext, section, columnNod
     .sort(compareByCreatedDesc)
     .map((item) => ({
       title: item.title || '',
-      href: buildArticleUrl(item, templateContext, section),
+      href: buildSiteScopedArticleUrl(item, templateContext, section),
       description: resolveRenderableContentSummary(item)
     }));
 
@@ -3122,7 +3215,7 @@ function buildLegacySectionRootColumnLinks({ templateContext, section, columnNod
 
   return [{
     title: columnNode?.name || '',
-    href: buildSectionCategoryUrl(section.dirName, columnNode),
+    href: buildSiteScopedSectionCategoryUrl(section.dirName, columnNode, templateContext.site),
     description: columnNode?.seo_description || columnNode?.summary || ''
   }];
 }
@@ -3159,17 +3252,17 @@ function compareByCreatedDesc(left, right) {
   return Number(right?.id || 0) - Number(left?.id || 0);
 }
 
-function buildLegacyManagedColumnSmallCategories(categories) {
+function buildLegacyManagedColumnSmallCategories(categories, site = null) {
   const columnMap = new Map(categories.map((item) => [normalizeInteger(item.id, 0), item]));
   let html = '<table width="95%" border="0" align="center" cellpadding="0" cellspacing="0"><tr><td><span class=abv>';
   categories.forEach((item) => {
-    html += `&nbsp;【<A href="${escapeHtml(buildLegacyManagedColumnUrl(item, columnMap))}" class="0a">${escapeHtml(item.name || '')}</a>】`;
+    html += `&nbsp;【<A href="${escapeHtml(buildLegacyManagedColumnUrl(item, columnMap, site))}" class="0a">${escapeHtml(item.name || '')}</a>】`;
   });
   html += '</span></td></tr></table>';
   return html;
 }
 
-function buildLegacyManagedColumnMenuItems(columns, activeId = 0, columnMap = null) {
+function buildLegacyManagedColumnMenuItems(columns, activeId = 0, columnMap = null, site = null) {
   return (columns || [])
     .filter(Boolean)
     .map((item) => {
@@ -3186,7 +3279,7 @@ function buildLegacyManagedColumnMenuItems(columns, activeId = 0, columnMap = nu
         id: itemId,
         label: item.name || '',
         title: item.name || '',
-        url: buildLegacyManagedColumnUrl(item, columnMap),
+        url: buildLegacyManagedColumnUrl(item, columnMap, site),
         active: itemId === normalizeInteger(activeId, 0),
         description,
         ctaLabel: description ? 'Explore more' : '',
@@ -3196,7 +3289,7 @@ function buildLegacyManagedColumnMenuItems(columns, activeId = 0, columnMap = nu
     });
 }
 
-function buildLegacyManagedColumnNavigation({ columns, currentColumn, currentParent, fallbackColumns = [], columnMap = null }) {
+function buildLegacyManagedColumnNavigation({ columns, currentColumn, currentParent, fallbackColumns = [], columnMap = null, site = null }) {
   const safeColumns = Array.isArray(columns) ? columns : [];
   const activeId = normalizeInteger(currentColumn?.id, 0);
   const parentId = normalizeInteger(currentColumn?.parent_id, 0);
@@ -3214,23 +3307,23 @@ function buildLegacyManagedColumnNavigation({ columns, currentColumn, currentPar
   if (directChildren.length > 0 || activeId === 0) {
     return {
       title: currentColumn?.name || 'Browse categories',
-      parentUrl: currentColumn ? buildLegacyManagedColumnUrl(currentColumn, columnMap) : '',
-      items: buildLegacyManagedColumnMenuItems(directChildren, activeId, columnMap)
+      parentUrl: currentColumn ? buildLegacyManagedColumnUrl(currentColumn, columnMap, site) : '',
+      items: buildLegacyManagedColumnMenuItems(directChildren, activeId, columnMap, site)
     };
   }
 
   if (siblingColumns.length > 0) {
     return {
       title: currentParent?.name || 'Browse categories',
-      parentUrl: currentParent ? buildLegacyManagedColumnUrl(currentParent, columnMap) : '',
-      items: buildLegacyManagedColumnMenuItems(siblingColumns, activeId, columnMap)
+      parentUrl: currentParent ? buildLegacyManagedColumnUrl(currentParent, columnMap, site) : '',
+      items: buildLegacyManagedColumnMenuItems(siblingColumns, activeId, columnMap, site)
     };
   }
 
   return {
     title: 'Browse categories',
     parentUrl: '',
-    items: buildLegacyManagedColumnMenuItems(fallbackColumns, activeId, columnMap)
+    items: buildLegacyManagedColumnMenuItems(fallbackColumns, activeId, columnMap, site)
   };
 }
 
@@ -3309,7 +3402,7 @@ function createLegacyAnchorSlug(value, fallback = 'section') {
   return normalized || fallback;
 }
 
-function normalizeLegacyColumnPageData(value) {
+function normalizeLegacyColumnPageData(value, site = null) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return null;
   }
@@ -3338,9 +3431,9 @@ function normalizeLegacyColumnPageData(value) {
     intro: normalizeLegacyLooseParagraphs(value.intro),
     overview: Array.isArray(value.overview) ? value.overview.filter(Boolean).map((item) => String(item).trim()).filter(Boolean) : [],
     benefits: Array.isArray(value.benefits) ? value.benefits.filter(Boolean) : [],
-    cards: Array.isArray(value.cards) ? value.cards.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
-    featuredCards: Array.isArray(value.featuredCards) ? value.featuredCards.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
-    heroActions: Array.isArray(value.heroActions) ? value.heroActions.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
+    cards: Array.isArray(value.cards) ? value.cards.filter(Boolean).map((item) => normalizeLegacyPageLinkFields(item, site)) : [],
+    featuredCards: Array.isArray(value.featuredCards) ? value.featuredCards.filter(Boolean).map((item) => normalizeLegacyPageLinkFields(item, site)) : [],
+    heroActions: Array.isArray(value.heroActions) ? value.heroActions.filter(Boolean).map((item) => normalizeLegacyPageLinkFields(item, site)) : [],
     models: Array.isArray(value.models) ? value.models.filter(Boolean) : [],
     downloads: Array.isArray(value.downloads) ? value.downloads.filter(Boolean) : [],
     supplementalSections: Array.isArray(value.supplementalSections) ? value.supplementalSections.filter(Boolean) : [],
@@ -3348,20 +3441,20 @@ function normalizeLegacyColumnPageData(value) {
     browseByTopicSection: value.browseByTopicSection && typeof value.browseByTopicSection === 'object' ? value.browseByTopicSection : null,
     topPanel: value.topPanel && typeof value.topPanel === 'object' ? value.topPanel : null,
     seo: value.seo && typeof value.seo === 'object' ? value.seo : null,
-    items: Array.isArray(value.items) ? value.items.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
-    sections: Array.isArray(value.sections) ? value.sections.filter(Boolean).map(normalizeLegacySectionLinkFields) : [],
-    resources: Array.isArray(value.resources) ? value.resources.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
-    managedItems: Array.isArray(value.managedItems) ? value.managedItems.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
+    items: Array.isArray(value.items) ? value.items.filter(Boolean).map((item) => normalizeLegacyPageLinkFields(item, site)) : [],
+    sections: Array.isArray(value.sections) ? value.sections.filter(Boolean).map((item) => normalizeLegacySectionLinkFields(item, site)) : [],
+    resources: Array.isArray(value.resources) ? value.resources.filter(Boolean).map((item) => normalizeLegacyPageLinkFields(item, site)) : [],
+    managedItems: Array.isArray(value.managedItems) ? value.managedItems.filter(Boolean).map((item) => normalizeLegacyPageLinkFields(item, site)) : [],
     features: Array.isArray(value.features) ? value.features.filter(Boolean) : [],
-    calloutCards: Array.isArray(value.calloutCards) ? value.calloutCards.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
-    promoCards: Array.isArray(value.promoCards) ? value.promoCards.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
-    valuePoints: Array.isArray(value.valuePoints) ? value.valuePoints.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
-    industries: Array.isArray(value.industries) ? value.industries.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
-    brandProofItems: Array.isArray(value.brandProofItems) ? value.brandProofItems.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
-    resultsStripItems: Array.isArray(value.resultsStripItems) ? value.resultsStripItems.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
-    faqItems: Array.isArray(value.faqItems) ? value.faqItems.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
+    calloutCards: Array.isArray(value.calloutCards) ? value.calloutCards.filter(Boolean).map((item) => normalizeLegacyPageLinkFields(item, site)) : [],
+    promoCards: Array.isArray(value.promoCards) ? value.promoCards.filter(Boolean).map((item) => normalizeLegacyPageLinkFields(item, site)) : [],
+    valuePoints: Array.isArray(value.valuePoints) ? value.valuePoints.filter(Boolean).map((item) => normalizeLegacyPageLinkFields(item, site)) : [],
+    industries: Array.isArray(value.industries) ? value.industries.filter(Boolean).map((item) => normalizeLegacyPageLinkFields(item, site)) : [],
+    brandProofItems: Array.isArray(value.brandProofItems) ? value.brandProofItems.filter(Boolean).map((item) => normalizeLegacyPageLinkFields(item, site)) : [],
+    resultsStripItems: Array.isArray(value.resultsStripItems) ? value.resultsStripItems.filter(Boolean).map((item) => normalizeLegacyPageLinkFields(item, site)) : [],
+    faqItems: Array.isArray(value.faqItems) ? value.faqItems.filter(Boolean).map((item) => normalizeLegacyPageLinkFields(item, site)) : [],
     filterGroups: Array.isArray(value.filterGroups) ? value.filterGroups.filter(Boolean) : [],
-    jobs: Array.isArray(value.jobs) ? value.jobs.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
+    jobs: Array.isArray(value.jobs) ? value.jobs.filter(Boolean).map((item) => normalizeLegacyPageLinkFields(item, site)) : [],
     jobsSummary: String(value.jobsSummary || '').trim(),
     goals: value.goals && typeof value.goals === 'object' ? value.goals : null,
     secondary: value.secondary && typeof value.secondary === 'object' ? value.secondary : null,
@@ -3375,7 +3468,7 @@ function normalizeLegacyColumnPageData(value) {
     answerSummary: value.answerSummary && typeof value.answerSummary === 'object' ? value.answerSummary : null,
     technicalReview: value.technicalReview && typeof value.technicalReview === 'object' ? value.technicalReview : null,
     featureImage: resolveNormalizedLegacyImagePath(value.featureImage || ''),
-    slides: Array.isArray(value.slides) ? value.slides.filter(Boolean).map(normalizeLegacyPageLinkFields) : [],
+    slides: Array.isArray(value.slides) ? value.slides.filter(Boolean).map((item) => normalizeLegacyPageLinkFields(item, site)) : [],
     featureHeading: value.featureHeading && typeof value.featureHeading === 'object' ? value.featureHeading : null,
     introBlock: value.introBlock && typeof value.introBlock === 'object'
       ? value.introBlock
@@ -3384,25 +3477,25 @@ function normalizeLegacyColumnPageData(value) {
     advice: value.advice && typeof value.advice === 'object' ? value.advice : null,
     supportList: value.supportList && typeof value.supportList === 'object' ? value.supportList : null,
     frame: value.frame && typeof value.frame === 'object' ? value.frame : null,
-    promo: value.promo && typeof value.promo === 'object' ? normalizeLegacyPageLinkFields(value.promo) : null,
+    promo: value.promo && typeof value.promo === 'object' ? normalizeLegacyPageLinkFields(value.promo, site) : null,
     spotlight: value.spotlight && typeof value.spotlight === 'object' ? value.spotlight : null,
-    aboutCta: value.aboutCta && typeof value.aboutCta === 'object' ? normalizeLegacyPageLinkFields(value.aboutCta) : null,
-    latestProducts: value.latestProducts && typeof value.latestProducts === 'object' ? normalizeLegacyPageLinkFields(value.latestProducts) : null,
-    contactCallout: value.contactCallout && typeof value.contactCallout === 'object' ? normalizeLegacyPageLinkFields(value.contactCallout) : null
+    aboutCta: value.aboutCta && typeof value.aboutCta === 'object' ? normalizeLegacyPageLinkFields(value.aboutCta, site) : null,
+    latestProducts: value.latestProducts && typeof value.latestProducts === 'object' ? normalizeLegacyPageLinkFields(value.latestProducts, site) : null,
+    contactCallout: value.contactCallout && typeof value.contactCallout === 'object' ? normalizeLegacyPageLinkFields(value.contactCallout, site) : null
   };
 }
 
-function normalizeLegacySectionLinkFields(section) {
+function normalizeLegacySectionLinkFields(section, site = null) {
   if (!section || typeof section !== 'object' || Array.isArray(section)) {
     return section;
   }
   return {
     ...section,
-    links: Array.isArray(section.links) ? section.links.filter(Boolean).map(normalizeLegacyPageLinkFields) : section.links
+    links: Array.isArray(section.links) ? section.links.filter(Boolean).map((item) => normalizeLegacyPageLinkFields(item, site)) : section.links
   };
 }
 
-function normalizeLegacyPageLinkFields(item) {
+function normalizeLegacyPageLinkFields(item, site = null) {
   if (!item || typeof item !== 'object' || Array.isArray(item)) {
     return item;
   }
@@ -3410,7 +3503,10 @@ function normalizeLegacyPageLinkFields(item) {
   const normalized = { ...item };
   for (const key of ['href', 'link', 'url']) {
     if (key in normalized) {
-      normalized[key] = normalizeLegacyInternalHref(normalized[key]);
+      normalized[key] = prefixSitePathForContext(normalizeLegacyInternalHref(normalized[key]), site, {
+        allowApi: false,
+        allowAssets: false
+      });
     }
   }
   for (const key of ['image', 'imageSrc', 'imageUrl', 'heroImage', 'mastheadImage', 'backgroundImage', 'featureImage']) {
@@ -3430,13 +3526,38 @@ function normalizeLegacyInternalHref(value) {
   if (!normalized) {
     return normalized;
   }
+  if (/^(?:[a-z]+:|#|mailto:|tel:|javascript:)/i.test(normalized)) {
+    return normalized;
+  }
   if (!normalized.startsWith('/')) {
     return normalized;
   }
-  if (normalized.endsWith('/') || normalized.endsWith('.html')) {
+  return normalizeCmsInternalPath(normalized);
+}
+
+function normalizeCmsInternalPath(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
     return normalized;
   }
-  return `${normalized}/`;
+
+  const [pathnamePart, suffix = ''] = normalized.split(/([?#].*)/s, 2);
+  let pathname = pathnamePart || '';
+  if (!pathname.startsWith('/')) {
+    return normalized;
+  }
+
+  pathname = pathname.replace(/\/{2,}/g, '/');
+
+  const sitePrefixMatch = pathname.match(/^\/(?:zh-cn|ru|es|id|pt|fr|tr|th|vi|ar(?:-[a-z]{2})?)(?=\/|$)/i);
+  const sitePrefix = sitePrefixMatch ? sitePrefixMatch[0] : '';
+  let rewrittenPath = sitePrefix ? pathname.slice(sitePrefix.length) || '/' : pathname;
+
+  if (!rewrittenPath.endsWith('/') && !rewrittenPath.endsWith('.html') && !path.posix.extname(rewrittenPath)) {
+    rewrittenPath = `${rewrittenPath}/`;
+  }
+
+  return `${sitePrefix}${rewrittenPath}${suffix}`;
 }
 
 function resolveDedicatedColumnPageContent(column, languageCode = null) {
@@ -3478,11 +3599,11 @@ function normalizeLegacyLooseParagraphs(value) {
   return String(value || '').trim() ? [String(value).trim()] : [];
 }
 
-function buildLegacyManagedColumnListItems(pageItems) {
+function buildLegacyManagedColumnListItems(pageItems, site = null) {
   return pageItems.map((item, index) => ({
     id: item.id,
     name: item.name || '',
-    url: buildManagedContentUrl(item),
+    url: buildSiteScopedManagedContentUrl(item, site),
     image: item.primary_image || '/skin/dfpic.gif',
     summary: gotTopicLegacy(item.summary || '', 90),
     rowOpenHtml: index === 0 ? '<tr>' : '',
@@ -3697,7 +3818,7 @@ function buildLegacyRelatedManagedItems(items, templateContext = null) {
     html += `<td width="50%" height="90" align="center" valign="middle" ${className}>`;
     html += '<table width="100%" border="0" cellpadding="0" cellspacing="0"><tr>';
     html += `<td width="100%" height="47" align="center" valign="middle" ${className}><img src="${escapeHtml(item.primary_image || '/skin/dfpic.gif')}" alt="${escapeHtml(item.name || '')}" width="95" height="70" /></td>`;
-    html += `</tr><tr><td align="center" height="20">&nbsp;<a href="${item.id}.html" class="Font_2E4690_a Font-Weight">${escapeHtml(item.name || '')}</a></td></tr></table>`;
+    html += `</tr><tr><td align="center" height="20">&nbsp;<a href="${escapeHtml(buildSiteScopedManagedContentUrl(item, templateContext?.site || null))}" class="Font_2E4690_a Font-Weight">${escapeHtml(item.name || '')}</a></td></tr></table>`;
     html += '</td>';
     if (index % 2 === 0) {
       html += '</tr><tr>';
@@ -3707,7 +3828,7 @@ function buildLegacyRelatedManagedItems(items, templateContext = null) {
   return html;
 }
 
-function buildLegacyIndexFeaturedManagedItems() {
+function buildLegacyIndexFeaturedManagedItems(site = null) {
   const managedColumnRoot = findManagedColumnRoot(listColumns());
   const items = managedColumnRoot
     ? listManagedColumnItems(managedColumnRoot, { featured: true, visibleOnly: true, limit: 8 }).slice(0, 8)
@@ -3717,13 +3838,13 @@ function buildLegacyIndexFeaturedManagedItems() {
   for (const item of items) {
     html += '<li>';
     html += `<img src="${escapeHtml(item.primary_image || '/skin/dfpic.gif')}" width="120" height="120" border="0" alt="${escapeHtml(item.name || '')}">`;
-    html += `<li><a href="${buildManagedContentUrl(item)}" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${gotTopicLegacy(item.summary || '', 118)}</li>`;
+    html += `<li><a href="${buildSiteScopedManagedContentUrl(item, site)}" target="_blank">${escapeHtml(item.name || '')}</a></li><li class="tvjpnr">${gotTopicLegacy(item.summary || '', 118)}</li>`;
     html += '</li>';
   }
   return html;
 }
 
-function buildLegacyIndexFeaturedManagedItemLinks() {
+function buildLegacyIndexFeaturedManagedItemLinks(site = null) {
   const managedColumnRoot = findManagedColumnRoot(listColumns());
   const items = managedColumnRoot
     ? listManagedColumnItems(managedColumnRoot, { featured: true, visibleOnly: true, limit: 32 })
@@ -3732,10 +3853,10 @@ function buildLegacyIndexFeaturedManagedItemLinks() {
       .slice(0, 32)
     : [];
 
-  return items.map((item) => `<li><a href="${buildManagedContentUrl(item)}">${escapeHtml(item.name || '')}</a></li>`).join('');
+  return items.map((item) => `<li><a href="${buildSiteScopedManagedContentUrl(item, site)}">${escapeHtml(item.name || '')}</a></li>`).join('');
 }
 
-function buildLegacyIndexNews() {
+function buildLegacyIndexNews(site = null) {
   const columns = listColumns();
   const publicSections = resolvePublicSectionContext(columns);
   const sectionContent = buildSectionContentContext({
@@ -3745,15 +3866,15 @@ function buildLegacyIndexNews() {
     visibleOnly: true
   });
   const newsSection = publicSections.getSectionByDirName('news');
-  const templateContext = { publicSections };
+  const templateContext = { publicSections, site };
   const items = newsSection
     ? (sectionContent.sectionEntriesByRootId.get(normalizeInteger(newsSection.rootColumnId, 0)) || [])
     : []
     .slice(0, 10);
-  return items.map((item) => `<li><a href="${buildArticleUrl(item, templateContext, newsSection)}" class="Ba">${escapeHtml(item.title || '')}</a></li>`).join('');
+  return items.map((item) => `<li><a href="${buildSiteScopedArticleUrl(item, templateContext, newsSection)}" class="Ba">${escapeHtml(item.title || '')}</a></li>`).join('');
 }
 
-function buildLegacyServiceIndex() {
+function buildLegacyServiceIndex(site = null) {
   const columns = listColumns();
   const publicSections = resolvePublicSectionContext(columns);
   const sectionContent = buildSectionContentContext({
@@ -3763,12 +3884,12 @@ function buildLegacyServiceIndex() {
     visibleOnly: true
   });
   const serviceSection = publicSections.getSectionByDirName('services');
-  const templateContext = { publicSections };
+  const templateContext = { publicSections, site };
   const items = serviceSection
     ? (sectionContent.sectionEntriesByRootId.get(normalizeInteger(serviceSection.rootColumnId, 0)) || [])
     : []
     .slice(0, 16);
-  return items.map((item) => `<li><a href="${buildArticleUrl(item, templateContext, serviceSection)}">${escapeHtml(item.title || '')}</a></li>`).join('');
+  return items.map((item) => `<li><a href="${buildSiteScopedArticleUrl(item, templateContext, serviceSection)}">${escapeHtml(item.title || '')}</a></li>`).join('');
 }
 
 function getDescendantNewsCategoryIds(categories, rootId) {
@@ -4505,7 +4626,7 @@ function finalizeSiteHtmlOutput(html, siteConfig = null) {
     return normalizedAssetUrl || `${basePrefix}${assetPath}`;
   });
 
-  const pathPrefix = normalizeLanguageOutputPrefix(siteConfig?.language_site_path_prefix);
+  const pathPrefix = normalizeLanguageSitePathPrefix(siteConfig?.language_site_path_prefix);
   if (pathPrefix === '/') {
     return output;
   }
@@ -4769,55 +4890,18 @@ function parseSvgLength(value) {
 }
 
 function prefixSiteInternalRootPaths(html, pathPrefix) {
-  const normalizedPrefix = normalizeLanguageOutputPrefix(pathPrefix);
+  const normalizedPrefix = normalizeLanguageSitePathPrefix(pathPrefix);
   if (normalizedPrefix === '/') {
     return String(html || '');
   }
 
   return String(html || '').replace(/(\b(?:href|action|content|data-search-api-url)=["'])(\/[^"']*)(["'])/gi, (match, prefix, url, suffix) => {
-    const rewritten = prefixSitePath(url, normalizedPrefix, {
-      allowApi: true,
+    const rewritten = prefixLanguageSitePath(url, normalizedPrefix, {
+      allowApi: false,
       allowAssets: false
     });
     return `${prefix}${rewritten}${suffix}`;
   });
-}
-
-function prefixSitePath(url, pathPrefix, options = {}) {
-  const value = String(url || '').trim();
-  if (!value || !value.startsWith('/')) {
-    return value;
-  }
-
-  const normalizedPrefix = normalizeLanguageOutputPrefix(pathPrefix);
-  if (normalizedPrefix === '/') {
-    return value;
-  }
-
-  if (/^\/(?:uploads|pdfs)\//i.test(value)) {
-    return value;
-  }
-  if (!options.allowAssets && /^\/(?:assets|css|img|images|skin|favicon\.ico|apple-touch-icon\.png|favicon-16x16\.png|favicon-32x32\.png|site\.webmanifest|safari-pinned-tab\.svg|browserconfig\.xml|logo\.svg)/i.test(value)) {
-    return value;
-  }
-  if (!options.allowApi && /^\/(?:api|admin)\b/i.test(value)) {
-    return value;
-  }
-  if (value === normalizedPrefix || value.startsWith(`${normalizedPrefix}/`)) {
-    return value;
-  }
-
-  return value === '/'
-    ? `${normalizedPrefix}/`
-    : `${normalizedPrefix}${value}`;
-}
-
-function normalizeLanguageOutputPrefix(value) {
-  const normalized = String(value || '').trim();
-  if (!normalized || normalized === '/') {
-    return '/';
-  }
-  return `/${normalized.replace(/^\/+|\/+$/g, '')}`;
 }
 
 function normalizeLegacyMetaAttributes(html) {

@@ -18,12 +18,13 @@ export function buildSeoMeta({
 }) {
   const siteConfig = site || {};
   const baseUrl = normalizeBaseUrl(siteConfig.resolved_web_url || siteConfig.web_url);
-  const canonicalUrl = toAbsoluteUrl(normalizeIndexDocumentUrl(url), baseUrl) || baseUrl || '/';
+  const canonicalPath = normalizeSiteScopedPagePath(siteConfig, normalizeIndexDocumentUrl(url));
+  const canonicalUrl = toAbsoluteUrl(canonicalPath, baseUrl, siteConfig) || baseUrl || '/';
   const siteName = siteConfig.web_name || siteConfig.company_name || '';
 
   const finalTitle = title || siteName;
   const finalDescription = description || '';
-  const finalImage = toAbsoluteUrl(image, baseUrl) || '';
+  const finalImage = toAbsoluteUrl(image, baseUrl, siteConfig) || '';
 
   return {
     basic: {
@@ -57,7 +58,7 @@ export function buildSeoMeta({
 }
 
 export function buildHreflangLinks(site, options = {}) {
-  const pagePath = normalizePagePath(normalizeIndexDocumentUrl(options?.url || '/'));
+  const pagePath = normalizeSiteScopedPagePath(site, normalizeIndexDocumentUrl(options?.url || '/'));
   const fallbackBaseUrl = normalizeBaseUrl(site?.base_web_url || site?.web_url);
   const hreflangConfig = site?.template_data?.seo?.hreflang || {};
   const links = [];
@@ -194,6 +195,7 @@ export function buildJsonLdPageGraph({ site, page, seoMeta, existingJsonLd, brea
 
   const breadcrumbNode = buildJsonLdBreadcrumbList(breadcrumbs, {
     baseUrl,
+    site,
     pageUrl: canonicalUrl,
     pageTitle
   });
@@ -228,7 +230,7 @@ export function buildJsonLdPageGraph({ site, page, seoMeta, existingJsonLd, brea
 export function buildJsonLdStructuredContent(content, site, options = {}) {
   const baseUrl = normalizeBaseUrl(site?.resolved_web_url || site?.web_url);
   const imageValue = content?.photo_url || content?.primary_image || null;
-  const imageUrl = toAbsoluteUrl(imageValue, baseUrl);
+  const imageUrl = toAbsoluteUrl(imageValue, baseUrl, site);
   const organizationName = site?.company_name || site?.web_name || '';
 
   return {
@@ -237,7 +239,7 @@ export function buildJsonLdStructuredContent(content, site, options = {}) {
     name: content?.seo_title || content?.title || content?.name || '',
     description: content?.seo_description || content?.description || content?.summary || '',
     image: imageUrl,
-    url: toAbsoluteUrl(options.url, baseUrl) || '',
+    url: toAbsoluteUrl(options.url, baseUrl, site) || '',
     brand: {
       '@type': 'Brand',
       name: organizationName
@@ -268,7 +270,7 @@ export function buildJsonLdBreadcrumbList(items, options = {}) {
 export function buildJsonLdSectionEntry(entry, site, options = {}) {
   const baseUrl = normalizeBaseUrl(site?.resolved_web_url || site?.web_url);
   const imageValue = entry?.photo_url || entry?.picture || entry?.primary_image || null;
-  const imageUrl = toAbsoluteUrl(imageValue, baseUrl);
+  const imageUrl = toAbsoluteUrl(imageValue, baseUrl, site);
   const organizationName = site?.company_name || site?.web_name || '';
 
   return {
@@ -277,7 +279,7 @@ export function buildJsonLdSectionEntry(entry, site, options = {}) {
     headline: entry?.seo_title || entry?.title || entry?.name || '',
     description: entry?.seo_description || entry?.summary || entry?.description || '',
     image: imageUrl,
-    mainEntityOfPage: toAbsoluteUrl(options.url, baseUrl) || '',
+    mainEntityOfPage: toAbsoluteUrl(options.url, baseUrl, site) || '',
     datePublished: entry?.created_at || entry?.add_date || '',
     dateModified: entry?.updated_at || entry?.add_date || entry?.created_at || '',
     author: {
@@ -358,7 +360,7 @@ function normalizeAbsoluteUrl(value) {
   }
 }
 
-function toAbsoluteUrl(value, baseUrl) {
+function toAbsoluteUrl(value, baseUrl, site = null) {
   const normalized = String(value || '').trim();
   if (!normalized) {
     return '';
@@ -373,10 +375,11 @@ function toAbsoluteUrl(value, baseUrl) {
   if (/^https?:\/\//i.test(normalized)) {
     return normalized;
   }
+  const normalizedValue = normalizeSiteScopedPagePath(site, normalized);
   if (!baseUrl) {
-    return normalized;
+    return normalizedValue;
   }
-  return normalized.startsWith('/') ? `${baseUrl}${normalized}` : `${baseUrl}/${normalized}`;
+  return normalizedValue.startsWith('/') ? `${baseUrl}${normalizedValue}` : `${baseUrl}/${normalizedValue}`;
 }
 
 function normalizeOgLocale(languageCode) {
@@ -423,6 +426,27 @@ function normalizePagePath(value) {
     }
   }
   return normalized.startsWith('/') ? normalized : `/${normalized}`;
+}
+
+function normalizeSiteScopedPagePath(site, value) {
+  const pagePath = normalizePagePath(value);
+  const pathPrefix = normalizeSitePathPrefix(site?.language_site_path_prefix);
+  if (pathPrefix === '/' || pagePath === pathPrefix) {
+    return pagePath === pathPrefix ? '/' : pagePath;
+  }
+  if (pagePath.startsWith(`${pathPrefix}/`)) {
+    const trimmed = pagePath.slice(pathPrefix.length);
+    return trimmed.startsWith('/') ? trimmed : `/${trimmed}`;
+  }
+  return pagePath;
+}
+
+function normalizeSitePathPrefix(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized || normalized === '/') {
+    return '/';
+  }
+  return `/${normalized.replace(/^\/+|\/+$/g, '')}`;
 }
 
 function normalizeIndexDocumentUrl(value) {
@@ -496,7 +520,7 @@ function resolveConfiguredSearchActionUrl(site, baseUrl) {
   if (!normalizedValue) {
     return '';
   }
-  return toAbsoluteUrl(normalizedValue, baseUrl);
+  return toAbsoluteUrl(normalizedValue, baseUrl, site);
 }
 
 function buildImageObject(value, baseUrl) {
@@ -602,7 +626,7 @@ function normalizeBreadcrumbItems(items, options = {}) {
 
   for (const item of Array.isArray(items) ? items : []) {
     const name = String(item?.name || item?.title || '').trim();
-    const url = toAbsoluteUrl(item?.url, baseUrl);
+    const url = toAbsoluteUrl(item?.url, baseUrl, options.site);
     if (!name || !url) {
       continue;
     }
@@ -613,7 +637,7 @@ function normalizeBreadcrumbItems(items, options = {}) {
   }
 
   const pageTitle = String(options.pageTitle || '').trim();
-  const pageUrl = normalizeAbsoluteUrl(options.pageUrl) || toAbsoluteUrl(options.pageUrl, baseUrl);
+  const pageUrl = normalizeAbsoluteUrl(options.pageUrl) || toAbsoluteUrl(options.pageUrl, baseUrl, options.site);
   if (pageTitle && pageUrl) {
     output.push({
       name: pageTitle,

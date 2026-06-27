@@ -92,6 +92,39 @@ export function resolveLanguageSitePublicBaseUrl(languageCode, fallbackWebUrl = 
   return resolveLanguageSiteBaseUrl(languageCode, fallbackWebUrl);
 }
 
+export function normalizeLanguageSitePathPrefix(value) {
+  return normalizePathPrefix(value);
+}
+
+export function prefixLanguageSitePath(url, pathPrefix, options = {}) {
+  const value = String(url || '').trim();
+  if (!value || !value.startsWith('/')) {
+    return value;
+  }
+
+  const normalizedPrefix = normalizeLanguageSitePathPrefix(pathPrefix);
+  if (normalizedPrefix === '/') {
+    return value;
+  }
+
+  if (/^\/(?:uploads|pdfs)\//i.test(value)) {
+    return value;
+  }
+  if (!options.allowAssets && /^\/(?:assets|css|img|images|skin|favicon\.ico|apple-touch-icon\.png|favicon-16x16\.png|favicon-32x32\.png|site\.webmanifest|safari-pinned-tab\.svg|browserconfig\.xml|logo\.svg)/i.test(value)) {
+    return value;
+  }
+  if (!options.allowApi && /^\/(?:api|admin)\b/i.test(value)) {
+    return value;
+  }
+  if (value === normalizedPrefix || value.startsWith(`${normalizedPrefix}/`)) {
+    return value;
+  }
+
+  return value === '/'
+    ? `${normalizedPrefix}/`
+    : `${normalizedPrefix}${value}`;
+}
+
 export function updateSiteConfig(input) {
   ensureSiteConfigSchema();
   const existing = getSiteConfig(null, { includeTranslations: true });
@@ -596,7 +629,11 @@ function resolveLanguageForContent(languageCode) {
 
   return {
     code: requestedCode || selected?.code || defaultLanguage.code || 'zh-CN',
-    default_code: defaultLanguage.code || 'zh-CN'
+    id: Number(selected?.id || 0) || null,
+    site: selected?.site || null,
+    default_code: defaultLanguage.code || 'zh-CN',
+    default_id: Number(defaultLanguage?.id || 0) || null,
+    default_site: defaultLanguage?.site || null
   };
 }
 
