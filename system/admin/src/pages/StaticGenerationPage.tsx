@@ -2,45 +2,22 @@ import { useMemo, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { languagesApi } from '@/api/languages'
 import { templateVariantsApi } from '@/api/advanced'
+import {
+  staticGenerationApi,
+  type BuildResult,
+  type DatabaseCheckpointResult,
+  type StaticSectionGroup,
+} from '@/api/static-generation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
-import axios from 'axios'
 import type { Language } from '@/types'
-
-interface BuildResult {
-  success: boolean
-  totalFiles?: number
-  totalRecords?: number
-  message?: string
-  languageCode?: string | null
-  result?: {
-    languageBuilds?: Array<{
-      languageCode: string
-      outputRoot: string
-      totalFiles: number
-      totalRecords: number
-    }>
-  }
-}
-
-interface StaticSectionGroup {
-  title: string
-  items: Array<{
-    label: string
-    value: string
-  }>
-}
-
-const buildClient = axios.create({
-  withCredentials: true,
-  timeout: 300000, // 5 minutes for build operations
-})
 
 export default function StaticGenerationPage() {
   const [building, setBuilding] = useState(false)
   const [lastBuild, setLastBuild] = useState<BuildResult | null>(null)
+  const [lastCheckpoint, setLastCheckpoint] = useState<DatabaseCheckpointResult | null>(null)
   const { data: selectedThemeData } = useQuery({
     queryKey: ['selected-theme'],
     queryFn: () => templateVariantsApi.getSelected(),
@@ -51,10 +28,7 @@ export default function StaticGenerationPage() {
   })
   const { data: sectionGroupsData } = useQuery({
     queryKey: ['static-build-sections'],
-    queryFn: async () => {
-      const response = await buildClient.get<{ success: boolean; data?: StaticSectionGroup[]; message?: string }>('/admin/build/sections')
-      return response.data
-    },
+    queryFn: () => staticGenerationApi.listSections(),
   })
 
   const languages = languagesData?.data || []
@@ -75,14 +49,8 @@ export default function StaticGenerationPage() {
   }, [enabledLanguages])
 
   const buildMutation = useMutation({
-    mutationFn: async ({ section, languageCode }: { section: string; languageCode?: string }) => {
-      const query = new URLSearchParams({ section })
-      if (languageCode) {
-        query.set('language', languageCode)
-      }
-      const response = await buildClient.post<BuildResult>(`/admin/build/generate?${query.toString()}`, {})
-      return response.data
-    },
+    mutationFn: ({ section, languageCode }: { section: string; languageCode?: string }) =>
+      staticGenerationApi.build(section, languageCode),
     onSuccess: (data) => {
       if (data.success) {
         const buildScope = data.languageCode ? `语言 ${data.languageCode}` : '全部已启用语言'
@@ -96,6 +64,25 @@ export default function StaticGenerationPage() {
     onError: (error: unknown) => {
       toast.error(getApiErrorMessage(error, '生成失败'))
       setBuilding(false)
+    },
+  })
+
+  const checkpointMutation = useMutation({
+    mutationFn: () => staticGenerationApi.checkpointDatabaseWal(),
+    onSuccess: (data) => {
+      if (data.success && data.data) {
+        setLastCheckpoint(data.data)
+        toast.success(
+          data.data.releasedBytes > 0
+            ? `数据库日志已清理，释放 ${formatBytes(data.data.releasedBytes)}`
+            : '数据库日志已检查，当前没有可释放的 WAL 空间'
+        )
+        return
+      }
+      toast.error(data.message || '数据库日志清理失败')
+    },
+    onError: (error: unknown) => {
+      toast.error(getApiErrorMessage(error, '数据库日志清理失败'))
     },
   })
 
@@ -187,12 +174,39 @@ export default function StaticGenerationPage() {
 
           <div className="pt-4 border-t">
             <h3 className="font-semibold mb-2">全站生成</h3>
-            <Button
-              onClick={() => handleBuild('all')}
-              disabled={building}
-            >
+            <Button onClick={() => handleBuild('all')} disabled={building}>
               {building ? '生成中...' : '生成全站'}
             </Button>
+          </div>
+
+          <div className="pt-4 border-t space-y-3">
+            <div>
+              <h3 className="font-semibold">数据库日志清理</h3>
+              <p className="text-sm text-muted-foreground">
+                `site.sqlite-wal` 是 SQLite 的写前日志，不是普通缓存。点击后会执行 checkpoint 并尝试截断 WAL 文件。
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => checkpointMutation.mutate()}
+              disabled={checkpointMutation.isPending || building}
+            >
+              {checkpointMutation.isPending ? '清理中...' : '清理数据库日志'}
+            </Button>
+            {lastCheckpoint ? (
+              <div className="rounded border p-4 space-y-2 text-sm">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="outline">WAL</Badge>
+                  <span className="text-muted-foreground">
+                    {formatBytes(lastCheckpoint.beforeWalSize)} -&gt; {formatBytes(lastCheckpoint.afterWalSize)}
+                  </span>
+                  <span className="text-muted-foreground">释放 {formatBytes(lastCheckpoint.releasedBytes)}</span>
+                </div>
+                <div className="text-muted-foreground">
+                  数据库文件：{formatBytes(lastCheckpoint.beforeDbSize)} -&gt; {formatBytes(lastCheckpoint.afterDbSize)}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           {lastBuild?.result?.languageBuilds?.length ? (
@@ -228,4 +242,22 @@ function getApiErrorMessage(error: unknown, fallback: string) {
     return error.message
   }
   return fallback
+}
+
+function formatBytes(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return '0 B'
+  }
+
+  const units = ['B', 'KB', 'MB', 'GB']
+  let value = bytes
+  let unitIndex = 0
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024
+    unitIndex += 1
+  }
+
+  const precision = value >= 10 || unitIndex === 0 ? 0 : 1
+  return `${value.toFixed(precision)} ${units[unitIndex]}`
 }

@@ -1,5 +1,6 @@
 import { requireAuth } from '../../middleware/auth.mjs';
 import { CONTENT_ROOT } from '../../config.mjs';
+import { checkpointDatabaseWal } from '../../services/database-maintenance.mjs';
 import {
   buildStaticSite,
   isSupportedStaticBuildSection,
@@ -65,6 +66,23 @@ export default async function staticGenRoutes(app) {
       return reply.code(500).send({
         success: false,
         message: error.message
+      });
+    }
+  });
+
+  app.post('/build/database/checkpoint', {
+    onRequest: [requireAuth]
+  }, async (request, reply) => {
+    try {
+      return {
+        success: true,
+        data: checkpointDatabaseWal()
+      };
+    } catch (error) {
+      app.log.error(error);
+      return reply.code(500).send({
+        success: false,
+        message: error.message || '数据库日志清理失败'
       });
     }
   });
