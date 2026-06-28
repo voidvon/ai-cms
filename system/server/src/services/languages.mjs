@@ -221,6 +221,13 @@ export function updateLanguage(id, input) {
     throw new Error('必须保留一个默认语言');
   }
 
+  if (!payload.is_enabled) {
+    if (Number(existing.is_default || 0) === 1) {
+      throw new Error('默认语言不能停用');
+    }
+    ensureAtLeastOneEnabledLanguage(id);
+  }
+
   execute(
     `
       UPDATE languages
@@ -459,6 +466,23 @@ function validateLanguageSiteConfig(payload, { currentLanguageId = null } = {}) 
     if (conflict) {
       throw new Error(`端口 ${site.access_port} 已被语言 ${conflict.code} 使用`);
     }
+  }
+}
+
+function ensureAtLeastOneEnabledLanguage(currentLanguageId) {
+  const anotherEnabled = queryOne(
+    `
+      SELECT id
+      FROM languages
+      WHERE id <> ?
+        AND is_enabled = 1
+      LIMIT 1
+    `,
+    [currentLanguageId]
+  );
+
+  if (!anotherEnabled) {
+    throw new Error('至少需要保留一个启用语言');
   }
 }
 

@@ -1,122 +1,244 @@
-# FULL AUDIT REPORT
+# 全站 SEO 审计报告
 
 ## 审计概览
 
-- 审计对象：`http://localhost:1231/`
-- 审计日期：2026-06-26
-- 审计类型：全站 SEO 审计（基于首页、`robots.txt`、`sitemap.xml`、`sitemap-1.xml` 与代表性页面抽样）
-- 站点类型判断：全球化 B2B 工业蒸汽系统与产品解决方案网站
-- 审计范围说明：本次为可访问页面与站点结构的实测审计，不含 GSC、GA4、CrUX、DataForSEO、外链平台等外部数据源
+- 审计对象：`http://test.spiraxsteam.cn/`
+- 审计日期：`2026-06-29`
+- 审计方式：首页、`robots.txt`、`sitemap.xml`、代表性栏目页/内容页、搜索接口、兼容入口、`llms.txt` 抽样实测
+- 站点类型判断：全球化 B2B 工业蒸汽系统、产品与服务解决方案站点
+- 审计范围说明：本次未接入 GSC、GA4、CrUX、Moz、DataForSEO 等外部数据源，结论基于可访问页面与 HTTP 响应
 
 ## 总体评分
 
-- 整体 SEO 健康分：`66 / 100`
+- 整体 SEO 健康分：`58 / 100`
 
 ### 分类评分
 
 | 维度 | 分数 | 说明 |
 |---|---:|---|
-| Technical SEO | 55 | 存在 canonical、重复 URL、兼容路由、开发环境暴露等结构性问题 |
-| Content Quality | 72 | 产品详情页内容质量不错，但存在空新闻页和部分弱描述 |
-| On-Page SEO | 60 | 站点基础标签齐全，但部分页面元描述过于泛化 |
-| Schema / Structured Data | 74 | JSON-LD 覆盖较稳定，但部分对象 URL/图片源仍不理想 |
-| Performance | 68 | 未接入真实 CWV 数据；页面资源较多，存在图片和脚本优化空间 |
-| AI Search Readiness | 78 | 已提供 `llms.txt`，但 canonical 与 `.md` 引用策略仍需纠正 |
-| Images | 65 | 页面图片有 alt，但社交/结构化数据图片 URL 使用本地端口 |
+| Technical SEO | 46 | 规范化、站点地图、HTTPS 证书、旧路径兼容存在明显问题 |
+| Content Quality | 70 | 核心产品/服务页内容完整，但新闻列表为空、语言混杂 |
+| On-Page SEO | 63 | 标题、描述、H1、hreflang 基本齐全，但域名与语言信号不一致 |
+| Schema / Structured Data | 68 | JSON-LD 覆盖较广，但主体、URL、语言仍指向英文正式站 |
+| Performance | 64 | 首页资源较重，图片多，未拿到真实 CWV 字段数据 |
+| AI Search Readiness | 76 | `llms.txt` 已上线，但 canonical 与引用源仍统一到英文站 |
+| Images | 60 | alt 基础不错，但图片大多走 `http` 静态域，社交图策略不稳 |
 
-## Executive Summary
+## 执行摘要
 
-### 站点当前的主要优点
+### 主要优点
 
-1. `robots.txt` 已配置，且允许抓取，同时声明了站点地图。
-2. 抽样页面普遍具备 `title`、`meta description`、`canonical`、`hreflang`、OG、Twitter Card 与 JSON-LD。
-3. 产品详情页不是简单 SKU 空壳，而是具备产品语义说明、面包屑、下载资料、相关推荐和后续路径引导。
-4. 响应头安全性较好，已配置 CSP、HSTS、`x-content-type-options`、`x-frame-options` 等。
-5. `llms.txt` 已存在，说明站点已开始考虑 AI 搜索与引用场景。
+1. 首页及抽样页普遍具备 `title`、`meta description`、`H1`、`canonical`、`hreflang`、OG、Twitter 和 JSON-LD。
+2. 内容页不是简单薄页，产品与服务页具备较强的主题覆盖、面包屑与内部推荐路径。
+3. `llms.txt` 已部署，说明站点已经考虑 AI 搜索抓取和引用场景。
+4. 响应头安全基线较完整，包含 CSP、HSTS、`x-frame-options`、`x-content-type-options` 等。
 
 ### Top 5 Critical Issues
 
-1. 产品详情页 canonical 指向错误的数字 ID URL，而该数字 URL 实际返回 `404`。
-2. `sitemap-1.xml` 收录了大量非唯一版本 URL，例如 `/` 与 `/index.html` 同时存在。
-3. OG 图、结构化数据图片等资源 URL 使用 `http://localhost:1232/`，不适合作为公开可抓取资源地址。
-4. 新闻栏目页 `/news/` 可索引且在 sitemap 中，但当前没有任何已发布内容，属于薄内容索引页。
-5. 兼容路径 `/search` 与 `/ajaxcode/msg` 直接返回 `404`，对旧站兼容和历史外链不利。
+1. 测试域页面 canonical、OG URL、结构化数据 URL 全部指向 `https://www.spiraxsteam.com/`，测试域没有自身规范化信号。
+2. `robots.txt` 与 `sitemap.xml` 也都指向英文正式站，而不是当前域名或当前语言站。
+3. `https://test.spiraxsteam.cn/` SSL 证书域名不匹配，`curl` 校验证书失败，属于严重技术信任问题。
+4. `html lang="en"`、页面正文英文、页脚语言显示 English，但 `hreflang` 又声明 `zh-CN` 替代版本，语言/站点定位混乱。
+5. 旧兼容入口 `/search` 与 `/ajaxcode/msg` 返回 `404`，不符合旧站兼容优先原则。
 
 ### Top 5 Quick Wins
 
-1. 先修正 canonical 生成逻辑，让每个公开页面自指向当前真实公开 URL。
-2. 从 sitemap 中移除 `/index.html` 类别名，只保留规范 URL。
-3. 把 `localhost:1232` 图片地址改为公开域名地址或站点可访问的相对地址。
-4. 对空新闻页临时 `noindex` 或从 sitemap 移除，直到有真实内容。
-5. 修复 `llms.txt` 中对 `.md` 地址的引用，统一改为 HTML 规范 URL。
+1. 先把当前域名的 canonical、OG URL、Schema URL 切到当前公开域名或正确目标域名。
+2. 修正 `robots.txt` 和 `sitemap.xml` 输出，避免继续把抓取与索引信号导向英文站。
+3. 修复 `test.spiraxsteam.cn` HTTPS 证书。
+4. 如果这是中文站，统一 `html lang`、文案语言、结构化数据 `inLanguage` 与页脚语言显示。
+5. 恢复 `/search` 与 `/ajaxcode/msg` 的兼容落点或 301 跳转。
 
 ## Technical SEO
 
 ### 1. 抓取与索引控制
 
-#### 正常项
+#### 发现
 
-- `robots.txt` 可访问。
-- `robots.txt` 当前内容允许所有 User-agent 抓取。
-- `robots.txt` 中声明了 sitemap：`https://www.spiraxsteam.com/sitemap.xml`。
-- 首页与抽样页面都带有 `meta name="robots" content="index, follow"`。
+- `http://test.spiraxsteam.cn/robots.txt` 返回 `200`
+- 内容为：
+  - `User-agent: *`
+  - `Allow: /`
+  - `Sitemap: https://www.spiraxsteam.com/sitemap.xml`
+- `http://test.spiraxsteam.cn/sitemap.xml` 返回的是 `https://www.spiraxsteam.com/sitemap-1.xml`
 
-#### 主要问题
+#### 结论
 
-##### 问题 A：canonical 与真实页面 URL 不一致
+- 当前测试域允许抓取，但把 sitemap 信号全部导向英文正式站。
+- 如果此域名希望被搜索引擎视为独立站点、预发站或中文站镜像，这种配置会让索引归属全部落到英文正式站。
+- 如果这是纯测试站，应考虑 `noindex` 或受限访问，而不是输出正式站 canonical/sitemap。
 
-抽样页面：
-- 可访问详情页：`/products/steam-traps/thermodynamic-steam-traps/td52-thermodynamic-steam-trap/`
-- 页面 canonical：`https://www.spiraxsteam.com/products/steam-traps/thermodynamic-steam-traps/349/`
-- 实测 `http://localhost:1231/products/steam-traps/thermodynamic-steam-traps/349/` 返回：`404 Not Found`
+### 2. 规范化问题
 
-影响：
-- 搜索引擎会把权重收敛到一个不存在的 canonical 目标。
-- 正常 slug 页面可能被视作重复页或错误 canonical 页。
-- 产品详情页的收录、排名和稳定性会明显受损。
+#### 抽样结果
 
-结论：
-- 这是当前最严重的索引层问题，应立即修复。
+- 首页 canonical：`https://www.spiraxsteam.com/`
+- 产品栏目页 `/products/steam-traps/` canonical：`https://www.spiraxsteam.com/products/steam-traps/`
+- 联系页 `/contact-us/` canonical：`https://www.spiraxsteam.com/contact-us/`
+- 新闻页 `/news/` canonical：`https://www.spiraxsteam.com/news/`
+- 服务页 `/services/wireless-steam-trap-monitoring/` canonical：`https://www.spiraxsteam.com/services/wireless-steam-trap-monitoring/`
 
-##### 问题 B：站点地图包含重复 URL 版本
+#### 风险
 
-`sitemap-1.xml` 中可见以下重复模式：
-- `https://www.spiraxsteam.com/`
-- `https://www.spiraxsteam.com/index.html`
-- `https://www.spiraxsteam.com/news/`
-- `https://www.spiraxsteam.com/news/index.html`
-- `https://www.spiraxsteam.com/learn-about-steam/`
-- `https://www.spiraxsteam.com/learn-about-steam/index.html`
-- 其他栏目页也存在同类重复
+- 当前域名几乎没有自有索引价值，所有权重都会被要求归并到英文正式站。
+- 若内容与英文正式站不完全一致，搜索引擎可能将其视为跨域重复内容。
+- 若目标其实是中文站，这会直接压制中文站收录。
 
-影响：
-- 稀释抓取预算。
-- 让搜索引擎在多个近重复 URL 之间做选择。
-- 与 canonical 不一致时会加剧重复收录和错误归并。
+### 3. HTTPS / 证书问题
 
-建议：
-- sitemap 只能输出最终规范 URL。
-- 所有 `/index.html` 页面应视为历史别名或技术别名，不应进入正式 sitemap。
+#### 实测
 
-##### 问题 C：兼容路由未就绪
+- `https://test.spiraxsteam.cn/` 访问时证书域名不匹配
+- `curl` 返回：`SSL: no alternative certificate subject name matches target host name 'test.spiraxsteam.cn'`
 
-实测：
-- `/search` 返回 `404`
-- `/ajaxcode/msg` 返回 `404`
+#### 影响
 
-影响：
-- 如果这些是旧站入口或历史收录链接，会产生大量死链。
-- 用户、爬虫、旧书签和旧外链访问体验都会受影响。
-- 不符合旧站兼容优先的迁移策略。
+- 浏览器会出现安全告警或降级信任。
+- 搜索引擎和部分抓取器会降低对该域的抓取可靠性判断。
+- 对外分享、AI 抓取、SEO 调试都会受影响。
 
-建议：
-- 若仍需兼容，应返回有效内容、301 跳转，或至少提供业务可接受的替代落点。
+### 4. 兼容入口
 
-##### 问题 D：`/admin/` 暴露开发环境跳转
+#### 实测
 
-实测：
-- `/admin/` 返回 `302 Found`
-- 跳转目标：`http://127.0.0.1:5173/admin/`
+- `/search`：`404 Not Found`
+- `/ajaxcode/msg`：`404 Not Found`
+- `/admin/build`：`401 Unauthorized`
+
+#### 结论
+
+- `/admin/build` 至少存在路由保护，优于 `404`。
+- `/search` 和 `/ajaxcode/msg` 当前未兼容，不符合仓库对旧入口兼容的要求。
+
+## Content Quality
+
+### 正面观察
+
+- `/products/steam-traps/` 内容体量足够，包含选型说明、路线表格、FAQ 式段落和相关链接。
+- `/services/wireless-steam-trap-monitoring/` 内容结构清晰，包含价值说明、工作方式、下一步路径和相关内容。
+- 联系页具备明确 CTA、电话与多种联系渠道。
+
+### 问题
+
+1. `/news/` 当前显示 `All articles (0)`，且空状态文案为 “News updates are coming soon”。
+2. 空新闻页被设置为 `noindex, follow`，这本身合理，但它仍然作为完整栏目页存在，建议与 sitemap 策略保持一致。
+3. 服务页出现语言混杂，正文后部出现中文标题“相关内容”，但条目标题和描述仍是英文，说明模板或内容源存在中英拼接。
+
+## On-Page SEO
+
+### 正常项
+
+- 抽样页面均只有一个主 H1。
+- 多数页面 title 与 description 可读性尚可。
+- 面包屑存在且同时进入 JSON-LD。
+
+### 主要问题
+
+1. 站点语言信号混乱：
+   - `html lang="en"`
+   - 页脚当前语言显示 `English`
+   - 页面主体几乎全英文
+   - 站点又以 `.cn` 域名出现，并声明 `zh-CN` 版本
+2. 如果目标是中文站，这套信号会显著削弱中文搜索表现。
+3. 联系页有重复价值文案：
+   - 两个 highlight 卡片重复 “Steam expertise when you need it”
+
+## Schema / Structured Data
+
+### 已有实现
+
+- 首页：`Organization`、`WebSite`、`WebPage`
+- 栏目页：补充 `BreadcrumbList`
+- 服务内容页：补充 `Article`
+
+### 问题
+
+1. Schema 中 `Organization.url`、`WebSite.url`、`WebPage.url` 全部指向 `https://www.spiraxsteam.com`
+2. `inLanguage` 多数为 `en`
+3. 如果当前域要承载中文站或中国区版本，这些结构化数据没有正确表达站点身份
+
+## Performance
+
+### 观察
+
+- 首页 HTML 体积约 `46KB`
+- 搜索接口可正常响应，但结果量较大
+- 大量首屏和卡片图片来自 `http://static.spiraxsteam.com/...`
+- 首页预加载多张图片，联系页也预加载多张二维码/装饰图
+
+### 风险
+
+- 图片数量和预加载策略可能影响首屏加载。
+- 静态图片大量使用 `http` 而非 `https`，会增加混合内容和抓取不一致风险。
+
+## AI Search Readiness
+
+### 正面项
+
+- `llms.txt` 返回 `200`
+- 包含 AI crawler guidance、归因说明、页面清单
+
+### 问题
+
+1. `llms.txt` 中核心 HTML Source 仍统一指向 `https://www.spiraxsteam.com/...`
+2. 多数条目主链接使用 `.md` 镜像 URL，而不是直接以公开 HTML URL 为主
+3. 如果 `.cn` 站希望建立独立 AI 可见性，这套输出仍在为英文正式站服务
+
+## 代表性页面抽样
+
+### 首页 `/`
+
+- 优点：标签完整、导航清晰、JSON-LD 存在
+- 问题：canonical 指向英文站；语言为英文；站点地图信号不属于当前域
+
+### 产品栏目页 `/products/steam-traps/`
+
+- 优点：内容丰富、表格和内部链接较完善
+- 问题：canonical/OG/Schema 全部指向英文站
+
+### 联系页 `/contact-us/`
+
+- 优点：强转化页，联系信息和渠道丰富
+- 问题：重复文案，且属于英文站身份信号
+
+### 新闻页 `/news/`
+
+- 当前状态：空列表，`noindex, follow`
+- 结论：可保留为过渡状态，但不应作为主要 SEO 资产页面
+
+### 服务页 `/services/wireless-steam-trap-monitoring/`
+
+- 优点：内容深度足够，具备 `Article` schema
+- 问题：后半段出现中英混排，说明模板或内容聚合存在质量控制问题
+
+## 优先级结论
+
+### Critical
+
+1. 修复测试域 canonical、OG、Schema URL 指向错误
+2. 修复 `robots.txt` / `sitemap.xml` 指向错误
+3. 修复 HTTPS 证书
+4. 明确当前站点到底是英文测试站还是中文站，并统一语言信号
+5. 恢复旧兼容入口 `/search`、`/ajaxcode/msg`
+
+### High
+
+1. 清理中英混排内容
+2. 统一 `llms.txt` 的站点归属与 HTML Source
+3. 优化空新闻页与 sitemap/内链策略
+
+### Medium
+
+1. 精简联系页重复文案
+2. 评估首页和联系页图片预加载数量
+3. 将静态图片资源统一到 `https`
+
+## 审计限制
+
+- 未连接 Search Console，无法确认真实索引状态
+- 未连接 CrUX，无法确认字段级 CWV
+- 未调用外链数据库，无法评估 backlinks
+- 本次为抽样审计，不是 500 页全量爬取
 
 影响：
 - 这是明显的开发环境泄漏。

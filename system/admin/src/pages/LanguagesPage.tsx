@@ -14,6 +14,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Switch } from '@/components/ui/switch'
 import LanguageFormDialog from '@/components/LanguageFormDialog'
 import { toast } from 'sonner'
 import type { Language } from '@/types'
@@ -41,6 +42,22 @@ export default function LanguagesPage() {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || '删除失败')
+    },
+  })
+
+  const toggleEnabledMutation = useMutation({
+    mutationFn: ({ language, checked }: { language: Language; checked: boolean }) => {
+      return languagesApi.update(language.id, {
+        ...language,
+        is_enabled: checked ? 1 : 0,
+      })
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['languages'] })
+      toast.success(`${variables.language.name} 已${variables.checked ? '启用' : '停用'}`)
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || '状态更新失败')
     },
   })
 
@@ -90,6 +107,7 @@ export default function LanguagesPage() {
                 <TableHead>语言</TableHead>
                 <TableHead>代码</TableHead>
                 <TableHead>状态</TableHead>
+                <TableHead>启用</TableHead>
                 <TableHead>部署</TableHead>
                 <TableHead>输出目录</TableHead>
                 <TableHead className="text-right">操作</TableHead>
@@ -98,7 +116,7 @@ export default function LanguagesPage() {
             <TableBody>
               {languages.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center">暂无语言配置</TableCell>
+                  <TableCell colSpan={7} className="text-center">暂无语言配置</TableCell>
                 </TableRow>
               ) : (
                 languages.map((language) => (
@@ -110,6 +128,19 @@ export default function LanguagesPage() {
                     <TableCell className="font-mono text-xs">{language.code}</TableCell>
                     <TableCell>
                       {language.is_default ? '默认' : '普通'} / {language.is_enabled ? '启用' : '停用'}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          checked={Number(language.is_enabled || 0) === 1}
+                          disabled={toggleEnabledMutation.isPending || Number(language.is_default || 0) === 1}
+                          onCheckedChange={(checked) => toggleEnabledMutation.mutate({ language, checked })}
+                          aria-label={`切换 ${language.name} 启用状态`}
+                        />
+                        <span className="text-sm text-muted-foreground">
+                          {Number(language.is_enabled || 0) === 1 ? '启用' : '停用'}
+                        </span>
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div>{language.site.site_mode === 'standalone' ? '独立站点' : '子目录站点'}</div>

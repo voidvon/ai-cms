@@ -1,5 +1,6 @@
 .DS_Store
 .codex/
+.seo-cache/
 
 /html/
 /html_*/

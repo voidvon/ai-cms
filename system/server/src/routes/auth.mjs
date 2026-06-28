@@ -20,14 +20,14 @@ export default async function authRoutes(app) {
   app.post('/login', async (request, reply) => {
     const { username, password } = request.body;
 
-    const admin = authenticateAdmin(username, password, getClientIp(request));
+    const result = authenticateAdmin(username, password, getClientIp(request));
 
-    if (!admin) {
+    if (!result?.ok) {
       return reply.redirect('/admin/login');
     }
 
-    const session = createAdminSession(admin.id);
-    const cookies = createAdminCookies(session.token, admin);
+    const session = createAdminSession(result.admin.id);
+    const cookies = createAdminCookies(session.token, result.admin);
 
     for (const cookie of cookies) {
       reply.setCookie(cookie.name, cookie.value, cookie.options);
@@ -55,17 +55,27 @@ export default async function authRoutes(app) {
   app.post('/api/login', async (request, reply) => {
     const { username, password } = request.body;
 
-    const admin = authenticateAdmin(username, password, getClientIp(request));
+    const result = authenticateAdmin(username, password, getClientIp(request));
 
-    if (!admin) {
+    if (!result?.ok) {
+      if (result?.code === 'LOGIN_LOCKED') {
+        return reply.code(429).send({
+          success: false,
+          code: result.code,
+          message: result.message,
+          locked_until: result.lockedUntil,
+          retry_after_seconds: result.retryAfterSeconds
+        });
+      }
       return reply.code(401).send({
         success: false,
-        message: '用户名或密码不正确'
+        code: result?.code || 'INVALID_CREDENTIALS',
+        message: result?.message || '用户名或密码不正确'
       });
     }
 
-    const session = createAdminSession(admin.id);
-    const cookies = createAdminCookies(session.token, admin);
+    const session = createAdminSession(result.admin.id);
+    const cookies = createAdminCookies(session.token, result.admin);
 
     for (const cookie of cookies) {
       reply.setCookie(cookie.name, cookie.value, cookie.options);
@@ -75,8 +85,8 @@ export default async function authRoutes(app) {
       success: true,
       token: session.token,
       admin: {
-        id: admin.id,
-        username: admin.username
+        id: result.admin.id,
+        username: result.admin.username
       }
     };
   });
