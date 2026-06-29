@@ -91,10 +91,6 @@ export default function LanguageFormDialog({ open, onOpenChange, language, mode 
       return
     }
     if (formData.site.site_mode === 'standalone') {
-      if (formData.is_default === 1) {
-        toast.error('默认语言不能配置为独立站点')
-        return
-      }
       if (!formData.site.host.trim()) {
         toast.error('独立站点必须填写正式域名')
         return

@@ -9,6 +9,7 @@ const ColumnsPage = lazy(() => import('@/pages/ColumnsPage'))
 const MediaAssetsPage = lazy(() => import('@/pages/MediaAssetsPage'))
 const TemplateVariantsPage = lazy(() => import('@/pages/TemplateVariantsPage'))
 const ContentModelsPage = lazy(() => import('@/pages/ContentModelsPage'))
+const ContentModelDataPage = lazy(() => import('@/pages/ContentModelDataPage'))
 const AdminsPage = lazy(() => import('@/pages/AdminsPage'))
 const StaticGenerationPage = lazy(() => import('@/pages/StaticGenerationPage'))
 const SiteConfigPage = lazy(() => import('@/pages/SiteConfigPage'))
@@ -38,6 +39,7 @@ function App() {
             <Route path="themes" element={<TemplateVariantsPage />} />
             <Route path="templates" element={<Navigate to="/themes" replace />} />
             <Route path="content-models" element={<ContentModelsPage />} />
+            <Route path="content-model-data" element={<ContentModelDataPage />} />
             <Route path="media-assets" element={<MediaAssetsPage />} />
             <Route path="languages" element={<LanguagesPage />} />
             <Route path="template-variants" element={<Navigate to="/themes" replace />} />

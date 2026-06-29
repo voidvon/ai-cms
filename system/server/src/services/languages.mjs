@@ -437,9 +437,6 @@ function normalizeSiteInput(input, { languageCode = '', isDefault = 0 } = {}) {
 function validateLanguageSiteConfig(payload, { currentLanguageId = null } = {}) {
   const site = payload.site || {};
   if (site.site_mode === SITE_MODE_STANDALONE) {
-    if (payload.is_default) {
-      throw new Error('默认语言必须保留在主站目录，不能配置为独立站点');
-    }
     if (!String(site.host || '').trim()) {
       throw new Error('独立站点必须配置正式域名');
     }

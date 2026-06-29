@@ -68,6 +68,7 @@ export default function DashboardLayout() {
   const mainMenuItems = [
     { path: '/dashboard', label: '仪表盘' },
     { path: '/columns', label: '栏目' },
+    { path: '/content-model-data', label: '信息' },
   ]
 
   const menuGroups = [

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import type { MediaPurpose } from '@/api/media'
 import { contentModelsApi } from '@/api/advanced'
 import { columnsApi } from '@/api/columns'
 import { contentItemsApi } from '@/api/content-items'
@@ -18,6 +19,7 @@ import { getFieldLabel, isFieldEditable, isFieldVisible, mapFieldsByName } from 
 import { toast } from 'sonner'
 import type {
   ContentModel,
+  ContentModelField,
   ManagedContentItem,
   ManagedContentTranslation,
   SectionContentItem,
@@ -37,51 +39,19 @@ interface FormModelCapabilities {
   codeFieldLabel: string
   primaryImageFieldName: 'picture' | 'images'
   primaryImageFieldLabel: string
-  primaryImagePurpose: 'news_cover' | 'product_cover'
+  primaryImagePurpose: MediaPurpose
   supportsVisibility: boolean
   supportsSortOrder: boolean
   supportsCreatedAt: boolean
+  supportsSpecOptions: boolean
 }
-
-const FORM_MODEL_CAPABILITIES = {
-  news: {
-    translationNameField: 'title',
-    translationNameLabel: '标题',
-    translationNamePlaceholder: '请输入标题',
-    requiredNameError: '请输入默认语言的标题',
-    languageDescription: '当前对标题、摘要、正文和 SEO 内容做多语言。',
-    codeFieldLabel: '内容编号',
-    primaryImageFieldName: 'picture',
-    primaryImageFieldLabel: '封面图片',
-    primaryImagePurpose: 'news_cover',
-    supportsVisibility: false,
-    supportsSortOrder: false,
-    supportsCreatedAt: true,
-  },
-  product: {
-    translationNameField: 'name',
-    translationNameLabel: '名称',
-    translationNamePlaceholder: '请输入名称',
-    requiredNameError: '请输入默认语言的名称',
-    languageDescription: '当前对名称、摘要、正文和 SEO 内容做多语言。',
-    codeFieldLabel: '产品编号',
-    primaryImageFieldName: 'images',
-    primaryImageFieldLabel: '产品图片',
-    primaryImagePurpose: 'product_cover',
-    supportsVisibility: true,
-    supportsSortOrder: true,
-    supportsCreatedAt: false,
-  },
-} satisfies Record<string, FormModelCapabilities>
-
-type SupportedModelCode = keyof typeof FORM_MODEL_CAPABILITIES
 
 interface ContentItemFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   item?: ContentItem
   mode: 'create' | 'edit'
-  modelCode: SupportedModelCode
+  modelCode: string
   defaultColumnId?: number
 }
 
@@ -95,7 +65,7 @@ export default function ContentItemFormDialog({
 }: ContentItemFormDialogProps) {
   const queryClient = useQueryClient()
   const [activeLanguage, setActiveLanguage] = useState('zh-CN')
-  const [baseData, setBaseData] = useState<Record<string, unknown>>(createEmptyBaseData(modelCode, defaultColumnId))
+  const [baseData, setBaseData] = useState<Record<string, unknown>>(createEmptyBaseData(defaultColumnId))
   const [translations, setTranslations] = useState<Record<string, ContentItemTranslation>>({})
 
   const { data: languagesData } = useQuery({
@@ -122,32 +92,35 @@ export default function ContentItemFormDialog({
   })
 
   const contentModel = (contentModelsData?.data || []).find((entry: ContentModel) => entry.code === modelCode)
+  const fieldMap = useMemo(() => mapFieldsByName(contentModel?.fields || []), [contentModel?.fields])
+  const capabilities = useMemo(
+    () => inferFormModelCapabilities(modelCode, contentModel?.fields || []),
+    [contentModel?.fields, modelCode],
+  )
+  const meta = useMemo(() => getModelMeta(capabilities), [capabilities])
   const modelColumns = (columnsData?.data || []).filter((column) => (
     Number(column.content_model_id || 0) === Number(contentModel?.id || 0)
     && column.column_type === 'list'
   ))
-  const fieldMap = mapFieldsByName(contentModel?.fields || [])
-  const meta = getModelMeta(modelCode)
-  const capabilities = getFormModelCapabilities(modelCode)
 
   useEffect(() => {
     const source = mode === 'edit' ? (itemDetailData?.data || item) : null
 
     if (source && mode === 'edit') {
-      setBaseData(createBaseDataFromItem(modelCode, source))
-      setTranslations(buildInitialTranslations(modelCode, source, defaultLanguageCode, availableLanguageCodes))
+      setBaseData(createBaseDataFromItem(source))
+      setTranslations(buildInitialTranslations(capabilities, source, defaultLanguageCode, availableLanguageCodes))
       setActiveLanguage(source.requested_language_code || source.current_language_code || defaultLanguageCode)
       return
     }
 
     if (mode === 'create') {
-      setBaseData(createEmptyBaseData(modelCode, defaultColumnId))
+      setBaseData(createEmptyBaseData(defaultColumnId))
       setTranslations({
-        [defaultLanguageCode]: createEmptyTranslation(modelCode, { publish_status: 'published' }),
+        [defaultLanguageCode]: createEmptyTranslation(capabilities, { publish_status: 'published' }),
       })
       setActiveLanguage(defaultLanguageCode)
     }
-  }, [item, itemDetailData?.data, mode, modelCode, defaultColumnId, defaultLanguageCode, availableLanguageCodes.join('|')])
+  }, [item, itemDetailData?.data, mode, defaultColumnId, defaultLanguageCode, availableLanguageCodes.join('|'), capabilities])
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -172,7 +145,7 @@ export default function ContentItemFormDialog({
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
-    const defaultTranslation = translations[defaultLanguageCode] || createEmptyTranslation(modelCode)
+    const defaultTranslation = translations[defaultLanguageCode] || createEmptyTranslation(capabilities)
     const requiredName = capabilities.translationNameField === 'title'
       ? String((defaultTranslation as SectionContentTranslation).title || '').trim()
       : String((defaultTranslation as ManagedContentTranslation).name || '').trim()
@@ -187,7 +160,7 @@ export default function ContentItemFormDialog({
     setTranslations((previous) => ({
       ...previous,
       [activeLanguage]: {
-        ...createEmptyTranslation(modelCode),
+        ...createEmptyTranslation(capabilities),
         ...(previous[activeLanguage] || {}),
         ...patch,
       },
@@ -235,7 +208,7 @@ export default function ContentItemFormDialog({
                       value={String(baseData.code || '')}
                       disabled={!isFieldEditable(fieldMap, 'code')}
                       onChange={(e) => setBaseData({ ...baseData, code: e.target.value })}
-                      placeholder="请输入产品编号"
+                      placeholder={`请输入${capabilities.codeFieldLabel}`}
                     />
                   </div>
                 ) : null}
@@ -278,7 +251,7 @@ export default function ContentItemFormDialog({
                         value={String(baseData.picture || '')}
                         onChange={(picture) => setBaseData({ ...baseData, picture })}
                         purpose={capabilities.primaryImagePurpose}
-                        placeholder="请输入封面图片路径"
+                        placeholder={`请输入${capabilities.primaryImageFieldLabel}路径`}
                       />
                     </div>
                   </div>
@@ -292,12 +265,12 @@ export default function ContentItemFormDialog({
                         value={Array.isArray(baseData.images) ? baseData.images as string[] : []}
                         onChange={(images) => setBaseData({ ...baseData, images })}
                         purpose={capabilities.primaryImagePurpose}
-                        placeholder="请输入产品图片路径"
+                        placeholder={`请输入${capabilities.primaryImageFieldLabel}路径`}
                       />
                     </div>
                   </div>
                 ) : null}
-                {modelCode === 'product' && isFieldVisible(fieldMap, 'spec_options_json') ? (
+                {capabilities.supportsSpecOptions && isFieldVisible(fieldMap, 'spec_options_json') ? (
                   <div className="space-y-2">
                     <Label htmlFor="spec_options_json">{getFieldLabel(fieldMap, 'spec_options_json', '产品规格')}</Label>
                     <Textarea
@@ -401,14 +374,14 @@ export default function ContentItemFormDialog({
             </TabsContent>
 
             {languages.map((language) => {
-              const translation = translations[language.code] || createEmptyTranslation(modelCode)
+              const translation = translations[language.code] || createEmptyTranslation(capabilities)
               return (
                 <TabsContent key={language.id} value={language.code}>
                   <div className="grid gap-4 md:grid-cols-2">
-                    {isFieldVisible(fieldMap, 'name') ? (
+                    {isFieldVisible(fieldMap, capabilities.translationNameField) ? (
                       <div className="space-y-2">
                         <Label htmlFor={`translation_name_${language.code}`}>
-                          {getFieldLabel(fieldMap, 'name', capabilities.translationNameLabel)} {language.code === defaultLanguageCode ? '*' : ''}
+                          {getFieldLabel(fieldMap, capabilities.translationNameField, capabilities.translationNameLabel)} {language.code === defaultLanguageCode ? '*' : ''}
                         </Label>
                         <Input
                           id={`translation_name_${language.code}`}
@@ -416,7 +389,7 @@ export default function ContentItemFormDialog({
                             ? String((translation as SectionContentTranslation).title || '')
                             : String((translation as ManagedContentTranslation).name || '')
                           }
-                          disabled={!isFieldEditable(fieldMap, 'name')}
+                          disabled={!isFieldEditable(fieldMap, capabilities.translationNameField)}
                           onChange={(e) => {
                             setActiveLanguage(language.code)
                             updateTranslation(capabilities.translationNameField === 'title'
@@ -531,8 +504,7 @@ export default function ContentItemFormDialog({
   )
 }
 
-function getModelMeta(modelCode: SupportedModelCode) {
-  const capabilities = getFormModelCapabilities(modelCode)
+function getModelMeta(capabilities: FormModelCapabilities) {
   return {
     createTitle: '添加内容',
     editTitle: '编辑内容',
@@ -547,58 +519,39 @@ function getModelMeta(modelCode: SupportedModelCode) {
   }
 }
 
-function createEmptyBaseData(modelCode: SupportedModelCode, defaultColumnId?: number) {
-  const capabilities = getFormModelCapabilities(modelCode)
-  if (capabilities.supportsCreatedAt) {
-    return {
-      column_id: defaultColumnId,
-      custom_url: '',
-      picture: '',
-      is_featured_home: 0,
-      created_at: '',
-    }
-  }
-
+function createEmptyBaseData(defaultColumnId?: number) {
   return {
     code: '',
     column_id: defaultColumnId,
     custom_url: '',
+    picture: '',
     images: [] as string[],
     spec_options_json: [] as string[],
     is_featured_home: 0,
     is_visible: 1,
     sort_order: 0,
+    created_at: '',
   }
 }
 
-function createBaseDataFromItem(modelCode: SupportedModelCode, item: ContentItem) {
-  const capabilities = getFormModelCapabilities(modelCode)
-  if (capabilities.supportsCreatedAt) {
-    const sectionItem = item as SectionContentItem
-    return {
-      column_id: sectionItem.column_id || undefined,
-      custom_url: sectionItem.custom_url || '',
-      picture: sectionItem.picture || sectionItem.image || '',
-      is_featured_home: sectionItem.is_featured_home || sectionItem.is_featured || 0,
-      created_at: sectionItem.created_at || '',
-    }
-  }
-
+function createBaseDataFromItem(item: ContentItem) {
+  const sectionItem = item as SectionContentItem
   const managedItem = item as ManagedContentItem
   return {
     code: managedItem.code || '',
-    column_id: managedItem.column_id || undefined,
-    custom_url: managedItem.custom_url || '',
+    column_id: item.column_id || undefined,
+    custom_url: item.custom_url || '',
+    picture: sectionItem.picture || sectionItem.image || managedItem.primary_image || '',
     images: Array.isArray(managedItem.images) ? managedItem.images : [],
     spec_options_json: Array.isArray(managedItem.spec_options) ? managedItem.spec_options : [],
-    is_featured_home: managedItem.is_featured_home || 0,
+    is_featured_home: item.is_featured_home || sectionItem.is_featured || 0,
     is_visible: managedItem.is_visible || 1,
-    sort_order: managedItem.sort_order || 0,
+    sort_order: item.sort_order || 0,
+    created_at: sectionItem.created_at || '',
   }
 }
 
-function createEmptyTranslation(modelCode: SupportedModelCode, patch: Partial<ContentItemTranslation> = {}): ContentItemTranslation {
-  const capabilities = getFormModelCapabilities(modelCode)
+function createEmptyTranslation(capabilities: FormModelCapabilities, patch: Partial<ContentItemTranslation> = {}): ContentItemTranslation {
   if (capabilities.translationNameField === 'title') {
     return {
       title: '',
@@ -623,26 +576,25 @@ function createEmptyTranslation(modelCode: SupportedModelCode, patch: Partial<Co
 }
 
 function buildInitialTranslations(
-  modelCode: SupportedModelCode,
+  capabilities: FormModelCapabilities,
   item: ContentItem,
   defaultLanguageCode: string,
   availableLanguageCodes: string[],
 ) {
-  const capabilities = getFormModelCapabilities(modelCode)
   const source = item.translations || {}
   const output: Record<string, ContentItemTranslation> = {}
 
   for (const code of availableLanguageCodes) {
-    output[code] = createEmptyTranslation(modelCode, source[code] || {})
+    output[code] = createEmptyTranslation(capabilities, source[code] || {})
   }
 
   if (!output[defaultLanguageCode]) {
-    output[defaultLanguageCode] = createEmptyTranslation(modelCode)
+    output[defaultLanguageCode] = createEmptyTranslation(capabilities)
   }
 
   if (!source[defaultLanguageCode]) {
     output[defaultLanguageCode] = capabilities.translationNameField === 'title'
-      ? createEmptyTranslation(modelCode, {
+      ? createEmptyTranslation(capabilities, {
           title: (item as SectionContentItem).title || '',
           summary: item.summary || '',
           content_html: item.content_html || '',
@@ -650,7 +602,7 @@ function buildInitialTranslations(
           seo_description: item.seo_description || '',
           publish_status: 'published',
         })
-      : createEmptyTranslation(modelCode, {
+      : createEmptyTranslation(capabilities, {
           name: (item as ManagedContentItem).name || '',
           summary: item.summary || '',
           content_html: item.content_html || '',
@@ -663,8 +615,33 @@ function buildInitialTranslations(
   return output
 }
 
-function getFormModelCapabilities(modelCode: SupportedModelCode): FormModelCapabilities {
-  return FORM_MODEL_CAPABILITIES[modelCode]
+function inferFormModelCapabilities(modelCode: string, fields: ContentModelField[]): FormModelCapabilities {
+  const fieldMap = mapFieldsByName(fields)
+  const hasTitleField = fieldMap.has('title')
+  const translationNameField: TranslationNameField = hasTitleField ? 'title' : 'name'
+  const translationNameLabel = getFieldLabel(fieldMap, translationNameField, hasTitleField ? '标题' : '名称')
+  const primaryImageFieldName: 'picture' | 'images' = fieldMap.has('images') ? 'images' : 'picture'
+  const defaultImagePurpose: MediaPurpose = modelCode === 'news'
+    ? 'news_cover'
+    : modelCode === 'product'
+      ? 'product_cover'
+      : 'attachment'
+
+  return {
+    translationNameField,
+    translationNameLabel,
+    translationNamePlaceholder: `请输入${translationNameLabel}`,
+    requiredNameError: `请输入默认语言的${translationNameLabel}`,
+    languageDescription: `当前对${translationNameLabel}、摘要、正文和 SEO 内容做多语言。`,
+    codeFieldLabel: getFieldLabel(fieldMap, 'code', '内容编号'),
+    primaryImageFieldName,
+    primaryImageFieldLabel: getFieldLabel(fieldMap, primaryImageFieldName, primaryImageFieldName === 'images' ? '图片' : '封面图片'),
+    primaryImagePurpose: defaultImagePurpose,
+    supportsVisibility: fieldMap.has('is_visible'),
+    supportsSortOrder: fieldMap.has('sort_order'),
+    supportsCreatedAt: fieldMap.has('created_at'),
+    supportsSpecOptions: fieldMap.has('spec_options_json'),
+  }
 }
 
 function formatSpecOptionsTextareaValue(value: unknown) {
