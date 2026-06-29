@@ -522,3 +522,67 @@ export interface BulkReplacePreviewPayload {
 export interface BulkReplaceExecutePayload extends BulkReplacePreviewPayload {
   confirm_execution: boolean;
 }
+
+export interface AiAssistantTaskDefinition {
+  key: 'contract_draft' | 'price_query' | 'knowledge_qa' | 'export_pdf' | string;
+  label: string;
+  description: string;
+}
+
+export interface AiAssistantCapabilities {
+  provider: string;
+  status: 'stub' | 'ready' | string;
+  tasks: AiAssistantTaskDefinition[];
+  recommendedArchitecture: {
+    ui: string;
+    api: string;
+    orchestration: string;
+    files: string;
+  };
+}
+
+export interface AiAssistantStubResult {
+  task: string;
+  status: 'stub' | 'ready' | string;
+  customer_name?: string;
+  product_count?: number;
+  question?: string;
+  query?: Record<string, string>;
+  draft_id?: string;
+  file?: {
+    url?: string;
+    name?: string;
+  } | null;
+  result: {
+    summary: string;
+    checklist: string[];
+    payload: Record<string, unknown>;
+  };
+}
+
+export interface AiAssistantContractProductInput {
+  sku: string;
+  quantity?: number;
+  name?: string;
+}
+
+export interface AiAssistantContractDraftPayload {
+  customer_name: string;
+  contract_type?: string;
+  region?: string;
+  currency?: string;
+  products: AiAssistantContractProductInput[];
+  notes?: string;
+}
+
+export interface AiAssistantPricePayload {
+  sku: string;
+  region?: string;
+  quantity?: number;
+  currency?: string;
+}
+
+export interface AiAssistantKnowledgePayload {
+  question: string;
+  scope?: string;
+}

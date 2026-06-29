@@ -119,6 +119,7 @@ export default function DashboardLayout() {
       label: '工具',
       icon: Bot,
       items: [
+        { path: '/ai-assistant', label: 'AI 合同助手', icon: Bot },
         { path: '/bulk-replace', label: '批量替换', icon: Replace },
         { path: '/sitemap-diagnostics', label: 'Sitemap', icon: Map },
         { path: '/llms-diagnostics', label: 'LLMS', icon: Bot },
