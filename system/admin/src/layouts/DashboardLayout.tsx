@@ -1,7 +1,26 @@
 import { Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { authApi } from '@/api/auth'
-import { ChevronDown, LogOut, Moon, Sun } from 'lucide-react'
+import {
+  Bot,
+  ChevronDown,
+  Folder,
+  FileText,
+  Globe,
+  Image,
+  Languages,
+  LayoutDashboard,
+  LogOut,
+  Map,
+  Moon,
+  Palette,
+  RefreshCw,
+  Replace,
+  Settings2,
+  Shield,
+  Sun,
+  type LucideIcon,
+} from 'lucide-react'
 import { useTheme } from 'next-themes'
 import {
   Sidebar,
@@ -9,7 +28,6 @@ import {
   SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
@@ -65,44 +83,58 @@ export default function DashboardLayout() {
     setTheme(isDarkMode ? 'light' : 'dark')
   }
 
+  type MenuItem = {
+    path: string
+    label: string
+    icon: LucideIcon
+  }
+
   const topLevelItems = [
-    { path: '/dashboard', label: '仪表盘' },
-    { path: '/columns', label: '栏目管理' },
-    { path: '/content-model-data', label: '信息管理' },
-    { path: '/media-assets', label: '附件管理' },
-  ]
+    { path: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
+    { path: '/columns', label: '栏目管理', icon: Folder },
+    { path: '/content-model-data', label: '信息管理', icon: FileText },
+    { path: '/media-assets', label: '附件管理', icon: Image },
+  ] satisfies MenuItem[]
 
   const menuGroups = [
     {
       label: '模板',
+      icon: Palette,
       items: [
-        { path: '/themes', label: '主题管理' },
-        { path: '/content-models', label: '数据模型' },
+        { path: '/themes', label: '主题管理', icon: Palette },
+        { path: '/content-models', label: '数据模型', icon: Settings2 },
       ]
     },
     {
       label: '站点',
+      icon: Globe,
       items: [
-        { path: '/languages', label: '多语言' },
-        { path: '/site-config', label: '网站配置' },
-        { path: '/static-gen', label: '静态生成' },
+        { path: '/languages', label: '多语言', icon: Languages },
+        { path: '/site-config', label: '网站配置', icon: Globe },
+        { path: '/static-gen', label: '静态生成', icon: RefreshCw },
       ]
     },
     {
       label: '工具',
+      icon: Bot,
       items: [
-        { path: '/bulk-replace', label: '批量替换' },
-        { path: '/sitemap-diagnostics', label: 'Sitemap' },
-        { path: '/llms-diagnostics', label: 'LLMS' },
+        { path: '/bulk-replace', label: '批量替换', icon: Replace },
+        { path: '/sitemap-diagnostics', label: 'Sitemap', icon: Map },
+        { path: '/llms-diagnostics', label: 'LLMS', icon: Bot },
       ]
     },
     {
       label: '系统',
+      icon: Shield,
       items: [
-        { path: '/admins', label: '管理员' },
+        { path: '/admins', label: '管理员', icon: Shield },
       ]
     }
-  ]
+  ] satisfies Array<{
+    label: string
+    icon: LucideIcon
+    items: MenuItem[]
+  }>
 
   const getCurrentPageTitle = () => {
     const topLevelCurrent = topLevelItems.find(item => item.path === location.pathname)
@@ -133,7 +165,8 @@ export default function DashboardLayout() {
                       onClick={() => navigate(item.path)}
                       isActive={location.pathname === item.path}
                     >
-                      {item.label}
+                      <item.icon />
+                      <span>{item.label}</span>
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 ))}
@@ -142,6 +175,7 @@ export default function DashboardLayout() {
                     <SidebarMenuItem>
                       <CollapsibleTrigger asChild>
                         <SidebarMenuButton className="w-full">
+                          <group.icon />
                           <span>{group.label}</span>
                           <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
                         </SidebarMenuButton>
@@ -154,7 +188,8 @@ export default function DashboardLayout() {
                                 onClick={() => navigate(item.path)}
                                 isActive={location.pathname === item.path}
                               >
-                                {item.label}
+                                <item.icon />
+                                <span>{item.label}</span>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
                           ))}
