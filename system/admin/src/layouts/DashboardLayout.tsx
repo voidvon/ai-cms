@@ -65,38 +65,48 @@ export default function DashboardLayout() {
     setTheme(isDarkMode ? 'light' : 'dark')
   }
 
-  const mainMenuItems = [
+  const topLevelItems = [
     { path: '/dashboard', label: '仪表盘' },
-    { path: '/columns', label: '栏目' },
-    { path: '/content-model-data', label: '信息' },
+    { path: '/columns', label: '栏目管理' },
+    { path: '/content-model-data', label: '信息管理' },
+    { path: '/media-assets', label: '附件管理' },
   ]
 
   const menuGroups = [
     {
-      label: '高级设置',
+      label: '模板',
       items: [
         { path: '/themes', label: '主题管理' },
         { path: '/content-models', label: '数据模型' },
-        { path: '/languages', label: '多语言管理' },
-        { path: '/media-assets', label: '附件管理' },
       ]
     },
     {
-      label: '系统管理',
+      label: '站点',
+      items: [
+        { path: '/languages', label: '多语言' },
+        { path: '/site-config', label: '网站配置' },
+        { path: '/static-gen', label: '静态生成' },
+      ]
+    },
+    {
+      label: '工具',
+      items: [
+        { path: '/bulk-replace', label: '批量替换' },
+        { path: '/sitemap-diagnostics', label: 'Sitemap' },
+        { path: '/llms-diagnostics', label: 'LLMS' },
+      ]
+    },
+    {
+      label: '系统',
       items: [
         { path: '/admins', label: '管理员' },
-        { path: '/static-gen', label: '静态生成' },
-        { path: '/site-config', label: '网站配置' },
-        { path: '/bulk-replace', label: '批量替换' },
-        { path: '/sitemap-diagnostics', label: 'LLMS' },
-        { path: '/llms-diagnostics', label: 'LLMS' },
       ]
     }
   ]
 
   const getCurrentPageTitle = () => {
-    const mainCurrent = mainMenuItems.find(item => item.path === location.pathname)
-    if (mainCurrent) return mainCurrent.label
+    const topLevelCurrent = topLevelItems.find(item => item.path === location.pathname)
+    if (topLevelCurrent) return topLevelCurrent.label
     for (const group of menuGroups) {
       const current = group.items.find(item => item.path === location.pathname)
       if (current) return current.label
@@ -115,10 +125,9 @@ export default function DashboardLayout() {
         </SidebarHeader>
         <SidebarContent>
           <SidebarGroup>
-            <SidebarGroupLabel>菜单</SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {mainMenuItems.map((item) => (
+                {topLevelItems.map((item) => (
                   <SidebarMenuItem key={item.path}>
                     <SidebarMenuButton
                       onClick={() => navigate(item.path)}
