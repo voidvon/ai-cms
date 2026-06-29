@@ -1,14 +1,30 @@
 PRAGMA foreign_keys = ON;
 
+CREATE TABLE IF NOT EXISTS admin_groups (
+  id INTEGER PRIMARY KEY,
+  code TEXT NOT NULL UNIQUE,
+  name TEXT NOT NULL UNIQUE,
+  permission_flags TEXT NOT NULL DEFAULT '',
+  is_system INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS admins (
   id INTEGER PRIMARY KEY,
   username TEXT NOT NULL UNIQUE,
   password_hash TEXT NOT NULL,
   password_scheme TEXT NOT NULL DEFAULT 'legacy-md5-16',
+  group_id INTEGER NOT NULL DEFAULT 1,
   permission_flags TEXT NOT NULL DEFAULT '',
   last_login_at TEXT,
-  last_login_ip TEXT
+  last_login_ip TEXT,
+  FOREIGN KEY (group_id) REFERENCES admin_groups(id)
 );
+CREATE INDEX IF NOT EXISTS idx_admins_group_id ON admins(group_id);
+
+INSERT OR IGNORE INTO admin_groups (id, code, name, permission_flags, is_system)
+VALUES (1, 'super_admin', '超级管理员', '01,02,03,04,05,06,07,08,09,10,11,12,13', 1);
 
 CREATE TABLE IF NOT EXISTS admin_sessions (
   token TEXT PRIMARY KEY,

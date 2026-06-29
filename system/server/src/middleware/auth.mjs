@@ -1,4 +1,5 @@
 import { getAdminSession, deleteAdminSession } from '../services/sessions.mjs';
+import { hasAdminPermission } from '../services/admin-permissions.mjs';
 
 /**
  * Fastify 钩子：从 cookie 中提取 session token 并加载会话信息
@@ -16,7 +17,10 @@ export async function authHook(request, reply) {
       request.adminUser = {
         id: session.admin_id,
         username: session.username,
-        permission_flags: session.permission_flags
+        permission_flags: session.permission_flags,
+        group_id: session.group_id,
+        group_code: session.group_code,
+        group_name: session.group_name
       };
     }
   }
@@ -33,6 +37,25 @@ export async function requireAuth(request, reply) {
     });
     return;
   }
+}
+
+export function requirePermission(flag) {
+  return async function requirePermissionHandler(request, reply) {
+    if (!request.session || !request.adminUser) {
+      reply.code(401).send({
+        error: 'Unauthorized',
+        message: '需要登录'
+      });
+      return;
+    }
+
+    if (!hasAdminPermission(request.adminUser.permission_flags, flag)) {
+      reply.code(403).send({
+        error: 'Forbidden',
+        message: '没有对应权限'
+      });
+    }
+  };
 }
 
 /**

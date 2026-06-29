@@ -10,6 +10,7 @@ import { createAssetsListenerManager } from './assets-listener-manager.mjs';
 import { getDb } from './db.mjs';
 import { getClientIp } from './middleware/auth.mjs';
 import { ensureAccessLogsSchema, recordAccessLog, shouldRecordPageAccess } from './services/access-logs.mjs';
+import { ensureAdminGroupSchema } from './services/admin-groups.mjs';
 import { applySecurityHeaders } from './services/security-headers.mjs';
 import { createSiteListenerManager } from './site-listener-manager.mjs';
 import { withPortConflictDetails } from './utils/port-diagnostics.mjs';
@@ -17,6 +18,7 @@ import { withPortConflictDetails } from './utils/port-diagnostics.mjs';
 const require = createRequire(import.meta.url);
 
 getDb();
+ensureAdminGroupSchema();
 ensureAccessLogsSchema();
 
 export async function createApp(options = {}) {

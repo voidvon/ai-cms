@@ -86,7 +86,10 @@ export default async function authRoutes(app) {
       token: session.token,
       admin: {
         id: result.admin.id,
-        username: result.admin.username
+        username: result.admin.username,
+        group_id: result.admin.group_id,
+        group_code: result.admin.group_code,
+        group_name: result.admin.group_name
       }
     };
   });

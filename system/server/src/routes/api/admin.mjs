@@ -1,5 +1,12 @@
-import { requireAuth } from '../../middleware/auth.mjs';
+import { requireAuth, requirePermission } from '../../middleware/auth.mjs';
 import { clearAccessLogs, getAccessLogDashboardSummary, listAccessLogs } from '../../services/access-logs.mjs';
+import {
+  createAdminGroup,
+  deleteAdminGroup,
+  listAdminGroups,
+  updateAdminGroup
+} from '../../services/admin-groups.mjs';
+import { listAdminPermissions } from '../../services/admin-permissions.mjs';
 import {
   listAdminsAdmin,
   getAdminById,
@@ -10,6 +17,8 @@ import {
 } from '../../services/admins.mjs';
 
 export default async function adminApiRoutes(app) {
+  const requireAdminManage = requirePermission('10');
+
   // 获取当前管理员信息
   app.get('/admin/me', {
     onRequest: [requireAuth]
@@ -22,14 +31,66 @@ export default async function adminApiRoutes(app) {
 
   // 管理员列表
   app.get('/admin/list', {
-    onRequest: [requireAuth]
+    onRequest: [requireAuth, requireAdminManage]
   }, async (request, reply) => {
     const admins = listAdminsAdmin();
     return { success: true, data: admins };
   });
 
+  app.get('/admin/groups', {
+    onRequest: [requireAuth, requireAdminManage]
+  }, async () => {
+    const groups = listAdminGroups();
+    return { success: true, data: groups };
+  });
+
+  app.get('/admin/permissions', {
+    onRequest: [requireAuth, requireAdminManage]
+  }, async () => {
+    return { success: true, data: listAdminPermissions() };
+  });
+
+  app.post('/admin/groups', {
+    onRequest: [requireAuth, requireAdminManage]
+  }, async (request, reply) => {
+    try {
+      const group = createAdminGroup(request.body);
+      return { success: true, data: group };
+    } catch (error) {
+      return reply.badRequest(error.message || '用户组创建失败');
+    }
+  });
+
+  app.put('/admin/groups/:id', {
+    onRequest: [requireAuth, requireAdminManage]
+  }, async (request, reply) => {
+    try {
+      const group = updateAdminGroup(parseInt(request.params.id), request.body);
+      if (!group) {
+        return reply.notFound('用户组不存在');
+      }
+      return { success: true, data: group };
+    } catch (error) {
+      return reply.badRequest(error.message || '用户组更新失败');
+    }
+  });
+
+  app.delete('/admin/groups/:id', {
+    onRequest: [requireAuth, requireAdminManage]
+  }, async (request, reply) => {
+    try {
+      const deleted = deleteAdminGroup(parseInt(request.params.id));
+      if (!deleted) {
+        return reply.notFound('用户组不存在');
+      }
+      return { success: true, message: '用户组已删除' };
+    } catch (error) {
+      return reply.badRequest(error.message || '用户组删除失败');
+    }
+  });
+
   app.get('/admin/access-logs', {
-    onRequest: [requireAuth]
+    onRequest: [requireAuth, requireAdminManage]
   }, async (request, reply) => {
     const result = listAccessLogs({
       page: request.query?.page,
@@ -42,14 +103,14 @@ export default async function adminApiRoutes(app) {
   });
 
   app.get('/admin/access-logs/summary', {
-    onRequest: [requireAuth]
+    onRequest: [requireAuth, requireAdminManage]
   }, async () => {
     const result = getAccessLogDashboardSummary();
     return { success: true, data: result };
   });
 
   app.delete('/admin/access-logs', {
-    onRequest: [requireAuth]
+    onRequest: [requireAuth, requireAdminManage]
   }, async () => {
     clearAccessLogs();
     return { success: true, message: '访问记录已清空' };
@@ -57,7 +118,7 @@ export default async function adminApiRoutes(app) {
 
   // 获取管理员详情
   app.get('/admin/:id', {
-    onRequest: [requireAuth]
+    onRequest: [requireAuth, requireAdminManage]
   }, async (request, reply) => {
     const admin = getAdminById(parseInt(request.params.id));
 
@@ -70,7 +131,7 @@ export default async function adminApiRoutes(app) {
 
   // 创建管理员
   app.post('/admin', {
-    onRequest: [requireAuth]
+    onRequest: [requireAuth, requireAdminManage]
   }, async (request, reply) => {
     const admin = createAdmin(request.body);
     return { success: true, data: admin };
@@ -78,7 +139,7 @@ export default async function adminApiRoutes(app) {
 
   // 更新管理员
   app.put('/admin/:id', {
-    onRequest: [requireAuth]
+    onRequest: [requireAuth, requireAdminManage]
   }, async (request, reply) => {
     const updated = updateAdmin(parseInt(request.params.id), request.body);
 
@@ -91,7 +152,7 @@ export default async function adminApiRoutes(app) {
 
   // 更新管理员密码
   app.put('/admin/:id/password', {
-    onRequest: [requireAuth]
+    onRequest: [requireAuth, requireAdminManage]
   }, async (request, reply) => {
     const newPassword = request.body?.newPassword ?? request.body?.password;
 
@@ -110,7 +171,7 @@ export default async function adminApiRoutes(app) {
 
   // 删除管理员
   app.delete('/admin/:id', {
-    onRequest: [requireAuth]
+    onRequest: [requireAuth, requireAdminManage]
   }, async (request, reply) => {
     const deleted = deleteAdmin(parseInt(request.params.id));
 

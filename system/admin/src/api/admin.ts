@@ -1,9 +1,42 @@
 import apiClient from './client'
-import type { AccessLog, AccessLogSummary, Admin, ApiResponse, PaginationMeta } from '@/types'
+import type {
+  AccessLog,
+  AccessLogSummary,
+  Admin,
+  AdminGroup,
+  AdminPermissionDefinition,
+  ApiResponse,
+  PaginationMeta
+} from '@/types'
 
 export const adminApi = {
   list: async () => {
     const response = await apiClient.get<ApiResponse<Admin[]>>('/admin/list')
+    return response.data
+  },
+
+  listGroups: async () => {
+    const response = await apiClient.get<ApiResponse<AdminGroup[]>>('/admin/groups')
+    return response.data
+  },
+
+  listPermissions: async () => {
+    const response = await apiClient.get<ApiResponse<AdminPermissionDefinition[]>>('/admin/permissions')
+    return response.data
+  },
+
+  createGroup: async (data: { code: string; name: string; permission_flags: string[] }) => {
+    const response = await apiClient.post<ApiResponse<AdminGroup>>('/admin/groups', data)
+    return response.data
+  },
+
+  updateGroup: async (id: number, data: { code: string; name: string; permission_flags: string[] }) => {
+    const response = await apiClient.put<ApiResponse<AdminGroup>>(`/admin/groups/${id}`, data)
+    return response.data
+  },
+
+  deleteGroup: async (id: number) => {
+    const response = await apiClient.delete<ApiResponse<void>>(`/admin/groups/${id}`)
     return response.data
   },
 
@@ -30,12 +63,12 @@ export const adminApi = {
     return response.data
   },
 
-  create: async (data: { username: string; password: string }) => {
+  create: async (data: { username: string; password: string; group_id: number }) => {
     const response = await apiClient.post<ApiResponse<Admin>>('/admin', data)
     return response.data
   },
 
-  update: async (id: number, data: { username: string }) => {
+  update: async (id: number, data: { username: string; group_id: number }) => {
     const response = await apiClient.put<ApiResponse<Admin>>(`/admin/${id}`, data)
     return response.data
   },

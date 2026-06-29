@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import AdminFormDialog from '@/components/AdminFormDialog'
+import AdminGroupsDialog from '@/components/AdminGroupsDialog'
 import { formatRelativeTime } from '@/lib/datetime'
 import { toast } from 'sonner'
 import type { Admin } from '@/types'
@@ -92,7 +93,10 @@ export default function AdminsPage() {
               <CardTitle>管理员</CardTitle>
               <CardDescription>共 {admins.length} 条记录</CardDescription>
             </div>
-            <Button onClick={handleAdd}>添加管理员</Button>
+            <div className="flex items-center gap-2">
+              <AdminGroupsDialog />
+              <Button onClick={handleAdd}>添加管理员</Button>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -101,6 +105,7 @@ export default function AdminsPage() {
               <TableRow>
                 <TableHead>ID</TableHead>
                 <TableHead>用户名</TableHead>
+                <TableHead>用户组</TableHead>
                 <TableHead>上次登录</TableHead>
                 <TableHead className="text-right">操作</TableHead>
               </TableRow>
@@ -108,7 +113,7 @@ export default function AdminsPage() {
             <TableBody>
               {admins.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center">
+                  <TableCell colSpan={5} className="text-center">
                     暂无数据
                   </TableCell>
                 </TableRow>
@@ -117,6 +122,7 @@ export default function AdminsPage() {
                   <TableRow key={admin.id}>
                     <TableCell>{admin.id}</TableCell>
                     <TableCell className="font-medium">{admin.username}</TableCell>
+                    <TableCell>{admin.group_name || '-'}</TableCell>
                     <TableCell>
                       {formatRelativeTime(admin.last_login_at)}
                     </TableCell>

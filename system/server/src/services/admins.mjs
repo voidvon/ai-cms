@@ -1,5 +1,7 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { execute, queryAll, queryOne } from '../db.mjs';
+import { normalizePermissionFlags } from './admin-permissions.mjs';
+import { ensureAdminGroupSchema, getAdminGroupById, getDefaultAdminGroupId } from './admin-groups.mjs';
 
 const LOGIN_FAILURE_WINDOW_MS = 30 * 60 * 1000;
 const LOGIN_LOCKOUT_MS = 30 * 60 * 1000;
@@ -8,6 +10,7 @@ const LOGIN_MAX_FAILURES = 5;
 let loginAttemptSchemaEnsured = false;
 
 export function authenticateAdmin(username, password, clientIp) {
+  ensureAdminGroupSchema();
   ensureAdminLoginAttemptSchema();
   purgeExpiredLoginAttempts();
 
@@ -20,9 +23,18 @@ export function authenticateAdmin(username, password, clientIp) {
 
   const admin = queryOne(
     `
-      SELECT id, username, password_hash, password_scheme, permission_flags
-      FROM admins
-      WHERE username = ?
+      SELECT
+        a.id,
+        a.username,
+        a.password_hash,
+        a.password_scheme,
+        COALESCE(g.permission_flags, a.permission_flags, '') AS permission_flags,
+        a.group_id,
+        g.code AS group_code,
+        g.name AS group_name
+      FROM admins a
+      LEFT JOIN admin_groups g ON g.id = a.group_id
+      WHERE a.username = ?
     `,
     [String(username ?? '').trim()]
   );
@@ -62,43 +74,57 @@ export function authenticateAdmin(username, password, clientIp) {
     admin: {
       id: admin.id,
       username: admin.username,
-      permissionFlags: admin.permission_flags
+      permissionFlags: admin.permission_flags,
+      group_id: admin.group_id || getDefaultAdminGroupId(),
+      group_code: admin.group_code || 'super_admin',
+      group_name: admin.group_name || '超级管理员'
     }
   };
 }
 
 export function listAdminsAdmin() {
+  ensureAdminGroupSchema();
   return queryAll(
     `
       SELECT
-        id,
-        username,
-        permission_flags,
-        last_login_at,
-        last_login_ip
-      FROM admins
-      ORDER BY id ASC
+        a.id,
+        a.username,
+        a.group_id,
+        g.code AS group_code,
+        g.name AS group_name,
+        COALESCE(g.permission_flags, a.permission_flags, '') AS permission_flags,
+        a.last_login_at,
+        a.last_login_ip
+      FROM admins a
+      LEFT JOIN admin_groups g ON g.id = a.group_id
+      ORDER BY a.id ASC
     `
   );
 }
 
 export function getAdminById(id) {
+  ensureAdminGroupSchema();
   return queryOne(
     `
       SELECT
-        id,
-        username,
-        permission_flags,
-        last_login_at,
-        last_login_ip
-      FROM admins
-      WHERE id = ?
+        a.id,
+        a.username,
+        a.group_id,
+        g.code AS group_code,
+        g.name AS group_name,
+        COALESCE(g.permission_flags, a.permission_flags, '') AS permission_flags,
+        a.last_login_at,
+        a.last_login_ip
+      FROM admins a
+      LEFT JOIN admin_groups g ON g.id = a.group_id
+      WHERE a.id = ?
     `,
     [id]
   );
 }
 
 export function createAdmin(input) {
+  ensureAdminGroupSchema();
   const payload = normalizeAdminInput(input, { requirePassword: true });
   const result = execute(
     `
@@ -106,13 +132,15 @@ export function createAdmin(input) {
         username,
         password_hash,
         password_scheme,
-        permission_flags
-      ) VALUES (?, ?, 'legacy-md5-16', ?)
+        permission_flags,
+        group_id
+      ) VALUES (?, ?, 'legacy-md5-16', ?, ?)
     `,
     [
       payload.username,
       createLegacyMd5Hash(payload.password),
-      payload.permission_flags
+      payload.permission_flags,
+      payload.group_id
     ]
   );
 
@@ -120,6 +148,7 @@ export function createAdmin(input) {
 }
 
 export function updateAdmin(id, input) {
+  ensureAdminGroupSchema();
   const existing = queryOne(
     `
       SELECT
@@ -127,7 +156,8 @@ export function updateAdmin(id, input) {
         username,
         password_hash,
         password_scheme,
-        permission_flags
+        permission_flags,
+        group_id
       FROM admins
       WHERE id = ?
     `,
@@ -147,7 +177,8 @@ export function updateAdmin(id, input) {
         username = ?,
         password_hash = ?,
         password_scheme = ?,
-        permission_flags = ?
+        permission_flags = ?,
+        group_id = ?
       WHERE id = ?
     `,
     [
@@ -155,6 +186,7 @@ export function updateAdmin(id, input) {
       password ? createLegacyMd5Hash(password) : existing.password_hash,
       password ? 'legacy-md5-16' : existing.password_scheme,
       payload.permission_flags,
+      payload.group_id,
       id
     ]
   );
@@ -163,6 +195,7 @@ export function updateAdmin(id, input) {
 }
 
 export function updateAdminPassword(id, password) {
+  ensureAdminGroupSchema();
   const existing = getAdminById(id);
   if (!existing) {
     return null;
@@ -188,6 +221,7 @@ export function updateAdminPassword(id, password) {
 }
 
 export function deleteAdmin(id) {
+  ensureAdminGroupSchema();
   const existing = getAdminById(id);
   if (!existing) {
     return null;
@@ -401,6 +435,7 @@ function createLegacyMd5Hash(password) {
 }
 
 function normalizeAdminInput(input, options = {}) {
+  ensureAdminGroupSchema();
   const username = String(input.username ?? '').trim();
   if (!username) {
     throw new Error('username is required');
@@ -414,26 +449,20 @@ function normalizeAdminInput(input, options = {}) {
   return {
     username,
     password,
-    permission_flags: normalizePermissionFlags(input.permission_flags ?? input.flag)
+    permission_flags: normalizePermissionFlags(input.permission_flags ?? input.flag),
+    group_id: normalizeAdminGroupId(input.group_id)
   };
 }
 
-function normalizePermissionFlags(value) {
-  const source = Array.isArray(value) ? value : String(value ?? '').split(',');
-  const flags = [];
-  for (const entry of source) {
-    const normalized = String(entry ?? '').trim();
-    if (!normalized) {
-      continue;
-    }
-    const parsed = Number.parseInt(normalized, 10);
-    if (Number.isNaN(parsed) || parsed <= 0) {
-      continue;
-    }
-    const flag = String(parsed).padStart(2, '0');
-    if (!flags.includes(flag)) {
-      flags.push(flag);
-    }
+function normalizeAdminGroupId(value) {
+  const fallbackGroupId = getDefaultAdminGroupId();
+  const parsed = Number.parseInt(String(value ?? fallbackGroupId), 10);
+  const groupId = Number.isFinite(parsed) && parsed > 0 ? parsed : fallbackGroupId;
+  const group = getAdminGroupById(groupId);
+
+  if (!group) {
+    throw new Error('admin group does not exist');
   }
-  return flags.join(',');
+
+  return group.id;
 }

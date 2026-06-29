@@ -4,8 +4,29 @@ export type PublishStatus = 'draft' | 'pending_review' | 'published';
 export interface Admin {
   id: number;
   username: string;
+  group_id: number;
+  group_name: string;
+  group_code?: string;
+  permission_flags?: string;
   created_at: string;
   last_login_at?: string;
+}
+
+export interface AdminGroup {
+  id: number;
+  code: string;
+  name: string;
+  permission_flags: string;
+  is_system: number;
+  member_count?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AdminPermissionDefinition {
+  flag: string;
+  label: string;
+  description: string;
 }
 
 export interface AccessLog {

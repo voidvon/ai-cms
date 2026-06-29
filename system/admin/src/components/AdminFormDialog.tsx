@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/api/admin'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import type { Admin } from '@/types'
 
@@ -21,7 +22,15 @@ export default function AdminFormDialog({ open, onOpenChange, admin, mode }: Adm
     username: '',
     password: '',
     confirmPassword: '',
+    groupId: '1',
   })
+
+  const { data: groupsResponse } = useQuery({
+    queryKey: ['admin-groups'],
+    queryFn: () => adminApi.listGroups(),
+  })
+
+  const groups = groupsResponse?.data || []
 
   useEffect(() => {
     if (admin && (mode === 'edit' || mode === 'password')) {
@@ -29,12 +38,14 @@ export default function AdminFormDialog({ open, onOpenChange, admin, mode }: Adm
         username: admin.username || '',
         password: '',
         confirmPassword: '',
+        groupId: String(admin.group_id || 1),
       })
     } else if (mode === 'create') {
       setFormData({
         username: '',
         password: '',
         confirmPassword: '',
+        groupId: '1',
       })
     }
   }, [admin, mode])
@@ -45,21 +56,28 @@ export default function AdminFormDialog({ open, onOpenChange, admin, mode }: Adm
         if (formData.password !== formData.confirmPassword) {
           throw new Error('两次输入的密码不一致')
         }
-        return adminApi.create({ username: formData.username, password: formData.password })
+        return adminApi.create({
+          username: formData.username,
+          password: formData.password,
+          group_id: Number.parseInt(formData.groupId, 10) || 1,
+        })
       } else if (mode === 'password') {
         if (formData.password !== formData.confirmPassword) {
           throw new Error('两次输入的密码不一致')
         }
         return adminApi.updatePassword(admin!.id, { newPassword: formData.password })
       } else {
-        return adminApi.update(admin!.id, { username: formData.username })
+        return adminApi.update(admin!.id, {
+          username: formData.username,
+          group_id: Number.parseInt(formData.groupId, 10) || 1,
+        })
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['admins'] })
       toast.success(mode === 'create' ? '创建成功' : mode === 'password' ? '密码修改成功' : '更新成功')
       onOpenChange(false)
-      setFormData({ username: '', password: '', confirmPassword: '' })
+      setFormData({ username: '', password: '', confirmPassword: '', groupId: '1' })
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || error.message || '操作失败')
@@ -100,15 +118,36 @@ export default function AdminFormDialog({ open, onOpenChange, admin, mode }: Adm
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
           {mode !== 'password' && (
-            <div className="space-y-2">
-              <Label htmlFor="username">用户名 *</Label>
-              <Input
-                id="username"
-                value={formData.username}
-                onChange={(e) => setFormData({ ...formData, username: e.target.value })}
-                placeholder="请输入用户名"
-              />
-            </div>
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="username">用户名 *</Label>
+                <Input
+                  id="username"
+                  value={formData.username}
+                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  placeholder="请输入用户名"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>用户组 *</Label>
+                <Select
+                  value={formData.groupId}
+                  onValueChange={(value) => setFormData({ ...formData, groupId: value })}
+                  disabled={groups.length <= 1}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="请选择用户组" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {groups.map((group) => (
+                      <SelectItem key={group.id} value={String(group.id)}>
+                        {group.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
           )}
           {(mode === 'create' || mode === 'password') && (
             <>
