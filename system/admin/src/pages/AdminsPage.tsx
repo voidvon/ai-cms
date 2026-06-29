@@ -15,6 +15,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import AdminFormDialog from '@/components/AdminFormDialog'
+import { formatRelativeTime } from '@/lib/datetime'
 import { toast } from 'sonner'
 import type { Admin } from '@/types'
 
@@ -117,9 +118,7 @@ export default function AdminsPage() {
                     <TableCell>{admin.id}</TableCell>
                     <TableCell className="font-medium">{admin.username}</TableCell>
                     <TableCell>
-                      {admin.last_login_at
-                        ? new Date(admin.last_login_at).toLocaleString('zh-CN')
-                        : '-'}
+                      {formatRelativeTime(admin.last_login_at)}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button variant="ghost" size="sm" onClick={() => handleEdit(admin)}>

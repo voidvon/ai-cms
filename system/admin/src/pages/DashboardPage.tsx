@@ -1,17 +1,30 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { adminApi } from '@/api/admin'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { formatRelativeTime } from '@/lib/datetime'
+import { toast } from 'sonner'
 
 const PAGE_SIZE = 20
 
 export default function DashboardPage() {
   const [topPagesOpen, setTopPagesOpen] = useState(false)
+  const [clearDialogOpen, setClearDialogOpen] = useState(false)
   const [page, setPage] = useState(1)
   const [pathInput, setPathInput] = useState('')
   const [ipInput, setIpInput] = useState('')
@@ -40,6 +53,20 @@ export default function DashboardPage() {
   const total = pagination?.total || 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
 
+  const clearLogsMutation = useMutation({
+    mutationFn: () => adminApi.clearAccessLogs(),
+    onSuccess: () => {
+      toast.success('访问记录已清空')
+      setClearDialogOpen(false)
+      setPage(1)
+      void refetch()
+      void summaryQuery.refetch()
+    },
+    onError: (error: Error) => {
+      toast.error(error.message || '清空访问记录失败')
+    },
+  })
+
   const applyFilters = () => {
     setPage(1)
     setFilters({
@@ -50,6 +77,10 @@ export default function DashboardPage() {
 
   const refreshLogs = () => {
     void refetch()
+  }
+
+  const confirmClearLogs = () => {
+    clearLogsMutation.mutate()
   }
 
   return (
@@ -103,6 +134,9 @@ export default function DashboardPage() {
           />
           <Button onClick={applyFilters}>查询</Button>
           <Button variant="outline" onClick={refreshLogs}>刷新</Button>
+          <Button variant="destructive" onClick={() => setClearDialogOpen(true)}>
+            清空
+          </Button>
         </div>
 
         {isLoading ? <div>加载中...</div> : null}
@@ -115,6 +149,7 @@ export default function DashboardPage() {
                 <TableRow>
                   <TableHead>页面</TableHead>
                   <TableHead className="w-[160px] min-w-[160px]">IP</TableHead>
+                  <TableHead className="w-[220px] min-w-[220px] max-w-[220px]">客户端</TableHead>
                   <TableHead className="w-[88px] min-w-[88px]">状态</TableHead>
                   <TableHead className="w-[180px] min-w-[180px]">时间</TableHead>
                   <TableHead>来源</TableHead>
@@ -123,7 +158,7 @@ export default function DashboardPage() {
               <TableBody>
                 {items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5} className="text-center">
+                    <TableCell colSpan={6} className="text-center">
                       暂无访问记录
                     </TableCell>
                   </TableRow>
@@ -131,13 +166,19 @@ export default function DashboardPage() {
                   <TableRow key={item.id}>
                     <TableCell className="font-medium">{item.page_path}</TableCell>
                     <TableCell className="w-[160px] min-w-[160px] whitespace-nowrap">{item.client_ip}</TableCell>
+                    <TableCell
+                      className="w-[220px] min-w-[220px] max-w-[220px] truncate"
+                      title={item.user_agent || item.user_agent_label || ''}
+                    >
+                      {item.user_agent_label || '-'}
+                    </TableCell>
                     <TableCell className="w-[88px] min-w-[88px]">
                       <Badge variant={item.status_code >= 400 ? 'destructive' : 'outline'}>
                         {item.status_code}
                       </Badge>
                     </TableCell>
                     <TableCell className="w-[180px] min-w-[180px] whitespace-nowrap">
-                      {new Date(item.visited_at).toLocaleString('zh-CN')}
+                      {formatRelativeTime(item.visited_at)}
                     </TableCell>
                     <TableCell className="max-w-[280px] truncate">
                       {item.referer || '-'}
@@ -200,20 +241,40 @@ export default function DashboardPage() {
                     <TableCell colSpan={4} className="text-center">暂无统计数据</TableCell>
                   </TableRow>
                 ) : topPages.map((item) => (
-                  <TableRow key={item.page_path}>
-                    <TableCell className="font-medium">{item.page_path}</TableCell>
-                    <TableCell>{item.visits}</TableCell>
-                    <TableCell>{item.unique_ips}</TableCell>
-                    <TableCell className="whitespace-nowrap">
-                      {item.last_visited_at ? new Date(item.last_visited_at).toLocaleString('zh-CN') : '-'}
-                    </TableCell>
-                  </TableRow>
+                    <TableRow key={item.page_path}>
+                      <TableCell className="font-medium">{item.page_path}</TableCell>
+                      <TableCell>{item.visits}</TableCell>
+                      <TableCell>{item.unique_ips}</TableCell>
+                      <TableCell className="whitespace-nowrap">
+                      {formatRelativeTime(item.last_visited_at)}
+                      </TableCell>
+                    </TableRow>
                 ))}
               </TableBody>
             </Table>
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认清空访问记录</AlertDialogTitle>
+            <AlertDialogDescription>
+              该操作会删除当前仪表盘访问记录表中的全部数据，且无法恢复。是否继续？
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmClearLogs}
+              disabled={clearLogsMutation.isPending}
+            >
+              {clearLogsMutation.isPending ? '清空中...' : '确认清空'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }

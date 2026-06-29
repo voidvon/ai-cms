@@ -135,7 +135,7 @@ export function listAccessLogs(options = {}) {
       LIMIT ? OFFSET ?
     `,
     [...params, limit, offset]
-  );
+  ).map(hydrateAccessLogRow);
 
   return {
     items,
@@ -199,6 +199,12 @@ export function getAccessLogDashboardSummary() {
       last_visited_at: item.last_visited_at || ''
     }))
   };
+}
+
+export function clearAccessLogs() {
+  ensureAccessLogsSchema();
+  execute('DELETE FROM access_logs');
+  return true;
 }
 
 export function shouldRecordPageAccess(request, reply) {
@@ -280,4 +286,93 @@ function normalizePositiveInteger(value, fallback) {
     return fallback;
   }
   return normalized;
+}
+
+function hydrateAccessLogRow(row = {}) {
+  const userAgent = normalizeText(row.user_agent);
+  const userAgentSummary = summarizeUserAgent(userAgent);
+
+  return {
+    ...row,
+    user_agent: userAgent,
+    user_agent_kind: userAgentSummary.kind,
+    user_agent_label: userAgentSummary.label
+  };
+}
+
+function summarizeUserAgent(userAgent) {
+  if (!userAgent) {
+    return {
+      kind: 'other',
+      label: '未知客户端'
+    };
+  }
+
+  const botLabel = detectBotLabel(userAgent);
+  if (botLabel) {
+    return {
+      kind: 'bot',
+      label: botLabel
+    };
+  }
+
+  const browserLabel = detectBrowserLabel(userAgent);
+  if (browserLabel) {
+    return {
+      kind: 'browser',
+      label: browserLabel
+    };
+  }
+
+  return {
+    kind: 'other',
+    label: userAgent
+  };
+}
+
+function detectBotLabel(userAgent) {
+  const botMatchers = [
+    { pattern: /\bGooglebot\b/i, label: 'Googlebot' },
+    { pattern: /\bBaiduspider\b/i, label: 'Baiduspider' },
+    { pattern: /\bbingbot\b/i, label: 'bingbot' },
+    { pattern: /\bSogou web spider\b/i, label: 'Sogou web spider' },
+    { pattern: /\bSogou.*spider\b/i, label: 'Sogou web spider' },
+    { pattern: /\bYandexBot\b/i, label: 'YandexBot' },
+    { pattern: /\bDuckDuckBot\b/i, label: 'DuckDuckBot' },
+    { pattern: /\bBytespider\b/i, label: 'Bytespider' },
+    { pattern: /\bAhrefsBot\b/i, label: 'AhrefsBot' },
+    { pattern: /\bSemrushBot\b/i, label: 'SemrushBot' }
+  ];
+
+  const matched = botMatchers.find((item) => item.pattern.test(userAgent));
+  if (matched) {
+    return matched.label;
+  }
+
+  if (/\b(bot|crawler|spider|slurp|fetcher|curl|wget)\b/i.test(userAgent)) {
+    return '其他爬虫';
+  }
+
+  return '';
+}
+
+function detectBrowserLabel(userAgent) {
+  const browserMatchers = [
+    { pattern: /\bEdg\/([\d.]+)/i, label: 'Edge' },
+    { pattern: /\bOPR\/([\d.]+)/i, label: 'Opera' },
+    { pattern: /\bChrome\/([\d.]+)/i, label: 'Chrome' },
+    { pattern: /\bFirefox\/([\d.]+)/i, label: 'Firefox' },
+    { pattern: /\bVersion\/([\d.]+).*Safari\//i, label: 'Safari' },
+    { pattern: /\bMSIE ([\d.]+)/i, label: 'Internet Explorer' },
+    { pattern: /\bTrident\/.*rv:([\d.]+)/i, label: 'Internet Explorer' }
+  ];
+
+  for (const matcher of browserMatchers) {
+    const match = userAgent.match(matcher.pattern);
+    if (match?.[1]) {
+      return `${matcher.label} ${match[1]}`;
+    }
+  }
+
+  return '';
 }

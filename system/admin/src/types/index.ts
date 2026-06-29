@@ -16,6 +16,8 @@ export interface AccessLog {
   status_code: number;
   referer: string;
   user_agent: string;
+  user_agent_kind?: 'browser' | 'bot' | 'other';
+  user_agent_label?: string;
   visited_at: string;
 }
 

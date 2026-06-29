@@ -11,6 +11,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { formatRelativeTime } from '@/lib/datetime'
 import { toast } from 'sonner'
 import axios from 'axios'
 
@@ -111,7 +112,7 @@ export default function SitemapDiagnosticsPage() {
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
           <div><span className="font-medium">索引地址：</span>{data.sitemap_index_url || '未生成'}</div>
-          <div><span className="font-medium">诊断时间：</span>{formatDateTime(data.generated_at)}</div>
+          <div><span className="font-medium">诊断时间：</span>{formatRelativeTime(data.generated_at)}</div>
           <div>
             <Button onClick={() => rebuildMutation.mutate()} disabled={rebuildMutation.isPending}>
               {rebuildMutation.isPending ? '重建中...' : '立即重建 Sitemap / Robots'}
@@ -191,7 +192,7 @@ export default function SitemapDiagnosticsPage() {
                 <TableRow key={item.file_name}>
                   <TableCell>{item.file_name}</TableCell>
                   <TableCell>{item.url_count}</TableCell>
-                  <TableCell>{formatDateTime(item.lastmod)}</TableCell>
+                  <TableCell>{formatRelativeTime(item.lastmod)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -216,7 +217,7 @@ export default function SitemapDiagnosticsPage() {
               {data.recent_urls.map((item) => (
                 <TableRow key={item.loc}>
                   <TableCell className="break-all">{item.loc}</TableCell>
-                  <TableCell>{formatDateTime(item.lastmod)}</TableCell>
+                  <TableCell>{formatRelativeTime(item.lastmod)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -234,17 +235,6 @@ function MetricCard({ label, value }: { label: string; value: string }) {
       <div className="mt-2 break-all text-2xl font-semibold">{value}</div>
     </div>
   )
-}
-
-function formatDateTime(value: string) {
-  if (!value) {
-    return '-'
-  }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-  return date.toLocaleString('zh-CN', { hour12: false })
 }
 
 function renderTypeLabel(value: string) {

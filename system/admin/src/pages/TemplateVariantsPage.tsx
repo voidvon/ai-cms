@@ -25,6 +25,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tree, type TreeItemData, type TreeMoveParams } from '@/components/ui/tree'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { TemplateVariableReference } from '@/components/TemplateVariableReference'
+import { formatRelativeTime } from '@/lib/datetime'
 import { toast } from 'sonner'
 import type { Template, TemplateVariant, TemplateVersion } from '@/types'
 
@@ -1251,7 +1252,7 @@ function TemplateVersionPopover({
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="font-medium">版本 #{version.version_no}</span>
                   <Badge variant="outline">{version.engine.toUpperCase()}</Badge>
-                  <span className="text-xs text-muted-foreground">{formatDateTime(version.created_at)}</span>
+                  <span className="text-xs text-muted-foreground">{formatRelativeTime(version.created_at)}</span>
                 </div>
                 <div className="mt-1 truncate text-xs text-muted-foreground">{version.note || '发布前版本'}</div>
                 <div className="mt-1 text-xs text-muted-foreground">
@@ -1314,7 +1315,7 @@ function TemplateVersionCodeDialog({
         <DialogHeader>
           <DialogTitle>{templateName} · 历史版本代码</DialogTitle>
           <DialogDescription>
-            {version ? `版本 #${version.version_no} · ${version.engine.toUpperCase()} · ${formatDateTime(version.created_at)}` : '历史版本代码预览'}
+            {version ? `版本 #${version.version_no} · ${version.engine.toUpperCase()} · ${formatRelativeTime(version.created_at)}` : '历史版本代码预览'}
           </DialogDescription>
         </DialogHeader>
         <div className="grid min-h-0 gap-3">
@@ -1371,13 +1372,6 @@ function summarizeContentDiff(current: string, previous: string) {
     return `当前少 ${Math.abs(delta)} 字符`
   }
   return '字符数相同但内容不同'
-}
-
-function formatDateTime(value?: string) {
-  if (!value) {
-    return ''
-  }
-  return value.replace('T', ' ').slice(0, 19)
 }
 
 function formatTemplateTypeLabel(type: string) {

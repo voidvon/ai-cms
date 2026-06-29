@@ -1,5 +1,5 @@
 import { requireAuth } from '../../middleware/auth.mjs';
-import { getAccessLogDashboardSummary, listAccessLogs } from '../../services/access-logs.mjs';
+import { clearAccessLogs, getAccessLogDashboardSummary, listAccessLogs } from '../../services/access-logs.mjs';
 import {
   listAdminsAdmin,
   getAdminById,
@@ -46,6 +46,13 @@ export default async function adminApiRoutes(app) {
   }, async () => {
     const result = getAccessLogDashboardSummary();
     return { success: true, data: result };
+  });
+
+  app.delete('/admin/access-logs', {
+    onRequest: [requireAuth]
+  }, async () => {
+    clearAccessLogs();
+    return { success: true, message: '访问记录已清空' };
   });
 
   // 获取管理员详情

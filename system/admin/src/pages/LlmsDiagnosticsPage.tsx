@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { formatRelativeTime } from '@/lib/datetime'
 import { toast } from 'sonner'
 
 interface LlmsWarning {
@@ -123,7 +124,7 @@ export default function LlmsDiagnosticsPage() {
           <CardDescription>当前导出入口与最近一次诊断时间</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4 text-sm">
-          <div><span className="font-medium">诊断时间：</span>{formatDateTime(data.generated_at)}</div>
+          <div><span className="font-medium">诊断时间：</span>{formatRelativeTime(data.generated_at)}</div>
           <div className="flex flex-wrap gap-2">
             <Button onClick={() => rebuildMutation.mutate()} disabled={rebuildMutation.isPending}>
               {rebuildMutation.isPending ? '重建中...' : '立即重建 LLMS'}
@@ -248,17 +249,6 @@ function MetricCard({ label, value }: { label: string; value: string }) {
       <div className="mt-2 break-all text-2xl font-semibold">{value}</div>
     </div>
   )
-}
-
-function formatDateTime(value: string) {
-  if (!value) {
-    return '-'
-  }
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-  return date.toLocaleString('zh-CN', { hour12: false })
 }
 
 function getApiErrorMessage(error: unknown, fallback: string) {

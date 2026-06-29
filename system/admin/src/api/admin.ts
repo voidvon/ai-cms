@@ -25,6 +25,11 @@ export const adminApi = {
     return response.data
   },
 
+  clearAccessLogs: async () => {
+    const response = await apiClient.delete<ApiResponse<void>>('/admin/access-logs')
+    return response.data
+  },
+
   create: async (data: { username: string; password: string }) => {
     const response = await apiClient.post<ApiResponse<Admin>>('/admin', data)
     return response.data

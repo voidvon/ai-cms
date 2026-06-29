@@ -34,6 +34,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { formatDate } from '@/lib/datetime'
 import { toast } from 'sonner'
 import type { Column, ColumnNode, ContentModel, ManagedContentItem, SectionContentItem, Template, TemplateBinding } from '@/types'
 import type { ManualColumnFormValue } from '@/components/ManualColumnFormDialog'
@@ -1207,7 +1208,7 @@ function ContentItemsTable({
               </TableCell>
               <TableCell>{Number(item.is_featured_home || (item as SectionContentItem).is_featured || 0) === 1 ? <Badge>是</Badge> : <Badge variant="outline">否</Badge>}</TableCell>
               {isSectionContent ? (
-                <TableCell>{(item as SectionContentItem).created_at ? new Date((item as SectionContentItem).created_at).toLocaleDateString('zh-CN') : '-'}</TableCell>
+                <TableCell>{formatDate((item as SectionContentItem).created_at)}</TableCell>
               ) : (
                 <TableCell>{(item as ManagedContentItem).is_visible === 1 ? <Badge>显示</Badge> : <Badge variant="secondary">隐藏</Badge>}</TableCell>
               )}

@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/pagination'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { formatRelativeTime } from '@/lib/datetime'
 import { toast } from 'sonner'
 import type { MediaAsset } from '@/types'
 
@@ -208,7 +209,7 @@ export default function MediaAssetsPage() {
                           {item.file_exists ? '存在' : '缺失'}
                         </Badge>
                       </TableCell>
-                      <TableCell>{formatDateTime(item.created_at)}</TableCell>
+                      <TableCell>{formatRelativeTime(item.created_at)}</TableCell>
                     </TableRow>
                   ))
                 )}
@@ -302,13 +303,6 @@ function formatFileSize(size: number) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function formatDateTime(value?: string) {
-  if (!value) {
-    return '-'
-  }
-  return new Date(value).toLocaleString('zh-CN')
 }
 
 function buildPaginationItems(currentPage: number, totalPages: number): Array<number | 'ellipsis'> {
