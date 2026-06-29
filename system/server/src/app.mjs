@@ -8,6 +8,8 @@ import fastifyFormbody from '@fastify/formbody';
 import { HOST, PORT } from './config.mjs';
 import { createAssetsListenerManager } from './assets-listener-manager.mjs';
 import { getDb } from './db.mjs';
+import { getClientIp } from './middleware/auth.mjs';
+import { ensureAccessLogsSchema, recordAccessLog, shouldRecordPageAccess } from './services/access-logs.mjs';
 import { applySecurityHeaders } from './services/security-headers.mjs';
 import { createSiteListenerManager } from './site-listener-manager.mjs';
 import { withPortConflictDetails } from './utils/port-diagnostics.mjs';
@@ -15,6 +17,7 @@ import { withPortConflictDetails } from './utils/port-diagnostics.mjs';
 const require = createRequire(import.meta.url);
 
 getDb();
+ensureAccessLogsSchema();
 
 export async function createApp(options = {}) {
   const publicSite = normalizePublicSiteOptions(options.publicSite);
@@ -90,6 +93,25 @@ async function registerCommonPlugins(app) {
 }
 
 async function registerCommonHooks(app) {
+  app.addHook('onResponse', async (request, reply) => {
+    if (!shouldRecordPageAccess(request, reply)) {
+      return;
+    }
+
+    try {
+      recordAccessLog({
+        pagePath: request.raw?.url || request.url,
+        clientIp: getClientIp(request),
+        method: request.method,
+        statusCode: reply.statusCode,
+        referer: request.headers.referer || request.headers.referrer || '',
+        userAgent: request.headers['user-agent'] || ''
+      });
+    } catch (error) {
+      request.log.warn({ err: error }, 'failed to record access log');
+    }
+  });
+
   app.addHook('onSend', async (request, reply, payload) => {
     applySecurityHeaders(reply);
     return payload;

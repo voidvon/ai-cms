@@ -4,6 +4,7 @@ import { Toaster } from '@/components/ui/sonner'
 
 const LoginPage = lazy(() => import('@/pages/LoginPage'))
 const DashboardLayout = lazy(() => import('@/layouts/DashboardLayout'))
+const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
 const ColumnsPage = lazy(() => import('@/pages/ColumnsPage'))
 const MediaAssetsPage = lazy(() => import('@/pages/MediaAssetsPage'))
 const TemplateVariantsPage = lazy(() => import('@/pages/TemplateVariantsPage'))
@@ -31,8 +32,8 @@ function App() {
         <Routes>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<DashboardLayout />}>
-            <Route index element={<Navigate to="/columns" replace />} />
-            <Route path="dashboard" element={<Navigate to="/columns" replace />} />
+            <Route index element={<Navigate to="/dashboard" replace />} />
+            <Route path="dashboard" element={<DashboardPage />} />
             <Route path="columns" element={<ColumnsPage />} />
             <Route path="themes" element={<TemplateVariantsPage />} />
             <Route path="templates" element={<Navigate to="/themes" replace />} />

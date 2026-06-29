@@ -1,9 +1,27 @@
 import apiClient from './client'
-import type { Admin, ApiResponse } from '@/types'
+import type { AccessLog, AccessLogSummary, Admin, ApiResponse, PaginationMeta } from '@/types'
 
 export const adminApi = {
   list: async () => {
     const response = await apiClient.get<ApiResponse<Admin[]>>('/admin/list')
+    return response.data
+  },
+
+  listAccessLogs: async (params?: {
+    page?: number
+    limit?: number
+    path?: string
+    ip?: string
+  }) => {
+    const response = await apiClient.get<ApiResponse<{
+      items: AccessLog[]
+      pagination: PaginationMeta
+    }>>('/admin/access-logs', { params })
+    return response.data
+  },
+
+  getAccessLogSummary: async () => {
+    const response = await apiClient.get<ApiResponse<AccessLogSummary>>('/admin/access-logs/summary')
     return response.data
   },
 

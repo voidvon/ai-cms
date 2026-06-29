@@ -2955,8 +2955,8 @@ function buildLegacyManagedColumnUrl(columnNode, columnMap = null, site = null) 
 
 function normalizeLegacyTemplateMarkup(value, site) {
   return String(value || '')
-    .replace(/\baction=(["'])\/(?:Search|search)\.asp(?:\?action=search)?\1/gi, 'action="#" data-search-open-form="true"')
-    .replace(/\bhref=(["'])\/(?:Search|search)\.asp(?:\?action=search)?\1/gi, 'href="#" data-search-open="true"');
+    .replace(/\baction=(["'])\/(?:Search|search)(?:\.asp(?:\?action=search)?)?\1/gi, 'action="#" data-search-open-form="true"')
+    .replace(/\bhref=(["'])\/(?:Search|search)(?:\.asp(?:\?action=search)?)?\1/gi, 'href="#" data-search-open="true"');
 }
 
 function buildLegacyManagedColumnMenu(categories, site = null) {

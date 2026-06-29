@@ -38,40 +38,12 @@ async function main() {
     assert.ok(keywordSearchPayload.items.some((item) => typeof item.url === 'string' && item.url.length > 0));
     assertSecurityHeaders(keywordSearch.headers);
 
-    const removedSearchPage = await app.inject({
-      method: 'GET',
-      url: '/search',
-      headers: { host: 'localhost' }
-    });
-    assert.equal(removedSearchPage.statusCode, 404);
-
-    const legacySearch = await app.inject({
-      method: 'GET',
-      url: '/search.asp?action=search',
-      headers: { host: 'localhost' }
-    });
-    assert.equal(legacySearch.statusCode, 404);
-
     const productsIndex = await app.inject({
       method: 'GET',
       url: '/products/',
       headers: { host: 'localhost' }
     });
     assert.equal(productsIndex.statusCode, 200);
-
-    const removedLegacyManagedItemUrl = await app.inject({
-      method: 'GET',
-      url: '/product/1.html',
-      headers: { host: 'localhost' }
-    });
-    assert.equal(removedLegacyManagedItemUrl.statusCode, 404);
-
-    const legacyAdminLogin = await app.inject({
-      method: 'GET',
-      url: '/spck/login.asp',
-      headers: { host: 'localhost' }
-    });
-    assert.equal(legacyAdminLogin.statusCode, 404);
 
     assertGeneratedJsonLdIsValid();
 

@@ -66,6 +66,7 @@ export default function DashboardLayout() {
   }
 
   const mainMenuItems = [
+    { path: '/dashboard', label: '仪表盘' },
     { path: '/columns', label: '栏目' },
   ]
 

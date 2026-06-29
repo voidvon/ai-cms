@@ -1,4 +1,5 @@
 import { requireAuth } from '../../middleware/auth.mjs';
+import { getAccessLogDashboardSummary, listAccessLogs } from '../../services/access-logs.mjs';
 import {
   listAdminsAdmin,
   getAdminById,
@@ -25,6 +26,26 @@ export default async function adminApiRoutes(app) {
   }, async (request, reply) => {
     const admins = listAdminsAdmin();
     return { success: true, data: admins };
+  });
+
+  app.get('/admin/access-logs', {
+    onRequest: [requireAuth]
+  }, async (request, reply) => {
+    const result = listAccessLogs({
+      page: request.query?.page,
+      limit: request.query?.limit,
+      path: request.query?.path,
+      ip: request.query?.ip
+    });
+
+    return { success: true, data: result };
+  });
+
+  app.get('/admin/access-logs/summary', {
+    onRequest: [requireAuth]
+  }, async () => {
+    const result = getAccessLogDashboardSummary();
+    return { success: true, data: result };
   });
 
   // 获取管理员详情

@@ -8,6 +8,40 @@ export interface Admin {
   last_login_at?: string;
 }
 
+export interface AccessLog {
+  id: number;
+  page_path: string;
+  client_ip: string;
+  method: string;
+  status_code: number;
+  referer: string;
+  user_agent: string;
+  visited_at: string;
+}
+
+export interface PaginationMeta {
+  page: number;
+  limit: number;
+  total: number;
+}
+
+export interface AccessLogTopPage {
+  page_path: string;
+  visits: number;
+  unique_ips: number;
+  last_visited_at: string;
+}
+
+export interface AccessLogSummary {
+  metrics: {
+    today_visits: number;
+    recent_unique_ips: number;
+    total_pages: number;
+    recent_visits: number;
+  };
+  top_pages: AccessLogTopPage[];
+}
+
 export interface LanguageSite {
   id?: number | null;
   host?: string;
