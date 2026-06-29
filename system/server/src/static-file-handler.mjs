@@ -30,6 +30,14 @@ export async function serveStatic(request, reply, options = {}) {
 
   const contentRoot = resolveRequestContentRoot(request, options);
 
+  const directoryRedirectLocation = await resolveDirectoryIndexRedirectLocation(rewrittenPathname, request, {
+    contentRoot
+  });
+  if (directoryRedirectLocation) {
+    reply.redirect(301, directoryRedirectLocation);
+    return true;
+  }
+
   const publicHandled = await serveFromCandidates(
     PUBLIC_ROOT,
     getStaticCandidates(rewrittenPathname),
@@ -220,6 +228,15 @@ function getPathname(url) {
   return url.split('?')[0];
 }
 
+function getSearch(url) {
+  const normalized = String(url || '');
+  const queryIndex = normalized.indexOf('?');
+  if (queryIndex < 0) {
+    return '';
+  }
+  return normalized.slice(queryIndex);
+}
+
 function isUnsafePath(pathname) {
   return path.normalize(pathname).includes('..');
 }
@@ -230,6 +247,50 @@ function isDisabledStaticPath(pathname) {
 
 function isStaticMethod(method) {
   return method === 'GET' || method === 'HEAD';
+}
+
+async function resolveDirectoryIndexRedirectLocation(pathname, request, options = {}) {
+  if (!isStaticMethod(request.method)) {
+    return '';
+  }
+
+  if (!shouldCanonicalizeDirectoryPath(pathname)) {
+    return '';
+  }
+
+  const contentRoot = path.resolve(String(options.contentRoot || CONTENT_ROOT));
+  const candidatePath = `${pathname}/index.html`;
+
+  if (await fileExists(PUBLIC_ROOT, candidatePath) || await fileExists(contentRoot, candidatePath)) {
+    return `${pathname}/${getSearch(request.url)}`;
+  }
+
+  return '';
+}
+
+function shouldCanonicalizeDirectoryPath(pathname) {
+  const normalized = String(pathname || '').trim();
+  if (!normalized || normalized === '/' || normalized.endsWith('/')) {
+    return false;
+  }
+
+  if (
+    normalized === '/admin'
+    || normalized.startsWith('/admin/')
+    || normalized === '/api'
+    || normalized.startsWith('/api/')
+    || normalized === '/embedded-tools'
+    || normalized.startsWith('/embedded-tools/')
+  ) {
+    return false;
+  }
+
+  const lastSegment = normalized.split('/').filter(Boolean).pop() || '';
+  if (!lastSegment || lastSegment.includes('.')) {
+    return false;
+  }
+
+  return true;
 }
 
 function getStaticCandidates(pathname) {
@@ -277,6 +338,21 @@ function getSharedAssetCandidates(pathname) {
   const [, , assetDir, suffix = ''] = match;
   const strippedPath = `/${assetDir}${suffix}`;
   return [strippedPath];
+}
+
+async function fileExists(rootDir, candidate) {
+  const resolvedRoot = path.resolve(rootDir);
+  const filePath = path.resolve(resolvedRoot, `.${candidate}`);
+  if (!filePath.startsWith(resolvedRoot)) {
+    return false;
+  }
+
+  try {
+    const stats = await fs.promises.stat(filePath);
+    return stats.isFile();
+  } catch {
+    return false;
+  }
 }
 
 function normalizeSharedUploadPath(pathname) {
