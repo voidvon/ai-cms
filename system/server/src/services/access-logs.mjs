@@ -308,6 +308,14 @@ function summarizeUserAgent(userAgent) {
     };
   }
 
+  const knownClientLabel = detectKnownClientLabel(userAgent);
+  if (knownClientLabel) {
+    return {
+      kind: 'other',
+      label: knownClientLabel
+    };
+  }
+
   const botLabel = detectBotLabel(userAgent);
   if (botLabel) {
     return {
@@ -330,11 +338,26 @@ function summarizeUserAgent(userAgent) {
   };
 }
 
+function detectKnownClientLabel(userAgent) {
+  const knownClientMatchers = [
+    { pattern: /\bChatGPT-User\/[\d.]+\b/i, label: 'ChatGPT-User' }
+  ];
+
+  const matched = knownClientMatchers.find((item) => item.pattern.test(userAgent));
+  if (matched) {
+    return matched.label;
+  }
+
+  return '';
+}
+
 function detectBotLabel(userAgent) {
   const botMatchers = [
     { pattern: /\bGooglebot\b/i, label: 'Googlebot' },
     { pattern: /\bBaiduspider\b/i, label: 'Baiduspider' },
     { pattern: /\bbingbot\b/i, label: 'bingbot' },
+    { pattern: /\bClaudeBot\b/i, label: 'ClaudeBot' },
+    { pattern: /\bPetalBot\b/i, label: 'PetalBot' },
     { pattern: /\bSogou web spider\b/i, label: 'Sogou web spider' },
     { pattern: /\bSogou.*spider\b/i, label: 'Sogou web spider' },
     { pattern: /\bYandexBot\b/i, label: 'YandexBot' },
@@ -347,10 +370,6 @@ function detectBotLabel(userAgent) {
   const matched = botMatchers.find((item) => item.pattern.test(userAgent));
   if (matched) {
     return matched.label;
-  }
-
-  if (/\b(bot|crawler|spider|slurp|fetcher|curl|wget)\b/i.test(userAgent)) {
-    return '其他爬虫';
   }
 
   return '';

@@ -16,6 +16,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatRelativeTime } from '@/lib/datetime'
 import { toast } from 'sonner'
@@ -168,9 +169,28 @@ export default function DashboardPage() {
                     <TableCell className="w-[160px] min-w-[160px] whitespace-nowrap">{item.client_ip}</TableCell>
                     <TableCell
                       className="w-[220px] min-w-[220px] max-w-[220px] truncate"
-                      title={item.user_agent || item.user_agent_label || ''}
                     >
-                      {item.user_agent_label || '-'}
+                      {item.user_agent ? (
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <button
+                              type="button"
+                              className="block w-full truncate text-left hover:underline"
+                              title={item.user_agent}
+                            >
+                              {item.user_agent_label || item.user_agent}
+                            </button>
+                          </PopoverTrigger>
+                          <PopoverContent
+                            align="start"
+                            className="w-[420px] max-w-[min(420px,var(--radix-popover-content-available-width))] break-all p-3 text-sm"
+                          >
+                            {item.user_agent}
+                          </PopoverContent>
+                        </Popover>
+                      ) : (
+                        '-'
+                      )}
                     </TableCell>
                     <TableCell className="w-[88px] min-w-[88px]">
                       <Badge variant={item.status_code >= 400 ? 'destructive' : 'outline'}>

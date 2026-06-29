@@ -34,7 +34,7 @@ export function formatRelativeTime(value?: string | null) {
     return '-'
   }
 
-  const date = new Date(value)
+  const date = parseBackendDate(value)
   if (Number.isNaN(date.getTime())) {
     return String(value)
   }
@@ -73,7 +73,7 @@ export function formatDate(value?: string | null) {
     return '-'
   }
 
-  const date = new Date(value)
+  const date = parseBackendDate(value)
   if (Number.isNaN(date.getTime())) {
     return String(value)
   }
@@ -101,4 +101,18 @@ function isSameWeek(left: Date, right: Date) {
 
 function normalizeFormattedValue(value: string) {
   return value.replace(/\//g, '-').replace(',', '')
+}
+
+function parseBackendDate(value: string) {
+  const normalized = String(value).trim()
+
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(normalized)) {
+    return new Date(normalized.replace(' ', 'T') + 'Z')
+  }
+
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/.test(normalized)) {
+    return new Date(`${normalized}Z`)
+  }
+
+  return new Date(normalized)
 }
