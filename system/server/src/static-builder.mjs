@@ -64,6 +64,12 @@ let globalColumnSlugMap = new Map();
 let globalManagedColumnMap = new Map(); // 托管内容栏目映射
 let globalColumnMap = new Map(); // 栏目映射
 const imageDimensionCache = new Map();
+let globalStaticBuildProgressReporter = null;
+let globalStaticBuildProgressState = {
+  languageCode: null,
+  outputRoot: null,
+  currentTarget: null
+};
 
 /**
  * 设置全局分类目录映射
@@ -379,6 +385,15 @@ function buildHomeRenderGroup() {
   });
 }
 
+function buildNotFoundRenderGroup() {
+  return buildRenderGroup({
+    key: 'site-not-found',
+    pageKind: 'not-found',
+    columnKind: 'site',
+    familyKey: 'site-not-found'
+  });
+}
+
 function buildSinglePageRenderGroup(column) {
   const columnId = normalizeInteger(column?.id, 0);
   return buildRenderGroup({
@@ -419,10 +434,24 @@ function sanitizeRenderGroupPart(value) {
     .replace(/^-+|-+$/g, '');
 }
 
-export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cleanExisting = false, languageCode = null } = {}) {
+export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cleanExisting = false, languageCode = null, onProgress = null } = {}) {
+  const previousReporter = globalStaticBuildProgressReporter;
+  const previousState = globalStaticBuildProgressState;
+  globalStaticBuildProgressReporter = typeof onProgress === 'function' ? onProgress : null;
+  globalStaticBuildProgressState = {
+    languageCode: null,
+    outputRoot: null,
+    currentTarget: null
+  };
+
+  try {
   getDb();
   const targetLanguages = resolveStaticBuildLanguages(languageCode);
   console.log(`[static-builder] Starting static build for ${targetLanguages.length} language(s)`);
+  reportStaticBuildProgress('build_started', {
+    requestedLanguageCode: languageCode || null,
+    languageCodes: targetLanguages.map((item) => item.code)
+  });
 
   // 先获取 columns 用于动态生成 section 列表
   const columns = listColumns({ languageCode: targetLanguages[0]?.code || null });
@@ -448,6 +477,16 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
     const normalizedOutputRoot = resolveLanguageOutputRoot(outputRoot, language);
     const results = [];
     console.log(`[static-builder] Language ${language.code}: output -> ${normalizedOutputRoot}`);
+    globalStaticBuildProgressState = {
+      ...globalStaticBuildProgressState,
+      languageCode: language.code,
+      outputRoot: normalizedOutputRoot,
+      currentTarget: null
+    };
+    reportStaticBuildProgress('language_started', {
+      languageCode: language.code,
+      outputRoot: normalizedOutputRoot
+    });
 
     // 初始化全局栏目目录映射和栏目映射
     const templateContext = getLegacyTemplateContext(language.code);
@@ -465,6 +504,19 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
     for (const target of resolvedTargets) {
       const startedAt = Date.now();
       console.log(`[static-builder] ${language.code}: start -> ${target.label}`);
+      globalStaticBuildProgressState = {
+        ...globalStaticBuildProgressState,
+        currentTarget: {
+          key: target.value,
+          label: target.label,
+          group: target.group
+        }
+      };
+      reportStaticBuildProgress('target_started', {
+        languageCode: language.code,
+        outputRoot: normalizedOutputRoot,
+        target: globalStaticBuildProgressState.currentTarget
+      });
       const buildResult = target.execute({
         outputRoot: normalizedOutputRoot,
         languageCode: language.code,
@@ -476,14 +528,46 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
         `[static-builder] ${language.code}: done -> ${target.label} `
         + `(${buildResult.filesWritten} files, ${buildResult.recordsProcessed} records, ${elapsedMs}ms)`
       );
+      reportStaticBuildProgress('target_completed', {
+        languageCode: language.code,
+        outputRoot: normalizedOutputRoot,
+        target: globalStaticBuildProgressState.currentTarget,
+        filesWritten: buildResult.filesWritten,
+        recordsProcessed: buildResult.recordsProcessed,
+        elapsedMs
+      });
+      globalStaticBuildProgressState = {
+        ...globalStaticBuildProgressState,
+        currentTarget: null
+      };
       results.push(buildResult);
     }
     if (requiresTemplateRuntime) {
       console.log(`[static-builder] ${language.code}: building shared TSX assets`);
+      reportStaticBuildProgress('assets_started', {
+        languageCode: language.code,
+        outputRoot: normalizedOutputRoot,
+        assetType: 'tsx'
+      });
       buildRegisteredTsxAssets(normalizedOutputRoot);
+      reportStaticBuildProgress('assets_completed', {
+        languageCode: language.code,
+        outputRoot: normalizedOutputRoot,
+        assetType: 'tsx'
+      });
     }
     console.log(`[static-builder] ${language.code}: syncing shared static assets`);
+    reportStaticBuildProgress('assets_started', {
+      languageCode: language.code,
+      outputRoot: normalizedOutputRoot,
+      assetType: 'shared-static'
+    });
     syncStaticSupportAssets(sharedAssetRoot, normalizedOutputRoot);
+    reportStaticBuildProgress('assets_completed', {
+      languageCode: language.code,
+      outputRoot: normalizedOutputRoot,
+      assetType: 'shared-static'
+    });
 
     const languageTotalFiles = results.reduce((sum, item) => sum + item.filesWritten, 0);
     const languageTotalRecords = results.reduce((sum, item) => sum + item.recordsProcessed, 0);
@@ -493,6 +577,12 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
     );
     totalFiles += languageTotalFiles;
     totalRecords += languageTotalRecords;
+    reportStaticBuildProgress('language_completed', {
+      languageCode: language.code,
+      outputRoot: normalizedOutputRoot,
+      totalFiles: languageTotalFiles,
+      totalRecords: languageTotalRecords
+    });
     languageBuilds.push({
       languageCode: language.code,
       outputRoot: normalizedOutputRoot,
@@ -502,13 +592,43 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
     });
   }
 
-  return {
+  const buildResult = {
     outputRoot: languageBuilds[0]?.outputRoot || path.resolve(outputRoot),
     results: languageBuilds.flatMap((item) => item.results),
     languageBuilds,
     totalFiles,
     totalRecords
   };
+  reportStaticBuildProgress('build_completed', {
+    totalFiles,
+    totalRecords,
+    languageCodes: languageBuilds.map((item) => item.languageCode)
+  });
+
+  return buildResult;
+  } finally {
+    globalStaticBuildProgressReporter = previousReporter;
+    globalStaticBuildProgressState = previousState;
+  }
+}
+
+function reportStaticBuildProgress(type, payload = {}) {
+  if (typeof globalStaticBuildProgressReporter !== 'function') {
+    return;
+  }
+
+  try {
+    globalStaticBuildProgressReporter({
+      type,
+      timestamp: new Date().toISOString(),
+      languageCode: globalStaticBuildProgressState.languageCode,
+      outputRoot: globalStaticBuildProgressState.outputRoot,
+      target: globalStaticBuildProgressState.currentTarget,
+      ...payload
+    });
+  } catch {
+    // 进度上报失败不影响静态生成主链路。
+  }
 }
 
 function listStaticBuildTargetDefinitions({ columns = null } = {}) {
@@ -523,6 +643,12 @@ function listStaticBuildTargetDefinitions({ columns = null } = {}) {
       label: '生成首页',
       value: 'index',
       execute: ({ outputRoot, languageCode, finalizeAssets }) => buildIndexPage({ outputRoot, languageCode, finalizeAssets })
+    }),
+    createStaticBuildTargetDefinition({
+      group: '网站页面',
+      label: '生成 404 页面',
+      value: '404',
+      execute: ({ outputRoot, languageCode, finalizeAssets }) => buildNotFoundPage({ outputRoot, languageCode, finalizeAssets })
     }),
     createStaticBuildTargetDefinition({
       group: '栏目页',
@@ -647,6 +773,22 @@ export function buildIndexPage({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode 
     buildRegisteredTsxAssets(outputRoot);
   }
   return createBuildResult('index', '首页', 1, 1);
+}
+
+export function buildNotFoundPage({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null, finalizeAssets = true } = {}) {
+  const templateContext = getLegacyTemplateContext(languageCode);
+  const html = renderCmsSitePage('site-not-found', buildLegacyNotFoundPageProps(templateContext), templateContext, {
+    templateType: 'not_found',
+    fallbackCode: 'not_found',
+    targets: [{ target_type: 'site', target_id: null }],
+    renderGroup: buildNotFoundRenderGroup()
+  });
+
+  writeTextFile(outputRoot, '404.html', html, templateContext.site);
+  if (finalizeAssets) {
+    buildRegisteredTsxAssets(outputRoot);
+  }
+  return createBuildResult('404', '404 页面', 1, 1);
 }
 
 export function buildManualSinglePageColumns({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null, finalizeAssets = true } = {}) {
@@ -1616,6 +1758,35 @@ function buildLegacyHomePageProps(templateContext) {
     faviconLinks: generateFaviconLinks(),
     themeColorMetas: generateThemeColorMetas(),
     hreflangLinks: buildHreflangLinks(templateContext.site, { url: '/' })
+  };
+}
+
+function buildLegacyNotFoundPageProps(templateContext) {
+  const notFoundUrl = prefixSitePathForContext('/404.html', templateContext.site, {
+    allowApi: false,
+    allowAssets: false
+  });
+
+  return {
+    ...buildLegacyCommonProps(templateContext),
+    ...buildLegacyPageContextProps({
+      pageType: 'not_found',
+      title: '404',
+      url: notFoundUrl,
+      section: { type: 'system', name: '404', url: notFoundUrl },
+      columnChain: [],
+      content: null
+    }),
+    siteColumns: buildTemplateContextSiteColumns(templateContext),
+    primaryMenuItems: buildLegacyRootColumnMenuItems(templateContext.columns, templateContext),
+    secondaryMenuItems: buildLegacyRootColumnMenuItems(templateContext.columns, templateContext),
+    title: '404',
+    itemDescription: '',
+    bodyHtml: '',
+    contentHtml: '',
+    faviconLinks: generateFaviconLinks(),
+    themeColorMetas: generateThemeColorMetas(),
+    hreflangLinks: buildHreflangLinks(templateContext.site, { url: '/404.html' })
   };
 }
 
@@ -3986,6 +4157,7 @@ function normalizeSections(sections, columns = null) {
 
 function cleanupManagedStaticFiles(outputRoot, { columns = null } = {}) {
   const managedDirs = collectManagedStaticDirs(columns);
+  const protectedSiteDirs = collectProtectedLanguageOutputDirs(outputRoot);
   for (const relativePath of MANAGED_STATIC_ROOT_FILES) {
     const filePath = path.resolve(outputRoot, relativePath);
     if (fs.existsSync(filePath) && fs.statSync(filePath).isFile()) {
@@ -4001,7 +4173,7 @@ function cleanupManagedStaticFiles(outputRoot, { columns = null } = {}) {
     cleanupHtmlFilesRecursive(dirPath);
   }
 
-  cleanupStaleTopLevelStaticDirs(outputRoot, managedDirs);
+  cleanupStaleTopLevelStaticDirs(outputRoot, [...managedDirs, ...protectedSiteDirs]);
   cleanupManagedSitemapChunks(outputRoot);
 }
 
@@ -4122,6 +4294,26 @@ function resolveStaticBuildLanguages(languageCode) {
   return enabledLanguages.length > 0 ? enabledLanguages : [{ code: 'zh-CN', site: { output_dir: 'html' } }];
 }
 
+function collectProtectedLanguageOutputDirs(outputRoot) {
+  const resolvedOutputRoot = path.resolve(outputRoot);
+  const protectedDirs = new Set();
+
+  for (const language of listLanguages().filter((item) => Number(item.is_enabled || 0) === 1)) {
+    const languageOutputRoot = resolveLanguageOutputRoot(resolvedOutputRoot, language);
+    const relativeDir = path.relative(resolvedOutputRoot, languageOutputRoot);
+    if (!relativeDir || relativeDir.startsWith('..') || path.isAbsolute(relativeDir)) {
+      continue;
+    }
+
+    const topLevelDir = normalizeStaticBuildRelativePath(relativeDir).split('/').filter(Boolean)[0] || '';
+    if (topLevelDir) {
+      protectedDirs.add(topLevelDir);
+    }
+  }
+
+  return Array.from(protectedDirs);
+}
+
 function resolveLanguageOutputRoot(baseOutputRoot, language) {
   const requestedRoot = path.resolve(baseOutputRoot);
   const configuredOutputDir = String(language?.site?.output_dir || '').trim();
@@ -4149,6 +4341,11 @@ function writeTextFile(outputRoot, relativePath, content, site = null) {
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   const normalizedContent = normalizeLegacyRichTextHtml(content, site);
   fs.writeFileSync(filePath, finalizeSiteHtmlOutput(normalizedContent, site), 'utf8');
+  reportStaticBuildProgress('file_written', {
+    fileType: 'html',
+    relativePath: normalizeStaticBuildRelativePath(relativePath),
+    absolutePath: filePath
+  });
 }
 
 function syncStaticSupportAssets(sharedRoot, outputRoot) {
@@ -4196,6 +4393,11 @@ function syncSharedStaticRootFiles(sharedRoot, outputRoot) {
 
     fs.mkdirSync(path.dirname(targetFile), { recursive: true });
     fs.copyFileSync(sourceFile, targetFile);
+    reportStaticBuildProgress('file_written', {
+      fileType: 'static-root',
+      relativePath: normalizeStaticBuildRelativePath(path.relative(outputRoot, targetFile)),
+      absolutePath: targetFile
+    });
   }
 }
 
@@ -4226,7 +4428,16 @@ function copyDirectoryContents(sourceDir, targetDir) {
     }
 
     fs.copyFileSync(sourcePath, targetPath);
+    reportStaticBuildProgress('file_written', {
+      fileType: 'static-asset',
+      relativePath: normalizeStaticBuildRelativePath(path.relative(globalStaticBuildProgressState.outputRoot || targetDir, targetPath)),
+      absolutePath: targetPath
+    });
   }
+}
+
+function normalizeStaticBuildRelativePath(relativePath) {
+  return String(relativePath || '').replace(/\\/g, '/');
 }
 
 function directoryHasFiles(dirPath) {

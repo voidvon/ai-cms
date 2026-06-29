@@ -12,6 +12,7 @@ export interface AccessLog {
   id: number;
   page_path: string;
   client_ip: string;
+  client_ip_visit_count: number;
   method: string;
   status_code: number;
   referer: string;
@@ -188,7 +189,7 @@ export interface Template {
   id: number;
   theme_id?: number | null;
   name: string;
-  type: 'home' | 'list' | 'content' | 'single' | 'component';
+  type: 'home' | 'list' | 'content' | 'single' | 'not_found' | 'component';
   code: string;
   engine: 'tsx';
   tsx_source: string;

@@ -101,7 +101,7 @@ export default function DashboardPage() {
         </Card>
         <Card>
           <CardHeader className="pb-2">
-            <CardDescription>近 24 小时独立 IP</CardDescription>
+            <CardDescription>近 24 小时独立 IP（排除机器人）</CardDescription>
             <CardTitle>{metrics?.recent_unique_ips ?? 0}</CardTitle>
           </CardHeader>
         </Card>
@@ -150,6 +150,7 @@ export default function DashboardPage() {
                 <TableRow>
                   <TableHead>页面</TableHead>
                   <TableHead className="w-[160px] min-w-[160px]">IP</TableHead>
+                  <TableHead className="w-[88px] min-w-[88px]">访问次数</TableHead>
                   <TableHead className="w-[220px] min-w-[220px] max-w-[220px]">客户端</TableHead>
                   <TableHead className="w-[88px] min-w-[88px]">状态</TableHead>
                   <TableHead className="w-[180px] min-w-[180px]">时间</TableHead>
@@ -159,7 +160,7 @@ export default function DashboardPage() {
               <TableBody>
                 {items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center">
+                    <TableCell colSpan={7} className="text-center">
                       暂无访问记录
                     </TableCell>
                   </TableRow>
@@ -167,6 +168,7 @@ export default function DashboardPage() {
                   <TableRow key={item.id}>
                     <TableCell className="font-medium">{item.page_path}</TableCell>
                     <TableCell className="w-[160px] min-w-[160px] whitespace-nowrap">{item.client_ip}</TableCell>
+                    <TableCell className="w-[88px] min-w-[88px]">{item.client_ip_visit_count}</TableCell>
                     <TableCell
                       className="w-[220px] min-w-[220px] max-w-[220px] truncate"
                     >

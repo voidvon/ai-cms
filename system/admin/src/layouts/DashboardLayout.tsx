@@ -87,8 +87,8 @@ export default function DashboardLayout() {
         { path: '/static-gen', label: '静态生成' },
         { path: '/site-config', label: '网站配置' },
         { path: '/bulk-replace', label: '批量替换' },
-        { path: '/sitemap-diagnostics', label: 'Sitemap 诊断' },
-        { path: '/llms-diagnostics', label: 'LLMS 诊断' },
+        { path: '/sitemap-diagnostics', label: 'LLMS' },
+        { path: '/llms-diagnostics', label: 'LLMS' },
       ]
     }
   ]

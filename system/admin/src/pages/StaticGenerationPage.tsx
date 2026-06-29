@@ -6,6 +6,7 @@ import {
   staticGenerationApi,
   type BuildResult,
   type DatabaseCheckpointResult,
+  type StaticBuildProgressEvent,
   type StaticSectionGroup,
 } from '@/api/static-generation'
 import { Button } from '@/components/ui/button'
@@ -18,6 +19,9 @@ export default function StaticGenerationPage() {
   const [building, setBuilding] = useState(false)
   const [lastBuild, setLastBuild] = useState<BuildResult | null>(null)
   const [lastCheckpoint, setLastCheckpoint] = useState<DatabaseCheckpointResult | null>(null)
+  const [buildScopeLabel, setBuildScopeLabel] = useState('')
+  const [buildEvents, setBuildEvents] = useState<StaticBuildProgressEvent[]>([])
+  const [recentFiles, setRecentFiles] = useState<Array<{ path: string; type: string; languageCode?: string | null }>>([])
   const { data: selectedThemeData } = useQuery({
     queryKey: ['selected-theme'],
     queryFn: () => templateVariantsApi.getSelected(),
@@ -50,12 +54,48 @@ export default function StaticGenerationPage() {
 
   const buildMutation = useMutation({
     mutationFn: ({ section, languageCode }: { section: string; languageCode?: string }) =>
-      staticGenerationApi.build(section, languageCode),
+      staticGenerationApi.buildStream(
+        section,
+        {
+          onStarted: ({ normalizedSection, languageCode: currentLanguageCode }) => {
+            const scope = currentLanguageCode ? `语言 ${currentLanguageCode}` : '全部已启用语言'
+            setBuildScopeLabel(`${scope} / ${normalizedSection}`)
+            setBuildEvents([])
+            setRecentFiles([])
+          },
+          onProgress: (event) => {
+            setBuildEvents((current) => {
+              const next = [...current, event]
+              return next.slice(-60)
+            })
+            if (event.type === 'file_written' && event.relativePath) {
+              setRecentFiles((current) => {
+                const next = [
+                  {
+                    path: event.relativePath || '',
+                    type: event.fileType || 'file',
+                    languageCode: event.languageCode,
+                  },
+                  ...current,
+                ]
+                return next.slice(0, 30)
+              })
+            }
+          },
+          onCompleted: (result) => {
+            setLastBuild(result)
+          },
+          onError: (error) => {
+            throw new Error(error.message || '生成失败')
+          },
+        },
+        languageCode
+      ),
     onSuccess: (data) => {
       if (data.success) {
-        const buildScope = data.languageCode ? `语言 ${data.languageCode}` : '全部已启用语言'
-        toast.success(`生成成功：${buildScope}，文件数：${data.totalFiles}，记录数：${data.totalRecords}`)
         setLastBuild(data)
+        const buildScope = data.languageCode ? `语言 ${data.languageCode}` : '全部已启用语言'
+        toast.success(`生成成功：${buildScope}，文件数：${data.totalFiles || 0}，记录数：${data.totalRecords || 0}`)
       } else {
         toast.error(data.message || '生成失败')
       }
@@ -88,8 +128,16 @@ export default function StaticGenerationPage() {
 
   const handleBuild = (section: string, languageCode?: string) => {
     setBuilding(true)
+    setLastBuild(null)
     buildMutation.mutate({ section, languageCode })
   }
+
+  const activeTargets = useMemo(() => {
+    return buildEvents
+      .filter((event) => event.type === 'target_started' || event.type === 'assets_started')
+      .slice(-6)
+      .reverse()
+  }, [buildEvents])
 
   return (
     <div className="h-full overflow-y-auto pr-1">
@@ -178,6 +226,47 @@ export default function StaticGenerationPage() {
               {building ? '生成中...' : '生成全站'}
             </Button>
           </div>
+
+          {building || recentFiles.length > 0 || activeTargets.length > 0 ? (
+            <div className="rounded border p-4 space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="font-semibold">实时生成进度</h3>
+                {building ? <Badge>进行中</Badge> : <Badge variant="outline">已完成</Badge>}
+                {buildScopeLabel ? (
+                  <code className="rounded bg-muted px-2 py-0.5 text-xs">{buildScopeLabel}</code>
+                ) : null}
+              </div>
+
+              {activeTargets.length > 0 ? (
+                <div className="space-y-2 text-sm">
+                  {activeTargets.map((event, index) => (
+                    <div key={`${event.timestamp || 'evt'}-${index}`} className="flex flex-wrap items-center gap-2">
+                      <Badge variant="outline">{event.languageCode || 'default'}</Badge>
+                      <span>{event.target?.label || event.assetType || event.type}</span>
+                      {event.target?.group ? (
+                        <span className="text-muted-foreground">{event.target.group}</span>
+                      ) : null}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+
+              {recentFiles.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">最近输出文件</div>
+                  <div className="max-h-80 space-y-2 overflow-y-auto rounded border bg-muted/20 p-3 text-xs">
+                    {recentFiles.map((item, index) => (
+                      <div key={`${item.path}-${index}`} className="flex flex-wrap items-center gap-2">
+                        <Badge variant="outline">{item.languageCode || 'shared'}</Badge>
+                        <Badge variant="secondary">{item.type}</Badge>
+                        <code>{item.path}</code>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
 
           <div className="pt-4 border-t space-y-3">
             <div>

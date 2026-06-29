@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/api/client'
+import { staticGenerationApi, type BuildResult } from '@/api/static-generation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -13,7 +14,6 @@ import {
 } from '@/components/ui/table'
 import { formatRelativeTime } from '@/lib/datetime'
 import { toast } from 'sonner'
-import axios from 'axios'
 
 interface SitemapWarning {
   level: 'error' | 'warning'
@@ -42,18 +42,6 @@ interface SitemapDiagnostics {
   chunk_files: SitemapChunkFile[]
 }
 
-interface BuildResult {
-  success: boolean
-  totalFiles?: number
-  totalRecords?: number
-  message?: string
-}
-
-const buildClient = axios.create({
-  withCredentials: true,
-  timeout: 300000,
-})
-
 export default function SitemapDiagnosticsPage() {
   const queryClient = useQueryClient()
   const { data, isLoading, error } = useQuery({
@@ -65,10 +53,7 @@ export default function SitemapDiagnosticsPage() {
   })
 
   const rebuildMutation = useMutation({
-    mutationFn: async () => {
-      const response = await buildClient.post<BuildResult>('/admin/build/generate?section=all', {})
-      return response.data
-    },
+    mutationFn: () => staticGenerationApi.buildStream('all', {}),
     onSuccess: (result) => {
       if (result.success) {
         toast.success(`重建完成，文件数：${result.totalFiles}，记录数：${result.totalRecords}`)

@@ -2,20 +2,17 @@ import { requireAuth } from '../../middleware/auth.mjs';
 import { CONTENT_ROOT } from '../../config.mjs';
 import { checkpointDatabaseWal } from '../../services/database-maintenance.mjs';
 import {
-  buildStaticSite,
+  getActiveStaticBuild,
+  runStaticBuild,
+  subscribeActiveStaticBuild
+} from '../../services/static-build-executor.mjs';
+import {
   isSupportedStaticBuildSection,
   listStaticBuildTargetGroups,
   resolveStaticBuildSectionKey
 } from '../../static-builder.mjs';
 
 export default async function staticGenRoutes(app) {
-  // 兼容旧入口，转到 React 后台页
-  app.get('/build', {
-    onRequest: [requireAuth]
-  }, async (request, reply) => {
-    return reply.redirect('/admin/static-gen');
-  });
-
   app.get('/build/sections', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
@@ -35,40 +32,95 @@ export default async function staticGenRoutes(app) {
     }
   });
 
-  // 静态生成接口
-  app.post('/build/generate', {
+  app.get('/build/stream', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
     const section = String(request.query.section || 'all').trim();
     const languageCode = String(request.query.language || '').trim() || null;
 
-    try {
-      if (section !== 'all' && !isSupportedStaticBuildSection(section, { languageCode })) {
-        return reply.badRequest('未知的生成类型');
-      }
+    if (section !== 'all' && !isSupportedStaticBuildSection(section, { languageCode })) {
+      return reply.badRequest('未知的生成类型');
+    }
 
-      const normalizedSection = resolveStaticBuildSectionKey(section, { languageCode });
-      const result = buildStaticSite({
+    const normalizedSection = resolveStaticBuildSectionKey(section, { languageCode });
+    reply.raw.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');
+    reply.raw.setHeader('Connection', 'keep-alive');
+    reply.raw.flushHeaders?.();
+    reply.hijack();
+
+    const sendEvent = (event, data) => {
+      reply.raw.write(`event: ${event}\n`);
+      reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    const heartbeat = setInterval(() => {
+      reply.raw.write(': keepalive\n\n');
+    }, 15000);
+
+    const closeStream = () => {
+      clearInterval(heartbeat);
+      if (!reply.raw.writableEnded) {
+        reply.raw.end();
+      }
+    };
+
+    request.raw.on('close', () => {
+      clearInterval(heartbeat);
+    });
+
+    sendEvent('started', {
+      section,
+      normalizedSection,
+      languageCode
+    });
+
+    let unsubscribe = null;
+
+    try {
+      const buildPromise = runStaticBuild({
         outputRoot: CONTENT_ROOT,
         sections: normalizedSection === 'all' ? undefined : [normalizedSection],
-        languageCode
+        languageCode,
+        cleanExisting: true
       });
 
-      return {
+      unsubscribe = subscribeActiveStaticBuild((event) => {
+        sendEvent('progress', event);
+      });
+
+      const result = await buildPromise;
+      sendEvent('completed', {
         success: true,
         languageCode,
-        totalFiles: result.totalFiles || result.filesWritten || 0,
-        totalRecords: result.totalRecords || result.recordsProcessed || 0,
+        totalFiles: result.totalFiles || 0,
+        totalRecords: result.totalRecords || 0,
         result
-      };
+      });
+      closeStream();
     } catch (error) {
       app.log.error(error);
-      return reply.code(500).send({
+      sendEvent('error', {
         success: false,
-        message: error.message
+        message: error.message,
+        statusCode: error.statusCode || 500
       });
+      closeStream();
+    } finally {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
     }
   });
+
+  app.get('/build/status', {
+    onRequest: [requireAuth]
+  }, async () => ({
+    success: true,
+    data: {
+      activeBuild: getActiveStaticBuild()
+    }
+  }));
 
   app.post('/build/database/checkpoint', {
     onRequest: [requireAuth]

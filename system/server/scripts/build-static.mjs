@@ -4,13 +4,22 @@ import { buildStaticSite } from '../src/static-builder.mjs';
 import { clearTsxTemplateCache } from '../src/tsx-template-renderer.mjs';
 import { CONTENT_ROOT } from '../src/config.mjs';
 
+const EVENT_MARKER = '__STATIC_BUILD_EVENT__';
+const RESULT_MARKER = '__STATIC_BUILD_RESULT__';
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.resolve(__dirname, '..');
-const outputRoot = process.env.STATIC_OUTPUT_DIR
-  ? path.resolve(appRoot, process.env.STATIC_OUTPUT_DIR)
-  : CONTENT_ROOT;
 const cliArgs = parseCliArgs(process.argv.slice(2));
+const outputDirArg = normalizeCliValue(cliArgs['output-dir']);
+const outputRoot = outputDirArg
+  ? path.resolve(appRoot, outputDirArg)
+  : process.env.STATIC_OUTPUT_DIR
+    ? path.resolve(appRoot, process.env.STATIC_OUTPUT_DIR)
+    : CONTENT_ROOT;
 const languageCode = normalizeCliValue(cliArgs.language || cliArgs.lang);
+const section = normalizeCliValue(cliArgs.section);
+const cleanExisting = normalizeBooleanCliValue(cliArgs['clean-existing'], true);
+const jsonOutput = normalizeBooleanCliValue(cliArgs.json, false);
 
 // 清除TSX模板缓存，确保使用最新的模板代码
 clearTsxTemplateCache();
@@ -18,18 +27,30 @@ console.log('[build-static] TSX template cache cleared');
 
 const result = buildStaticSite({
   outputRoot,
-  cleanExisting: true,
-  languageCode
+  cleanExisting,
+  languageCode,
+  sections: section ? [section] : undefined,
+  onProgress: jsonOutput
+    ? (event) => {
+      console.log(`${EVENT_MARKER}${JSON.stringify(event)}`);
+    }
+    : null
 });
 
 console.log('[build-static] Static site build completed');
 if (languageCode) {
   console.log(`[build-static] Language: ${languageCode}`);
 }
+if (section) {
+  console.log(`[build-static] Section: ${section}`);
+}
 
 console.log(`Static pages generated into: ${result.outputRoot}`);
 for (const item of result.results) {
   console.log(`- ${item.label}: ${item.filesWritten} files (${item.recordsProcessed} records)`);
+}
+if (jsonOutput) {
+  console.log(`${RESULT_MARKER}${JSON.stringify(result)}`);
 }
 
 function parseCliArgs(argv) {
@@ -67,4 +88,25 @@ function parseCliArgs(argv) {
 function normalizeCliValue(value) {
   const normalized = String(value || '').trim();
   return normalized || null;
+}
+
+function normalizeBooleanCliValue(value, fallback) {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  const normalized = String(value || '').trim().toLowerCase();
+  if (!normalized) {
+    return fallback;
+  }
+
+  if (['1', 'true', 'yes', 'on'].includes(normalized)) {
+    return true;
+  }
+
+  if (['0', 'false', 'no', 'off'].includes(normalized)) {
+    return false;
+  }
+
+  return fallback;
 }

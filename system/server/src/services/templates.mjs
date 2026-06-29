@@ -13,7 +13,7 @@ import { buildContentDetailUrlFromColumn } from './column-paths.mjs';
 import { normalizeUploadedRelativePath } from './uploads.mjs';
 import { getSiteConfig, normalizeLanguageSitePathPrefix, prefixLanguageSitePath } from './site.mjs';
 
-export const TEMPLATE_TYPES = ['home', 'list', 'content', 'single', 'component'];
+export const TEMPLATE_TYPES = ['home', 'list', 'content', 'single', 'not_found', 'component'];
 export const TEMPLATE_ENGINES = ['tsx'];
 const MAX_TEMPLATE_VERSIONS = 10;
 const CONTENT_TYPE_PRODUCT_ID = 1;
@@ -55,7 +55,7 @@ const TEMPLATES_TABLE_SCHEMA = `
     id INTEGER PRIMARY KEY,
     theme_id INTEGER,
     name TEXT NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'single', 'component')),
+    type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'single', 'not_found', 'component')),
     code TEXT NOT NULL,
     engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
     tsx_source TEXT NOT NULL DEFAULT '',
@@ -136,7 +136,7 @@ export function ensureTemplatesSchema() {
       id INTEGER PRIMARY KEY,
       theme_id INTEGER,
       name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'single', 'component')),
+      type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'single', 'not_found', 'component')),
       code TEXT NOT NULL,
       engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
       tsx_source TEXT NOT NULL DEFAULT '',
@@ -156,7 +156,7 @@ export function ensureTemplatesSchema() {
       theme_id INTEGER NOT NULL,
       target_type TEXT NOT NULL,
       target_id INTEGER,
-      template_type TEXT NOT NULL CHECK (template_type IN ('home', 'list', 'content', 'single')),
+      template_type TEXT NOT NULL CHECK (template_type IN ('home', 'list', 'content', 'single', 'not_found')),
       template_id INTEGER NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -195,6 +195,7 @@ export function ensureTemplatesSchema() {
   ensureTemplateVersionsEngineConstraint();
   ensureTemplateBindingsThemeScope();
   reconcileThemeOwnedTemplateAssets();
+  ensureThemeNotFoundTemplates();
   collapseLegacyGlobalCssSources();
   collapseLegacyInlineTsxStyleSources();
   ensureSingleCssSourceSchema();
@@ -609,7 +610,7 @@ export function deleteTemplate(id) {
   if (dependencyInfo.bindings.length > 0) {
     throw new Error('模板已绑定到分类或站点，不能删除，请先取消模板绑定');
   }
-  if (existing.type === 'home') {
+  if (existing.type === 'home' || existing.type === 'not_found') {
     throw new Error('特殊模板不能删除');
   }
   detachTemplateFromAllThemeVariants(existing);
@@ -905,6 +906,27 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
     };
   }
 
+  if (effectiveMode === 'not_found') {
+    const notFoundUrl = prefixPreviewSitePath('/404.html', site);
+    return {
+      ...props,
+      ...buildPreviewPageContext({
+        pageType: 'not_found',
+        title: '404',
+        url: notFoundUrl,
+        section: { type: 'system', name: '404', url: notFoundUrl },
+        column: null,
+        content: null
+      }),
+      title: '404',
+      itemDescription: '',
+      contentHtml: '',
+      bodyHtml: '',
+      primaryMenuItems: buildPreviewPrimaryMenuItems('home', site),
+      secondaryMenuItems: buildPreviewRootColumnMenuItems(site),
+    };
+  }
+
   if (effectiveMode === 'list') {
     const managedRootColumn = getPreviewManagedRootColumn();
     const managedRootUrl = getPreviewManagedRootPublicUrl(managedRootColumn, site);
@@ -1046,6 +1068,9 @@ function inferPreviewMode(template) {
   if (template.type === 'single') {
     return 'single';
   }
+  if (template.type === 'not_found') {
+    return 'not_found';
+  }
   return 'generic';
 }
 
@@ -1066,7 +1091,10 @@ function normalizePreviewMode(value) {
     ['knowledge-detail', 'content'],
     ['contact', 'single'],
     ['contact-page', 'single'],
-    ['single-page', 'single']
+    ['single-page', 'single'],
+    ['404', 'not_found'],
+    ['not-found', 'not_found'],
+    ['not_found', 'not_found']
   ]);
   return legacyToGenericMap.get(mode) || mode || 'auto';
 }
@@ -2234,7 +2262,7 @@ function normalizeBindingTarget(themeId, targetType, targetId, templateType) {
   if (!['site', 'content_type', 'column'].includes(normalizedTargetType)) {
     throw new Error('invalid binding target type');
   }
-  if (!['home', 'list', 'content', 'single'].includes(templateType)) {
+  if (!['home', 'list', 'content', 'single', 'not_found'].includes(templateType)) {
     throw new Error('invalid binding template type');
   }
 
@@ -2365,6 +2393,194 @@ function migrateDefaultThemeAssets() {
   ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_ARTICLE_ID, 'content', 'default_article_detail_tsx');
   ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_CORPORATION_ID, 'content', 'default_content_tsx');
   ensureThemeBindingByCode(defaultThemeId, 'content_type', CONTENT_TYPE_CONTACT_ID, 'content', 'default_contact_tsx');
+}
+
+function ensureThemeNotFoundTemplates() {
+  const themes = queryAll(
+    `
+      SELECT id
+      FROM template_variants
+      ORDER BY id ASC
+    `
+  );
+
+  for (const theme of themes) {
+    ensureThemeNotFoundTemplate(theme);
+  }
+}
+
+function ensureThemeNotFoundTemplate(theme) {
+  const themeId = toInteger(theme?.id, null);
+  if (!themeId) {
+    return;
+  }
+
+  const existing = queryOne(
+    `
+      SELECT id
+      FROM templates
+      WHERE theme_id = ? AND type = 'not_found'
+      ORDER BY sort_order ASC, id ASC
+      LIMIT 1
+    `,
+    [themeId]
+  );
+  if (existing?.id) {
+    const tsxSource = buildDefaultNotFoundTsxSource();
+    const cssSource = buildDefaultNotFoundCssSource();
+    execute(
+      `
+        UPDATE templates
+        SET
+          code = 'not_found',
+          tsx_source = ?,
+          css_source = ?,
+          published_tsx_source = ?,
+          published_css_source = ?,
+          updated_at = ?
+        WHERE id = ?
+      `,
+      [tsxSource, cssSource, tsxSource, cssSource, new Date().toISOString(), existing.id]
+    );
+    return;
+  }
+
+  const tsxSource = buildDefaultNotFoundTsxSource();
+  const cssSource = buildDefaultNotFoundCssSource();
+  const now = new Date().toISOString();
+  execute(
+    `
+      INSERT INTO templates (
+        theme_id,
+        name,
+        type,
+        code,
+        engine,
+        tsx_source,
+        css_source,
+        published_tsx_source,
+        published_css_source,
+        status,
+        is_default,
+        sort_order,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, 'not_found', 'not_found', 'tsx', ?, ?, ?, ?, 'published', 0, 0, ?, ?)
+    `,
+    [
+      themeId,
+      '404 页面模板',
+      tsxSource,
+      cssSource,
+      tsxSource,
+      cssSource,
+      now,
+      now
+    ]
+  );
+}
+
+function buildDefaultNotFoundTsxSource() {
+  return [
+    'export default function NotFoundTemplate(props) {',
+    '  const languageCode = String(props?.site?.requested_language_code || props?.site?.current_language_code || "en").trim();',
+    '  const dictionaries = {',
+    '    en: { title: "Page not found", description: "The page you requested does not exist or has been removed.", section: "Error page", homeLabel: "Home" },',
+    '    "zh-CN": { title: "页面未找到", description: "您访问的页面不存在或已被移除。", section: "错误页面", homeLabel: "首页" },',
+    '    ru: { title: "Страница не найдена", description: "Запрошенная страница не существует или была удалена.", section: "Страница ошибки", homeLabel: "Главная" },',
+    '    ar: { title: "الصفحة غير موجودة", description: "الصفحة التي طلبتها غير موجودة أو تمت إزالتها.", section: "صفحة الخطأ", homeLabel: "الرئيسية" },',
+    '    "ar-me": { title: "الصفحة غير موجودة", description: "الصفحة التي طلبتها غير موجودة أو تمت إزالتها.", section: "صفحة الخطأ", homeLabel: "الرئيسية" },',
+    '    es: { title: "Página no encontrada", description: "La página solicitada no existe o ha sido eliminada.", section: "Página de error", homeLabel: "Inicio" },',
+    '    id: { title: "Halaman tidak ditemukan", description: "Halaman yang Anda minta tidak ada atau telah dihapus.", section: "Halaman error", homeLabel: "Beranda" },',
+    '    pt: { title: "Página não encontrada", description: "A página solicitada não existe ou foi removida.", section: "Página de erro", homeLabel: "Início" },',
+    '    fr: { title: "Page introuvable", description: "La page demandée n existe pas ou a été supprimée.", section: "Page d erreur", homeLabel: "Accueil" },',
+    '    tr: { title: "Sayfa bulunamadı", description: "İstediğiniz sayfa mevcut değil veya kaldırılmış.", section: "Hata sayfası", homeLabel: "Ana sayfa" },',
+    '    th: { title: "ไม่พบหน้า", description: "หน้าที่คุณร้องขอไม่มีอยู่หรือถูกลบออกแล้ว", section: "หน้าข้อผิดพลาด", homeLabel: "หน้าแรก" },',
+    '    vi: { title: "Không tìm thấy trang", description: "Trang bạn yêu cầu không tồn tại hoặc đã bị xóa.", section: "Trang lỗi", homeLabel: "Trang chủ" }',
+    '  };',
+    '  const exactCopy = dictionaries[languageCode];',
+    '  const baseCopy = dictionaries[String(languageCode).split("-")[0]];',
+    '  const copy = exactCopy || baseCopy || dictionaries.en;',
+    '  const title = copy.title;',
+    '  const description = copy.description;',
+    '  const sectionLabel = copy.section;',
+    '  const canonicalUrl = "/404.html";',
+    '  const headChildren = (',
+    '    <>',
+    '      <title>{`404 - ${title}`}</title>',
+    '      <meta name="description" content={description} />',
+    '      <meta name="robots" content="noindex, nofollow" />',
+    '    </>',
+    '  );',
+    '  const content = (',
+    '    <section className="cms-not-found-placeholder">',
+    '      <div className="cms-not-found-placeholder__inner">',
+    '        <p className="cms-not-found-placeholder__code">404</p>',
+    '        <h1>{title}</h1>',
+    '        <p>{description}</p>',
+    '      </div>',
+    '    </section>',
+    '  );',
+    '',
+    '  if (typeof props.component === "function") {',
+    '    return props.component("spirax_shell", {',
+    '      ...props,',
+    '      title: "404",',
+    '      currentPage: { ...(props.currentPage || {}), title, url: canonicalUrl },',
+    '      currentSection: { ...(props.currentSection || {}), name: sectionLabel, url: canonicalUrl },',
+    '      itemDescription: description,',
+    '      headChildren,',
+    '      children: content,',
+    '      content,',
+    '      body: content,',
+    '      bodyContent: content,',
+    '      mainContent: content,',
+    '    });',
+    '  }',
+    '',
+    '  return content;',
+    '}',
+    ''
+  ].join('\n');
+}
+
+function buildDefaultNotFoundCssSource() {
+  return [
+    '.cms-not-found-placeholder {',
+    '  padding: 72px 20px 96px;',
+    '}',
+    '',
+    '.cms-not-found-placeholder__inner {',
+    '  max-width: 720px;',
+    '  margin: 0 auto;',
+    '  text-align: center;',
+    '}',
+    '',
+    '.cms-not-found-placeholder__code {',
+    '  margin: 0;',
+    '  font-size: 14px;',
+    '  font-weight: 700;',
+    '  letter-spacing: 0.2em;',
+    '  text-transform: uppercase;',
+    '  color: #b91c1c;',
+    '}',
+    '',
+    '.cms-not-found-placeholder h1 {',
+    '  margin: 0;',
+    '  padding-top: 12px;',
+    '  font-size: clamp(32px, 6vw, 56px);',
+    '  line-height: 1.1;',
+    '}',
+    '',
+    '.cms-not-found-placeholder p {',
+    '  margin: 16px auto 0;',
+    '  max-width: 32rem;',
+    '  line-height: 1.7;',
+    '  color: #334155;',
+    '}',
+    ''
+  ].join('\n');
 }
 
 function migrateThemeSuffixedAssets() {
@@ -2499,7 +2715,7 @@ function ensureTemplateBindingsThemeScope() {
   if (
     String(sql).includes('theme_id INTEGER NOT NULL')
     && String(sql).includes('UNIQUE (theme_id, target_type, target_id, template_type)')
-    && String(sql).includes("CHECK (template_type IN ('home', 'list', 'content', 'single'))")
+    && String(sql).includes("CHECK (template_type IN ('home', 'list', 'content', 'single', 'not_found'))")
     && String(sql).includes('REFERENCES templates(id)')
     && !String(sql).includes('templates__old_theme_code_scope')
     && !String(sql).includes('templates__old_engine_check')
@@ -2518,7 +2734,7 @@ function ensureTemplateBindingsThemeScope() {
       theme_id INTEGER NOT NULL,
       target_type TEXT NOT NULL,
       target_id INTEGER,
-      template_type TEXT NOT NULL CHECK (template_type IN ('home', 'list', 'content', 'single')),
+      template_type TEXT NOT NULL CHECK (template_type IN ('home', 'list', 'content', 'single', 'not_found')),
       template_id INTEGER NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -2561,7 +2777,7 @@ function ensureTemplateCodeThemeScope() {
     String(sql).includes('theme_id INTEGER')
     && String(sql).includes('UNIQUE (theme_id, code)')
     && !String(sql).includes('code TEXT NOT NULL UNIQUE')
-    && String(sql).includes("CHECK (type IN ('home', 'list', 'content', 'single', 'component'))")
+    && String(sql).includes("CHECK (type IN ('home', 'list', 'content', 'single', 'not_found', 'component'))")
   ) {
     return;
   }
@@ -2603,7 +2819,7 @@ function ensureTemplatesEngineConstraint() {
   if (
     String(sql).includes("DEFAULT 'tsx'")
     && String(sql).includes("CHECK (engine IN ('tsx'))")
-    && String(sql).includes("CHECK (type IN ('home', 'list', 'content', 'single', 'component'))")
+    && String(sql).includes("CHECK (type IN ('home', 'list', 'content', 'single', 'not_found', 'component'))")
   ) {
     return;
   }

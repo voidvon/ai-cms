@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import axios from 'axios'
 import apiClient from '@/api/client'
+import { staticGenerationApi, type BuildResult } from '@/api/static-generation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -54,18 +54,6 @@ interface LlmsDiagnostics {
   recent_pages: LlmsPagePreview[]
 }
 
-interface BuildResult {
-  success: boolean
-  totalFiles?: number
-  totalRecords?: number
-  message?: string
-}
-
-const buildClient = axios.create({
-  withCredentials: true,
-  timeout: 300000,
-})
-
 export default function LlmsDiagnosticsPage() {
   const queryClient = useQueryClient()
   const { data, isLoading, error } = useQuery({
@@ -77,10 +65,7 @@ export default function LlmsDiagnosticsPage() {
   })
 
   const rebuildMutation = useMutation({
-    mutationFn: async () => {
-      const response = await buildClient.post<BuildResult>('/admin/build/generate?section=llms', {})
-      return response.data
-    },
+    mutationFn: () => staticGenerationApi.buildStream('llms', {}),
     onSuccess: (result) => {
       if (result.success) {
         toast.success(`重建完成，文件数：${result.totalFiles}，页面数：${result.totalRecords}`)

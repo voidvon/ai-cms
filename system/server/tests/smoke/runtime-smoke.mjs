@@ -8,11 +8,26 @@ import { listContentItems } from '../../src/services/content-items.mjs';
 import { clearTsxTemplateCache } from '../../src/tsx-template-renderer.mjs';
 
 async function main() {
+  const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'cms-runtime-smoke-'));
+  clearTsxTemplateCache();
+  buildStaticSite({
+    outputRoot,
+    cleanExisting: true,
+    languageCode: 'en',
+    sections: ['index']
+  });
+
   const sampleManagedItem = listContentItems('product', { visibleOnly: false, limit: 1 })[0];
   assert(sampleManagedItem?.name, '缺少可搜索内容数据，无法执行搜索接口回归。');
   const searchKeyword = String(sampleManagedItem.name).trim();
 
-  const app = await createApp({ logger: false });
+  const app = await createApp({
+    logger: false,
+    publicSite: {
+      contentRoot: outputRoot,
+      languageCode: 'en'
+    }
+  });
 
   try {
     const emptySearch = await app.inject({
@@ -38,14 +53,16 @@ async function main() {
     assert.ok(keywordSearchPayload.items.some((item) => typeof item.url === 'string' && item.url.length > 0));
     assertSecurityHeaders(keywordSearch.headers);
 
-    const productsIndex = await app.inject({
+    const homePage = await app.inject({
       method: 'GET',
-      url: '/products/',
+      url: '/',
       headers: { host: 'localhost' }
     });
-    assert.equal(productsIndex.statusCode, 200);
+    assert.equal(homePage.statusCode, 200);
+    assert.match(homePage.headers['content-type'] || '', /text\/html/i);
+    assertSecurityHeaders(homePage.headers);
 
-    assertGeneratedJsonLdIsValid();
+    assertGeneratedJsonLdIsValid(outputRoot);
 
     console.log('runtime smoke passed');
   } finally {
@@ -61,16 +78,7 @@ function assertSecurityHeaders(headers) {
   assert.equal(headers['referrer-policy'], 'strict-origin-when-cross-origin');
 }
 
-function assertGeneratedJsonLdIsValid() {
-  const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'cms-runtime-smoke-'));
-  clearTsxTemplateCache();
-  buildStaticSite({
-    outputRoot,
-    cleanExisting: true,
-    languageCode: 'en',
-    sections: ['index']
-  });
-
+function assertGeneratedJsonLdIsValid(outputRoot) {
   const indexHtml = fs.readFileSync(path.join(outputRoot, 'index.html'), 'utf8');
   const match = indexHtml.match(/<script\s+type="application\/ld\+json">([\s\S]*?)<\/script>/i);
   assert.ok(match, '生成首页缺少 application/ld+json。');

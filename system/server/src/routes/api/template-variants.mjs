@@ -1,6 +1,6 @@
 import { requireAuth } from '../../middleware/auth.mjs';
 import { CONTENT_ROOT } from '../../config.mjs';
-import { buildStaticSite } from '../../static-builder.mjs';
+import { runStaticBuild } from '../../services/static-build-executor.mjs';
 import {
   createTemplateVariant,
   deleteTemplateVariant,
@@ -79,7 +79,7 @@ export default async function templateVariantsRoutes(app) {
       return { success: false, message: '主题不存在' };
     }
 
-    const buildResult = buildStaticSite({
+    const buildResult = await runStaticBuild({
       outputRoot: CONTENT_ROOT,
       cleanExisting: true
     });

@@ -53,6 +53,17 @@ export async function serveStatic(request, reply, options = {}) {
   return false;
 }
 
+export async function serveNotFoundPage(request, reply, options = {}) {
+  const contentRoot = resolveRequestContentRoot(request, options);
+  return serveFromCandidates(
+    contentRoot,
+    ['/404.html'],
+    request,
+    reply,
+    { statusCode: 404 }
+  );
+}
+
 export async function serveSharedUploads(request, reply, pathname = getPathname(request.url)) {
   if (!isStaticMethod(request.method)) {
     return false;
@@ -132,9 +143,9 @@ function resolveRequestContentRoot(request, options = {}) {
   return CONTENT_ROOT;
 }
 
-async function serveFromCandidates(rootDir, candidates, request, reply) {
+async function serveFromCandidates(rootDir, candidates, request, reply, options = {}) {
   for (const candidate of candidates) {
-    const handled = await trySendFile(rootDir, candidate, request, reply);
+    const handled = await trySendFile(rootDir, candidate, request, reply, options);
     if (handled) {
       return true;
     }
@@ -142,7 +153,7 @@ async function serveFromCandidates(rootDir, candidates, request, reply) {
   return false;
 }
 
-async function trySendFile(rootDir, candidate, request, reply) {
+async function trySendFile(rootDir, candidate, request, reply, options = {}) {
   if (!isStaticMethod(request.method)) {
     return false;
   }
@@ -172,6 +183,9 @@ async function trySendFile(rootDir, candidate, request, reply) {
       const body = Buffer.from(rewritten, 'utf8');
 
       reply.type(contentType);
+      if (Number.isInteger(options.statusCode) && options.statusCode > 0) {
+        reply.code(options.statusCode);
+      }
       reply.header('Content-Length', body.byteLength);
 
       if (request.method === 'HEAD') {
@@ -184,6 +198,9 @@ async function trySendFile(rootDir, candidate, request, reply) {
     }
 
     reply.type(contentType);
+    if (Number.isInteger(options.statusCode) && options.statusCode > 0) {
+      reply.code(options.statusCode);
+    }
     reply.header('Content-Length', stats.size);
 
     if (request.method === 'HEAD') {

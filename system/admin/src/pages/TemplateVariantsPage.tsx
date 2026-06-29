@@ -37,6 +37,7 @@ const previewModeLabelMap = {
   list: '列表',
   content: '内容',
   single: '单页',
+  not_found: '404 页面',
 } as const
 
 const templateTypeLabelMap: Record<Template['type'], string> = {
@@ -44,6 +45,7 @@ const templateTypeLabelMap: Record<Template['type'], string> = {
   list: '列表模板',
   content: '内容模板',
   single: '单页模板',
+  not_found: '404模板',
   component: '组件模板',
 }
 
@@ -75,7 +77,7 @@ type TemplateLibraryNode = {
 function buildPreviewModeOptions(templateType: Template['type'] | null | undefined) {
   const options = [{ value: 'auto', label: previewModeLabelMap.auto }]
 
-  if (templateType === 'home' || templateType === 'list' || templateType === 'content' || templateType === 'single') {
+  if (templateType === 'home' || templateType === 'list' || templateType === 'content' || templateType === 'single' || templateType === 'not_found') {
     options.push({
       value: templateType,
       label: previewModeLabelMap[templateType],
@@ -145,11 +147,12 @@ export default function TemplateVariantsPage() {
   const templates = data?.data ?? []
   const themeTemplatesByType = useMemo(
     () => {
-      const grouped: Record<'home' | 'list' | 'content' | 'single', Template[]> = {
+      const grouped: Record<'home' | 'list' | 'content' | 'single' | 'not_found', Template[]> = {
         home: [],
         list: [],
         content: [],
         single: [],
+        not_found: [],
       }
 
       if (templates.length === 0) {
@@ -157,7 +160,7 @@ export default function TemplateVariantsPage() {
       }
 
       for (const template of templates) {
-        if (template.type !== 'home' && template.type !== 'list' && template.type !== 'content' && template.type !== 'single') {
+        if (template.type !== 'home' && template.type !== 'list' && template.type !== 'content' && template.type !== 'single' && template.type !== 'not_found') {
           continue
         }
         grouped[template.type].push(template)
@@ -167,6 +170,7 @@ export default function TemplateVariantsPage() {
       grouped.list.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id)
       grouped.content.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id)
       grouped.single.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id)
+      grouped.not_found.sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0) || a.id - b.id)
       return grouped
     },
     [templates],
@@ -193,6 +197,11 @@ export default function TemplateVariantsPage() {
     () => themeTemplatesByType.single,
     [themeTemplatesByType],
   )
+  const notFoundTemplates = useMemo(
+    () => themeTemplatesByType.not_found,
+    [themeTemplatesByType],
+  )
+  const primaryNotFoundTemplate = notFoundTemplates[0] || null
   const templateLibraryItems = useMemo<TreeItemData<TemplateLibraryNode>[]>(() => {
     const createTemplateLeaf = (template: Template) => {
       return {
@@ -232,6 +241,27 @@ export default function TemplateVariantsPage() {
             data: { kind: 'group', templateType: 'home' },
             children: [],
           },
+      primaryNotFoundTemplate
+        ? {
+            id: `template:${primaryNotFoundTemplate.id}`,
+            label: (
+              <div className="min-w-0">
+                <div className="truncate">404模板</div>
+                <div className="truncate text-xs text-muted-foreground">{primaryNotFoundTemplate.code}</div>
+              </div>
+            ),
+            data: {
+              kind: 'template' as const,
+              template: primaryNotFoundTemplate,
+            },
+          }
+        : {
+            id: 'group:not_found',
+            label: '404模板',
+            selectable: false,
+            data: { kind: 'group', templateType: 'not_found' },
+            children: [],
+          },
       {
         id: 'group:list',
         label: '列表模板',
@@ -261,7 +291,7 @@ export default function TemplateVariantsPage() {
         children: themeComponentTemplates.map(createTemplateLeaf),
       },
     ]
-  }, [contentTemplates, listTemplates, primaryHomeTemplate, singleTemplates, themeComponentTemplates])
+  }, [contentTemplates, listTemplates, primaryHomeTemplate, primaryNotFoundTemplate, singleTemplates, themeComponentTemplates])
   const selectedTemplate = useMemo(
     () => templates.find((item) => item.id === editorTarget.templateId) || null,
     [editorTarget, templates],
@@ -332,11 +362,11 @@ export default function TemplateVariantsPage() {
     if (editorTarget.templateId || selectedTemplate) {
       return
     }
-    const firstTemplate = homeTemplates[0] || listTemplates[0] || contentTemplates[0] || singleTemplates[0] || themeComponentTemplates[0] || null
+    const firstTemplate = homeTemplates[0] || listTemplates[0] || contentTemplates[0] || singleTemplates[0] || notFoundTemplates[0] || themeComponentTemplates[0] || null
     if (firstTemplate) {
       setEditorTarget({ templateId: firstTemplate.id })
     }
-  }, [contentTemplates, editorTarget.templateId, homeTemplates, listTemplates, selectedTemplate, singleTemplates, themeComponentTemplates])
+  }, [contentTemplates, editorTarget.templateId, homeTemplates, listTemplates, notFoundTemplates, selectedTemplate, singleTemplates, themeComponentTemplates])
 
   useEffect(() => {
     if (!editorTarget.templateId) {
@@ -348,6 +378,7 @@ export default function TemplateVariantsPage() {
       ...listTemplates.map((item) => item.id),
       ...contentTemplates.map((item) => item.id),
       ...singleTemplates.map((item) => item.id),
+      ...notFoundTemplates.map((item) => item.id),
       ...themeComponentTemplates.map((item) => item.id),
     ])
 
@@ -355,9 +386,9 @@ export default function TemplateVariantsPage() {
       return
     }
 
-    const fallbackTemplate = homeTemplates[0] || listTemplates[0] || contentTemplates[0] || singleTemplates[0] || themeComponentTemplates[0] || null
+    const fallbackTemplate = homeTemplates[0] || listTemplates[0] || contentTemplates[0] || singleTemplates[0] || notFoundTemplates[0] || themeComponentTemplates[0] || null
     setEditorTarget({ templateId: fallbackTemplate?.id || null })
-  }, [contentTemplates, editorTarget.templateId, homeTemplates, listTemplates, singleTemplates, themeComponentTemplates])
+  }, [contentTemplates, editorTarget.templateId, homeTemplates, listTemplates, notFoundTemplates, singleTemplates, themeComponentTemplates])
 
   const publishMutation = useMutation({
     mutationFn: async () => {
@@ -377,7 +408,7 @@ export default function TemplateVariantsPage() {
   })
 
   const createMutation = useMutation({
-    mutationFn: async (templateType: Extract<Template['type'], 'home' | 'list' | 'content' | 'single'>) => {
+    mutationFn: async (templateType: Extract<Template['type'], 'home' | 'list' | 'content' | 'single' | 'not_found'>) => {
       const templateCount = templates.filter((item) => item.type === templateType).length
       const code = `${templateType}_${Date.now()}`
       const created = await templatesApi.create({
@@ -647,8 +678,9 @@ export default function TemplateVariantsPage() {
     const groupId = String(item.id)
     const canCreate = data.kind === 'group' && ['group:home', 'group:list', 'group:content', 'group:single', 'group:component'].includes(groupId)
     const canManageTemplate = data.kind === 'template' && Boolean(data.template?.id)
+    const isLockedSingletonTemplate = data.kind === 'template' && (data.template?.type === 'not_found')
 
-    if (!canCreate && !canManageTemplate) {
+    if (!canCreate && (!canManageTemplate || isLockedSingletonTemplate)) {
       return null
     }
 
@@ -791,7 +823,7 @@ export default function TemplateVariantsPage() {
             <Tree
               items={templateLibraryItems}
               value={selectedTreeValue}
-              defaultExpandedIds={['group:list', 'group:content', 'group:component']}
+              defaultExpandedIds={['group:list', 'group:content', 'group:not_found', 'group:component']}
               onValueChange={handleSelectLibraryItem}
               renderAction={renderTreeAction}
               canDrag={canDragTreeItem}

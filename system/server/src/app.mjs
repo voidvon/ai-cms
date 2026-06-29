@@ -148,10 +148,14 @@ async function registerCommonRoutes(app, { publicSite }) {
 
 function registerCommonErrorHandling(app, { publicSite }) {
   app.setNotFoundHandler(async (request, reply) => {
-    const { serveStatic } = await import('./static-file-handler.mjs');
+    const { serveNotFoundPage, serveStatic } = await import('./static-file-handler.mjs');
     const handled = await serveStatic(request, reply, publicSite || undefined);
 
     if (!handled) {
+      const notFoundHandled = await serveNotFoundPage(request, reply, publicSite || undefined);
+      if (notFoundHandled) {
+        return;
+      }
       reply.type('text/html; charset=utf-8');
       reply.code(404);
       reply.send(`<!DOCTYPE html>

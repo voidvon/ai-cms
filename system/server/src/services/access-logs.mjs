@@ -31,6 +31,7 @@ export function ensureAccessLogsSchema() {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       page_path TEXT NOT NULL,
       client_ip TEXT NOT NULL,
+      client_ip_visit_count INTEGER NOT NULL DEFAULT 0,
       method TEXT NOT NULL,
       status_code INTEGER NOT NULL,
       referer TEXT NOT NULL DEFAULT '',
@@ -53,6 +54,15 @@ export function ensureAccessLogsSchema() {
     CREATE INDEX IF NOT EXISTS idx_access_logs_client_ip
     ON access_logs (client_ip)
   `);
+
+  addColumnIfMissing('access_logs', 'client_ip_visit_count', 'INTEGER NOT NULL DEFAULT 0');
+
+  execute(`
+    CREATE INDEX IF NOT EXISTS idx_access_logs_client_ip_visit_count
+    ON access_logs (client_ip, client_ip_visit_count DESC)
+  `);
+
+  backfillAccessLogVisitCounts();
 }
 
 export function recordAccessLog(input = {}) {
@@ -67,20 +77,35 @@ export function recordAccessLog(input = {}) {
     return false;
   }
 
+  const previousVisitRow = queryAll(
+    `
+      SELECT client_ip_visit_count
+      FROM access_logs
+      WHERE client_ip = ?
+      ORDER BY client_ip_visit_count DESC, datetime(visited_at) DESC, id DESC
+      LIMIT 1
+    `,
+    [clientIp]
+  )[0] || { client_ip_visit_count: 0 };
+
+  const nextVisitCount = Number(previousVisitRow.client_ip_visit_count || 0) + 1;
+
   execute(
     `
       INSERT INTO access_logs (
         page_path,
         client_ip,
+        client_ip_visit_count,
         method,
         status_code,
         referer,
         user_agent
-      ) VALUES (?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
     `,
     [
       pagePath,
       clientIp,
+      nextVisitCount,
       method,
       statusCode,
       normalizeText(input.referer),
@@ -103,35 +128,36 @@ export function listAccessLogs(options = {}) {
   const params = [];
 
   if (pathKeyword) {
-    where.push('page_path LIKE ?');
+    where.push('l.page_path LIKE ?');
     params.push(`%${pathKeyword}%`);
   }
 
   if (ipKeyword) {
-    where.push('client_ip LIKE ?');
+    where.push('l.client_ip LIKE ?');
     params.push(`%${ipKeyword}%`);
   }
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
   const totalRow = queryAll(
-    `SELECT COUNT(*) AS total FROM access_logs ${whereClause}`,
+    `SELECT COUNT(*) AS total FROM access_logs l ${whereClause}`,
     params
   )[0] || { total: 0 };
 
   const items = queryAll(
     `
       SELECT
-        id,
-        page_path,
-        client_ip,
-        method,
-        status_code,
-        referer,
-        user_agent,
-        visited_at
-      FROM access_logs
+        l.id,
+        l.page_path,
+        l.client_ip,
+        l.client_ip_visit_count,
+        l.method,
+        l.status_code,
+        l.referer,
+        l.user_agent,
+        l.visited_at
+      FROM access_logs l
       ${whereClause}
-      ORDER BY datetime(visited_at) DESC, id DESC
+      ORDER BY datetime(l.visited_at) DESC, l.id DESC
       LIMIT ? OFFSET ?
     `,
     [...params, limit, offset]
@@ -156,11 +182,18 @@ export function getAccessLogDashboardSummary() {
     WHERE datetime(visited_at) >= datetime('now', 'start of day')
   `)[0] || { total: 0 };
 
-  const recentUniqueIpRow = queryAll(`
-    SELECT COUNT(DISTINCT client_ip) AS total
+  const recentAccessRows = queryAll(`
+    SELECT client_ip, user_agent
     FROM access_logs
     WHERE datetime(visited_at) >= datetime('now', '-24 hours')
-  `)[0] || { total: 0 };
+  `);
+
+  const recentUniqueIps = new Set(
+    recentAccessRows
+      .filter((row) => summarizeUserAgent(normalizeText(row.user_agent)).kind !== 'bot')
+      .map((row) => normalizeText(row.client_ip))
+      .filter(Boolean)
+  );
 
   const totalPagesRow = queryAll(`
     SELECT COUNT(DISTINCT page_path) AS total
@@ -188,7 +221,7 @@ export function getAccessLogDashboardSummary() {
   return {
     metrics: {
       today_visits: Number(todayVisitsRow.total || 0),
-      recent_unique_ips: Number(recentUniqueIpRow.total || 0),
+      recent_unique_ips: recentUniqueIps.size,
       total_pages: Number(totalPagesRow.total || 0),
       recent_visits: Number(recentVisitsRow.total || 0)
     },
@@ -294,10 +327,52 @@ function hydrateAccessLogRow(row = {}) {
 
   return {
     ...row,
+    client_ip_visit_count: Number(row.client_ip_visit_count || 0),
     user_agent: userAgent,
     user_agent_kind: userAgentSummary.kind,
     user_agent_label: userAgentSummary.label
   };
+}
+
+function addColumnIfMissing(tableName, columnName, definition) {
+  const columns = new Set(queryAll(`PRAGMA table_info(${tableName})`).map((column) => String(column.name || '')));
+  if (columns.has(columnName)) {
+    return;
+  }
+
+  execute(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+}
+
+function backfillAccessLogVisitCounts() {
+  const needsBackfill = queryAll(`
+    SELECT 1 AS value
+    FROM access_logs
+    WHERE COALESCE(client_ip_visit_count, 0) <= 0
+    LIMIT 1
+  `)[0];
+
+  if (!needsBackfill) {
+    return;
+  }
+
+  execute(`
+    WITH sequenced_logs AS (
+      SELECT
+        id,
+        ROW_NUMBER() OVER (
+          PARTITION BY client_ip
+          ORDER BY datetime(visited_at) ASC, id ASC
+        ) AS visit_count
+      FROM access_logs
+    )
+    UPDATE access_logs
+    SET client_ip_visit_count = (
+      SELECT sequenced_logs.visit_count
+      FROM sequenced_logs
+      WHERE sequenced_logs.id = access_logs.id
+    )
+    WHERE id IN (SELECT id FROM sequenced_logs)
+  `);
 }
 
 function summarizeUserAgent(userAgent) {
