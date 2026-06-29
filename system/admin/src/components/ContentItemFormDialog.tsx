@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import ImageUploadField from '@/components/ImageUploadField'
 import ImagesUploadField from '@/components/ImagesUploadField'
 import RichTextEditor from '@/components/RichTextEditor'
+import { buildColumnTreeOptions } from '@/lib/column-options'
 import { getFieldLabel, isFieldEditable, isFieldVisible, mapFieldsByName } from '@/lib/content-model-fields'
 import { toast } from 'sonner'
 import type {
@@ -98,10 +99,15 @@ export default function ContentItemFormDialog({
     [contentModel?.fields, modelCode],
   )
   const meta = useMemo(() => getModelMeta(capabilities), [capabilities])
-  const modelColumns = (columnsData?.data || []).filter((column) => (
+  const allColumns = columnsData?.data || []
+  const modelColumns = allColumns.filter((column) => (
     Number(column.content_model_id || 0) === Number(contentModel?.id || 0)
     && column.column_type === 'list'
   ))
+  const modelColumnOptions = useMemo(
+    () => buildColumnTreeOptions(allColumns, { selectableColumnIds: modelColumns.map((column) => column.id) }),
+    [allColumns, modelColumns],
+  )
 
   useEffect(() => {
     const source = mode === 'edit' ? (itemDetailData?.data || item) : null
@@ -224,9 +230,9 @@ export default function ContentItemFormDialog({
                         <SelectValue placeholder={meta.columnPlaceholder} />
                       </SelectTrigger>
                       <SelectContent>
-                        {modelColumns.map((column) => (
-                          <SelectItem key={column.id} value={String(column.id)}>
-                            {column.name}
+                        {modelColumnOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
                           </SelectItem>
                         ))}
                       </SelectContent>

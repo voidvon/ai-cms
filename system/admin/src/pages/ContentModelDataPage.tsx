@@ -27,10 +27,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
+import { buildColumnPathMap, buildColumnTreeOptions } from '@/lib/column-options'
 import { formatDate } from '@/lib/datetime'
 import { getFieldLabel, isFieldVisible, mapFieldsByName } from '@/lib/content-model-fields'
 import { toast } from 'sonner'
-import type { ManagedContentItem, SectionContentItem } from '@/types'
+import type { Column, ManagedContentItem, SectionContentItem } from '@/types'
 
 const ContentItemFormDialog = lazy(() => import('@/components/ContentItemFormDialog'))
 
@@ -81,22 +82,28 @@ export default function ContentModelDataPage() {
     [models, selectedModelCode],
   )
   const fieldMap = useMemo(() => mapFieldsByName(selectedModel?.fields || []), [selectedModel?.fields])
+  const allColumns = columnsData?.data || []
   const modelColumns = useMemo(
-    () => (columnsData?.data || []).filter((column) => (
+    () => allColumns.filter((column) => (
       Number(column.content_model_id || 0) === Number(selectedModel?.id || 0)
       && column.column_type === 'list'
     )),
-    [columnsData?.data, selectedModel?.id],
+    [allColumns, selectedModel?.id],
   )
+  const modelColumnOptions = useMemo(
+    () => buildColumnTreeOptions(allColumns, { selectableColumnIds: modelColumns.map((column) => column.id) }),
+    [allColumns, modelColumns],
+  )
+  const columnPathById = useMemo(() => buildColumnPathMap(allColumns), [allColumns])
 
   useEffect(() => {
     if (selectedColumnId === 'all') {
       return
     }
-    if (!modelColumns.some((column) => String(column.id) === selectedColumnId)) {
+    if (!modelColumnOptions.some((option) => option.value === selectedColumnId)) {
       setSelectedColumnId('all')
     }
-  }, [modelColumns, selectedColumnId])
+  }, [modelColumnOptions, selectedColumnId])
 
   const { data: itemsData, isLoading: itemsLoading } = useQuery({
     queryKey: ['content-items', selectedModel?.code || '', 'model-data', selectedColumnId, page, PAGE_LIMIT, defaultLanguageCode],
@@ -220,9 +227,9 @@ export default function ContentModelDataPage() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">全部栏目</SelectItem>
-                  {modelColumns.map((column) => (
-                    <SelectItem key={column.id} value={String(column.id)}>
-                      {column.name}
+                  {modelColumnOptions.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -270,7 +277,7 @@ export default function ContentModelDataPage() {
                       <TableCell>{item.id}</TableCell>
                       <TableCell className="font-medium">{resolveContentItemTitle(item)}</TableCell>
                       {showCode ? <TableCell>{'code' in item ? item.code || '-' : '-'}</TableCell> : null}
-                      <TableCell>{item.column_name || item.column_id || '-'}</TableCell>
+                      <TableCell>{resolveColumnLabel(item, modelColumns, columnPathById)}</TableCell>
                       {showFeatured ? (
                         <TableCell>{Number(item.is_featured_home || (item as SectionContentItem).is_featured || 0) === 1 ? <Badge>是</Badge> : <Badge variant="outline">否</Badge>}</TableCell>
                       ) : null}
@@ -391,6 +398,21 @@ export default function ContentModelDataPage() {
 
 function resolveContentItemTitle(item: ListedContentItem) {
   return 'title' in item ? item.title : item.name
+}
+
+function resolveColumnLabel(
+  item: ListedContentItem,
+  modelColumns: Column[],
+  columnPathById: Map<number, string>,
+) {
+  const columnId = Number(item.column_id || 0)
+  if (columnId > 0) {
+    return columnPathById.get(columnId)
+      || modelColumns.find((column) => column.id === columnId)?.name
+      || item.column_name
+      || String(columnId)
+  }
+  return item.column_name || '-'
 }
 
 function resolveColumnCount({
