@@ -1,12 +1,13 @@
+import { createUIMessageStream, pipeUIMessageStreamToResponse } from 'ai';
 import { requireAuth } from '../../middleware/auth.mjs';
 import {
   answerKnowledgeStub,
-  chatWithAssistant,
   draftContractWithAgent,
   exportContractPdfStub,
   getAiAssistantCapabilities,
   queryPriceStub,
-  resetAssistantChat
+  resetAssistantChat,
+  streamAssistantChat
 } from '../../services/ai-assistant.mjs';
 
 async function parseBody(request) {
@@ -14,6 +15,73 @@ async function parseBody(request) {
     return request.body;
   }
   return {};
+}
+
+function createAssistantStreamingTextStream(originalMessages, executeTextStream) {
+  const textPartId = `text-${Date.now()}`;
+  return createUIMessageStream({
+    execute: async ({ writer }) => {
+      writer.write({
+        type: 'start'
+      });
+      writer.write({
+        type: 'text-start',
+        id: textPartId
+      });
+
+      try {
+        await executeTextStream((delta) => {
+          if (!delta) {
+            return;
+          }
+
+          writer.write({
+            type: 'text-delta',
+            id: textPartId,
+            delta
+          });
+        });
+      } catch (error) {
+        writer.write({
+          type: 'text-delta',
+          id: textPartId,
+          delta: formatAssistantError(error)
+        });
+      }
+
+      writer.write({
+        type: 'text-end',
+        id: textPartId
+      });
+      writer.write({
+        type: 'finish',
+        finishReason: 'stop'
+      });
+    },
+    originalMessages
+  });
+}
+
+function sendAssistantStreamingTextStream(reply, originalMessages, executeTextStream) {
+  reply.hijack();
+  pipeUIMessageStreamToResponse({
+    response: reply.raw,
+    stream: createAssistantStreamingTextStream(originalMessages, executeTextStream)
+  });
+  return reply;
+}
+
+function formatAssistantError(error) {
+  const message = String(error?.message || '').trim();
+  if (!message) {
+    return 'AI 服务暂时不可用，请稍后重试。';
+  }
+
+  if (message === 'Connection error.') {
+    return 'AI 服务连接失败。请检查 `OPENAI_BASE_URL`、`OPENAI_API_KEY`、模型名以及当前服务器到上游地址的网络连通性。';
+  }
+
+  return `AI 服务请求失败：${message}`;
 }
 
 export default async function aiAssistantRoutes(app) {
@@ -113,42 +181,48 @@ export default async function aiAssistantRoutes(app) {
   app.post('/ai-assistant/chat', {
     onRequest: [requireAuth]
   }, async (request, reply) => {
-    try {
-      const body = await parseBody(request);
-      const messages = Array.isArray(body.messages) ? body.messages : [];
-      const lastMessage = messages[messages.length - 1];
-      const textParts = Array.isArray(lastMessage?.parts)
-        ? lastMessage.parts.filter((part) => part?.type === 'text').map((part) => String(part.text || ''))
-        : [];
-      const messageText = textParts.join('\n').trim();
-      const chatId = body.chatId || body.id || '';
+    const body = await parseBody(request);
+    const messages = Array.isArray(body.messages) ? body.messages : [];
+    const lastMessage = messages[messages.length - 1];
+    const textParts = Array.isArray(lastMessage?.parts)
+      ? lastMessage.parts.filter((part) => part?.type === 'text').map((part) => String(part.text || ''))
+      : [];
+    const messageText = textParts.join('\n').trim();
+    const chatId = body.chatId || body.id || '';
 
-      const result = await chatWithAssistant({
+    return sendAssistantStreamingTextStream(reply, messages, async (writeDelta) => {
+      const streamed = await streamAssistantChat({
         chatId,
         message: messageText
       });
+      const reader = streamed.result.toTextStream().getReader();
+      let hasDelta = false;
 
-      return {
-        id: result.chat_id,
-        messages: [
-          {
-            id: `assistant-${Date.now()}`,
-            role: 'assistant',
-            parts: [
-              {
-                type: 'text',
-                text: result.message
-              }
-            ]
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
           }
-        ]
-      };
-    } catch (error) {
-      reply.code(error.statusCode || 400);
-      return {
-        error: error.message || '聊天请求失败'
-      };
-    }
+
+          const delta = String(value || '');
+          if (!delta) {
+            continue;
+          }
+
+          hasDelta = true;
+          writeDelta(delta);
+        }
+      } finally {
+        reader.releaseLock();
+      }
+
+      await streamed.result.completed;
+
+      if (!hasDelta) {
+        writeDelta(streamed.getFinalText() || '我已收到你的请求，但当前没有生成有效回复。');
+      }
+    });
   });
 
   app.post('/ai-assistant/chat/reset', {

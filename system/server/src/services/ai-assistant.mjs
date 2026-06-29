@@ -1,11 +1,22 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { Agent, MemorySession, run, tool } from '@openai/agents';
+import OpenAI from 'openai';
+import { Agent, MemorySession, run, setDefaultOpenAIClient, tool } from '@openai/agents';
 import { z } from 'zod';
 import { UPLOADS_PDFS_ROOT } from '../config.mjs';
 
 const DEFAULT_MODEL = process.env.OPENAI_CONTRACT_MODEL || process.env.OPENAI_DEFAULT_MODEL || 'gpt-5';
+const OPENAI_BASE_URL = normalizeText(process.env.OPENAI_BASE_URL);
 const chatSessions = new Map();
+
+if (OPENAI_BASE_URL) {
+  setDefaultOpenAIClient(
+    new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY || 'missing-key',
+      baseURL: OPENAI_BASE_URL,
+    })
+  );
+}
 
 function normalizeText(value) {
   return String(value || '').trim();
@@ -221,6 +232,18 @@ function buildConversationAgent() {
 }
 
 export async function chatWithAssistant({ chatId, message }) {
+  const streamed = await streamAssistantChat({ chatId, message });
+  await streamed.result.completed;
+  const outputText = streamed.getFinalText();
+
+  return {
+    chat_id: streamed.chat_id,
+    message: outputText || '我已收到你的请求，但当前没有生成有效回复。',
+    model: DEFAULT_MODEL
+  };
+}
+
+export async function streamAssistantChat({ chatId, message }) {
   assertOpenAIConfig();
 
   const normalizedMessage = normalizeText(message);
@@ -232,13 +255,15 @@ export async function chatWithAssistant({ chatId, message }) {
 
   const { chatId: resolvedChatId, session } = getOrCreateChatSession(chatId);
   const agent = buildConversationAgent();
-  const result = await run(agent, normalizedMessage, { session });
-  const outputText = extractJsonString(result?.finalOutput);
+  const result = await run(agent, normalizedMessage, { session, stream: true });
 
   return {
     chat_id: resolvedChatId,
-    message: outputText || '我已收到你的请求，但当前没有生成有效回复。',
-    model: DEFAULT_MODEL
+    model: DEFAULT_MODEL,
+    result,
+    getFinalText() {
+      return extractJsonString(result?.finalOutput) || '';
+    }
   };
 }
 

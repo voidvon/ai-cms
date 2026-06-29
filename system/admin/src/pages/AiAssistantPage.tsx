@@ -1,14 +1,24 @@
-import { useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { DefaultChatTransport } from 'ai'
 import { useChat } from '@ai-sdk/react'
-import { RotateCcw, Send } from 'lucide-react'
-import { toast } from 'sonner'
-import { aiAssistantApi } from '@/api/ai-assistant'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { Bot, Send, Sparkles } from 'lucide-react'
+import {
+  Conversation,
+  ConversationContent,
+  ConversationEmptyState,
+  ConversationScrollButton,
+} from '@/components/ai-elements/conversation'
+import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message'
+import {
+  PromptInput,
+  PromptInputBody,
+  PromptInputFooter,
+  PromptInputSubmit,
+  PromptInputTextarea,
+  PromptInputTools,
+} from '@/components/ai-elements/prompt-input'
+import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Textarea } from '@/components/ui/textarea'
-import { cn } from '@/lib/utils'
 
 const QUICK_PROMPTS = [
   '帮我查询 BSA2T-25 在中国区的价格',
@@ -18,8 +28,7 @@ const QUICK_PROMPTS = [
 ]
 
 export default function AiAssistantPage() {
-  const [draftInput, setDraftInput] = useState('')
-  const chatId = useMemo(() => `admin-ai-chat`, [])
+  const chatId = useMemo(() => 'admin-ai-chat', [])
 
   const transport = useMemo(
     () =>
@@ -33,38 +42,26 @@ export default function AiAssistantPage() {
     [chatId]
   )
 
-  const { messages, sendMessage, status, error, setMessages } = useChat({
+  const { messages, sendMessage, status, error, stop } = useChat({
     id: chatId,
     transport,
   })
 
   const isBusy = status === 'submitted' || status === 'streaming'
 
-  const handleSend = async () => {
-    const value = draftInput.trim()
+  const handlePromptSubmit = async ({ text }: { text?: string }) => {
+    const value = String(text || '').trim()
     if (!value) {
       return
     }
 
-    setDraftInput('')
     await sendMessage({
       role: 'user',
       parts: [{ type: 'text', text: value }],
     })
   }
 
-  const handleReset = async () => {
-    try {
-      await aiAssistantApi.resetChat(chatId)
-      setMessages([])
-      toast.success('对话已重置')
-    } catch (resetError) {
-      toast.error(getApiErrorMessage(resetError, '重置对话失败'))
-    }
-  }
-
-  const handleQuickPrompt = async (prompt: string) => {
-    setDraftInput('')
+  const handleSuggestionClick = async (prompt: string) => {
     await sendMessage({
       role: 'user',
       parts: [{ type: 'text', text: prompt }],
@@ -72,133 +69,103 @@ export default function AiAssistantPage() {
   }
 
   return (
-    <div className="grid min-h-0 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-      <Card className="lg:sticky lg:top-0 lg:h-[calc(100vh-8rem)]">
-        <CardHeader>
-          <CardTitle>AI 合同助手</CardTitle>
-          <CardDescription>
-            通过对话连续查询价格、补齐合同信息、整理合同草稿。当前合同对话已接 OpenAI Agents SDK TS。
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap gap-2">
-            <Badge>chat-first</Badge>
-            <Badge variant="secondary">OpenAI Agents</Badge>
-            <Badge variant="outline">Fastify</Badge>
-          </div>
-
-          <div className="space-y-2">
-            <div className="text-sm font-medium">推荐用法</div>
-            <div className="rounded-lg border p-3 text-sm text-muted-foreground">
-              先直接问价格，再继续补客户、产品、交期、付款方式，让助手逐步整理成合同草稿。
+    <div className="min-h-0">
+      <Card className="flex min-h-[calc(100vh-9rem)] flex-col overflow-hidden border-border/70 shadow-sm">
+        <CardHeader className="border-b bg-muted/20">
+          <div className="flex items-start justify-between gap-4">
+            <div className="space-y-1">
+              <CardTitle className="flex items-center gap-2 text-xl">
+                <Bot className="h-5 w-5 text-primary" />
+                AI 合同助手
+              </CardTitle>
+              <CardDescription>
+                连续追问价格、补齐缺失字段、整理合同草稿。当前对话会保留上下文，适合一轮轮把合同信息收完整。
+              </CardDescription>
+            </div>
+            <div className="rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground">
+              {isBusy ? '正在处理' : '可继续对话'}
             </div>
           </div>
+        </CardHeader>
 
-          <div className="space-y-2">
-            <div className="text-sm font-medium">快捷提示</div>
-            <div className="space-y-2">
-              {QUICK_PROMPTS.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  onClick={() => void handleQuickPrompt(prompt)}
-                  className="w-full rounded-lg border px-3 py-3 text-left text-sm transition-colors hover:bg-accent"
+        <CardContent className="flex min-h-0 flex-1 flex-col gap-0 p-0">
+          <Conversation className="bg-gradient-to-b from-background via-background to-muted/10">
+            <ConversationContent className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6">
+              {messages.length === 0 ? (
+                <ConversationEmptyState
+                  icon={<Sparkles className="h-6 w-6" />}
+                  title="从一条问题开始"
+                  description="先问价格，再补客户、产品、交期、付款方式，最后让助手整理合同草稿。"
                 >
-                  {prompt}
-                </button>
-              ))}
+                  <div className="flex max-w-xl flex-col items-center gap-4 text-center">
+                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl border bg-background shadow-sm">
+                      <Bot className="h-6 w-6 text-primary" />
+                    </div>
+                    <div className="space-y-2">
+                      <h3 className="text-lg font-semibold">AI 合同助手</h3>
+                      <p className="text-sm leading-6 text-muted-foreground">
+                        这不是一个孤立表单，而是一个持续协作的对话区。你可以先查价格，再逐步把合同信息补完整。
+                      </p>
+                    </div>
+                    <Suggestions className="max-w-full">
+                      {QUICK_PROMPTS.map((prompt) => (
+                        <Suggestion key={prompt} suggestion={prompt} onClick={() => void handleSuggestionClick(prompt)} />
+                      ))}
+                    </Suggestions>
+                  </div>
+                </ConversationEmptyState>
+              ) : (
+                messages.map((message) => (
+                  <Message key={message.id} from={message.role}>
+                    <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                      {message.role === 'user' ? 'You' : 'Assistant'}
+                    </div>
+                    <MessageContent className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm group-[.is-user]:border-transparent group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground">
+                      <MessageResponse>{extractMessageText(message) || '...'}</MessageResponse>
+                    </MessageContent>
+                  </Message>
+                ))
+              )}
+
+              {error ? (
+                <div className="rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive shadow-sm">
+                  {error.message || '聊天请求失败'}
+                </div>
+              ) : null}
+            </ConversationContent>
+
+            <ConversationScrollButton />
+          </Conversation>
+
+          <div className="border-t bg-background/95 backdrop-blur">
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-4 py-4 sm:px-6">
+              {messages.length > 0 ? (
+                <Suggestions>
+                  {QUICK_PROMPTS.map((prompt) => (
+                    <Suggestion key={prompt} suggestion={prompt} onClick={() => void handleSuggestionClick(prompt)} />
+                  ))}
+                </Suggestions>
+              ) : null}
+
+              <PromptInput onSubmit={({ text }, event) => void handlePromptSubmit({ text: text || '' }, event)}>
+                <PromptInputBody>
+                  <PromptInputTextarea placeholder="例如：先帮我查 BSA2T-25 在中国区的价格，然后根据结果起草一份销售合同" />
+                </PromptInputBody>
+                <PromptInputFooter>
+                  <PromptInputTools>
+                    <div className="rounded-full border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+                      状态：{status}
+                    </div>
+                  </PromptInputTools>
+                  <PromptInputSubmit disabled={!isBusy && false} onStop={() => void stop()} status={status}>
+                    {!isBusy ? <Send className="h-4 w-4" /> : undefined}
+                  </PromptInputSubmit>
+                </PromptInputFooter>
+              </PromptInput>
             </div>
           </div>
-
-          <Button variant="outline" className="w-full" onClick={() => void handleReset()}>
-            <RotateCcw className="h-4 w-4" />
-            清空对话
-          </Button>
         </CardContent>
       </Card>
-
-      <Card className="flex min-h-[70vh] flex-col">
-        <CardHeader className="border-b">
-          <CardTitle>对话</CardTitle>
-          <CardDescription>
-            直接问价格、追问缺失信息，或要求生成合同草稿。助手会基于当前对话上下文继续。
-          </CardDescription>
-        </CardHeader>
-
-        <CardContent className="flex min-h-0 flex-1 flex-col gap-4 p-0">
-          <div className="flex-1 space-y-4 overflow-y-auto p-4">
-            {messages.length === 0 ? (
-              <EmptyState />
-            ) : (
-              messages.map((message) => (
-                <MessageBubble key={message.id} role={message.role} text={extractMessageText(message)} />
-              ))
-            )}
-
-            {error ? (
-              <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-                {error.message || '聊天请求失败'}
-              </div>
-            ) : null}
-          </div>
-
-          <div className="border-t p-4">
-            <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-              <span>状态：{status}</span>
-              <span>{isBusy ? '处理中...' : '可继续发送'}</span>
-            </div>
-            <div className="flex gap-3">
-              <Textarea
-                value={draftInput}
-                onChange={(event) => setDraftInput(event.target.value)}
-                placeholder="例如：先帮我查 BSA2T-25 在中国区的价格，然后根据结果起草一份销售合同"
-                className="min-h-[96px] resize-y"
-                onKeyDown={(event) => {
-                  if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-                    event.preventDefault()
-                    void handleSend()
-                  }
-                }}
-              />
-              <Button className="self-end" onClick={() => void handleSend()} disabled={isBusy || !draftInput.trim()}>
-                <Send className="h-4 w-4" />
-                发送
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-function EmptyState() {
-  return (
-    <div className="flex h-full min-h-[320px] items-center justify-center rounded-lg border border-dashed">
-      <div className="max-w-md space-y-3 px-6 text-center">
-        <div className="text-lg font-semibold">从对话开始</div>
-        <div className="text-sm text-muted-foreground">
-          这不是一个表单工具，而是一个连续协作的助手。你可以先问价格，再继续补合同信息，最后让它整理合同草稿。
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function MessageBubble({ role, text }: { role: string; text: string }) {
-  const isUser = role === 'user'
-
-  return (
-    <div className={cn('flex', isUser ? 'justify-end' : 'justify-start')}>
-      <div
-        className={cn(
-          'max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-6 shadow-sm',
-          isUser ? 'bg-primary text-primary-foreground' : 'border bg-background'
-        )}
-      >
-        <div className="mb-1 text-[11px] uppercase tracking-wide opacity-70">{isUser ? 'You' : 'Assistant'}</div>
-        <div className="whitespace-pre-wrap break-words">{text || '...'}</div>
-      </div>
     </div>
   )
 }
@@ -213,17 +180,4 @@ function extractMessageText(message: { parts?: Array<{ type?: string; text?: str
     .map((part) => part.text || '')
     .join('\n')
     .trim()
-}
-
-function getApiErrorMessage(error: unknown, fallback: string) {
-  if (error && typeof error === 'object' && 'response' in error) {
-    const response = (error as { response?: { data?: { message?: string } } }).response
-    if (response?.data?.message) {
-      return response.data.message
-    }
-  }
-  if (error instanceof Error && error.message) {
-    return error.message
-  }
-  return fallback
 }
