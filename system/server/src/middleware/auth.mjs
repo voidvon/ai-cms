@@ -62,10 +62,43 @@ export function requirePermission(flag) {
  * 获取客户端 IP
  */
 export function getClientIp(request) {
+  const cfConnectingIp = normalizeSingleIpHeader(request.headers['cf-connecting-ip']);
+  if (cfConnectingIp) {
+    return cfConnectingIp;
+  }
+
+  const realIp = normalizeSingleIpHeader(request.headers['x-real-ip']);
+  if (realIp) {
+    return realIp;
+  }
+
+  const forwardedFor = normalizeForwardedForHeader(request.headers['x-forwarded-for']);
+  if (forwardedFor) {
+    return forwardedFor;
+  }
+
   return request.ip ||
-         request.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
          request.socket.remoteAddress ||
          '127.0.0.1';
+}
+
+function normalizeSingleIpHeader(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value.trim();
+}
+
+function normalizeForwardedForHeader(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .find(Boolean) || '';
 }
 
 /**

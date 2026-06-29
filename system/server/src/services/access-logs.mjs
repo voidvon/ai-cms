@@ -36,6 +36,7 @@ export function ensureAccessLogsSchema() {
       status_code INTEGER NOT NULL,
       referer TEXT NOT NULL DEFAULT '',
       user_agent TEXT NOT NULL DEFAULT '',
+      user_agent_kind TEXT NOT NULL DEFAULT 'other',
       visited_at TEXT NOT NULL DEFAULT (datetime('now'))
     )
   `);
@@ -56,13 +57,20 @@ export function ensureAccessLogsSchema() {
   `);
 
   addColumnIfMissing('access_logs', 'client_ip_visit_count', 'INTEGER NOT NULL DEFAULT 0');
+  addColumnIfMissing('access_logs', 'user_agent_kind', `TEXT NOT NULL DEFAULT 'other'`);
 
   execute(`
     CREATE INDEX IF NOT EXISTS idx_access_logs_client_ip_visit_count
     ON access_logs (client_ip, client_ip_visit_count DESC)
   `);
 
+  execute(`
+    CREATE INDEX IF NOT EXISTS idx_access_logs_user_agent_kind
+    ON access_logs (user_agent_kind)
+  `);
+
   backfillAccessLogVisitCounts();
+  backfillAccessLogUserAgentKinds();
 }
 
 export function recordAccessLog(input = {}) {
@@ -72,6 +80,8 @@ export function recordAccessLog(input = {}) {
   const clientIp = normalizeText(input.clientIp);
   const method = normalizeMethod(input.method);
   const statusCode = normalizeStatusCode(input.statusCode);
+  const userAgent = normalizeText(input.userAgent);
+  const userAgentSummary = summarizeUserAgent(userAgent);
 
   if (!pagePath || !clientIp || !method || !Number.isInteger(statusCode)) {
     return false;
@@ -99,8 +109,9 @@ export function recordAccessLog(input = {}) {
         method,
         status_code,
         referer,
-        user_agent
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        user_agent,
+        user_agent_kind
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       pagePath,
@@ -109,7 +120,8 @@ export function recordAccessLog(input = {}) {
       method,
       statusCode,
       normalizeText(input.referer),
-      normalizeText(input.userAgent)
+      userAgent,
+      userAgentSummary.kind
     ]
   );
 
@@ -124,6 +136,7 @@ export function listAccessLogs(options = {}) {
   const offset = (page - 1) * limit;
   const pathKeyword = normalizeText(options.path);
   const ipKeyword = normalizeText(options.ip);
+  const userAgentKind = normalizeAccessLogUserAgentKindFilter(options.userAgentKind);
   const where = [];
   const params = [];
 
@@ -135,6 +148,14 @@ export function listAccessLogs(options = {}) {
   if (ipKeyword) {
     where.push('l.client_ip LIKE ?');
     params.push(`%${ipKeyword}%`);
+  }
+
+  if (userAgentKind === 'bot') {
+    where.push('l.user_agent_kind = ?');
+    params.push('bot');
+  } else if (userAgentKind === 'non_bot') {
+    where.push('l.user_agent_kind != ?');
+    params.push('bot');
   }
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
@@ -154,6 +175,7 @@ export function listAccessLogs(options = {}) {
         l.status_code,
         l.referer,
         l.user_agent,
+        l.user_agent_kind,
         l.visited_at
       FROM access_logs l
       ${whereClause}
@@ -183,14 +205,14 @@ export function getAccessLogDashboardSummary() {
   `)[0] || { total: 0 };
 
   const recentAccessRows = queryAll(`
-    SELECT client_ip, user_agent
+    SELECT client_ip, user_agent_kind
     FROM access_logs
     WHERE datetime(visited_at) >= datetime('now', '-24 hours')
   `);
 
   const recentUniqueIps = new Set(
     recentAccessRows
-      .filter((row) => summarizeUserAgent(normalizeText(row.user_agent)).kind !== 'bot')
+      .filter((row) => normalizeStoredUserAgentKind(row.user_agent_kind) !== 'bot')
       .map((row) => normalizeText(row.client_ip))
       .filter(Boolean)
   );
@@ -251,6 +273,10 @@ export function shouldRecordPageAccess(request, reply) {
     return false;
   }
 
+  if (shouldIgnoreProbeRequest(request)) {
+    return false;
+  }
+
   if (pathname.startsWith('/api/')) {
     return false;
   }
@@ -269,6 +295,21 @@ export function shouldRecordPageAccess(request, reply) {
   }
 
   return true;
+}
+
+function shouldIgnoreProbeRequest(request) {
+  const userAgent = normalizeText(request?.headers?.['user-agent']);
+  const clientIp = normalizeClientIpForFilter(request);
+
+  if (isLoopbackIp(clientIp) && isCliProbeUserAgent(userAgent)) {
+    return true;
+  }
+
+  if (isHealthCheckUserAgent(userAgent)) {
+    return true;
+  }
+
+  return false;
 }
 
 function isKnownAssetPath(pathname) {
@@ -303,6 +344,34 @@ function normalizeText(value) {
   return String(value || '').trim();
 }
 
+function normalizeClientIpForFilter(request) {
+  const headerCandidates = [
+    request?.headers?.['cf-connecting-ip'],
+    request?.headers?.['x-real-ip'],
+    request?.headers?.['x-forwarded-for']
+  ];
+
+  for (const headerValue of headerCandidates) {
+    const normalized = normalizeHeaderIp(headerValue);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return normalizeText(request?.ip || request?.socket?.remoteAddress || '');
+}
+
+function normalizeHeaderIp(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .find(Boolean) || '';
+}
+
 function normalizeMethod(value) {
   const normalized = String(value || '').trim().toUpperCase();
   return normalized || '';
@@ -321,15 +390,34 @@ function normalizePositiveInteger(value, fallback) {
   return normalized;
 }
 
+function normalizeAccessLogUserAgentKindFilter(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  if (normalized === 'all' || normalized === 'bot' || normalized === 'non_bot') {
+    return normalized;
+  }
+
+  return 'non_bot';
+}
+
+function normalizeStoredUserAgentKind(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  if (normalized === 'browser' || normalized === 'bot' || normalized === 'other') {
+    return normalized;
+  }
+
+  return '';
+}
+
 function hydrateAccessLogRow(row = {}) {
   const userAgent = normalizeText(row.user_agent);
   const userAgentSummary = summarizeUserAgent(userAgent);
+  const userAgentKind = normalizeStoredUserAgentKind(row.user_agent_kind) || userAgentSummary.kind;
 
   return {
     ...row,
     client_ip_visit_count: Number(row.client_ip_visit_count || 0),
     user_agent: userAgent,
-    user_agent_kind: userAgentSummary.kind,
+    user_agent_kind: userAgentKind,
     user_agent_label: userAgentSummary.label
   };
 }
@@ -373,6 +461,23 @@ function backfillAccessLogVisitCounts() {
     )
     WHERE id IN (SELECT id FROM sequenced_logs)
   `);
+}
+
+function backfillAccessLogUserAgentKinds() {
+  const rows = queryAll(`
+    SELECT id, user_agent
+    FROM access_logs
+    WHERE COALESCE(user_agent_kind, '') NOT IN ('browser', 'bot', 'other')
+  `);
+
+  for (const row of rows) {
+    const userAgent = normalizeText(row.user_agent);
+    const userAgentSummary = summarizeUserAgent(userAgent);
+    execute(
+      'UPDATE access_logs SET user_agent_kind = ? WHERE id = ?',
+      [userAgentSummary.kind, row.id]
+    );
+  }
 }
 
 function summarizeUserAgent(userAgent) {
@@ -429,6 +534,11 @@ function detectKnownClientLabel(userAgent) {
 function detectBotLabel(userAgent) {
   const botMatchers = [
     { pattern: /\bGooglebot\b/i, label: 'Googlebot' },
+    { pattern: /\bGoogleOther(?:-Image|-Video)?\b/i, label: 'GoogleOther' },
+    { pattern: /\bGoogle-InspectionTool\b/i, label: 'Google-InspectionTool' },
+    { pattern: /\bStorebot-Google\b/i, label: 'Storebot-Google' },
+    { pattern: /\bAdsBot-Google(?:-Mobile)?\b/i, label: 'AdsBot-Google' },
+    { pattern: /\bMJ12bot\b/i, label: 'MJ12bot' },
     { pattern: /\bBaiduspider\b/i, label: 'Baiduspider' },
     { pattern: /\bbingbot\b/i, label: 'bingbot' },
     { pattern: /\bClaudeBot\b/i, label: 'ClaudeBot' },
@@ -469,4 +579,29 @@ function detectBrowserLabel(userAgent) {
   }
 
   return '';
+}
+
+function isLoopbackIp(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  return normalized === '127.0.0.1'
+    || normalized === '::1'
+    || normalized === '::ffff:127.0.0.1';
+}
+
+function isCliProbeUserAgent(userAgent) {
+  if (!userAgent) {
+    return false;
+  }
+
+  return /\bcurl\/[\d.]+\b/i.test(userAgent)
+    || /\bwget\/[\d.]+\b/i.test(userAgent)
+    || /\bhttpie\/[\d.]+\b/i.test(userAgent);
+}
+
+function isHealthCheckUserAgent(userAgent) {
+  if (!userAgent) {
+    return false;
+  }
+
+  return /\b(kube-probe|healthcheck|uptimerobot|statuscake|headlesschrome health check)\b/i.test(userAgent);
 }

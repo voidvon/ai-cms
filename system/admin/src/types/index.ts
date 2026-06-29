@@ -66,6 +66,16 @@ export interface AccessLogSummary {
   top_pages: AccessLogTopPage[];
 }
 
+export interface AdminLoginLog {
+  id: number;
+  admin_id?: number | null;
+  username: string;
+  client_ip: string;
+  status: 'success' | 'failure';
+  failure_code?: string | null;
+  created_at: string;
+}
+
 export interface LanguageSite {
   id?: number | null;
   host?: string;

@@ -1,5 +1,6 @@
 import { requireAuth, requirePermission } from '../../middleware/auth.mjs';
 import { clearAccessLogs, getAccessLogDashboardSummary, listAccessLogs } from '../../services/access-logs.mjs';
+import { listAdminLoginLogs } from '../../services/admin-login-logs.mjs';
 import {
   createAdminGroup,
   deleteAdminGroup,
@@ -96,7 +97,8 @@ export default async function adminApiRoutes(app) {
       page: request.query?.page,
       limit: request.query?.limit,
       path: request.query?.path,
-      ip: request.query?.ip
+      ip: request.query?.ip,
+      userAgentKind: request.query?.userAgentKind
     });
 
     return { success: true, data: result };
@@ -106,6 +108,20 @@ export default async function adminApiRoutes(app) {
     onRequest: [requireAuth, requireAdminManage]
   }, async () => {
     const result = getAccessLogDashboardSummary();
+    return { success: true, data: result };
+  });
+
+  app.get('/admin/login-logs', {
+    onRequest: [requireAuth, requireAdminManage]
+  }, async (request) => {
+    const result = listAdminLoginLogs({
+      page: request.query?.page,
+      limit: request.query?.limit,
+      username: request.query?.username,
+      ip: request.query?.ip,
+      status: request.query?.status
+    });
+
     return { success: true, data: result };
   });
 

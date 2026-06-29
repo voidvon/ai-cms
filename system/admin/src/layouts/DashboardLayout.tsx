@@ -10,6 +10,7 @@ import {
   Image,
   Languages,
   LayoutDashboard,
+  ListChecks,
   LogOut,
   Map,
   Moon,
@@ -128,6 +129,7 @@ export default function DashboardLayout() {
       icon: Shield,
       items: [
         { path: '/admins', label: '管理员', icon: Shield },
+        { path: '/admin-login-logs', label: '登录日志', icon: ListChecks },
       ]
     }
   ] satisfies Array<{

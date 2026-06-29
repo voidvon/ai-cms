@@ -11,6 +11,7 @@ const TemplateVariantsPage = lazy(() => import('@/pages/TemplateVariantsPage'))
 const ContentModelsPage = lazy(() => import('@/pages/ContentModelsPage'))
 const ContentModelDataPage = lazy(() => import('@/pages/ContentModelDataPage'))
 const AdminsPage = lazy(() => import('@/pages/AdminsPage'))
+const AdminLoginLogsPage = lazy(() => import('@/pages/AdminLoginLogsPage'))
 const StaticGenerationPage = lazy(() => import('@/pages/StaticGenerationPage'))
 const SiteConfigPage = lazy(() => import('@/pages/SiteConfigPage'))
 const SitemapDiagnosticsPage = lazy(() => import('@/pages/SitemapDiagnosticsPage'))
@@ -44,6 +45,7 @@ function App() {
             <Route path="languages" element={<LanguagesPage />} />
             <Route path="template-variants" element={<Navigate to="/themes" replace />} />
             <Route path="admins" element={<AdminsPage />} />
+            <Route path="admin-login-logs" element={<AdminLoginLogsPage />} />
             <Route path="static-gen" element={<StaticGenerationPage />} />
             <Route path="site-config" element={<SiteConfigPage />} />
             <Route path="bulk-replace" element={<BulkReplacePage />} />

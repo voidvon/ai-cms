@@ -2,6 +2,7 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypt
 import { execute, queryAll, queryOne } from '../db.mjs';
 import { normalizePermissionFlags } from './admin-permissions.mjs';
 import { ensureAdminGroupSchema, getAdminGroupById, getDefaultAdminGroupId } from './admin-groups.mjs';
+import { recordAdminLoginLog } from './admin-login-logs.mjs';
 
 const LOGIN_FAILURE_WINDOW_MS = 30 * 60 * 1000;
 const LOGIN_LOCKOUT_MS = 30 * 60 * 1000;
@@ -18,7 +19,14 @@ export function authenticateAdmin(username, password, clientIp) {
   const normalizedClientIp = normalizeLoginAttemptField(clientIp, { fallback: 'unknown' });
   const activeLock = getActiveLoginLock(normalizedUsername, normalizedClientIp);
   if (activeLock) {
-    return buildLockedAuthResult(activeLock.locked_until);
+    const result = buildLockedAuthResult(activeLock.locked_until);
+    recordAdminLoginLog({
+      username,
+      clientIp,
+      status: 'failure',
+      failureCode: result.code
+    });
+    return result;
   }
 
   const admin = queryOne(
@@ -40,12 +48,18 @@ export function authenticateAdmin(username, password, clientIp) {
   );
 
   if (!admin) {
-    return registerFailedLoginAttempt(normalizedUsername, normalizedClientIp);
+    return registerFailedLoginAttempt(normalizedUsername, normalizedClientIp, {
+      username,
+      clientIp
+    });
   }
 
   const verified = verifyPassword(password, admin.password_hash, admin.password_scheme);
   if (!verified.valid) {
-    return registerFailedLoginAttempt(normalizedUsername, normalizedClientIp);
+    return registerFailedLoginAttempt(normalizedUsername, normalizedClientIp, {
+      username: admin.username,
+      clientIp
+    });
   }
 
   if (verified.upgradedHash) {
@@ -68,6 +82,13 @@ export function authenticateAdmin(username, password, clientIp) {
     `,
     [clientIp, admin.id]
   );
+
+  recordAdminLoginLog({
+    adminId: admin.id,
+    username: admin.username,
+    clientIp,
+    status: 'success'
+  });
 
   return {
     ok: true,
@@ -303,7 +324,7 @@ function getActiveLoginLock(username, clientIp) {
   return { locked_until: new Date(lockedUntilTime).toISOString() };
 }
 
-function registerFailedLoginAttempt(username, clientIp) {
+function registerFailedLoginAttempt(username, clientIp, logContext = {}) {
   const now = new Date();
   const nowIso = now.toISOString();
   const existing = queryOne(
@@ -358,14 +379,28 @@ function registerFailedLoginAttempt(username, clientIp) {
   }
 
   if (lockedUntilIso) {
-    return buildLockedAuthResult(lockedUntilIso);
+    const result = buildLockedAuthResult(lockedUntilIso);
+    recordAdminLoginLog({
+      username: logContext.username || username,
+      clientIp: logContext.clientIp || clientIp,
+      status: 'failure',
+      failureCode: result.code
+    });
+    return result;
   }
 
-  return {
+  const result = {
     ok: false,
     code: 'INVALID_CREDENTIALS',
     message: '用户名或密码不正确'
   };
+  recordAdminLoginLog({
+    username: logContext.username || username,
+    clientIp: logContext.clientIp || clientIp,
+    status: 'failure',
+    failureCode: result.code
+  });
+  return result;
 }
 
 function clearLoginAttemptState(username, clientIp) {

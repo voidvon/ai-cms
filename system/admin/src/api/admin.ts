@@ -4,6 +4,7 @@ import type {
   AccessLogSummary,
   Admin,
   AdminGroup,
+  AdminLoginLog,
   AdminPermissionDefinition,
   ApiResponse,
   PaginationMeta
@@ -45,6 +46,7 @@ export const adminApi = {
     limit?: number
     path?: string
     ip?: string
+    userAgentKind?: 'non_bot' | 'bot' | 'all'
   }) => {
     const response = await apiClient.get<ApiResponse<{
       items: AccessLog[]
@@ -55,6 +57,20 @@ export const adminApi = {
 
   getAccessLogSummary: async () => {
     const response = await apiClient.get<ApiResponse<AccessLogSummary>>('/admin/access-logs/summary')
+    return response.data
+  },
+
+  listLoginLogs: async (params?: {
+    page?: number
+    limit?: number
+    username?: string
+    ip?: string
+    status?: 'success' | 'failure' | 'all'
+  }) => {
+    const response = await apiClient.get<ApiResponse<{
+      items: AdminLoginLog[]
+      pagination: PaginationMeta
+    }>>('/admin/login-logs', { params })
     return response.data
   },
 

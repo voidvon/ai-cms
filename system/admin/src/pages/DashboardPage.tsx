@@ -17,11 +17,13 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatRelativeTime } from '@/lib/datetime'
 import { toast } from 'sonner'
 
 const PAGE_SIZE = 20
+const DEFAULT_USER_AGENT_KIND = 'non_bot'
 
 export default function DashboardPage() {
   const [topPagesOpen, setTopPagesOpen] = useState(false)
@@ -29,7 +31,12 @@ export default function DashboardPage() {
   const [page, setPage] = useState(1)
   const [pathInput, setPathInput] = useState('')
   const [ipInput, setIpInput] = useState('')
-  const [filters, setFilters] = useState({ path: '', ip: '' })
+  const [userAgentKindInput, setUserAgentKindInput] = useState<'non_bot' | 'bot' | 'all'>(DEFAULT_USER_AGENT_KIND)
+  const [filters, setFilters] = useState({
+    path: '',
+    ip: '',
+    userAgentKind: DEFAULT_USER_AGENT_KIND as 'non_bot' | 'bot' | 'all',
+  })
 
   const summaryQuery = useQuery({
     queryKey: ['dashboard-access-log-summary'],
@@ -37,12 +44,13 @@ export default function DashboardPage() {
   })
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['dashboard-access-logs', page, filters.path, filters.ip],
+    queryKey: ['dashboard-access-logs', page, filters.path, filters.ip, filters.userAgentKind],
     queryFn: () => adminApi.listAccessLogs({
       page,
       limit: PAGE_SIZE,
       path: filters.path || undefined,
       ip: filters.ip || undefined,
+      userAgentKind: filters.userAgentKind,
     }),
   })
 
@@ -73,6 +81,7 @@ export default function DashboardPage() {
     setFilters({
       path: pathInput.trim(),
       ip: ipInput.trim(),
+      userAgentKind: userAgentKindInput,
     })
   }
 
@@ -121,6 +130,19 @@ export default function DashboardPage() {
       </div>
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-3">
+          <Select
+            value={userAgentKindInput}
+            onValueChange={(value: 'non_bot' | 'bot' | 'all') => setUserAgentKindInput(value)}
+          >
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="non_bot">非爬虫</SelectItem>
+              <SelectItem value="bot">爬虫</SelectItem>
+              <SelectItem value="all">全部</SelectItem>
+            </SelectContent>
+          </Select>
           <Input
             className="w-[260px]"
             value={pathInput}
@@ -180,7 +202,14 @@ export default function DashboardPage() {
                               className="block w-full truncate text-left hover:underline"
                               title={item.user_agent}
                             >
-                              {item.user_agent_label || item.user_agent}
+                              <span className="inline-flex max-w-full items-center gap-2">
+                                <Badge variant={getUserAgentBadgeVariant(item.user_agent_kind)}>
+                                  {getUserAgentKindLabel(item.user_agent_kind)}
+                                </Badge>
+                                <span className="truncate">
+                                  {item.user_agent_label || item.user_agent}
+                                </span>
+                              </span>
                             </button>
                           </PopoverTrigger>
                           <PopoverContent
@@ -299,4 +328,24 @@ export default function DashboardPage() {
       </AlertDialog>
     </div>
   )
+}
+
+function getUserAgentKindLabel(kind?: 'browser' | 'bot' | 'other') {
+  if (kind === 'bot') {
+    return '爬虫'
+  }
+
+  if (kind === 'browser') {
+    return '浏览器'
+  }
+
+  return '其他'
+}
+
+function getUserAgentBadgeVariant(kind?: 'browser' | 'bot' | 'other') {
+  if (kind === 'bot') {
+    return 'secondary' as const
+  }
+
+  return 'outline' as const
 }
