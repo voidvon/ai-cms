@@ -18,7 +18,7 @@ const SitemapDiagnosticsPage = lazy(() => import('@/pages/SitemapDiagnosticsPage
 const LlmsDiagnosticsPage = lazy(() => import('@/pages/LlmsDiagnosticsPage'))
 const LanguagesPage = lazy(() => import('@/pages/LanguagesPage'))
 const BulkReplacePage = lazy(() => import('@/pages/BulkReplacePage'))
-const AiAssistantPage = lazy(() => import('@/pages/AiAssistantPage'))
+const AiChatPage = lazy(() => import('@/pages/AiChatPage'))
 
 function RouteFallback() {
   return (
@@ -50,7 +50,8 @@ function App() {
             <Route path="static-gen" element={<StaticGenerationPage />} />
             <Route path="site-config" element={<SiteConfigPage />} />
             <Route path="bulk-replace" element={<BulkReplacePage />} />
-            <Route path="ai-assistant" element={<AiAssistantPage />} />
+            <Route path="ai" element={<AiChatPage />} />
+            <Route path="ai-assistant" element={<Navigate to="/ai" replace />} />
             <Route path="sitemap-diagnostics" element={<SitemapDiagnosticsPage />} />
             <Route path="llms-diagnostics" element={<LlmsDiagnosticsPage />} />
           </Route>

@@ -1,14 +1,7 @@
 import { createUIMessageStream, pipeUIMessageStreamToResponse } from 'ai';
 import { requireAuth } from '../../middleware/auth.mjs';
-import {
-  answerKnowledgeStub,
-  draftContractWithAgent,
-  exportContractPdfStub,
-  getAiAssistantCapabilities,
-  queryPriceStub,
-  resetAssistantChat,
-  streamAssistantChat
-} from '../../services/ai-assistant.mjs';
+import { getAiCapabilities, executeAiTask } from '../../services/ai/capabilities.mjs';
+import { resetAiConversation, streamAiChat } from '../../services/ai/chat.mjs';
 
 async function parseBody(request) {
   if (request.body && typeof request.body === 'object') {
@@ -21,13 +14,8 @@ function createAssistantStreamingTextStream(originalMessages, executeTextStream)
   const textPartId = `text-${Date.now()}`;
   return createUIMessageStream({
     execute: async ({ writer }) => {
-      writer.write({
-        type: 'start'
-      });
-      writer.write({
-        type: 'text-start',
-        id: textPartId
-      });
+      writer.write({ type: 'start' });
+      writer.write({ type: 'text-start', id: textPartId });
 
       try {
         await executeTextStream((delta) => {
@@ -38,27 +26,21 @@ function createAssistantStreamingTextStream(originalMessages, executeTextStream)
           writer.write({
             type: 'text-delta',
             id: textPartId,
-            delta
+            delta,
           });
         });
       } catch (error) {
         writer.write({
           type: 'text-delta',
           id: textPartId,
-          delta: formatAssistantError(error)
+          delta: formatAiError(error),
         });
       }
 
-      writer.write({
-        type: 'text-end',
-        id: textPartId
-      });
-      writer.write({
-        type: 'finish',
-        finishReason: 'stop'
-      });
+      writer.write({ type: 'text-end', id: textPartId });
+      writer.write({ type: 'finish', finishReason: 'stop' });
     },
-    originalMessages
+    originalMessages,
   });
 }
 
@@ -66,12 +48,12 @@ function sendAssistantStreamingTextStream(reply, originalMessages, executeTextSt
   reply.hijack();
   pipeUIMessageStreamToResponse({
     response: reply.raw,
-    stream: createAssistantStreamingTextStream(originalMessages, executeTextStream)
+    stream: createAssistantStreamingTextStream(originalMessages, executeTextStream),
   });
   return reply;
 }
 
-function formatAssistantError(error) {
+function formatAiError(error) {
   const message = String(error?.message || '').trim();
   if (!message) {
     return 'AI 服务暂时不可用，请稍后重试。';
@@ -84,102 +66,40 @@ function formatAssistantError(error) {
   return `AI 服务请求失败：${message}`;
 }
 
-export default async function aiAssistantRoutes(app) {
-  app.get('/ai-assistant/capabilities', {
-    onRequest: [requireAuth]
+export default async function aiRoutes(app) {
+  app.get('/ai/capabilities', {
+    onRequest: [requireAuth],
   }, async () => {
     return {
       success: true,
-      data: getAiAssistantCapabilities()
+      data: getAiCapabilities(),
     };
   });
 
-  app.post('/ai-assistant/contract/draft', {
-    onRequest: [requireAuth]
+  app.post('/ai/tasks/:taskKey/execute', {
+    onRequest: [requireAuth],
   }, async (request, reply) => {
     try {
       const body = await parseBody(request);
-      const result = await draftContractWithAgent(body);
+      const taskKey = String(request.params?.taskKey || '').trim();
+      const result = await executeAiTask(taskKey, body);
 
       return {
         success: true,
         data: result,
-        message: '合同草稿已生成'
+        message: 'AI 任务执行完成',
       };
     } catch (error) {
       reply.code(error.statusCode || 400);
       return {
         success: false,
-        message: error.message || '合同草稿请求失败'
+        message: error.message || 'AI 任务执行失败',
       };
     }
   });
 
-  app.post('/ai-assistant/price/query', {
-    onRequest: [requireAuth]
-  }, async (request, reply) => {
-    try {
-      const body = await parseBody(request);
-      const result = queryPriceStub(body);
-
-      return {
-        success: true,
-        data: result,
-        message: '价格查询接口骨架已就绪，待接入真实价格源'
-      };
-    } catch (error) {
-      reply.code(400);
-      return {
-        success: false,
-        message: error.message || '价格查询失败'
-      };
-    }
-  });
-
-  app.post('/ai-assistant/knowledge/ask', {
-    onRequest: [requireAuth]
-  }, async (request, reply) => {
-    try {
-      const body = await parseBody(request);
-      const result = answerKnowledgeStub(body);
-
-      return {
-        success: true,
-        data: result,
-        message: '知识问答接口骨架已就绪，待接入检索与回答生成'
-      };
-    } catch (error) {
-      reply.code(400);
-      return {
-        success: false,
-        message: error.message || '知识问答失败'
-      };
-    }
-  });
-
-  app.post('/ai-assistant/contract/export-pdf', {
-    onRequest: [requireAuth]
-  }, async (request, reply) => {
-    try {
-      const body = await parseBody(request);
-      const result = exportContractPdfStub(body);
-
-      return {
-        success: true,
-        data: result,
-        message: 'PDF 导出接口骨架已就绪，待接入渲染器'
-      };
-    } catch (error) {
-      reply.code(400);
-      return {
-        success: false,
-        message: error.message || 'PDF 导出失败'
-      };
-    }
-  });
-
-  app.post('/ai-assistant/chat', {
-    onRequest: [requireAuth]
+  app.post('/ai/chat', {
+    onRequest: [requireAuth],
   }, async (request, reply) => {
     const body = await parseBody(request);
     const messages = Array.isArray(body.messages) ? body.messages : [];
@@ -188,12 +108,14 @@ export default async function aiAssistantRoutes(app) {
       ? lastMessage.parts.filter((part) => part?.type === 'text').map((part) => String(part.text || ''))
       : [];
     const messageText = textParts.join('\n').trim();
-    const chatId = body.chatId || body.id || '';
+    const conversationId = body.conversationId || body.chatId || body.id || '';
+    const capability = body.capability || '';
 
     return sendAssistantStreamingTextStream(reply, messages, async (writeDelta) => {
-      const streamed = await streamAssistantChat({
-        chatId,
-        message: messageText
+      const streamed = await streamAiChat({
+        conversationId,
+        capability,
+        message: messageText,
       });
       const reader = streamed.result.toTextStream().getReader();
       let hasDelta = false;
@@ -225,13 +147,13 @@ export default async function aiAssistantRoutes(app) {
     });
   });
 
-  app.post('/ai-assistant/chat/reset', {
-    onRequest: [requireAuth]
+  app.post('/ai/chat/reset', {
+    onRequest: [requireAuth],
   }, async (request) => {
     const body = await parseBody(request);
     return {
       success: true,
-      data: resetAssistantChat(body.chat_id || body.chatId || '')
+      data: resetAiConversation(body.conversation_id || body.conversationId || body.chat_id || body.chatId || ''),
     };
   });
 }

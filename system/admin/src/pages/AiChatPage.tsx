@@ -24,26 +24,28 @@ const QUICK_PROMPTS = [
   '帮我查询 BSA2T-25 在中国区的价格',
   '我要做一份销售合同，需要先收集哪些信息？',
   '客户是上海某工厂，产品是 BSA2T-25 2 台和 BSA2T-40 1 台，先帮我整理合同草稿',
-  '把刚才的合同草稿改成需要人工确认付款条款和交期的版本',
+  '我想把 AI 能力扩展到知识问答和内容协作，应该怎么规划入口？',
 ]
 
-export default function AiAssistantPage() {
-  const chatId = useMemo(() => 'admin-ai-chat', [])
+const DEFAULT_CONVERSATION_ID = 'admin-ai-chat'
+const DEFAULT_CAPABILITY = 'contract_copilot'
 
+export default function AiChatPage() {
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
-        api: '/api/ai-assistant/chat',
+        api: '/api/ai/chat',
         credentials: 'include',
         body: {
-          chatId,
+          conversationId: DEFAULT_CONVERSATION_ID,
+          capability: DEFAULT_CAPABILITY,
         },
       }),
-    [chatId]
+    []
   )
 
   const { messages, sendMessage, status, error, stop } = useChat({
-    id: chatId,
+    id: DEFAULT_CONVERSATION_ID,
     transport,
   })
 
@@ -76,10 +78,10 @@ export default function AiAssistantPage() {
             <div className="space-y-1">
               <CardTitle className="flex items-center gap-2 text-xl">
                 <Bot className="h-5 w-5 text-primary" />
-                AI 合同助手
+                AI 对话
               </CardTitle>
               <CardDescription>
-                连续追问价格、补齐缺失字段、整理合同草稿。当前对话会保留上下文，适合一轮轮把合同信息收完整。
+                统一承接后续 AI 能力。当前先内置合同协作能力，支持连续对话、价格占位查询和合同草稿整理。
               </CardDescription>
             </div>
             <div className="rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground">
@@ -95,16 +97,16 @@ export default function AiAssistantPage() {
                 <ConversationEmptyState
                   icon={<Sparkles className="h-6 w-6" />}
                   title="从一条问题开始"
-                  description="先问价格，再补客户、产品、交期、付款方式，最后让助手整理合同草稿。"
+                  description="当前先通过统一对话入口承接合同相关能力，后续再向知识问答、内容协作、运营辅助扩展。"
                 >
                   <div className="flex max-w-xl flex-col items-center gap-4 text-center">
                     <div className="flex h-14 w-14 items-center justify-center rounded-2xl border bg-background shadow-sm">
                       <Bot className="h-6 w-6 text-primary" />
                     </div>
                     <div className="space-y-2">
-                      <h3 className="text-lg font-semibold">AI 合同助手</h3>
+                      <h3 className="text-lg font-semibold">AI 对话</h3>
                       <p className="text-sm leading-6 text-muted-foreground">
-                        这不是一个孤立表单，而是一个持续协作的对话区。你可以先查价格，再逐步把合同信息补完整。
+                        这里是统一 AI 入口，不再把合同做成单独产品页。当前默认能力仍是合同协作，后续新能力会继续挂在这里。
                       </p>
                     </div>
                     <Suggestions className="max-w-full">
@@ -154,10 +156,10 @@ export default function AiAssistantPage() {
                 <PromptInputFooter>
                   <PromptInputTools>
                     <div className="rounded-full border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
-                      状态：{status}
+                      当前能力：合同协作
                     </div>
                   </PromptInputTools>
-                  <PromptInputSubmit disabled={!isBusy && false} onStop={() => void stop()} status={status}>
+                  <PromptInputSubmit disabled={false} onStop={() => void stop()} status={status}>
                     {!isBusy ? <Send className="h-4 w-4" /> : undefined}
                   </PromptInputSubmit>
                 </PromptInputFooter>

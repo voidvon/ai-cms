@@ -523,16 +523,24 @@ export interface BulkReplaceExecutePayload extends BulkReplacePreviewPayload {
   confirm_execution: boolean;
 }
 
-export interface AiAssistantTaskDefinition {
+export interface AiTaskDefinition {
   key: 'contract_draft' | 'price_query' | 'knowledge_qa' | 'export_pdf' | string;
   label: string;
   description: string;
 }
 
-export interface AiAssistantCapabilities {
+export interface AiChatCapabilityDefinition {
+  key: string;
+  label: string;
+  description: string;
+}
+
+export interface AiCapabilities {
   provider: string;
   status: 'stub' | 'ready' | string;
-  tasks: AiAssistantTaskDefinition[];
+  default_chat_capability: string;
+  chat_capabilities: AiChatCapabilityDefinition[];
+  task_capabilities: AiTaskDefinition[];
   recommendedArchitecture: {
     ui: string;
     api: string;
@@ -541,7 +549,7 @@ export interface AiAssistantCapabilities {
   };
 }
 
-export interface AiAssistantStubResult {
+export interface AiTaskResult {
   task: string;
   status: 'stub' | 'ready' | string;
   customer_name?: string;
@@ -560,29 +568,29 @@ export interface AiAssistantStubResult {
   };
 }
 
-export interface AiAssistantContractProductInput {
+export interface AiContractProductInput {
   sku: string;
   quantity?: number;
   name?: string;
 }
 
-export interface AiAssistantContractDraftPayload {
+export interface AiContractDraftPayload {
   customer_name: string;
   contract_type?: string;
   region?: string;
   currency?: string;
-  products: AiAssistantContractProductInput[];
+  products: AiContractProductInput[];
   notes?: string;
 }
 
-export interface AiAssistantPricePayload {
+export interface AiPriceQueryPayload {
   sku: string;
   region?: string;
   quantity?: number;
   currency?: string;
 }
 
-export interface AiAssistantKnowledgePayload {
+export interface AiKnowledgePayload {
   question: string;
   scope?: string;
 }
