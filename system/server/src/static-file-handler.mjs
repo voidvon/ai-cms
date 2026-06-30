@@ -357,11 +357,11 @@ async function fileExists(rootDir, candidate) {
 
 function normalizeSharedUploadPath(pathname) {
   const normalized = String(pathname || '').replace(/\/{2,}/g, '/');
-  if (/^\/uploads\/(?:images|skin|pdfs)\//i.test(normalized)) {
+  if (/^\/uploads\/(?:images|skin|pdfs|files)\//i.test(normalized)) {
     return normalized.replace(/^\/uploads\//i, '/');
   }
 
-  if (/^\/upload\/(?:images|skin|pdfs)\//i.test(normalized)) {
+  if (/^\/upload\/(?:images|skin|pdfs|files)\//i.test(normalized)) {
     return normalized.replace(/^\/upload\//i, '/');
   }
   if (/^\/skin\//i.test(normalized)) {

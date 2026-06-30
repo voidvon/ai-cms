@@ -1,14 +1,8 @@
-import { useMemo } from 'react'
-import { DefaultChatTransport } from 'ai'
-import { useChat } from '@ai-sdk/react'
-import { Bot, Send, Sparkles } from 'lucide-react'
-import {
-  Conversation,
-  ConversationContent,
-  ConversationEmptyState,
-  ConversationScrollButton,
-} from '@/components/ai-elements/conversation'
-import { Message, MessageContent, MessageResponse } from '@/components/ai-elements/message'
+import { useMemo, useRef, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Bot, Loader2, MessageSquareText, RefreshCw, ScrollText, Send, Trash2 } from 'lucide-react'
+import { documentWorkspacesApi } from '@/api/document-workspaces'
+import { ChatMessageItem } from '@/components/ai-chat/ChatMessageItem'
 import {
   PromptInput,
   PromptInputBody,
@@ -17,169 +11,528 @@ import {
   PromptInputTextarea,
   PromptInputTools,
 } from '@/components/ai-elements/prompt-input'
-import { Suggestion, Suggestions } from '@/components/ai-elements/suggestion'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { toast } from 'sonner'
+import type { DocumentDraftConversationState, DocumentTemplate } from '@/types'
 
-const QUICK_PROMPTS = [
-  '帮我查询 BSA2T-25 在中国区的价格',
-  '我要做一份销售合同，需要先收集哪些信息？',
-  '客户是上海某工厂，产品是 BSA2T-25 2 台和 BSA2T-40 1 台，先帮我整理合同草稿',
-  '我想把 AI 能力扩展到知识问答和内容协作，应该怎么规划入口？',
-]
-
-const DEFAULT_CONVERSATION_ID = 'admin-ai-chat'
-const DEFAULT_CAPABILITY = 'contract_copilot'
+const DOCUMENT_TYPE_LABELS: Record<'quote' | 'contract', string> = {
+  quote: '报价单',
+  contract: '销售合同',
+}
 
 export default function AiChatPage() {
-  const transport = useMemo(
-    () =>
-      new DefaultChatTransport({
-        api: '/api/ai/chat',
-        credentials: 'include',
-        body: {
-          conversationId: DEFAULT_CONVERSATION_ID,
-          capability: DEFAULT_CAPABILITY,
-        },
-      }),
-    []
-  )
-
-  const { messages, sendMessage, status, error, stop } = useChat({
-    id: DEFAULT_CONVERSATION_ID,
-    transport,
+  const queryClient = useQueryClient()
+  const previewFrameRef = useRef<HTMLIFrameElement | null>(null)
+  const [selectedDocumentType, setSelectedDocumentType] = useState<'quote' | 'contract'>('quote')
+  const [draftId, setDraftId] = useState<string>('')
+  const [inputValue, setInputValue] = useState('')
+  const [previewVersion, setPreviewVersion] = useState(0)
+  const [deleteDraftId, setDeleteDraftId] = useState<string>('')
+  const [conversationState, setConversationState] = useState<DocumentDraftConversationState>({
+    missing_fields: [],
+    suggested_questions: [],
   })
 
-  const isBusy = status === 'submitted' || status === 'streaming'
+  const { data: templatesData, isLoading: isTemplatesLoading } = useQuery({
+    queryKey: ['document-templates'],
+    queryFn: () => documentWorkspacesApi.listTemplates(),
+  })
 
-  const handlePromptSubmit = async ({ text }: { text?: string }) => {
-    const value = String(text || '').trim()
-    if (!value) {
+  const templates = templatesData?.data || []
+  const groupedTemplates = useMemo(() => {
+    return {
+      quote: templates.filter((item) => item.document_type === 'quote'),
+      contract: templates.filter((item) => item.document_type === 'contract'),
+    }
+  }, [templates])
+
+  const draftsQuery = useQuery({
+    queryKey: ['document-drafts'],
+    queryFn: () => documentWorkspacesApi.listDrafts(30),
+  })
+
+  const recentDrafts = draftsQuery.data?.data || []
+
+  const draftQuery = useQuery({
+    queryKey: ['document-draft', draftId],
+    queryFn: () => documentWorkspacesApi.getDraft(draftId),
+    enabled: Boolean(draftId),
+  })
+
+  const currentDraft = draftQuery.data?.data || null
+
+  const createDraftMutation = useMutation({
+    mutationFn: async (template: DocumentTemplate) => {
+      return documentWorkspacesApi.createDraft({
+        document_type: template.document_type,
+        document_template_id: template.id,
+        title: template.document_type === 'quote' ? '报价单' : '销售合同',
+      })
+    },
+    onSuccess: async (response) => {
+      const nextDraft = response.data
+      if (!nextDraft) {
+        return
+      }
+      setDraftId(nextDraft.id)
+      setPreviewVersion((value) => value + 1)
+      setConversationState({
+        missing_fields: [],
+        suggested_questions: [],
+      })
+      await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
+      await queryClient.invalidateQueries({ queryKey: ['document-draft', nextDraft.id] })
+    },
+  })
+
+  const sendMessageMutation = useMutation({
+    mutationFn: async ({ id, message }: { id: string; message: string }) => {
+      return documentWorkspacesApi.sendMessage(id, message)
+    },
+    onSuccess: async (response) => {
+      if (!response.data?.draft?.id) {
+        return
+      }
+      setInputValue('')
+      setConversationState({
+        missing_fields: response.data.missing_fields || [],
+        suggested_questions: response.data.suggested_questions || [],
+      })
+      setPreviewVersion((value) => value + 1)
+      await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
+      await queryClient.setQueryData(['document-draft', response.data.draft.id], { success: true, data: response.data.draft })
+    },
+  })
+
+  const deleteDraftMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return documentWorkspacesApi.deleteDraft(id)
+    },
+    onSuccess: async (_, deletedId) => {
+      if (draftId === deletedId) {
+        setDraftId('')
+        setInputValue('')
+        setPreviewVersion((value) => value + 1)
+        setConversationState({
+          missing_fields: [],
+          suggested_questions: [],
+        })
+      }
+      setDeleteDraftId('')
+      await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
+      queryClient.removeQueries({ queryKey: ['document-draft', deletedId] })
+      toast.success('草稿已删除')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || '删除草稿失败')
+    },
+  })
+
+  const previewUrl = currentDraft ? `${documentWorkspacesApi.getPreviewUrl(currentDraft.id)}?v=${previewVersion}` : ''
+
+  const handleTemplateSelect = async (template: DocumentTemplate) => {
+    await createDraftMutation.mutateAsync(template)
+  }
+
+  const handleDraftSelect = async (nextDraftId: string) => {
+    if (!nextDraftId) {
+      return
+    }
+    setDraftId(nextDraftId)
+    setConversationState({
+      missing_fields: [],
+      suggested_questions: [],
+    })
+    setPreviewVersion((value) => value + 1)
+    await queryClient.invalidateQueries({ queryKey: ['document-draft', nextDraftId] })
+  }
+
+  const handleSubmit = async ({ text }: { text?: string }) => {
+    const value = String(text || inputValue || '').trim()
+    if (!value || !currentDraft?.id) {
+      return
+    }
+    await sendMessageMutation.mutateAsync({
+      id: currentDraft.id,
+      message: value,
+    })
+  }
+
+  const handlePrintCurrentDraft = () => {
+    const frameWindow = previewFrameRef.current?.contentWindow
+    if (!frameWindow) {
       return
     }
 
-    await sendMessage({
-      role: 'user',
-      parts: [{ type: 'text', text: value }],
-    })
+    frameWindow.focus()
+    frameWindow.print()
   }
 
-  const handleSuggestionClick = async (prompt: string) => {
-    await sendMessage({
-      role: 'user',
-      parts: [{ type: 'text', text: prompt }],
-    })
+  const confirmDeleteDraft = () => {
+    if (!deleteDraftId) {
+      return
+    }
+    deleteDraftMutation.mutate(deleteDraftId)
   }
 
   return (
-    <div className="min-h-0">
-      <Card className="flex min-h-[calc(100vh-9rem)] flex-col overflow-hidden border-border/70 shadow-sm">
+    <div className="h-[calc(100vh-9rem)] min-h-0">
+      <Card className="flex h-full min-h-0 flex-col overflow-hidden border-border/70 shadow-sm">
         <CardHeader className="border-b bg-muted/20">
           <div className="flex items-start justify-between gap-4">
             <div className="space-y-1">
               <CardTitle className="flex items-center gap-2 text-xl">
-                <Bot className="h-5 w-5 text-primary" />
-                AI 对话
+                <ScrollText className="h-5 w-5 text-primary" />
+                AI 文档工作台
               </CardTitle>
               <CardDescription>
-                统一承接后续 AI 能力。当前先内置合同协作能力，支持连续对话、价格占位查询和合同草稿整理。
+                先选模板，再通过右侧 AI 对话完善报价单或合同内容；左侧预览会实时生效。
               </CardDescription>
             </div>
-            <div className="rounded-full border bg-background px-3 py-1 text-xs text-muted-foreground">
-              {isBusy ? '正在处理' : '可继续对话'}
-            </div>
+            <Badge variant="secondary" className="rounded-full px-3 py-1">
+              {currentDraft ? '预览模式' : '选择模板'}
+            </Badge>
           </div>
         </CardHeader>
 
-        <CardContent className="flex min-h-0 flex-1 flex-col gap-0 p-0">
-          <Conversation className="bg-gradient-to-b from-background via-background to-muted/10">
-            <ConversationContent className="mx-auto w-full max-w-4xl px-4 py-6 sm:px-6">
-              {messages.length === 0 ? (
-                <ConversationEmptyState
-                  icon={<Sparkles className="h-6 w-6" />}
-                  title="从一条问题开始"
-                  description="当前先通过统一对话入口承接合同相关能力，后续再向知识问答、内容协作、运营辅助扩展。"
-                >
-                  <div className="flex max-w-xl flex-col items-center gap-4 text-center">
-                    <div className="flex h-14 w-14 items-center justify-center rounded-2xl border bg-background shadow-sm">
-                      <Bot className="h-6 w-6 text-primary" />
-                    </div>
-                    <div className="space-y-2">
-                      <h3 className="text-lg font-semibold">AI 对话</h3>
-                      <p className="text-sm leading-6 text-muted-foreground">
-                        这里是统一 AI 入口，不再把合同做成单独产品页。当前默认能力仍是合同协作，后续新能力会继续挂在这里。
-                      </p>
-                    </div>
-                    <Suggestions className="max-w-full">
-                      {QUICK_PROMPTS.map((prompt) => (
-                        <Suggestion key={prompt} suggestion={prompt} onClick={() => void handleSuggestionClick(prompt)} />
-                      ))}
-                    </Suggestions>
+        <CardContent className="min-h-0 flex-1 overflow-hidden p-0">
+          {!currentDraft ? (
+            <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[1.2fr_0.8fr]">
+              <section className="flex h-full min-h-0 flex-col border-b bg-background lg:border-b-0 lg:border-r">
+                <div className="flex items-center justify-between border-b bg-background/95 px-4 py-3 backdrop-blur">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">选择文档模板</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      从左侧模板开始新的报价单或销售合同草稿
+                    </p>
                   </div>
-                </ConversationEmptyState>
-              ) : (
-                messages.map((message) => (
-                  <Message key={message.id} from={message.role}>
-                    <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                      {message.role === 'user' ? 'You' : 'Assistant'}
-                    </div>
-                    <MessageContent className="rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm group-[.is-user]:border-transparent group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground">
-                      <MessageResponse>{extractMessageText(message) || '...'}</MessageResponse>
-                    </MessageContent>
-                  </Message>
-                ))
-              )}
-
-              {error ? (
-                <div className="rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm text-destructive shadow-sm">
-                  {error.message || '聊天请求失败'}
+                  <Badge variant="secondary" className="rounded-full px-3 py-1">
+                    选择模板
+                  </Badge>
                 </div>
-              ) : null}
-            </ConversationContent>
+                <div className="min-h-0 flex-1 overflow-y-auto p-5">
+                  <div className="mb-5 flex gap-2">
+                    <Button
+                      variant={selectedDocumentType === 'quote' ? 'default' : 'outline'}
+                      onClick={() => setSelectedDocumentType('quote')}
+                    >
+                      报价单
+                    </Button>
+                    <Button
+                      variant={selectedDocumentType === 'contract' ? 'default' : 'outline'}
+                      onClick={() => setSelectedDocumentType('contract')}
+                    >
+                      销售合同
+                    </Button>
+                  </div>
 
-            <ConversationScrollButton />
-          </Conversation>
+                  <div className="grid gap-4">
+                    {(groupedTemplates[selectedDocumentType] || []).map((template) => (
+                      <button
+                        key={template.id}
+                        type="button"
+                        onClick={() => void handleTemplateSelect(template)}
+                        className="bg-background px-5 py-4 text-left transition hover:bg-muted/20"
+                      >
+                        <div className="flex items-start justify-between gap-4">
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-base font-semibold">{template.name}</h3>
+                              {Number(template.is_default || 0) === 1 ? <Badge variant="secondary">默认</Badge> : null}
+                            </div>
+                            <p className="text-sm leading-6 text-muted-foreground">
+                              {template.description || '进入后可继续通过 AI 对话补全客户、产品、价格和条款信息。'}
+                            </p>
+                          </div>
+                          <Badge variant="outline">{DOCUMENT_TYPE_LABELS[template.document_type]}</Badge>
+                        </div>
+                      </button>
+                    ))}
 
-          <div className="border-t bg-background/95 backdrop-blur">
-            <div className="mx-auto flex w-full max-w-4xl flex-col gap-3 px-4 py-4 sm:px-6">
-              {messages.length > 0 ? (
-                <Suggestions>
-                  {QUICK_PROMPTS.map((prompt) => (
-                    <Suggestion key={prompt} suggestion={prompt} onClick={() => void handleSuggestionClick(prompt)} />
-                  ))}
-                </Suggestions>
-              ) : null}
+                    {isTemplatesLoading ? (
+                      <div className="flex items-center gap-2 border border-dashed px-4 py-6 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        正在加载文档模板...
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </section>
 
-              <PromptInput onSubmit={({ text }, event) => void handlePromptSubmit({ text: text || '' }, event)}>
-                <PromptInputBody>
-                  <PromptInputTextarea placeholder="例如：先帮我查 BSA2T-25 在中国区的价格，然后根据结果起草一份销售合同" />
-                </PromptInputBody>
-                <PromptInputFooter>
-                  <PromptInputTools>
-                    <div className="rounded-full border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
-                      当前能力：合同协作
+              <section className="flex h-full min-h-0 flex-col bg-background">
+                <div className="flex items-center justify-between border-b px-4 py-4">
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-medium">
+                      <MessageSquareText className="h-4 w-4 text-primary" />
+                      继续旧草稿
                     </div>
-                  </PromptInputTools>
-                  <PromptInputSubmit disabled={false} onStop={() => void stop()} status={status}>
-                    {!isBusy ? <Send className="h-4 w-4" /> : undefined}
-                  </PromptInputSubmit>
-                </PromptInputFooter>
-              </PromptInput>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      像会话记录一样继续之前的报价单或合同。
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => void draftsQuery.refetch()}
+                    disabled={draftsQuery.isFetching}
+                  >
+                    <RefreshCw className={`h-4 w-4 ${draftsQuery.isFetching ? 'animate-spin' : ''}`} />
+                  </Button>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+                  {recentDrafts.length === 0 ? (
+                    <div className="flex h-full min-h-[220px] items-center justify-center border border-dashed bg-muted/10 px-6 text-center text-sm leading-6 text-muted-foreground">
+                      还没有历史草稿。先从左侧选择模板开始。
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {recentDrafts.map((draft) => (
+                        <div
+                          key={draft.id}
+                          className="group relative border border-border/70 bg-background transition hover:border-primary/40 hover:bg-muted/20"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => void handleDraftSelect(draft.id)}
+                            className="block w-full px-4 py-4 text-left"
+                          >
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="min-w-0 space-y-1">
+                                <div className="flex items-center gap-2">
+                                  <Badge variant="outline">{DOCUMENT_TYPE_LABELS[draft.document_type]}</Badge>
+                                  <span className="truncate text-sm font-medium">{draft.title || '未命名草稿'}</span>
+                                </div>
+                                <p className="truncate text-sm text-muted-foreground">
+                                  {draft.document_template_name || '-'}
+                                </p>
+                                <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
+                                  {draft.messages[draft.messages.length - 1]?.text
+                                    || String(draft.draft_payload?.customer?.company || draft.draft_payload?.customer?.name || '暂无对话记录')}
+                                </p>
+                              </div>
+                              <div className="shrink-0 pr-9 text-right">
+                                <div className="mt-2 text-xs text-muted-foreground">
+                                  {formatDraftTime(draft.updated_at)}
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                          <button
+                            type="button"
+                            className="invisible absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive group-hover:visible"
+                            onClick={() => setDeleteDraftId(draft.id)}
+                            aria-label={`删除草稿 ${draft.title || '未命名草稿'}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </section>
             </div>
-          </div>
+          ) : (
+            <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[1.2fr_0.8fr]">
+              <section className="flex h-full min-h-0 flex-col border-b bg-stone-100 lg:border-b-0 lg:border-r">
+                <div className="flex items-center justify-between border-b bg-background/95 px-4 py-3 backdrop-blur">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-medium">{currentDraft.title}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {currentDraft.document_template_name} · {DOCUMENT_TYPE_LABELS[currentDraft.document_type]}
+                    </p>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={handlePrintCurrentDraft}>
+                    打印 / 导出 PDF
+                  </Button>
+                </div>
+                <iframe
+                  ref={previewFrameRef}
+                  key={previewUrl}
+                  src={previewUrl}
+                  title="文档预览"
+                  className="min-h-0 flex-1 bg-white"
+                />
+              </section>
+
+              <section className="flex h-full min-h-0 flex-col bg-background">
+                <div className="border-b px-4 py-4">
+                  <div className="flex items-center gap-2 text-sm font-medium">
+                    <MessageSquareText className="h-4 w-4 text-primary" />
+                    AI 对话
+                  </div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    告诉 AI 客户、产品、数量、价格、付款条款或交期，左侧预览会按当前模板更新。
+                  </p>
+                </div>
+
+                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+                  <div className="space-y-5">
+                    <div className="rounded-2xl border bg-background p-4">
+                      <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">当前识别</p>
+                      <div className="mt-3 grid gap-3 text-sm">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">客户</span>
+                          <span className="text-right font-medium">
+                            {String(
+                              currentDraft.draft_payload?.customer?.company
+                              || currentDraft.draft_payload?.customer?.name
+                              || '-'
+                            )}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">产品行数</span>
+                          <span className="font-medium">
+                            {Array.isArray(currentDraft.draft_payload?.items) ? currentDraft.draft_payload.items.length : 0}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">币种</span>
+                          <span className="font-medium">{String(currentDraft.draft_payload?.pricing?.currency || '-')}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">交期</span>
+                          <span className="text-right font-medium">{String(currentDraft.draft_payload?.terms?.delivery || '-')}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-muted-foreground">付款</span>
+                          <span className="text-right font-medium">{String(currentDraft.draft_payload?.terms?.payment || '-')}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {conversationState.missing_fields.length > 0 || conversationState.suggested_questions.length > 0 ? (
+                      <div className="rounded-2xl border bg-muted/20 p-4">
+                        {conversationState.missing_fields.length > 0 ? (
+                          <div className="space-y-2">
+                            <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">待补充字段</p>
+                            <div className="flex flex-wrap gap-2">
+                              {conversationState.missing_fields.map((field) => (
+                                <Badge key={field} variant="outline">{field}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                        {conversationState.suggested_questions.length > 0 ? (
+                          <div className={conversationState.missing_fields.length > 0 ? 'mt-4 space-y-2' : 'space-y-2'}>
+                            <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">建议下一问</p>
+                            <div className="flex flex-col gap-2">
+                              {conversationState.suggested_questions.map((question) => (
+                                <button
+                                  key={question}
+                                  type="button"
+                                  className="rounded-xl border bg-background px-3 py-2 text-left text-sm transition hover:border-primary/40"
+                                  onClick={() => setInputValue(question)}
+                                >
+                                  {question}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {currentDraft.messages.length === 0 ? (
+                      <ChatMessageItem
+                        role="assistant"
+                        text={`当前已进入${DOCUMENT_TYPE_LABELS[currentDraft.document_type]}工作台。你可以先告诉我客户名称、产品型号和数量，我会先补齐基础草稿。`}
+                      />
+                    ) : (
+                      currentDraft.messages.map((message, index) => (
+                        <ChatMessageItem
+                          key={`${message.created_at}-${index}`}
+                          role={message.role}
+                          text={message.text}
+                        />
+                      ))
+                    )}
+
+                    {sendMessageMutation.isPending ? (
+                      <ChatMessageItem pending role="assistant" />
+                    ) : null}
+                  </div>
+                </div>
+
+                <div className="border-t bg-background/95 px-4 py-4 backdrop-blur">
+                  <PromptInput onSubmit={({ text }) => void handleSubmit({ text: text || inputValue })}>
+                    <PromptInputBody>
+                      <PromptInputTextarea
+                        value={inputValue}
+                        onChange={(event) => setInputValue(event.target.value)}
+                        placeholder={`例如：客户是上海某工厂，${currentDraft.document_type === 'quote' ? '报价' : '合同'}里先加入 BSA2T-25 两台，含税，交期两周`}
+                      />
+                    </PromptInputBody>
+                    <PromptInputFooter>
+                      <PromptInputTools>
+                        <div className="rounded-full border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+                          当前模板：{currentDraft.document_template_name}
+                        </div>
+                      </PromptInputTools>
+                      <PromptInputSubmit
+                        disabled={!inputValue.trim() || sendMessageMutation.isPending}
+                        status={sendMessageMutation.isPending ? 'submitted' : 'ready'}
+                      >
+                        {!sendMessageMutation.isPending ? <Send className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                      </PromptInputSubmit>
+                    </PromptInputFooter>
+                  </PromptInput>
+                </div>
+              </section>
+            </div>
+          )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={Boolean(deleteDraftId)} onOpenChange={(open) => { if (!open) setDeleteDraftId('') }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除草稿</AlertDialogTitle>
+            <AlertDialogDescription>
+              删除后，该报价单或合同草稿及其对话记录将无法恢复。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteDraftMutation.isPending}>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteDraft} disabled={deleteDraftMutation.isPending}>
+              {deleteDraftMutation.isPending ? '删除中...' : '确认删除'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
 
-function extractMessageText(message: { parts?: Array<{ type?: string; text?: string }> }) {
-  if (!Array.isArray(message.parts)) {
-    return ''
+function formatDraftTime(value?: string) {
+  if (!value) {
+    return '-'
   }
 
-  return message.parts
-    .filter((part) => part?.type === 'text')
-    .map((part) => part.text || '')
-    .join('\n')
-    .trim()
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) {
+    return value
+  }
+
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date)
 }

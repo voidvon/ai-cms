@@ -4607,7 +4607,7 @@ function normalizeLegacyRichTextHtml(value, siteConfig = null) {
     .replace(/href="https?:\/\/\/+"/gi, 'href="/"')
     .replace(/data-ke-src="https?:\/\/\/+"/gi, 'data-ke-src="/"')
     .replace(/https?:\/\/\/+(?=[^/"])/gi, '/')
-    .replace(/(["'(=])(https?:\/\/[^/\s"'<>]+\/uploads\/(?:images|skin|pdfs)\/[^\s"'<>]+|\/uploads\/(?:images|skin|pdfs)\/[^\s"'<>]+)/gi, (_, prefix, relativePath) => {
+    .replace(/(["'(=])(https?:\/\/[^/\s"'<>]+\/uploads\/(?:images|skin|pdfs|files)\/[^\s"'<>]+|\/uploads\/(?:images|skin|pdfs|files)\/[^\s"'<>]+)/gi, (_, prefix, relativePath) => {
       return `${prefix}${resolvePublicAssetUrl(relativePath, siteConfig)}`;
     })
     // 修正托管内容链接：确保详情链接都有尾部斜杠
@@ -4832,7 +4832,7 @@ function finalizeSiteHtmlOutput(html, siteConfig = null) {
   output = normalizeHtmlImageLoading(output);
   output = normalizeHtmlImageDimensions(output);
 
-  output = output.replace(/(https?:\/\/[^/\s"'<>]+\/[A-Za-z0-9_-]+)https?:\/\/[^/\s"'<>]+(\/uploads\/(?:images|skin|pdfs)\/[^\s"'<>]+)/gi, (_, basePrefix, assetPath) => {
+  output = output.replace(/(https?:\/\/[^/\s"'<>]+\/[A-Za-z0-9_-]+)https?:\/\/[^/\s"'<>]+(\/uploads\/(?:images|skin|pdfs|files)\/[^\s"'<>]+)/gi, (_, basePrefix, assetPath) => {
     const normalizedAssetUrl = resolvePublicAssetUrl(assetPath, siteConfig);
     return normalizedAssetUrl || `${basePrefix}${assetPath}`;
   });

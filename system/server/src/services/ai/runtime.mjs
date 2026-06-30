@@ -9,14 +9,17 @@ export const DEFAULT_MODEL =
   'gpt-5';
 
 const OPENAI_BASE_URL = normalizeText(process.env.OPENAI_BASE_URL);
+let openaiClient = null;
 
-if (OPENAI_BASE_URL) {
-  setDefaultOpenAIClient(
-    new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY || 'missing-key',
-      baseURL: OPENAI_BASE_URL,
-    })
-  );
+if (normalizeText(process.env.OPENAI_API_KEY)) {
+  openaiClient = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY || 'missing-key',
+    ...(OPENAI_BASE_URL ? { baseURL: OPENAI_BASE_URL } : {}),
+  });
+}
+
+if (openaiClient) {
+  setDefaultOpenAIClient(openaiClient);
 }
 
 export function assertAiConfig() {
@@ -36,4 +39,16 @@ export function createAiAgent(config) {
 
 export function runAiAgent(agent, input, options) {
   return run(agent, input, options);
+}
+
+export function getOpenAIClient() {
+  assertAiConfig();
+  if (!openaiClient) {
+    openaiClient = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY || 'missing-key',
+      ...(OPENAI_BASE_URL ? { baseURL: OPENAI_BASE_URL } : {}),
+    });
+    setDefaultOpenAIClient(openaiClient);
+  }
+  return openaiClient;
 }

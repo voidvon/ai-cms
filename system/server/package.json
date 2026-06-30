@@ -5,6 +5,7 @@
   "type": "module",
   "description": "Fastify + SQLite server for the legacy static site migration.",
   "scripts": {
+    "postinstall": "node ../../scripts/patch-openai-agents-core-status.mjs",
     "start": "node src/server.mjs",
     "dev": "node ../../scripts/dev-server.mjs",
     "db:init": "node scripts/init-db.mjs",

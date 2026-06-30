@@ -5,7 +5,7 @@ import fastifyMultipart from '@fastify/multipart';
 import fastifyCors from '@fastify/cors';
 import fastifySensible from '@fastify/sensible';
 import fastifyFormbody from '@fastify/formbody';
-import { HOST, PORT } from './config.mjs';
+import { ATTACHMENT_UPLOAD_MAX_SIZE_KB, HOST, PORT } from './config.mjs';
 import { createAssetsListenerManager } from './assets-listener-manager.mjs';
 import { getDb } from './db.mjs';
 import { getClientIp } from './middleware/auth.mjs';
@@ -83,7 +83,7 @@ async function registerCommonPlugins(app) {
 
   await app.register(fastifyMultipart, {
     limits: {
-      fileSize: (process.env.UPLOAD_MAX_SIZE_KB || 400) * 1024,
+      fileSize: ATTACHMENT_UPLOAD_MAX_SIZE_KB * 1024,
       files: 1
     }
   });
@@ -140,6 +140,7 @@ async function registerCommonRoutes(app, { publicSite }) {
     await app.register(import('./routes/api/admin.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/bulk-replace.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/ai.mjs'), { prefix: '/api' });
+    await app.register(import('./routes/api/document-workspaces.mjs'), { prefix: '/api' });
     await app.register(import('./routes/admin/static-gen.mjs'), { prefix: '/admin' });
   }
 

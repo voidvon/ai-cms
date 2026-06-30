@@ -1,37 +1,58 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
-import { UPLOADS_IMAGES_ROOT, UPLOAD_ALLOWED_EXTENSIONS, UPLOAD_MAX_SIZE_KB } from '../config.mjs';
+import {
+  ATTACHMENT_ALLOWED_EXTENSIONS,
+  ATTACHMENT_UPLOAD_MAX_SIZE_KB,
+  MIME_TYPES,
+  UPLOADS_FILES_ROOT,
+  UPLOADS_IMAGES_ROOT,
+  UPLOAD_ALLOWED_EXTENSIONS,
+  UPLOAD_MAX_SIZE_KB,
+} from '../config.mjs';
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 
 const PURPOSE_TARGETS = {
   product_cover: {
     purpose: 'product_cover',
     mimeFallback: 'image/jpeg',
+    bucket: 'images',
+    root: UPLOADS_IMAGES_ROOT,
+    allowedExtensions: UPLOAD_ALLOWED_EXTENSIONS,
+    maxSizeKb: UPLOAD_MAX_SIZE_KB,
   },
   news_cover: {
     purpose: 'news_cover',
     mimeFallback: 'image/jpeg',
+    bucket: 'images',
+    root: UPLOADS_IMAGES_ROOT,
+    allowedExtensions: UPLOAD_ALLOWED_EXTENSIONS,
+    maxSizeKb: UPLOAD_MAX_SIZE_KB,
   },
   richtext_image: {
     purpose: 'richtext_image',
     mimeFallback: 'image/jpeg',
+    bucket: 'images',
+    root: UPLOADS_IMAGES_ROOT,
+    allowedExtensions: UPLOAD_ALLOWED_EXTENSIONS,
+    maxSizeKb: UPLOAD_MAX_SIZE_KB,
   },
   column_image: {
     purpose: 'column_image',
     mimeFallback: 'image/jpeg',
+    bucket: 'images',
+    root: UPLOADS_IMAGES_ROOT,
+    allowedExtensions: UPLOAD_ALLOWED_EXTENSIONS,
+    maxSizeKb: UPLOAD_MAX_SIZE_KB,
   },
   attachment: {
     purpose: 'attachment',
     mimeFallback: 'application/octet-stream',
+    bucket: 'files',
+    root: UPLOADS_FILES_ROOT,
+    allowedExtensions: ATTACHMENT_ALLOWED_EXTENSIONS,
+    maxSizeKb: ATTACHMENT_UPLOAD_MAX_SIZE_KB,
   },
-};
-
-const MIME_BY_EXTENSION = {
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.gif': 'image/gif',
 };
 
 let schemaEnsured = false;
@@ -66,25 +87,25 @@ export function uploadMediaAsset({ buffer, originalFilename, purpose }) {
   ensureMediaAssetsSchema();
 
   const normalizedPurpose = resolvePurpose(purpose);
+  const target = PURPOSE_TARGETS[normalizedPurpose];
   const extension = path.extname(String(originalFilename || '')).toLowerCase();
-  if (!UPLOAD_ALLOWED_EXTENSIONS.has(extension)) {
+  if (!target.allowedExtensions.has(extension)) {
     throw new Error('unsupported file type');
   }
 
-  const maxBytes = UPLOAD_MAX_SIZE_KB * 1024;
+  const maxBytes = target.maxSizeKb * 1024;
   if (!buffer || buffer.length > maxBytes) {
     throw new Error('uploaded file exceeds size limit');
   }
 
-  const target = PURPOSE_TARGETS[normalizedPurpose];
   const monthSegment = getUploadMonthSegment();
   const fileName = buildFileName(extension);
-  const fsDir = path.join(UPLOADS_IMAGES_ROOT, monthSegment);
+  const fsDir = path.join(target.root, monthSegment);
   fs.mkdirSync(fsDir, { recursive: true });
   const fsPath = path.join(fsDir, fileName);
   fs.writeFileSync(fsPath, buffer);
 
-  const relativePath = `/uploads/images/${monthSegment}/${fileName}`;
+  const relativePath = `/uploads/${target.bucket}/${monthSegment}/${fileName}`;
   const result = execute(
     `
       INSERT INTO media_assets (
@@ -103,7 +124,7 @@ export function uploadMediaAsset({ buffer, originalFilename, purpose }) {
       'local',
       normalizedPurpose,
       String(originalFilename || ''),
-      MIME_BY_EXTENSION[extension] || target.mimeFallback,
+      MIME_TYPES.get(extension) || target.mimeFallback,
       extension,
       buffer.length,
       relativePath,

@@ -1,9 +1,12 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { Copy, FileUp, Link as LinkIcon } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { mediaApi } from '@/api/media'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import ImagePreview from '@/components/ImagePreview'
 import {
   Pagination,
@@ -24,6 +27,7 @@ const MEDIA_PURPOSE_META = {
   product_cover: { label: '产品封面' },
   news_cover: { label: '新闻封面' },
   richtext_image: { label: '富文本图片' },
+  column_image: { label: '栏目图片' },
   attachment: { label: '附件' },
 } as const
 
@@ -43,9 +47,11 @@ const STATUS_OPTIONS = [
 
 export default function MediaAssetsPage() {
   const queryClient = useQueryClient()
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [page, setPage] = useState(1)
   const [purpose, setPurpose] = useState('all')
   const [status, setStatus] = useState('all')
+  const [latestUploadedAsset, setLatestUploadedAsset] = useState<MediaAsset | null>(null)
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['media-assets', page, LIMIT, purpose, status],
@@ -66,6 +72,45 @@ export default function MediaAssetsPage() {
     },
   })
 
+  const uploadMutation = useMutation({
+    mutationFn: async (file: File) => mediaApi.upload(file, 'attachment'),
+    onSuccess: (response) => {
+      setLatestUploadedAsset(response.data)
+      queryClient.invalidateQueries({ queryKey: ['media-assets'] })
+      setPurpose('attachment')
+      setStatus('all')
+      setPage(1)
+      toast.success('附件上传成功')
+    },
+    onError: (mutationError: any) => {
+      toast.error(mutationError.response?.data?.message || mutationError.message || '附件上传失败')
+    },
+  })
+
+  const handleSelectFile = () => {
+    if (!uploadMutation.isPending) {
+      fileInputRef.current?.click()
+    }
+  }
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) {
+      return
+    }
+    uploadMutation.mutate(file)
+  }
+
+  const copyText = async (value: string, successMessage: string) => {
+    try {
+      await navigator.clipboard.writeText(value)
+      toast.success(successMessage)
+    } catch {
+      toast.error('复制失败，请手动复制')
+    }
+  }
+
   if (isLoading) {
     return <div>加载中...</div>
   }
@@ -76,6 +121,10 @@ export default function MediaAssetsPage() {
 
   const items: MediaAsset[] = data?.items || []
   const pagination = data?.pagination
+  const latestRelativeUrl = latestUploadedAsset?.relative_path || ''
+  const latestAbsoluteUrl = latestRelativeUrl
+    ? new URL(latestRelativeUrl, window.location.origin).toString()
+    : ''
 
   return (
     <div className="h-full min-h-0">
@@ -84,7 +133,7 @@ export default function MediaAssetsPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle>附件管理</CardTitle>
-              <CardDescription>查看本地媒体资产，按类型筛选并清理孤儿资源。</CardDescription>
+              <CardDescription>上传附件、直接获取 URL，并查看本地媒体资产状态。</CardDescription>
             </div>
             <Button
               variant="outline"
@@ -96,6 +145,65 @@ export default function MediaAssetsPage() {
           </div>
         </CardHeader>
         <CardContent className="flex min-h-0 flex-1 flex-col space-y-4">
+          <Card className="border-dashed shadow-none">
+            <CardContent className="space-y-4 p-4">
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                onChange={handleFileChange}
+              />
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">直接上传附件</div>
+                  <div className="text-sm text-muted-foreground">
+                    支持图片、PDF、Office、压缩包、音视频等常见文件，上传后可直接复制 URL。
+                  </div>
+                </div>
+                <Button type="button" onClick={handleSelectFile} disabled={uploadMutation.isPending}>
+                  <FileUp className="size-4" />
+                  {uploadMutation.isPending ? '上传中...' : '上传附件'}
+                </Button>
+              </div>
+
+              {latestUploadedAsset ? (
+                <div className="grid gap-3 rounded-lg border bg-muted/20 p-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="latest-relative-url">相对 URL</Label>
+                    <div className="flex gap-2">
+                      <Input id="latest-relative-url" readOnly value={latestRelativeUrl} />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => copyText(latestRelativeUrl, '已复制相对 URL')}
+                      >
+                        <Copy className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="latest-absolute-url">完整 URL</Label>
+                    <div className="flex gap-2">
+                      <Input id="latest-absolute-url" readOnly value={latestAbsoluteUrl} />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="icon"
+                        onClick={() => copyText(latestAbsoluteUrl, '已复制完整 URL')}
+                      >
+                        <LinkIcon className="size-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="text-sm text-muted-foreground md:col-span-2">
+                    最近上传：{latestUploadedAsset.original_name || '-'}，{formatFileSize(latestUploadedAsset.file_size)}
+                  </div>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+
           <div className="grid gap-3 md:grid-cols-[220px_220px_minmax(0,1fr)]">
             <div className="space-y-2">
               <div className="text-sm font-medium">资源类型</div>
@@ -154,6 +262,7 @@ export default function MediaAssetsPage() {
                   <TableHead>类型</TableHead>
                   <TableHead>预览</TableHead>
                   <TableHead>文件名</TableHead>
+                  <TableHead>URL</TableHead>
                   <TableHead>大小</TableHead>
                   <TableHead>状态</TableHead>
                   <TableHead>本地文件</TableHead>
@@ -163,7 +272,7 @@ export default function MediaAssetsPage() {
               <TableBody>
                 {items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center">
+                    <TableCell colSpan={9} className="text-center">
                       暂无资源
                     </TableCell>
                   </TableRow>
@@ -197,6 +306,20 @@ export default function MediaAssetsPage() {
                       </TableCell>
                       <TableCell className="max-w-[220px] truncate">
                         {item.original_name || '-'}
+                      </TableCell>
+                      <TableCell className="max-w-[280px]">
+                        <div className="flex items-center gap-2">
+                          <span className="truncate text-sm text-muted-foreground">{item.relative_path}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="shrink-0"
+                            onClick={() => copyText(item.relative_path, '已复制 URL')}
+                          >
+                            <Copy className="size-4" />
+                          </Button>
+                        </div>
                       </TableCell>
                       <TableCell>{formatFileSize(item.file_size)}</TableCell>
                       <TableCell>

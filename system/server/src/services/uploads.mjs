@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { UPLOADS_IMAGES_ROOT, UPLOADS_PDFS_ROOT, UPLOADS_SKIN_ROOT } from '../config.mjs';
+import { UPLOADS_FILES_ROOT, UPLOADS_IMAGES_ROOT, UPLOADS_PDFS_ROOT, UPLOADS_SKIN_ROOT } from '../config.mjs';
 
 export function resolveUploadedFilePath(relativePath) {
   const normalized = normalizeSupportedUploadPath(relativePath);
@@ -25,7 +25,7 @@ export function normalizeLegacyAssetText(value, siteConfig = null) {
   }
 
   return input.replace(
-    /https?:\/\/[^/\s"'<>]+\/uploads\/(?:images|skin|pdfs)\/[^\s"'<>)]*|\/uploads\/(?:images|skin|pdfs)\/[^\s"'<>)]*/gi,
+    /https?:\/\/[^/\s"'<>]+\/uploads\/(?:images|skin|pdfs|files)\/[^\s"'<>)]*|\/uploads\/(?:images|skin|pdfs|files)\/[^\s"'<>)]*/gi,
     (matched) => resolvePublicAssetUrl(matched, siteConfig)
   );
 }
@@ -40,7 +40,7 @@ export function resolvePublicAssetUrl(relativePath, siteConfig = null) {
 }
 
 function resolveUploadCandidate(normalized) {
-  const match = normalized.match(/^\/uploads\/(images|skin|pdfs)\/(.+)$/i);
+  const match = normalized.match(/^\/uploads\/(images|skin|pdfs|files)\/(.+)$/i);
   if (!match) {
     return null;
   }
@@ -53,6 +53,8 @@ function resolveUploadCandidate(normalized) {
 
   const root = bucket === 'images'
     ? path.resolve(UPLOADS_IMAGES_ROOT)
+    : bucket === 'files'
+      ? path.resolve(UPLOADS_FILES_ROOT)
     : bucket === 'skin'
       ? path.resolve(UPLOADS_SKIN_ROOT)
       : path.resolve(UPLOADS_PDFS_ROOT);
@@ -70,12 +72,12 @@ function normalizeSupportedUploadPath(relativePath) {
     return '';
   }
 
-  const matched = normalized.match(/^https?:\/\/[^/]+(\/uploads\/(?:images|skin|pdfs)\/[^?#]*)([?#].*)?$/i);
+  const matched = normalized.match(/^https?:\/\/[^/]+(\/uploads\/(?:images|skin|pdfs|files)\/[^?#]*)([?#].*)?$/i);
   if (matched) {
     return canonicalizeUploadsPath(`${matched[1]}${matched[2] || ''}`);
   }
 
-  if (!/^\/uploads\/(?:images|skin|pdfs)\//i.test(normalized)) {
+  if (!/^\/uploads\/(?:images|skin|pdfs|files)\//i.test(normalized)) {
     return '';
   }
 
@@ -86,6 +88,6 @@ function canonicalizeUploadsPath(normalized) {
   const matched = normalized.match(/^([^?#]+)([?#].*)?$/);
   const pathname = matched?.[1] || normalized;
   const suffix = matched?.[2] || '';
-  const canonical = pathname.replace(/^\/uploads\/(images|skin|pdfs)\//i, (_, bucket) => `/uploads/${String(bucket).toLowerCase()}/`);
+  const canonical = pathname.replace(/^\/uploads\/(images|skin|pdfs|files)\//i, (_, bucket) => `/uploads/${String(bucket).toLowerCase()}/`);
   return canonical + suffix;
 }

@@ -594,3 +594,63 @@ export interface AiKnowledgePayload {
   question: string;
   scope?: string;
 }
+
+export interface DocumentTemplate {
+  id: number;
+  theme_id: number;
+  key: string;
+  name: string;
+  description?: string | null;
+  document_type: 'quote' | 'contract';
+  template_id: number;
+  template_code?: string;
+  template_name?: string;
+  template_status?: string;
+  is_default: number;
+  sort_order: number;
+  default_payload_json: string;
+  default_payload?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DocumentDraftMessage {
+  role: 'user' | 'assistant';
+  text: string;
+  created_at: string;
+}
+
+export interface DocumentDraft {
+  id: string;
+  theme_id: number;
+  document_type: 'quote' | 'contract';
+  document_template_id: number;
+  template_id: number;
+  title: string;
+  language_code: string;
+  draft_payload_json: string;
+  draft_payload: Record<string, unknown>;
+  messages_json: string;
+  messages: DocumentDraftMessage[];
+  status: string;
+  document_template_key?: string;
+  document_template_name?: string;
+  document_template_description?: string;
+  template_code?: string;
+  template_name?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DocumentDraftMessageResult {
+  assistant_message: string;
+  patch: Record<string, unknown>;
+  missing_fields: string[];
+  suggested_questions: string[];
+  draft: DocumentDraft;
+}
+
+export interface DocumentDraftConversationState {
+  missing_fields: string[];
+  suggested_questions: string[];
+}
