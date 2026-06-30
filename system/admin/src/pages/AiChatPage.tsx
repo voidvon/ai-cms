@@ -1,6 +1,8 @@
 import { useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bot, Loader2, MessageSquareText, RefreshCw, ScrollText, Send, Trash2 } from 'lucide-react'
+import { Bot, Loader2, MessageSquareText, RefreshCw, Send, Trash2 } from 'lucide-react'
+import { useOutletContext } from 'react-router-dom'
 import { documentWorkspacesApi } from '@/api/document-workspaces'
 import { ChatMessageItem } from '@/components/ai-chat/ChatMessageItem'
 import {
@@ -23,7 +25,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { toast } from 'sonner'
 import type { DocumentDraftConversationState, DocumentTemplate } from '@/types'
 
@@ -32,7 +34,12 @@ const DOCUMENT_TYPE_LABELS: Record<'quote' | 'contract', string> = {
   contract: '销售合同',
 }
 
+type DashboardHeaderContext = {
+  headerSlotElement: HTMLDivElement | null
+}
+
 export default function AiChatPage() {
+  const { headerSlotElement } = useOutletContext<DashboardHeaderContext>()
   const queryClient = useQueryClient()
   const previewFrameRef = useRef<HTMLIFrameElement | null>(null)
   const [selectedDocumentType, setSelectedDocumentType] = useState<'quote' | 'contract'>('quote')
@@ -189,27 +196,34 @@ export default function AiChatPage() {
 
   return (
     <div className="h-[calc(100vh-9rem)] min-h-0">
-      <Card className="flex h-full min-h-0 flex-col overflow-hidden border-border/70 shadow-sm">
-        <CardHeader className="border-b bg-muted/20">
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-1">
-              <CardTitle className="flex items-center gap-2 text-xl">
-                <ScrollText className="h-5 w-5 text-primary" />
-                AI 文档工作台
-              </CardTitle>
-              <CardDescription>
-                先选模板，再通过右侧 AI 对话完善报价单或合同内容；左侧预览会实时生效。
-              </CardDescription>
+      {currentDraft && headerSlotElement
+        ? createPortal(
+          <div className="hidden min-w-0 items-center lg:grid lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-4">
+            <div className="min-w-0">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                <div className="min-w-0 text-center">
+                  <p className="truncate text-sm font-medium">{currentDraft.title}</p>
+                </div>
+                <div className="flex justify-end">
+                  <Button type="button" variant="outline" size="sm" onClick={handlePrintCurrentDraft}>
+                    打印 / 导出 PDF
+                  </Button>
+                </div>
+              </div>
             </div>
-            <Badge variant="secondary" className="rounded-full px-3 py-1">
-              {currentDraft ? '预览模式' : '选择模板'}
-            </Badge>
-          </div>
-        </CardHeader>
-
+            <div className="flex items-center justify-center">
+              <div className="truncate text-center text-sm font-medium">
+                {currentDraft.title || '未命名会话'}
+              </div>
+            </div>
+          </div>,
+          headerSlotElement,
+        )
+        : null}
+      <Card className="flex h-full min-h-0 flex-col overflow-hidden border-border/70 shadow-sm">
         <CardContent className="min-h-0 flex-1 overflow-hidden p-0">
           {!currentDraft ? (
-            <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px]">
               <section className="flex h-full min-h-0 flex-col border-b bg-background lg:border-b-0 lg:border-r">
                 <div className="flex items-center justify-between border-b bg-background/95 px-4 py-3 backdrop-blur">
                   <div className="min-w-0">
@@ -347,19 +361,8 @@ export default function AiChatPage() {
               </section>
             </div>
           ) : (
-            <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[1.2fr_0.8fr]">
-              <section className="flex h-full min-h-0 flex-col border-b bg-stone-100 lg:border-b-0 lg:border-r">
-                <div className="flex items-center justify-between border-b bg-background/95 px-4 py-3 backdrop-blur">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">{currentDraft.title}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {currentDraft.document_template_name} · {DOCUMENT_TYPE_LABELS[currentDraft.document_type]}
-                    </p>
-                  </div>
-                  <Button type="button" variant="outline" size="sm" onClick={handlePrintCurrentDraft}>
-                    打印 / 导出 PDF
-                  </Button>
-                </div>
+            <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px]">
+                <section className="flex h-full min-h-0 flex-col border-b bg-stone-100 lg:border-b-0 lg:border-r">
                 <iframe
                   ref={previewFrameRef}
                   key={previewUrl}
@@ -367,133 +370,124 @@ export default function AiChatPage() {
                   title="文档预览"
                   className="min-h-0 flex-1 bg-white"
                 />
-              </section>
+                </section>
 
-              <section className="flex h-full min-h-0 flex-col bg-background">
-                <div className="border-b px-4 py-4">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <MessageSquareText className="h-4 w-4 text-primary" />
-                    AI 对话
-                  </div>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    告诉 AI 客户、产品、数量、价格、付款条款或交期，左侧预览会按当前模板更新。
-                  </p>
-                </div>
+                <section className="flex h-full min-h-0 flex-col bg-background">
 
-                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
-                  <div className="space-y-5">
-                    <div className="rounded-2xl border bg-background p-4">
-                      <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">当前识别</p>
-                      <div className="mt-3 grid gap-3 text-sm">
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-muted-foreground">客户</span>
-                          <span className="text-right font-medium">
-                            {String(
-                              currentDraft.draft_payload?.customer?.company
-                              || currentDraft.draft_payload?.customer?.name
-                              || '-'
-                            )}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-muted-foreground">产品行数</span>
-                          <span className="font-medium">
-                            {Array.isArray(currentDraft.draft_payload?.items) ? currentDraft.draft_payload.items.length : 0}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-muted-foreground">币种</span>
-                          <span className="font-medium">{String(currentDraft.draft_payload?.pricing?.currency || '-')}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-muted-foreground">交期</span>
-                          <span className="text-right font-medium">{String(currentDraft.draft_payload?.terms?.delivery || '-')}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-3">
-                          <span className="text-muted-foreground">付款</span>
-                          <span className="text-right font-medium">{String(currentDraft.draft_payload?.terms?.payment || '-')}</span>
+                  <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
+                    <div className="space-y-5">
+                      <div className="rounded-2xl border bg-background p-4">
+                        <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">当前识别</p>
+                        <div className="mt-3 grid gap-3 text-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground">客户</span>
+                            <span className="text-right font-medium">
+                              {String(
+                                currentDraft.draft_payload?.customer?.company
+                                || currentDraft.draft_payload?.customer?.name
+                                || '-'
+                              )}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground">产品行数</span>
+                            <span className="font-medium">
+                              {Array.isArray(currentDraft.draft_payload?.items) ? currentDraft.draft_payload.items.length : 0}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground">币种</span>
+                            <span className="font-medium">{String(currentDraft.draft_payload?.pricing?.currency || '-')}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground">交期</span>
+                            <span className="text-right font-medium">{String(currentDraft.draft_payload?.terms?.delivery || '-')}</span>
+                          </div>
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground">付款</span>
+                            <span className="text-right font-medium">{String(currentDraft.draft_payload?.terms?.payment || '-')}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    {conversationState.missing_fields.length > 0 || conversationState.suggested_questions.length > 0 ? (
-                      <div className="rounded-2xl border bg-muted/20 p-4">
-                        {conversationState.missing_fields.length > 0 ? (
-                          <div className="space-y-2">
-                            <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">待补充字段</p>
-                            <div className="flex flex-wrap gap-2">
-                              {conversationState.missing_fields.map((field) => (
-                                <Badge key={field} variant="outline">{field}</Badge>
-                              ))}
+                      {conversationState.missing_fields.length > 0 || conversationState.suggested_questions.length > 0 ? (
+                        <div className="rounded-2xl border bg-muted/20 p-4">
+                          {conversationState.missing_fields.length > 0 ? (
+                            <div className="space-y-2">
+                              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">待补充字段</p>
+                              <div className="flex flex-wrap gap-2">
+                                {conversationState.missing_fields.map((field) => (
+                                  <Badge key={field} variant="outline">{field}</Badge>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        ) : null}
-                        {conversationState.suggested_questions.length > 0 ? (
-                          <div className={conversationState.missing_fields.length > 0 ? 'mt-4 space-y-2' : 'space-y-2'}>
-                            <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">建议下一问</p>
-                            <div className="flex flex-col gap-2">
-                              {conversationState.suggested_questions.map((question) => (
-                                <button
-                                  key={question}
-                                  type="button"
-                                  className="rounded-xl border bg-background px-3 py-2 text-left text-sm transition hover:border-primary/40"
-                                  onClick={() => setInputValue(question)}
-                                >
-                                  {question}
-                                </button>
-                              ))}
+                          ) : null}
+                          {conversationState.suggested_questions.length > 0 ? (
+                            <div className={conversationState.missing_fields.length > 0 ? 'mt-4 space-y-2' : 'space-y-2'}>
+                              <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">建议下一问</p>
+                              <div className="flex flex-col gap-2">
+                                {conversationState.suggested_questions.map((question) => (
+                                  <button
+                                    key={question}
+                                    type="button"
+                                    className="rounded-xl border bg-background px-3 py-2 text-left text-sm transition hover:border-primary/40"
+                                    onClick={() => setInputValue(question)}
+                                  >
+                                    {question}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
+                          ) : null}
+                        </div>
+                      ) : null}
 
-                    {currentDraft.messages.length === 0 ? (
-                      <ChatMessageItem
-                        role="assistant"
-                        text={`当前已进入${DOCUMENT_TYPE_LABELS[currentDraft.document_type]}工作台。你可以先告诉我客户名称、产品型号和数量，我会先补齐基础草稿。`}
-                      />
-                    ) : (
-                      currentDraft.messages.map((message, index) => (
+                      {currentDraft.messages.length === 0 ? (
                         <ChatMessageItem
-                          key={`${message.created_at}-${index}`}
-                          role={message.role}
-                          text={message.text}
+                          role="assistant"
+                          text={`当前已进入${DOCUMENT_TYPE_LABELS[currentDraft.document_type]}工作台。你可以先告诉我客户名称、产品型号和数量，我会先补齐基础草稿。`}
                         />
-                      ))
-                    )}
+                      ) : (
+                        currentDraft.messages.map((message, index) => (
+                          <ChatMessageItem
+                            key={`${message.created_at}-${index}`}
+                            role={message.role}
+                            text={message.text}
+                          />
+                        ))
+                      )}
 
-                    {sendMessageMutation.isPending ? (
-                      <ChatMessageItem pending role="assistant" />
-                    ) : null}
+                      {sendMessageMutation.isPending ? (
+                        <ChatMessageItem pending role="assistant" />
+                      ) : null}
+                    </div>
                   </div>
-                </div>
 
-                <div className="border-t bg-background/95 px-4 py-4 backdrop-blur">
-                  <PromptInput onSubmit={({ text }) => void handleSubmit({ text: text || inputValue })}>
-                    <PromptInputBody>
-                      <PromptInputTextarea
-                        value={inputValue}
-                        onChange={(event) => setInputValue(event.target.value)}
-                        placeholder={`例如：客户是上海某工厂，${currentDraft.document_type === 'quote' ? '报价' : '合同'}里先加入 BSA2T-25 两台，含税，交期两周`}
-                      />
-                    </PromptInputBody>
-                    <PromptInputFooter>
-                      <PromptInputTools>
-                        <div className="rounded-full border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
-                          当前模板：{currentDraft.document_template_name}
-                        </div>
-                      </PromptInputTools>
-                      <PromptInputSubmit
-                        disabled={!inputValue.trim() || sendMessageMutation.isPending}
-                        status={sendMessageMutation.isPending ? 'submitted' : 'ready'}
-                      >
-                        {!sendMessageMutation.isPending ? <Send className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-                      </PromptInputSubmit>
-                    </PromptInputFooter>
-                  </PromptInput>
-                </div>
-              </section>
+                  <div className="border-t bg-background/95 px-4 py-4 backdrop-blur">
+                    <PromptInput onSubmit={({ text }) => void handleSubmit({ text: text || inputValue })}>
+                      <PromptInputBody>
+                        <PromptInputTextarea
+                          value={inputValue}
+                          onChange={(event) => setInputValue(event.target.value)}
+                          placeholder={`例如：客户是上海某工厂，${currentDraft.document_type === 'quote' ? '报价' : '合同'}里先加入 BSA2T-25 两台，含税，交期两周`}
+                        />
+                      </PromptInputBody>
+                      <PromptInputFooter>
+                        <PromptInputTools>
+                          <div className="rounded-full border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+                            当前模板：{currentDraft.document_template_name}
+                          </div>
+                        </PromptInputTools>
+                        <PromptInputSubmit
+                          disabled={!inputValue.trim() || sendMessageMutation.isPending}
+                          status={sendMessageMutation.isPending ? 'submitted' : 'ready'}
+                        >
+                          {!sendMessageMutation.isPending ? <Send className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                        </PromptInputSubmit>
+                      </PromptInputFooter>
+                    </PromptInput>
+                  </div>
+                </section>
             </div>
           )}
         </CardContent>

@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { authApi } from '@/api/auth'
@@ -54,6 +55,7 @@ export default function DashboardLayout() {
   const navigate = useNavigate()
   const location = useLocation()
   const { resolvedTheme, setTheme } = useTheme()
+  const [headerSlotElement, setHeaderSlotElement] = useState<HTMLDivElement | null>(null)
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['currentUser'],
@@ -243,10 +245,11 @@ export default function DashboardLayout() {
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
+          <div ref={setHeaderSlotElement} className="min-w-0 flex-1" />
         </header>
         <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
           <div className="min-h-0 flex-1">
-            <Outlet />
+            <Outlet context={{ headerSlotElement }} />
           </div>
         </main>
       </SidebarInset>
