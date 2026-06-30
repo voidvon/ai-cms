@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { authApi } from '@/api/auth'
@@ -56,24 +56,13 @@ export default function DashboardLayout() {
   const location = useLocation()
   const { resolvedTheme, setTheme } = useTheme()
   const [headerSlotElement, setHeaderSlotElement] = useState<HTMLDivElement | null>(null)
+  const [documentTitleOverride, setDocumentTitleOverride] = useState<string>('')
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['currentUser'],
     queryFn: authApi.getCurrentUser,
     retry: false,
   })
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div>加载中...</div>
-      </div>
-    )
-  }
-
-  if (!user?.success) {
-    return <Navigate to="/login" replace />
-  }
 
   const handleLogout = async () => {
     await authApi.logout()
@@ -149,6 +138,34 @@ export default function DashboardLayout() {
       if (current) return current.label
     }
     return '管理后台'
+  }
+
+  const routeTitle = useMemo(() => {
+    return String(getCurrentPageTitle()).trim() || '管理后台'
+  }, [location.pathname])
+
+  const currentDocumentTitle = useMemo(() => {
+    return String(documentTitleOverride || routeTitle).trim() || '管理后台'
+  }, [documentTitleOverride, routeTitle])
+
+  useEffect(() => {
+    setDocumentTitleOverride('')
+  }, [location.pathname])
+
+  useEffect(() => {
+    document.title = currentDocumentTitle
+  }, [currentDocumentTitle])
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div>加载中...</div>
+      </div>
+    )
+  }
+
+  if (!user?.success) {
+    return <Navigate to="/login" replace />
   }
 
   return (
@@ -241,15 +258,15 @@ export default function DashboardLayout() {
           <Breadcrumb>
             <BreadcrumbList>
               <BreadcrumbItem>
-                <BreadcrumbPage>{getCurrentPageTitle()}</BreadcrumbPage>
+                <BreadcrumbPage>{routeTitle}</BreadcrumbPage>
               </BreadcrumbItem>
             </BreadcrumbList>
           </Breadcrumb>
           <div ref={setHeaderSlotElement} className="min-w-0 flex-1" />
         </header>
-        <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-4">
+        <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
           <div className="min-h-0 flex-1">
-            <Outlet context={{ headerSlotElement }} />
+            <Outlet context={{ headerSlotElement, setDocumentTitle: setDocumentTitleOverride }} />
           </div>
         </main>
       </SidebarInset>

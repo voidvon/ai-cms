@@ -79,8 +79,8 @@ function injectPreviewDocumentShell(html, cssText) {
 
 function previewBaseCss() {
   return [
-    'html, body { min-height: 100%; }',
-    'body { margin: 0; }',
+    'html, body { min-height: 100%; background: #0f172a; color-scheme: dark; }',
+    'body { margin: 0; background: #0f172a; }',
     '*, *::before, *::after { box-sizing: border-box; }',
     'body > .doc-shell, body > .contract-shell { max-width: none; }',
     '@media print {',

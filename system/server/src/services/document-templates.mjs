@@ -10,13 +10,16 @@ const QUOTE_REMARKS_BG_BASE64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAA0JCgsKCA0LCws
 const DEFAULT_DOCUMENT_TEMPLATE_DEFINITIONS = [
   {
     key: 'default_quote_workspace',
-    name: '标准报价单',
+    name: '斯派莎克报价单',
     description: '适用于销售报价和后续打印导出。',
     document_type: 'quote',
     template_code: 'doc_quote_default',
-    template_name: '文档模板-标准报价单',
+    template_name: '文档模板-斯派莎克报价单',
     sort_order: 10,
-    default_payload: buildDefaultDraftPayload('quote'),
+    default_payload: buildDefaultDraftPayload('quote', {
+      title: '斯派莎克报价单',
+      documentNumberPrefix: 'SP',
+    }),
     template_source: buildQuoteTemplateSource(),
     css_source: buildQuoteTemplateCss(),
   },
@@ -318,11 +321,13 @@ function hydrateDocumentTemplateRecord(row) {
   };
 }
 
-export function buildDefaultDraftPayload(documentType) {
+export function buildDefaultDraftPayload(documentType, options = {}) {
   const normalizedDocumentType = normalizeDocumentType(documentType);
+  const normalizedTitle = String(options.title || '').trim();
+  const normalizedDocumentNumberPrefix = String(options.documentNumberPrefix || '').trim().toUpperCase();
   const base = {
     type: normalizedDocumentType,
-    title: normalizedDocumentType === 'quote' ? '报价单' : '销售合同',
+    title: normalizedTitle || (normalizedDocumentType === 'quote' ? '报价单' : '销售合同'),
     language: 'zh-CN',
     quoteNumber: '',
     contractNumber: '',
@@ -363,7 +368,9 @@ export function buildDefaultDraftPayload(documentType) {
       sellerSigner: '',
       buyerSigner: '',
     },
-    meta: {},
+    meta: {
+      documentNumberPrefix: normalizedDocumentNumberPrefix,
+    },
   };
 
   return base;
@@ -782,7 +789,6 @@ export default function QuoteTemplate(props) {
 function buildQuoteTemplateCss() {
   return `
 :root {
-  color-scheme: light;
   --quote-navy: #0f2f6e;
   --quote-navy-deep: #13284f;
   --quote-ink: #13284f;
@@ -791,22 +797,16 @@ function buildQuoteTemplateCss() {
   --quote-line-soft: #e9eef6;
   --quote-panel: #ffffff;
   --quote-paper: #ffffff;
-  --quote-bg: #edf2f8;
 }
 
 * { box-sizing: border-box; }
 html, body {
   margin: 0;
   padding: 0;
-  background: var(--quote-bg);
   color: var(--quote-ink);
   font-family: "PingFang SC", "Microsoft YaHei", "Helvetica Neue", Arial, sans-serif;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
-}
-
-body {
-  padding: 6mm;
 }
 
 .quote-page {

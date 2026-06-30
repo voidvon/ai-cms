@@ -38,6 +38,14 @@ export const documentWorkspacesApi = {
     return response.data
   },
 
+  updateDraft: async (id: string, data: { title?: string }) => {
+    const response = await apiClient.patch<ApiResponse<DocumentDraft>>(
+      `/document-drafts/${encodeURIComponent(id)}`,
+      data
+    )
+    return response.data
+  },
+
   deleteDraft: async (id: string) => {
     const response = await apiClient.delete<ApiResponse<{ deleted: boolean; id: string }>>(
       `/document-drafts/${encodeURIComponent(id)}`

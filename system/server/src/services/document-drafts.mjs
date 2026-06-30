@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { getDocumentTemplateById, resolveDocumentTemplateForType } from './document-templates.mjs';
-import { getTemplateById } from './templates.mjs';
 
 let schemaEnsured = false;
 
@@ -41,31 +40,39 @@ export function createDocumentDraft(input = {}) {
   ensureDocumentDraftsSchema();
 
   const documentTemplate = resolveDocumentTemplateInput(input);
-  const payload = mergeDraftPayload(documentTemplate.default_payload, input.draft_payload || input.payload || {});
-  const title = String(input.title || payload.title || documentTemplate.name || '').trim() || buildDefaultTitle(documentTemplate.document_type);
-  const languageCode = String(input.language_code || payload.language || 'zh-CN').trim() || 'zh-CN';
   const id = String(input.id || '').trim() || randomUUID();
   const now = new Date().toISOString();
+  const db = getDb();
 
-  execute(
-    `
-      INSERT INTO document_drafts (
-        id,
-        theme_id,
-        document_type,
-        document_template_id,
-        template_id,
-        title,
-        language_code,
-        draft_payload_json,
-        messages_json,
-        status,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', 'draft', ?, ?)
-    `,
-    [
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const payload = assignDraftDocumentNumber(
+      mergeDraftPayload(documentTemplate.default_payload, input.draft_payload || input.payload || {}),
+      documentTemplate.document_type,
+      db
+    );
+    const title = String(input.title || payload.title || documentTemplate.name || '').trim() || buildDefaultTitle(documentTemplate.document_type);
+    const languageCode = String(input.language_code || payload.language || 'zh-CN').trim() || 'zh-CN';
+
+    db.prepare(
+      `
+        INSERT INTO document_drafts (
+          id,
+          theme_id,
+          document_type,
+          document_template_id,
+          template_id,
+          title,
+          language_code,
+          draft_payload_json,
+          messages_json,
+          status,
+          created_at,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]', 'draft', ?, ?)
+      `
+    ).run(
       id,
       documentTemplate.theme_id,
       documentTemplate.document_type,
@@ -76,8 +83,13 @@ export function createDocumentDraft(input = {}) {
       JSON.stringify(payload),
       now,
       now,
-    ]
-  );
+    );
+
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
 
   return getDocumentDraftById(id);
 }
@@ -355,6 +367,82 @@ function isPlainObject(value) {
 
 function buildDefaultTitle(documentType) {
   return documentType === 'quote' ? '报价单' : '销售合同';
+}
+
+function assignDraftDocumentNumber(payload, documentType, db) {
+  const nextPayload = normalizeDraftPayload(payload);
+  const fieldName = documentType === 'contract' ? 'contractNumber' : 'quoteNumber';
+  const existingNumber = String(nextPayload[fieldName] || '').trim();
+  if (existingNumber) {
+    return nextPayload;
+  }
+
+  return {
+    ...nextPayload,
+    [fieldName]: generateDailyDocumentNumber(
+      db,
+      resolveDocumentNumberPrefix(nextPayload),
+    ),
+  };
+}
+
+function generateDailyDocumentNumber(db, documentPrefix = '', now = new Date()) {
+  const prefix = buildDocumentNumberBase(documentPrefix, now);
+  const rows = db.prepare(
+    `
+      SELECT draft_payload_json
+      FROM document_drafts
+      WHERE draft_payload_json LIKE ?
+         OR draft_payload_json LIKE ?
+    `
+  ).all(
+    `%"quoteNumber":"${prefix}%`,
+    `%"contractNumber":"${prefix}%`,
+  );
+
+  let maxSequence = 9;
+  for (const row of rows) {
+    const payload = safeParseJson(row?.draft_payload_json, {});
+    const candidates = [payload?.quoteNumber, payload?.contractNumber];
+    for (const candidate of candidates) {
+      const sequence = extractDocumentNumberSequence(candidate, prefix);
+      if (sequence != null && sequence > maxSequence) {
+        maxSequence = sequence;
+      }
+    }
+  }
+
+  return `${prefix}${String(maxSequence + 1).padStart(2, '0')}`;
+}
+
+function resolveDocumentNumberPrefix(payload) {
+  const normalizedMeta = isPlainObject(payload?.meta) ? payload.meta : {};
+  return String(normalizedMeta.documentNumberPrefix || '').trim().toUpperCase();
+}
+
+function buildDocumentNumberBase(documentPrefix, value) {
+  const normalizedPrefix = String(documentPrefix || '').trim().toUpperCase();
+  const datePart = formatDocumentNumberDate(value);
+  return normalizedPrefix ? `${normalizedPrefix}-${datePart}` : datePart;
+}
+
+function formatDocumentNumberDate(value) {
+  const date = value instanceof Date ? value : new Date(value);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}${month}${day}`;
+}
+
+function extractDocumentNumberSequence(value, prefix) {
+  const normalized = String(value || '').trim();
+  if (!normalized.startsWith(prefix)) {
+    return null;
+  }
+
+  const sequencePart = normalized.slice(prefix.length);
+  const sequence = Number.parseInt(sequencePart, 10);
+  return Number.isFinite(sequence) ? sequence : null;
 }
 
 function toInteger(value, fallbackValue = 0) {

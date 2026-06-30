@@ -1,8 +1,8 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bot, Loader2, MessageSquareText, RefreshCw, Send, Trash2 } from 'lucide-react'
-import { useOutletContext } from 'react-router-dom'
+import { Bot, Loader2, Pencil, RefreshCw, Send, Trash2 } from 'lucide-react'
+import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { documentWorkspacesApi } from '@/api/document-workspaces'
 import { ChatMessageItem } from '@/components/ai-chat/ChatMessageItem'
 import {
@@ -26,8 +26,9 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
-import type { DocumentDraftConversationState, DocumentTemplate } from '@/types'
+import type { DocumentDraft, DocumentDraftConversationState, DocumentTemplate } from '@/types'
 
 const DOCUMENT_TYPE_LABELS: Record<'quote' | 'contract', string> = {
   quote: '报价单',
@@ -36,21 +37,26 @@ const DOCUMENT_TYPE_LABELS: Record<'quote' | 'contract', string> = {
 
 type DashboardHeaderContext = {
   headerSlotElement: HTMLDivElement | null
+  setDocumentTitle: (value: string) => void
 }
 
 export default function AiChatPage() {
-  const { headerSlotElement } = useOutletContext<DashboardHeaderContext>()
+  const { headerSlotElement, setDocumentTitle } = useOutletContext<DashboardHeaderContext>()
+  const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const previewFrameRef = useRef<HTMLIFrameElement | null>(null)
+  const titleInputRef = useRef<HTMLInputElement | null>(null)
   const [selectedDocumentType, setSelectedDocumentType] = useState<'quote' | 'contract'>('quote')
-  const [draftId, setDraftId] = useState<string>('')
   const [inputValue, setInputValue] = useState('')
   const [previewVersion, setPreviewVersion] = useState(0)
   const [deleteDraftId, setDeleteDraftId] = useState<string>('')
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [titleInputValue, setTitleInputValue] = useState('')
   const [conversationState, setConversationState] = useState<DocumentDraftConversationState>({
     missing_fields: [],
     suggested_questions: [],
   })
+  const draftId = String(searchParams.get('draft') || '').trim()
 
   const { data: templatesData, isLoading: isTemplatesLoading } = useQuery({
     queryKey: ['document-templates'],
@@ -79,13 +85,54 @@ export default function AiChatPage() {
   })
 
   const currentDraft = draftQuery.data?.data || null
+  const previewHeaderTitle = currentDraft
+    ? getDraftDocumentNumber(currentDraft) || currentDraft.title || '未命名文档'
+    : ''
+
+  useEffect(() => {
+    setDocumentTitle(previewHeaderTitle || 'AI 文档工作台')
+  }, [previewHeaderTitle, setDocumentTitle])
+
+  useEffect(() => {
+    setTitleInputValue(String(currentDraft?.title || '').trim())
+    setIsEditingTitle(false)
+  }, [currentDraft?.id, currentDraft?.title])
+
+  useEffect(() => {
+    if (!isEditingTitle) {
+      return
+    }
+    titleInputRef.current?.focus()
+    titleInputRef.current?.select()
+  }, [isEditingTitle])
+
+  const setDraftSearchParam = (nextDraftId: string, options?: { replace?: boolean }) => {
+    const normalizedDraftId = String(nextDraftId || '').trim()
+    const nextSearchParams = new URLSearchParams(searchParams)
+    if (normalizedDraftId) {
+      nextSearchParams.set('draft', normalizedDraftId)
+    } else {
+      nextSearchParams.delete('draft')
+    }
+    setSearchParams(nextSearchParams, { replace: options?.replace ?? false })
+  }
+
+  useEffect(() => {
+    setConversationState({
+      missing_fields: [],
+      suggested_questions: [],
+    })
+    setInputValue('')
+    setPreviewVersion((value) => value + 1)
+  }, [draftId])
 
   const createDraftMutation = useMutation({
     mutationFn: async (template: DocumentTemplate) => {
       return documentWorkspacesApi.createDraft({
         document_type: template.document_type,
         document_template_id: template.id,
-        title: template.document_type === 'quote' ? '报价单' : '销售合同',
+        title: String(template.name || '').trim()
+          || (template.document_type === 'quote' ? '报价单' : '销售合同'),
       })
     },
     onSuccess: async (response) => {
@@ -93,12 +140,7 @@ export default function AiChatPage() {
       if (!nextDraft) {
         return
       }
-      setDraftId(nextDraft.id)
-      setPreviewVersion((value) => value + 1)
-      setConversationState({
-        missing_fields: [],
-        suggested_questions: [],
-      })
+      setDraftSearchParam(nextDraft.id)
       await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
       await queryClient.invalidateQueries({ queryKey: ['document-draft', nextDraft.id] })
     },
@@ -129,13 +171,7 @@ export default function AiChatPage() {
     },
     onSuccess: async (_, deletedId) => {
       if (draftId === deletedId) {
-        setDraftId('')
-        setInputValue('')
-        setPreviewVersion((value) => value + 1)
-        setConversationState({
-          missing_fields: [],
-          suggested_questions: [],
-        })
+        setDraftSearchParam('', { replace: true })
       }
       setDeleteDraftId('')
       await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
@@ -144,6 +180,25 @@ export default function AiChatPage() {
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || '删除草稿失败')
+    },
+  })
+
+  const updateDraftTitleMutation = useMutation({
+    mutationFn: async ({ id, title }: { id: string; title: string }) => {
+      return documentWorkspacesApi.updateDraft(id, { title })
+    },
+    onSuccess: async (response) => {
+      const nextDraft = response.data
+      if (!nextDraft?.id) {
+        return
+      }
+      setIsEditingTitle(false)
+      setTitleInputValue(String(nextDraft.title || '').trim())
+      await queryClient.setQueryData(['document-draft', nextDraft.id], { success: true, data: nextDraft })
+      await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || '修改标题失败')
     },
   })
 
@@ -157,12 +212,7 @@ export default function AiChatPage() {
     if (!nextDraftId) {
       return
     }
-    setDraftId(nextDraftId)
-    setConversationState({
-      missing_fields: [],
-      suggested_questions: [],
-    })
-    setPreviewVersion((value) => value + 1)
+    setDraftSearchParam(nextDraftId)
     await queryClient.invalidateQueries({ queryKey: ['document-draft', nextDraftId] })
   }
 
@@ -194,48 +244,120 @@ export default function AiChatPage() {
     deleteDraftMutation.mutate(deleteDraftId)
   }
 
-  return (
-    <div className="h-[calc(100vh-9rem)] min-h-0">
-      {currentDraft && headerSlotElement
-        ? createPortal(
-          <div className="hidden min-w-0 items-center lg:grid lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-4">
-            <div className="min-w-0">
-              <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-                <div className="min-w-0 text-center">
-                  <p className="truncate text-sm font-medium">{currentDraft.title}</p>
-                </div>
-                <div className="flex justify-end">
-                  <Button type="button" variant="outline" size="sm" onClick={handlePrintCurrentDraft}>
-                    打印 / 导出 PDF
-                  </Button>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center justify-center">
+  const beginEditTitle = () => {
+    setTitleInputValue(String(currentDraft?.title || '').trim())
+    setIsEditingTitle(true)
+  }
+
+  const cancelEditTitle = () => {
+    setTitleInputValue(String(currentDraft?.title || '').trim())
+    setIsEditingTitle(false)
+  }
+
+  const submitTitleEdit = async () => {
+    if (!currentDraft?.id || updateDraftTitleMutation.isPending) {
+      return
+    }
+
+    const normalizedTitle = String(titleInputValue || '').trim()
+    const currentTitle = String(currentDraft.title || '').trim()
+    if (!normalizedTitle) {
+      cancelEditTitle()
+      return
+    }
+    if (normalizedTitle === currentTitle) {
+      setIsEditingTitle(false)
+      return
+    }
+
+    await updateDraftTitleMutation.mutateAsync({
+      id: currentDraft.id,
+      title: normalizedTitle,
+    })
+  }
+
+  const headerContent = currentDraft ? (
+    <div className="hidden min-w-0 items-center lg:grid lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-4">
+      <div className="min-w-0">
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+          <div className="min-w-0 text-center">
+            <p className="truncate text-sm font-medium">{previewHeaderTitle}</p>
+          </div>
+          <div className="flex justify-end">
+            <Button type="button" variant="outline" size="sm" onClick={handlePrintCurrentDraft}>
+              导出
+            </Button>
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center justify-center">
+        <div className="group/title flex min-w-0 items-center justify-center">
+          {isEditingTitle ? (
+            <Input
+              ref={titleInputRef}
+              value={titleInputValue}
+              onChange={(event) => setTitleInputValue(event.target.value)}
+              onBlur={() => void submitTitleEdit()}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault()
+                  void submitTitleEdit()
+                }
+                if (event.key === 'Escape') {
+                  event.preventDefault()
+                  cancelEditTitle()
+                }
+              }}
+              disabled={updateDraftTitleMutation.isPending}
+              className="h-8 max-w-full rounded-none border-0 bg-transparent px-0 text-center text-sm font-medium shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+            />
+          ) : (
+            <div className="relative max-w-full">
               <div className="truncate text-center text-sm font-medium">
                 {currentDraft.title || '未命名会话'}
               </div>
+              <button
+                type="button"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={beginEditTitle}
+                className="absolute left-full top-1/2 ml-1 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none group-hover/title:opacity-100"
+                aria-label="修改标题"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
             </div>
-          </div>,
-          headerSlotElement,
-        )
-        : null}
-      <Card className="flex h-full min-h-0 flex-col overflow-hidden border-border/70 shadow-sm">
+          )}
+        </div>
+      </div>
+    </div>
+  ) : (
+    <div className="hidden min-w-0 items-center lg:grid lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-4">
+      <div className="flex min-w-0 items-center justify-center">
+        <div className="truncate text-center text-sm font-medium">选择模板</div>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1 truncate text-center text-sm font-medium">继续旧草稿</div>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={() => void draftsQuery.refetch()}
+          disabled={draftsQuery.isFetching}
+        >
+          <RefreshCw className={`h-4 w-4 ${draftsQuery.isFetching ? 'animate-spin' : ''}`} />
+        </Button>
+      </div>
+    </div>
+  )
+
+  return (
+    <div className="h-full">
+      {headerSlotElement ? createPortal(headerContent, headerSlotElement) : null}
+      <Card className="flex h-full min-h-0 flex-col overflow-hidden rounded-none border-0 shadow-none">
         <CardContent className="min-h-0 flex-1 overflow-hidden p-0">
           {!currentDraft ? (
             <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px]">
               <section className="flex h-full min-h-0 flex-col border-b bg-background lg:border-b-0 lg:border-r">
-                <div className="flex items-center justify-between border-b bg-background/95 px-4 py-3 backdrop-blur">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">选择文档模板</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      从左侧模板开始新的报价单或销售合同草稿
-                    </p>
-                  </div>
-                  <Badge variant="secondary" className="rounded-full px-3 py-1">
-                    选择模板
-                  </Badge>
-                </div>
                 <div className="min-h-0 flex-1 overflow-y-auto p-5">
                   <div className="mb-5 flex gap-2">
                     <Button
@@ -286,27 +408,6 @@ export default function AiChatPage() {
               </section>
 
               <section className="flex h-full min-h-0 flex-col bg-background">
-                <div className="flex items-center justify-between border-b px-4 py-4">
-                  <div>
-                    <div className="flex items-center gap-2 text-sm font-medium">
-                      <MessageSquareText className="h-4 w-4 text-primary" />
-                      继续旧草稿
-                    </div>
-                    <p className="mt-1 text-sm text-muted-foreground">
-                      像会话记录一样继续之前的报价单或合同。
-                    </p>
-                  </div>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => void draftsQuery.refetch()}
-                    disabled={draftsQuery.isFetching}
-                  >
-                    <RefreshCw className={`h-4 w-4 ${draftsQuery.isFetching ? 'animate-spin' : ''}`} />
-                  </Button>
-                </div>
-
                 <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
                   {recentDrafts.length === 0 ? (
                     <div className="flex h-full min-h-[220px] items-center justify-center border border-dashed bg-muted/10 px-6 text-center text-sm leading-6 text-muted-foreground">
@@ -362,13 +463,13 @@ export default function AiChatPage() {
             </div>
           ) : (
             <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px]">
-                <section className="flex h-full min-h-0 flex-col border-b bg-stone-100 lg:border-b-0 lg:border-r">
+                <section className="flex h-full min-h-0 flex-col border-b lg:border-b-0 lg:border-r">
                 <iframe
                   ref={previewFrameRef}
                   key={previewUrl}
                   src={previewUrl}
                   title="文档预览"
-                  className="min-h-0 flex-1 bg-white"
+                  className="min-h-0 flex-1 bg-transparent"
                 />
                 </section>
 
@@ -529,4 +630,10 @@ function formatDraftTime(value?: string) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(date)
+}
+
+function getDraftDocumentNumber(draft?: DocumentDraft | null) {
+  const payload = draft?.draft_payload || {}
+  const fieldName = draft?.document_type === 'contract' ? 'contractNumber' : 'quoteNumber'
+  return String(payload[fieldName] || '').trim()
 }

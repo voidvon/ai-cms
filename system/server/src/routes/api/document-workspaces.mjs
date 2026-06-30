@@ -1,6 +1,6 @@
 import { requireAuth } from '../../middleware/auth.mjs';
 import { sendDocumentDraftMessage } from '../../services/ai/document-chat.mjs';
-import { createDocumentDraft, deleteDocumentDraft, getDocumentDraftById, listDocumentDrafts } from '../../services/document-drafts.mjs';
+import { createDocumentDraft, deleteDocumentDraft, getDocumentDraftById, listDocumentDrafts, updateDocumentDraft } from '../../services/document-drafts.mjs';
 import { renderDocumentDraftPreview } from '../../services/document-preview.mjs';
 import { listDocumentTemplates } from '../../services/document-templates.mjs';
 
@@ -47,6 +47,19 @@ export default async function documentWorkspaceRoutes(app) {
     onRequest: [requireAuth],
   }, async (request, reply) => {
     const draft = getDocumentDraftById(request.params.id);
+    if (!draft) {
+      reply.code(404);
+      return { success: false, message: '文档草稿不存在' };
+    }
+    return { success: true, data: draft };
+  });
+
+  app.patch('/document-drafts/:id', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    const draft = updateDocumentDraft(request.params.id, {
+      title: request.body?.title,
+    });
     if (!draft) {
       reply.code(404);
       return { success: false, message: '文档草稿不存在' };
