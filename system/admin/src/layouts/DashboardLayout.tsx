@@ -85,9 +85,10 @@ export default function DashboardLayout() {
 
   const topLevelItems = [
     { path: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
-    { path: '/columns', label: '栏目管理', icon: Folder },
-    { path: '/content-model-data', label: '信息管理', icon: FileText },
+    { path: '/ai', label: 'AI 文档', icon: Bot },
     { path: '/price-management', label: '价格管理', icon: ListOrdered },
+    { path: '/content-model-data', label: '信息管理', icon: FileText },
+    { path: '/columns', label: '栏目管理', icon: Folder },
     { path: '/media-assets', label: '附件管理', icon: Image },
   ] satisfies MenuItem[]
 
@@ -113,7 +114,6 @@ export default function DashboardLayout() {
       label: '工具',
       icon: Bot,
       items: [
-        { path: '/ai', label: 'AI 文档工作台', icon: Bot },
         { path: '/bulk-replace', label: '批量替换', icon: Replace },
         { path: '/sitemap-diagnostics', label: 'Sitemap', icon: Map },
         { path: '/llms-diagnostics', label: 'LLMS', icon: Bot },

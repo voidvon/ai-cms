@@ -147,7 +147,7 @@ export default function AiChatPage() {
   }
 
   useEffect(() => {
-    setDocumentTitle(previewHeaderTitle || 'AI 文档工作台')
+    setDocumentTitle(previewHeaderTitle || 'AI 文档')
   }, [previewHeaderTitle, setDocumentTitle])
 
   useEffect(() => {

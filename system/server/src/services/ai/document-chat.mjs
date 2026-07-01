@@ -10,7 +10,7 @@ function buildDocumentChatMessages(draft, message) {
     {
       role: 'system',
       content: [
-        '你是 AI 文档工作台里的文档协作助手。',
+        '你是 AI 文档里的文档协作助手。',
         '你的职责是把用户消息直接转成结构化文档 patch。',
         '不要输出 HTML，不要输出 markdown，不要输出解释性前缀。',
         '如果用户提供了报价明细、客户资料、条款、编号或签署信息，必须直接写入 patch。',
