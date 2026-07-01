@@ -13,6 +13,7 @@ export const DEFAULT_MODEL =
 const OPENAI_BASE_URL = normalizeText(process.env.OPENAI_BASE_URL);
 let openaiClient = null;
 let openaiProvider = null;
+let normalizedOpenAIProvider = null;
 
 if (normalizeText(process.env.OPENAI_API_KEY)) {
   openaiClient = new OpenAI({
@@ -25,12 +26,13 @@ if (openaiClient) {
   setDefaultOpenAIClient(openaiClient);
   openaiProvider = new OpenAIProvider({
     openAIClient: openaiClient,
-    useResponses: false,
+    useResponses: true,
     strictFeatureValidation: true,
     useResponsesWebSocket: false,
     cacheResponsesWebSocketModels: false,
   });
-  setDefaultModelProvider(openaiProvider);
+  normalizedOpenAIProvider = createFlyapiResponsesCompatibilityProvider(openaiProvider);
+  setDefaultModelProvider(normalizedOpenAIProvider);
 }
 
 export function assertAiConfig() {
@@ -45,6 +47,10 @@ export function createAiAgent(config) {
   return new Agent({
     model: DEFAULT_MODEL,
     ...config,
+    modelSettings: {
+      store: false,
+      ...(config?.modelSettings || {}),
+    },
   });
 }
 
@@ -66,12 +72,14 @@ export function getOpenAIClient() {
     setDefaultOpenAIClient(openaiClient);
     openaiProvider = new OpenAIProvider({
       openAIClient: openaiClient,
-      useResponses: false,
+      useResponses: true,
       strictFeatureValidation: true,
       useResponsesWebSocket: false,
       cacheResponsesWebSocketModels: false,
     });
-    setDefaultModelProvider(openaiProvider);
+    normalizedOpenAIProvider = null;
+    normalizedOpenAIProvider = createFlyapiResponsesCompatibilityProvider(openaiProvider);
+    setDefaultModelProvider(normalizedOpenAIProvider);
   }
   return openaiClient;
 }
@@ -81,7 +89,10 @@ export function getOpenAIModelProvider() {
   if (!openaiProvider) {
     getOpenAIClient();
   }
-  return openaiProvider;
+  if (!normalizedOpenAIProvider) {
+    normalizedOpenAIProvider = createFlyapiResponsesCompatibilityProvider(openaiProvider);
+  }
+  return normalizedOpenAIProvider;
 }
 
 export function getAiRuntimeDebug() {
@@ -93,10 +104,72 @@ export function getAiRuntimeDebug() {
     openaiDefaultModel: normalizeText(process.env.OPENAI_DEFAULT_MODEL),
     openaiContractModel: normalizeText(process.env.OPENAI_CONTRACT_MODEL),
     providerConstructor: openaiProvider?.constructor?.name || '',
-    providerUsesResponses: false,
+    providerUsesResponses: true,
     providerUsesResponsesWebSocket: false,
-    providerApiMode: 'chat_completions',
+    providerApiMode: 'responses',
     providerConversationMemory: 'local_session',
     pid: process.pid,
+  };
+}
+
+function createFlyapiResponsesCompatibilityProvider(provider) {
+  return {
+    async getModel(modelName) {
+      const model = await provider.getModel(modelName);
+      return createFlyapiResponsesCompatibilityModel(model);
+    },
+    async close() {
+      if (typeof provider.close === 'function') {
+        await provider.close();
+      }
+    },
+  };
+}
+
+function createFlyapiResponsesCompatibilityModel(model) {
+  return {
+    async getResponse(request) {
+      return model.getResponse(request);
+    },
+    async *getStreamedResponse(request) {
+      for await (const event of model.getStreamedResponse(request)) {
+        yield normalizeResponsesStreamEvent(event);
+      }
+    },
+    async getRetryAdvice(args) {
+      if (typeof model.getRetryAdvice !== 'function') {
+        return undefined;
+      }
+      return model.getRetryAdvice(args);
+    },
+  };
+}
+
+function normalizeResponsesStreamEvent(event) {
+  if (event?.type !== 'response_done' || !Array.isArray(event.response?.output)) {
+    return event;
+  }
+
+  return {
+    ...event,
+    response: {
+      ...event.response,
+      output: event.response.output.map((item) => normalizeResponseOutputItem(item)),
+    },
+  };
+}
+
+function normalizeResponseOutputItem(item) {
+  if (item?.type !== 'message' || item.role !== 'assistant') {
+    return item;
+  }
+
+  if (item.status === 'in_progress' || item.status === 'completed' || item.status === 'incomplete') {
+    return item;
+  }
+
+  return {
+    ...item,
+    status: 'completed',
   };
 }

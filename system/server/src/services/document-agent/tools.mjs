@@ -238,7 +238,7 @@ function wrapAuditedTool(baseTool) {
       });
 
       try {
-        const output = await baseTool.execute(input, runContext, details);
+        const output = await baseTool.invoke(runContext, JSON.stringify(input || {}), details);
         finishToolCallRecord(toolCall.id, {
           status: 'completed',
           output,
