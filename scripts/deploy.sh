@@ -14,6 +14,7 @@ MAX_SQLITE_BACKUPS="10"
 BUILD_STATIC_ON_DEPLOY="0"
 DEPLOY_UPLOAD_DB="0"
 LOCAL_SQLITE_DB_PATH="${PROJECT_ROOT}/data/site.sqlite"
+HEALTH_CHECK_URL="https://www.spiraxsteam.com"
 
 KEY_FILE="$(mktemp "${TMPDIR:-/tmp}/node-cms-deploy-key.XXXXXX")"
 KNOWN_HOSTS_FILE="$(mktemp "${TMPDIR:-/tmp}/node-cms-known-hosts.XXXXXX")"
@@ -48,6 +49,7 @@ Options:
   --runtime-manager <mode>       Runtime manager: bt, bt-manual, plain. Default: ${DEPLOY_RUNTIME_MANAGER}
   --bt-restart-command <cmd>     Restart command used when runtime manager is bt
   --max-sqlite-backups <count>   Remote sqlite backup retention, default: ${MAX_SQLITE_BACKUPS}
+  --health-url <url>             Health check base url, default: ${HEALTH_CHECK_URL}
   --help                         Show this help message
 EOF
 }
@@ -115,6 +117,14 @@ parse_args() {
           exit 1
         }
         MAX_SQLITE_BACKUPS="$2"
+        shift
+        ;;
+      --health-url)
+        [ "$#" -ge 2 ] || {
+          printf 'Missing value for --health-url\n' >&2
+          exit 1
+        }
+        HEALTH_CHECK_URL="$2"
         shift
         ;;
       --help|-h)
@@ -235,7 +245,7 @@ main() {
   fi
 
   ssh "${ssh_options[@]}" "${REMOTE_USER}@${REMOTE_HOST}" \
-    "DEPLOY_RUNTIME_MANAGER='${DEPLOY_RUNTIME_MANAGER}' BT_RESTART_COMMAND='${BT_RESTART_COMMAND}' MAX_SQLITE_BACKUPS='${MAX_SQLITE_BACKUPS}' BUILD_STATIC_ON_DEPLOY='${BUILD_STATIC_ON_DEPLOY}' DEPLOY_UPLOAD_DB='${DEPLOY_UPLOAD_DB}' bash -s -- '${REMOTE_DIR}'" <<'EOF'
+    "DEPLOY_RUNTIME_MANAGER='${DEPLOY_RUNTIME_MANAGER}' BT_RESTART_COMMAND='${BT_RESTART_COMMAND}' MAX_SQLITE_BACKUPS='${MAX_SQLITE_BACKUPS}' BUILD_STATIC_ON_DEPLOY='${BUILD_STATIC_ON_DEPLOY}' DEPLOY_UPLOAD_DB='${DEPLOY_UPLOAD_DB}' HEALTH_CHECK_URL='${HEALTH_CHECK_URL}' bash -s -- '${REMOTE_DIR}'" <<'EOF'
 set -euo pipefail
 
 APP_DIR="$1"
@@ -351,6 +361,11 @@ ensure_runtime_permissions() {
   local target_user="${2:-www}"
   local target_group="${3:-www}"
 
+  if [ -e "${app_dir}" ]; then
+    chown "${target_user}:${target_group}" "${app_dir}"
+    chmod 775 "${app_dir}"
+  fi
+
   for runtime_path in \
     "${app_dir}/.deploy" \
     "${app_dir}/logs" \
@@ -359,13 +374,13 @@ ensure_runtime_permissions() {
     "${app_dir}/uploads"; do
     if [ -e "${runtime_path}" ]; then
       chown -R "${target_user}:${target_group}" "${runtime_path}"
+      chmod -R u+rwX,g+rwX,o-rwx "${runtime_path}" 2>/dev/null || true
     fi
   done
 }
 
 run_local_health_checks() {
-  local port="${PORT:-1231}"
-  local base_url="http://127.0.0.1:${port}"
+  local base_url="${HEALTH_CHECK_URL:-https://www.spiraxsteam.com}"
 
   if ! command -v curl >/dev/null 2>&1; then
     printf '[deploy] curl not found, skipping health checks.\n'
