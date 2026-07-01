@@ -300,6 +300,7 @@ function normalizeDraftPayload(value) {
     terms: isPlainObject(source.terms) ? source.terms : {},
     signatures: isPlainObject(source.signatures) ? source.signatures : {},
     meta: isPlainObject(source.meta) ? source.meta : {},
+    stamps: Array.isArray(source.stamps) ? source.stamps.map(normalizeDraftStamp) : [],
     items: Array.isArray(source.items)
       ? source.items.map((item, index) => normalizeDraftItem(item, index))
       : [],
@@ -318,6 +319,21 @@ function normalizeDraftItem(item, index) {
     unitPrice: toNumber(source.unitPrice, null),
     amount: toNumber(source.amount, null),
     notes: String(source.notes || '').trim(),
+  };
+}
+
+function normalizeDraftStamp(item, index) {
+  const source = isPlainObject(item) ? item : {};
+  return {
+    id: String(source.id || `stamp-${index + 1}`),
+    stampId: toInteger(source.stampId ?? source.stamp_id, null),
+    name: String(source.name || '').trim(),
+    imagePath: String(source.imagePath || source.image_path || '').trim(),
+    x: toNumber(source.x, 0),
+    y: toNumber(source.y, 0),
+    width: toNumber(source.width, 160),
+    height: toNumber(source.height, 160),
+    rotation: toNumber(source.rotation, 0),
   };
 }
 

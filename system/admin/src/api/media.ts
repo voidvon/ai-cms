@@ -1,7 +1,7 @@
 import apiClient from './client'
 import type { ApiResponse, MediaAsset, PaginationInfo } from '@/types'
 
-export type MediaPurpose = 'product_cover' | 'news_cover' | 'richtext_image' | 'column_image' | 'attachment'
+export type MediaPurpose = 'product_cover' | 'news_cover' | 'richtext_image' | 'column_image' | 'document_stamp' | 'attachment'
 
 export const mediaApi = {
   upload: async (file: File, purpose: MediaPurpose) => {

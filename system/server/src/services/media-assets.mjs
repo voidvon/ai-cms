@@ -45,6 +45,14 @@ const PURPOSE_TARGETS = {
     allowedExtensions: UPLOAD_ALLOWED_EXTENSIONS,
     maxSizeKb: UPLOAD_MAX_SIZE_KB,
   },
+  document_stamp: {
+    purpose: 'document_stamp',
+    mimeFallback: 'image/png',
+    bucket: 'images',
+    root: UPLOADS_IMAGES_ROOT,
+    allowedExtensions: UPLOAD_ALLOWED_EXTENSIONS,
+    maxSizeKb: UPLOAD_MAX_SIZE_KB,
+  },
   attachment: {
     purpose: 'attachment',
     mimeFallback: 'application/octet-stream',

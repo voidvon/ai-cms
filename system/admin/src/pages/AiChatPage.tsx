@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bot, Loader2, Pencil, RefreshCw, Send, Trash2 } from 'lucide-react'
+import { Bot, Loader2, Pencil, RefreshCw, Send, Stamp, Trash2 } from 'lucide-react'
 import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { documentWorkspacesApi } from '@/api/document-workspaces'
 import { ChatMessageItem } from '@/components/ai-chat/ChatMessageItem'
+import { DocumentStampManagerDialog } from '@/components/DocumentStampManagerDialog'
 import {
   PromptInput,
   PromptInputBody,
@@ -27,8 +28,9 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import type { DocumentDraft, DocumentDraftConversationState, DocumentTemplate } from '@/types'
+import type { DocumentDraft, DocumentDraftConversationState, DocumentDraftStampPlacement, DocumentStamp, DocumentTemplate } from '@/types'
 
 const DOCUMENT_TYPE_LABELS: Record<'quote' | 'contract', string> = {
   quote: '报价单',
@@ -39,6 +41,9 @@ type DashboardHeaderContext = {
   headerSlotElement: HTMLDivElement | null
   setDocumentTitle: (value: string) => void
 }
+
+const DEFAULT_DOCUMENT_PAGE_WIDTH = 794
+const DEFAULT_DOCUMENT_PAGE_PADDING = 38
 
 export default function AiChatPage() {
   const { headerSlotElement, setDocumentTitle } = useOutletContext<DashboardHeaderContext>()
@@ -52,6 +57,9 @@ export default function AiChatPage() {
   const [deleteDraftId, setDeleteDraftId] = useState<string>('')
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [titleInputValue, setTitleInputValue] = useState('')
+  const [isStampManagerOpen, setIsStampManagerOpen] = useState(false)
+  const [selectedStampIdToApply, setSelectedStampIdToApply] = useState<string>('')
+  const [isStampEditMode, setIsStampEditMode] = useState(false)
   const [conversationState, setConversationState] = useState<DocumentDraftConversationState>({
     missing_fields: [],
     suggested_questions: [],
@@ -76,7 +84,13 @@ export default function AiChatPage() {
     queryFn: () => documentWorkspacesApi.listDrafts(30),
   })
 
+  const stampsQuery = useQuery({
+    queryKey: ['document-stamps'],
+    queryFn: () => documentWorkspacesApi.listStamps(),
+  })
+
   const recentDrafts = draftsQuery.data?.data || []
+  const stamps = (stampsQuery.data?.data || []) as DocumentStamp[]
 
   const draftQuery = useQuery({
     queryKey: ['document-draft', draftId],
@@ -88,6 +102,53 @@ export default function AiChatPage() {
   const previewHeaderTitle = currentDraft
     ? getDraftDocumentNumber(currentDraft) || currentDraft.title || '未命名文档'
     : ''
+  const currentDraftStamps = Array.isArray(currentDraft?.draft_payload?.stamps) ? currentDraft.draft_payload.stamps : []
+
+  const syncPreviewStampState = (override?: {
+    stamps?: DocumentDraftStampPlacement[]
+    editMode?: boolean
+    activeStampId?: string
+  }) => {
+    const frameWindow = previewFrameRef.current?.contentWindow
+    if (!frameWindow) {
+      return
+    }
+
+    const nextStamps = override?.stamps || currentDraftStamps
+    const nextActiveStampId = String(
+      override?.activeStampId
+      || nextStamps[0]?.id
+      || ''
+    )
+    const nextEditMode = typeof override?.editMode === 'boolean' ? override.editMode : isStampEditMode
+
+    frameWindow.postMessage({
+      type: 'document-preview-set-stamps',
+      stamps: nextStamps,
+    }, window.location.origin)
+
+    frameWindow.postMessage({
+      type: 'document-preview-set-stamp-edit-mode',
+      enabled: nextEditMode,
+      activeStampId: nextActiveStampId,
+    }, window.location.origin)
+
+    window.setTimeout(() => {
+      const latestFrameWindow = previewFrameRef.current?.contentWindow
+      if (!latestFrameWindow) {
+        return
+      }
+      latestFrameWindow.postMessage({
+        type: 'document-preview-set-stamps',
+        stamps: nextStamps,
+      }, window.location.origin)
+      latestFrameWindow.postMessage({
+        type: 'document-preview-set-stamp-edit-mode',
+        enabled: nextEditMode,
+        activeStampId: nextActiveStampId,
+      }, window.location.origin)
+    }, 180)
+  }
 
   useEffect(() => {
     setDocumentTitle(previewHeaderTitle || 'AI 文档工作台')
@@ -126,12 +187,41 @@ export default function AiChatPage() {
     setPreviewVersion((value) => value + 1)
   }, [draftId])
 
+  useEffect(() => {
+    const handler = async (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) {
+        return
+      }
+      const data = event.data || {}
+      if (data.type !== 'document-preview-stamps-change') {
+        return
+      }
+      if (!currentDraft?.id || data.draftId !== currentDraft.id) {
+        return
+      }
+      const nextStamps = Array.isArray(data.stamps) ? data.stamps : []
+      await documentWorkspacesApi.updateDraft(currentDraft.id, {
+        draft_payload: {
+          ...(currentDraft.draft_payload || {}),
+          stamps: nextStamps,
+        },
+      })
+      await queryClient.invalidateQueries({ queryKey: ['document-draft', currentDraft.id] })
+      await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
+    }
+
+    window.addEventListener('message', handler)
+    return () => window.removeEventListener('message', handler)
+  }, [currentDraft, queryClient])
+
   const createDraftMutation = useMutation({
     mutationFn: async (template: DocumentTemplate) => {
+      const defaultTitle = String(template.default_payload?.title || '').trim()
       return documentWorkspacesApi.createDraft({
         document_type: template.document_type,
         document_template_id: template.id,
-        title: String(template.name || '').trim()
+        title: defaultTitle
+          || String(template.name || '').trim()
           || (template.document_type === 'quote' ? '报价单' : '销售合同'),
       })
     },
@@ -204,6 +294,13 @@ export default function AiChatPage() {
 
   const previewUrl = currentDraft ? `${documentWorkspacesApi.getPreviewUrl(currentDraft.id)}?v=${previewVersion}` : ''
 
+  useEffect(() => {
+    if (!currentDraft?.id) {
+      return
+    }
+    syncPreviewStampState()
+  }, [currentDraft?.id, currentDraftStamps, isStampEditMode, previewVersion])
+
   const handleTemplateSelect = async (template: DocumentTemplate) => {
     await createDraftMutation.mutateAsync(template)
   }
@@ -235,6 +332,52 @@ export default function AiChatPage() {
 
     frameWindow.focus()
     frameWindow.print()
+  }
+
+  const handleApplyStamp = async () => {
+    if (!currentDraft?.id || !selectedStampIdToApply) {
+      return
+    }
+
+    const stamp = stamps.find((item) => item.id === Number(selectedStampIdToApply))
+    if (!stamp?.image_path) {
+      toast.error('请选择可用印章')
+      return
+    }
+
+    const contentWidth = DEFAULT_DOCUMENT_PAGE_WIDTH - (DEFAULT_DOCUMENT_PAGE_PADDING * 2)
+    const centeredX = Math.max(Math.round((contentWidth - 180) / 2), 0)
+    const centeredY = 220
+
+    const nextStamp: DocumentDraftStampPlacement = {
+      id: `stamp-${Date.now()}`,
+      stampId: stamp.id,
+      name: stamp.name,
+      imagePath: stamp.image_path,
+      page: 1,
+      x: centeredX,
+      y: centeredY,
+      width: 180,
+      height: 180,
+      rotation: 0,
+    }
+
+    const nextStamps = [...currentDraftStamps, nextStamp]
+    const response = await documentWorkspacesApi.updateDraft(currentDraft.id, {
+      draft_payload: {
+        ...(currentDraft.draft_payload || {}),
+        stamps: nextStamps,
+      },
+    })
+    setIsStampEditMode(true)
+    syncPreviewStampState({
+      stamps: nextStamps,
+      editMode: true,
+      activeStampId: nextStamp.id,
+    })
+    await queryClient.setQueryData(['document-draft', currentDraft.id], { success: true, data: response.data })
+    await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
+    toast.success('印章已添加到预览')
   }
 
   const confirmDeleteDraft = () => {
@@ -359,7 +502,7 @@ export default function AiChatPage() {
             <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px]">
               <section className="flex h-full min-h-0 flex-col border-b bg-background lg:border-b-0 lg:border-r">
                 <div className="min-h-0 flex-1 overflow-y-auto p-5">
-                  <div className="mb-5 flex gap-2">
+                  <div className="mb-5 flex flex-wrap items-center gap-2">
                     <Button
                       variant={selectedDocumentType === 'quote' ? 'default' : 'outline'}
                       onClick={() => setSelectedDocumentType('quote')}
@@ -371,6 +514,10 @@ export default function AiChatPage() {
                       onClick={() => setSelectedDocumentType('contract')}
                     >
                       销售合同
+                    </Button>
+                    <Button type="button" variant="outline" onClick={() => setIsStampManagerOpen(true)}>
+                      <Stamp className="h-4 w-4" />
+                      印章管理
                     </Button>
                   </div>
 
@@ -384,10 +531,7 @@ export default function AiChatPage() {
                       >
                         <div className="flex items-start justify-between gap-4">
                           <div className="space-y-2">
-                            <div className="flex items-center gap-2">
-                              <h3 className="text-base font-semibold">{template.name}</h3>
-                              {Number(template.is_default || 0) === 1 ? <Badge variant="secondary">默认</Badge> : null}
-                            </div>
+                            <h3 className="text-base font-semibold">{template.name}</h3>
                             <p className="text-sm leading-6 text-muted-foreground">
                               {template.description || '进入后可继续通过 AI 对话补全客户、产品、价格和条款信息。'}
                             </p>
@@ -469,11 +613,38 @@ export default function AiChatPage() {
                   key={previewUrl}
                   src={previewUrl}
                   title="文档预览"
+                  onLoad={() => syncPreviewStampState()}
                   className="min-h-0 flex-1 bg-transparent"
                 />
                 </section>
 
                 <section className="flex h-full min-h-0 flex-col bg-background">
+                  <div className="border-b px-4 py-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setIsStampManagerOpen(true)}>
+                        <Stamp className="h-4 w-4" />
+                        印章管理
+                      </Button>
+                      <Select value={selectedStampIdToApply} onValueChange={setSelectedStampIdToApply}>
+                        <SelectTrigger className="w-[220px]">
+                          <SelectValue placeholder="选择要盖的章" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stamps.map((stamp) => (
+                            <SelectItem key={stamp.id} value={String(stamp.id)}>
+                              {stamp.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button type="button" size="sm" onClick={() => void handleApplyStamp()} disabled={!selectedStampIdToApply}>
+                        添加印章
+                      </Button>
+                      <Button type="button" variant={isStampEditMode ? 'default' : 'outline'} size="sm" onClick={() => setIsStampEditMode((value) => !value)}>
+                        {isStampEditMode ? '结束拖拽' : '调整印章'}
+                      </Button>
+                    </div>
+                  </div>
 
                   <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
                     <div className="space-y-5">
@@ -610,6 +781,12 @@ export default function AiChatPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <DocumentStampManagerDialog
+        open={isStampManagerOpen}
+        onOpenChange={setIsStampManagerOpen}
+        stamps={stamps}
+      />
     </div>
   )
 }

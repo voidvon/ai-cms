@@ -1,6 +1,7 @@
 import { requireAuth } from '../../middleware/auth.mjs';
 import { sendDocumentDraftMessage } from '../../services/ai/document-chat.mjs';
 import { createDocumentDraft, deleteDocumentDraft, getDocumentDraftById, listDocumentDrafts, updateDocumentDraft } from '../../services/document-drafts.mjs';
+import { createDocumentStamp, deleteDocumentStamp, listDocumentStamps, updateDocumentStamp } from '../../services/document-stamps.mjs';
 import { renderDocumentDraftPreview } from '../../services/document-preview.mjs';
 import { listDocumentTemplates } from '../../services/document-templates.mjs';
 
@@ -25,6 +26,62 @@ export default async function documentWorkspaceRoutes(app) {
     try {
       const drafts = listDocumentDrafts({ limit: request.query?.limit });
       return { success: true, data: drafts };
+    } catch (error) {
+      reply.code(error.statusCode || 400);
+      return { success: false, message: error.message };
+    }
+  });
+
+  app.get('/document-stamps', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      const stamps = listDocumentStamps();
+      return { success: true, data: stamps };
+    } catch (error) {
+      reply.code(error.statusCode || 400);
+      return { success: false, message: error.message };
+    }
+  });
+
+  app.post('/document-stamps', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      const stamp = createDocumentStamp(request.body || {});
+      return { success: true, data: stamp };
+    } catch (error) {
+      reply.code(error.statusCode || 400);
+      return { success: false, message: error.message };
+    }
+  });
+
+  app.put('/document-stamps/:id', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      const stamp = updateDocumentStamp(request.params.id, request.body || {});
+      if (!stamp) {
+        reply.code(404);
+        return { success: false, message: '印章不存在' };
+      }
+      return { success: true, data: stamp };
+    } catch (error) {
+      reply.code(error.statusCode || 400);
+      return { success: false, message: error.message };
+    }
+  });
+
+  app.delete('/document-stamps/:id', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      const deleted = deleteDocumentStamp(request.params.id);
+      if (!deleted) {
+        reply.code(404);
+        return { success: false, message: '印章不存在' };
+      }
+      return { success: true, data: { deleted: true, id: request.params.id } };
     } catch (error) {
       reply.code(error.statusCode || 400);
       return { success: false, message: error.message };
@@ -59,6 +116,9 @@ export default async function documentWorkspaceRoutes(app) {
   }, async (request, reply) => {
     const draft = updateDocumentDraft(request.params.id, {
       title: request.body?.title,
+      draft_payload: request.body?.draft_payload,
+      payload: request.body?.payload,
+      replace_payload: request.body?.replace_payload,
     });
     if (!draft) {
       reply.code(404);

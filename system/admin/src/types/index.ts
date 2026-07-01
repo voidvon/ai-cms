@@ -440,6 +440,29 @@ export interface MediaAsset {
   created_at?: string;
 }
 
+export interface DocumentStamp {
+  id: number;
+  theme_id: number;
+  name: string;
+  image_asset_id?: number | null;
+  image_path: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DocumentDraftStampPlacement {
+  id: string;
+  stampId?: number | null;
+  name?: string;
+  imagePath: string;
+  page?: number;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  rotation: number;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;
@@ -606,7 +629,6 @@ export interface DocumentTemplate {
   template_code?: string;
   template_name?: string;
   template_status?: string;
-  is_default: number;
   sort_order: number;
   default_payload_json: string;
   default_payload?: Record<string, unknown>;
@@ -629,7 +651,9 @@ export interface DocumentDraft {
   title: string;
   language_code: string;
   draft_payload_json: string;
-  draft_payload: Record<string, unknown>;
+  draft_payload: Record<string, unknown> & {
+    stamps?: DocumentDraftStampPlacement[];
+  };
   messages_json: string;
   messages: DocumentDraftMessage[];
   status: string;

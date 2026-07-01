@@ -19,8 +19,27 @@ const DEFAULT_DOCUMENT_TEMPLATE_DEFINITIONS = [
     default_payload: buildDefaultDraftPayload('quote', {
       title: '斯派莎克报价单',
       documentNumberPrefix: 'SP',
+      paymentText: '30%预付款，发货前70%',
     }),
     template_source: buildQuoteTemplateSource(),
+    css_source: buildQuoteTemplateCss(),
+  },
+  {
+    key: 'default_quote_workspace_en',
+    name: '斯派莎克报价单（英文版）',
+    description: '适用于英文销售报价和打印导出。',
+    document_type: 'quote',
+    template_code: 'doc_quote_default_en',
+    template_name: '文档模板-斯派莎克报价单（英文版）',
+    sort_order: 11,
+    default_payload: buildDefaultDraftPayload('quote', {
+      title: 'Spirax Sarco Quotation',
+      documentNumberPrefix: 'SP',
+      language: 'en-US',
+      validityText: 'Valid for 30 days',
+      paymentText: '30% advance payment, 70% before shipment',
+    }),
+    template_source: buildEnglishQuoteTemplateSource(),
     css_source: buildQuoteTemplateCss(),
   },
   {
@@ -53,7 +72,6 @@ export function ensureDocumentTemplatesSchema() {
       description TEXT,
       document_type TEXT NOT NULL CHECK (document_type IN ('quote', 'contract')),
       template_id INTEGER NOT NULL,
-      is_default INTEGER NOT NULL DEFAULT 0,
       sort_order INTEGER NOT NULL DEFAULT 0,
       default_payload_json TEXT NOT NULL DEFAULT '{}',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -65,6 +83,8 @@ export function ensureDocumentTemplatesSchema() {
     CREATE INDEX IF NOT EXISTS idx_document_templates_theme_type_sort
       ON document_templates(theme_id, document_type, sort_order, id);
   `);
+
+  ensureDocumentTemplatesSchemaColumns();
 
   schemaEnsured = true;
 }
@@ -92,7 +112,6 @@ export function listDocumentTemplates({ documentType, themeId } = {}) {
         dt.description,
         dt.document_type,
         dt.template_id,
-        dt.is_default,
         dt.sort_order,
         dt.default_payload_json,
         dt.created_at,
@@ -124,7 +143,6 @@ export function getDocumentTemplateById(id, { themeId } = {}) {
         dt.description,
         dt.document_type,
         dt.template_id,
-        dt.is_default,
         dt.sort_order,
         dt.default_payload_json,
         dt.created_at,
@@ -162,7 +180,6 @@ export function getDocumentTemplateByKey(key, { themeId } = {}) {
         dt.description,
         dt.document_type,
         dt.template_id,
-        dt.is_default,
         dt.sort_order,
         dt.default_payload_json,
         dt.created_at,
@@ -184,7 +201,7 @@ export function getDocumentTemplateByKey(key, { themeId } = {}) {
 export function resolveDocumentTemplateForType(documentType, { themeId } = {}) {
   const normalizedDocumentType = normalizeDocumentType(documentType);
   const templates = listDocumentTemplates({ documentType: normalizedDocumentType, themeId });
-  return templates.find((item) => Number(item.is_default || 0) === 1) || templates[0] || null;
+  return templates[0] || null;
 }
 
 function ensureThemeDocumentTemplates(themeId) {
@@ -257,7 +274,6 @@ function upsertDocumentTemplateMetadata(themeId, definition, templateId) {
           description = ?,
           document_type = ?,
           template_id = ?,
-          is_default = 1,
           sort_order = ?,
           default_payload_json = ?,
           updated_at = ?
@@ -286,13 +302,12 @@ function upsertDocumentTemplateMetadata(themeId, definition, templateId) {
         description,
         document_type,
         template_id,
-        is_default,
         sort_order,
         default_payload_json,
         created_at,
         updated_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       themeId,
@@ -321,14 +336,80 @@ function hydrateDocumentTemplateRecord(row) {
   };
 }
 
+function ensureDocumentTemplatesSchemaColumns() {
+  const columns = queryAll('PRAGMA table_info(document_templates)');
+  const hasIsDefault = columns.some((column) => String(column.name || '').trim() === 'is_default');
+  if (!hasIsDefault) {
+    return;
+  }
+
+  getDb().exec(`
+    BEGIN;
+    ALTER TABLE document_templates RENAME TO document_templates__legacy_default_flag;
+    CREATE TABLE document_templates (
+      id INTEGER PRIMARY KEY,
+      theme_id INTEGER NOT NULL,
+      key TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      document_type TEXT NOT NULL CHECK (document_type IN ('quote', 'contract')),
+      template_id INTEGER NOT NULL,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      default_payload_json TEXT NOT NULL DEFAULT '{}',
+      created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE (theme_id, key),
+      FOREIGN KEY (template_id) REFERENCES templates(id) ON DELETE CASCADE
+    );
+    INSERT INTO document_templates (
+      id,
+      theme_id,
+      key,
+      name,
+      description,
+      document_type,
+      template_id,
+      sort_order,
+      default_payload_json,
+      created_at,
+      updated_at
+    )
+    SELECT
+      id,
+      theme_id,
+      key,
+      name,
+      description,
+      document_type,
+      template_id,
+      sort_order,
+      default_payload_json,
+      created_at,
+      updated_at
+    FROM document_templates__legacy_default_flag;
+    DROP TABLE document_templates__legacy_default_flag;
+    CREATE INDEX IF NOT EXISTS idx_document_templates_theme_type_sort
+      ON document_templates(theme_id, document_type, sort_order, id);
+    COMMIT;
+  `);
+}
+
 export function buildDefaultDraftPayload(documentType, options = {}) {
   const normalizedDocumentType = normalizeDocumentType(documentType);
   const normalizedTitle = String(options.title || '').trim();
   const normalizedDocumentNumberPrefix = String(options.documentNumberPrefix || '').trim().toUpperCase();
+  const normalizedLanguage = String(options.language || '').trim() || 'zh-CN';
+  const normalizedValidityText = String(options.validityText || '').trim();
+  const normalizedPaymentText = String(options.paymentText || '').trim();
+  const isEnglish = normalizedLanguage.toLowerCase().startsWith('en');
   const base = {
     type: normalizedDocumentType,
-    title: normalizedTitle || (normalizedDocumentType === 'quote' ? '报价单' : '销售合同'),
-    language: 'zh-CN',
+    title: normalizedTitle || (
+      normalizedDocumentType === 'quote'
+        ? (isEnglish ? 'Quotation' : '报价单')
+        : (isEnglish ? 'Sales Contract' : '销售合同')
+    ),
+    language: normalizedLanguage,
     quoteNumber: '',
     contractNumber: '',
     customer: {
@@ -356,9 +437,13 @@ export function buildDefaultDraftPayload(documentType, options = {}) {
       total: null,
     },
     terms: {
-      validity: normalizedDocumentType === 'quote' ? '有效期 30 天' : '',
+      validity: normalizedDocumentType === 'quote'
+        ? (normalizedValidityText || (isEnglish ? 'Valid for 30 days' : '有效期 30 天'))
+        : '',
       delivery: '',
-      payment: '',
+      payment: normalizedDocumentType === 'quote'
+        ? (normalizedPaymentText || (isEnglish ? '30% advance payment, 70% before shipment' : '30%预付款，发货前70%'))
+        : '',
       warranty: '',
       disputeResolution: normalizedDocumentType === 'contract' ? '双方协商解决，协商不成提交卖方所在地法院处理。' : '',
       breachLiability: normalizedDocumentType === 'contract' ? '违约方应承担相应违约责任。' : '',
@@ -453,7 +538,7 @@ export default function QuoteTemplate(props) {
   ];
   const termFields = [
     ['交期', terms.delivery || '-'],
-    ['付款方式', terms.payment || '-'],
+    ['付款方式', terms.payment || '30%预付款，发货前70%'],
     ['有效期', terms.validity || '有效期 30 天'],
     ['备注', terms.extraNotes || '-'],
   ];
@@ -784,6 +869,57 @@ export default function QuoteTemplate(props) {
   );
 }
 `;
+}
+
+function buildEnglishQuoteTemplateSource() {
+  let source = buildQuoteTemplateSource();
+
+  const replacements = [
+    ["const quoteNumber = draft.quoteNumber || '待生成';", "const quoteNumber = draft.quoteNumber || 'PENDING';"],
+    ["const remarkText = terms.remarks || '本报价单所列价格、交期及商务条件以双方最终确认版本为准。';", "const remarkText = terms.remarks || 'Prices, lead times and commercial terms in this quotation are subject to the final confirmed version agreed by both parties.';"],
+    ["return number.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });", "return number.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });"],
+    ["['公司', customerName],", "['Company', customerName],"],
+    ["['联系人', customer.contact || '-'],", "['Contact', customer.contact || '-'],"],
+    ["['电话', customer.phone || '-'],", "['Phone', customer.phone || '-'],"],
+    ["['邮箱', customer.email || '-'],", "['Email', customer.email || '-'],"],
+    ["['地址', customer.address || '-'],", "['Address', customer.address || '-'],"],
+    ["['公司', sellerName],", "['Company', sellerName],"],
+    ["['联系人', seller.contact || '-'],", "['Contact', seller.contact || '-'],"],
+    ["['电话', seller.phone || '-'],", "['Phone', seller.phone || '-'],"],
+    ["['邮箱', seller.email || '-'],", "['Email', seller.email || '-'],"],
+    ["['地址', seller.address || '-'],", "['Address', seller.address || '-'],"],
+    ["['交期', terms.delivery || '-'],", "['Lead Time', terms.delivery || '-'],"],
+    ["['付款方式', terms.payment || '30%预付款，发货前70%'],", "['Payment Terms', terms.payment || '30% advance payment, 70% before shipment'],"],
+    ["['有效期', terms.validity || '有效期 30 天'],", "['Validity', terms.validity || 'Valid for 30 days'],"],
+    ["['备注', terms.extraNotes || '-'],", "['Notes', terms.extraNotes || '-'],"],
+    ['<html lang="zh-CN">', '<html lang="en">'],
+    ["<title>{draft.title || '报价单'}</title>", "<title>{draft.title || 'Quotation'}</title>"],
+    ["<p className=\"quote-hero__cn\">{draft.title || '报价单'}</p>", "<p className=\"quote-hero__cn\">{draft.title || 'Quotation'}</p>"],
+    ['<span className="quote-meta-card__label">报价编号</span>', '<span className="quote-meta-card__label">Quote No.</span>'],
+    ['<span className="quote-meta-card__label">发布日期</span>', '<span className="quote-meta-card__label">Issue Date</span>'],
+    ['<span className="quote-meta-card__label">币种</span>', '<span className="quote-meta-card__label">Currency</span>'],
+    ['<span className="quote-meta-card__label">有效期</span>', '<span className="quote-meta-card__label">Validity</span>'],
+    ['<strong className="quote-meta-card__value">{terms.validity || \'有效期 30 天\'}</strong>', '<strong className="quote-meta-card__value">{terms.validity || \'Valid for 30 days\'}</strong>'],
+    ['<SectionTitle cn="客户信息" en="BUYER INFORMATION" icon={<IconUser />} />', '<SectionTitle cn="Customer Information" en="" icon={<IconUser />} />'],
+    ['<SectionTitle cn="销售方信息" en="SELLER INFORMATION" icon={<IconCompany />} />', '<SectionTitle cn="Seller Information" en="" icon={<IconCompany />} />'],
+    ['<SectionTitle className="quote-section-title--plain" cn="报价明细" en="QUOTATION ITEMS" icon={<IconFile />} trailing={<span>共 {items.length} 项</span>} />', '<SectionTitle className="quote-section-title--plain" cn="Quotation Items" en="" icon={<IconFile />} trailing={<span>{items.length} items</span>} />'],
+    ['<SectionTitle cn="商务条款" en="COMMERCIAL TERMS" icon={<IconTerms />} />', '<SectionTitle cn="Commercial Terms" en="" icon={<IconTerms />} />'],
+    ['<SectionTitle cn="报价说明" en="REMARKS" icon={<IconRemarks />} />', '<SectionTitle cn="Remarks" en="" icon={<IconRemarks />} />'],
+    ['<th>型号 / MODEL</th>', '<th>MODEL</th>'],
+    ['<th>描述 / DESCRIPTION</th>', '<th>DESCRIPTION</th>'],
+    ['<th>数量 / QTY</th>', '<th>QTY</th>'],
+    ['<th>单价 / UNIT PRICE</th>', '<th>UNIT PRICE</th>'],
+    ['<th>金额 / AMOUNT</th>', '<th>AMOUNT</th>'],
+    ['<td colSpan={4}>运费 / SHIPPING</td>', '<td colSpan={4}>SHIPPING</td>'],
+    ['<td colSpan={4}>税额 / TAX</td>', '<td colSpan={4}>TAX</td>'],
+    ['<td colSpan={4}>总金额 / TOTAL</td>', '<td colSpan={4}>TOTAL</td>'],
+  ];
+
+  for (const [from, to] of replacements) {
+    source = source.replaceAll(from, to);
+  }
+
+  return source;
 }
 
 function buildQuoteTemplateCss() {
