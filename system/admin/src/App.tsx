@@ -10,6 +10,7 @@ const MediaAssetsPage = lazy(() => import('@/pages/MediaAssetsPage'))
 const TemplateVariantsPage = lazy(() => import('@/pages/TemplateVariantsPage'))
 const ContentModelsPage = lazy(() => import('@/pages/ContentModelsPage'))
 const ContentModelDataPage = lazy(() => import('@/pages/ContentModelDataPage'))
+const PriceManagementPage = lazy(() => import('@/pages/PriceManagementPage'))
 const AdminsPage = lazy(() => import('@/pages/AdminsPage'))
 const AdminLoginLogsPage = lazy(() => import('@/pages/AdminLoginLogsPage'))
 const StaticGenerationPage = lazy(() => import('@/pages/StaticGenerationPage'))
@@ -42,6 +43,7 @@ function App() {
             <Route path="templates" element={<Navigate to="/themes" replace />} />
             <Route path="content-models" element={<ContentModelsPage />} />
             <Route path="content-model-data" element={<ContentModelDataPage />} />
+            <Route path="price-management" element={<PriceManagementPage />} />
             <Route path="media-assets" element={<MediaAssetsPage />} />
             <Route path="languages" element={<LanguagesPage />} />
             <Route path="template-variants" element={<Navigate to="/themes" replace />} />

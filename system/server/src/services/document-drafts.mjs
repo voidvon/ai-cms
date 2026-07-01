@@ -329,6 +329,7 @@ function normalizeDraftStamp(item, index) {
     stampId: toInteger(source.stampId ?? source.stamp_id, null),
     name: String(source.name || '').trim(),
     imagePath: String(source.imagePath || source.image_path || '').trim(),
+    page: Math.max(toInteger(source.page, 1) || 1, 1),
     x: toNumber(source.x, 0),
     y: toNumber(source.y, 0),
     width: toNumber(source.width, 160),

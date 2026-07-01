@@ -1,5 +1,6 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
-import { ensureContentModelsSchema, getContentModelByCode } from './content-models.mjs';
+import { ensureContentModelsSchema, getContentModelByCode, migratePriceRecordTranslationsToMainTable } from './content-models.mjs';
+import { listConfiguredModelFields } from './content-model-fields.mjs';
 import { ensureLanguagesSchema } from './languages.mjs';
 
 let schemaEnsured = false;
@@ -29,6 +30,7 @@ function getFieldDefinition(fieldName) {
   const fieldDefinitions = {
     // 主表字段
     'custom_url': 'TEXT',
+    'name': `TEXT NOT NULL DEFAULT ''`,
     'code': 'TEXT',
     'images': `TEXT NOT NULL DEFAULT '[]'`,
     'spec_options_json': `TEXT NOT NULL DEFAULT '[]'`,
@@ -47,6 +49,22 @@ function getFieldDefinition(fieldName) {
   };
 
   return fieldDefinitions[fieldName];
+}
+
+function getConfiguredFieldDefinition(field) {
+  const configured = getFieldDefinition(field.field_name);
+  if (configured) {
+    return configured;
+  }
+
+  const normalizedType = String(field?.field_type || '').trim().toLowerCase();
+  if (normalizedType === 'number' || normalizedType === 'boolean') {
+    return 'NUMERIC';
+  }
+  if (normalizedType === 'image' || normalizedType === 'images' || normalizedType === 'richtext' || normalizedType === 'textarea' || normalizedType === 'datetime') {
+    return 'TEXT';
+  }
+  return 'TEXT';
 }
 
 export function ensureContentModelStorageSchema() {
@@ -109,6 +127,10 @@ export function ensureModelTables(modelCode) {
   applyConfiguredTranslationTableColumns(translationTableName, modelCode);
 
   addColumnIfMissing(translationTableName, 'template_data_json', 'TEXT');
+
+  if (modelCode === 'price_record') {
+    migratePriceRecordTranslationsToMainTable();
+  }
 }
 
 export function getTranslationTableName(modelCode) {
@@ -286,21 +308,25 @@ function buildContentTableSql(tableName, modelCode) {
 }
 
 function applyConfiguredMainTableColumns(tableName, modelCode) {
-  const { mainTableFields } = getModelFields(modelCode);
-  mainTableFields.forEach((fieldName) => {
-    const def = getFieldDefinition(fieldName);
+  const configuredFields = listConfiguredModelFields(modelCode);
+  const mainFields = configuredFields.filter((field) => Number(field.is_translatable || 0) === 0);
+
+  mainFields.forEach((field) => {
+    const def = getConfiguredFieldDefinition(field);
     if (def) {
-      addColumnIfMissing(tableName, fieldName, def);
+      addColumnIfMissing(tableName, field.field_name, def);
     }
   });
 }
 
 function applyConfiguredTranslationTableColumns(translationTableName, modelCode) {
-  const { translationTableFields } = getModelFields(modelCode);
-  translationTableFields.forEach((fieldName) => {
-    const def = getFieldDefinition(fieldName);
+  const configuredFields = listConfiguredModelFields(modelCode);
+  const translationFields = configuredFields.filter((field) => Number(field.is_translatable || 0) === 1);
+
+  translationFields.forEach((field) => {
+    const def = getConfiguredFieldDefinition(field);
     if (def) {
-      addColumnIfMissing(translationTableName, fieldName, def);
+      addColumnIfMissing(translationTableName, field.field_name, def);
     }
   });
 }

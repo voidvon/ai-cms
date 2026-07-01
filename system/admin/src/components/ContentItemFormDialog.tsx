@@ -47,6 +47,29 @@ interface FormModelCapabilities {
   supportsSpecOptions: boolean
 }
 
+const SYSTEM_FIELD_NAMES = new Set([
+  'id',
+  'column_id',
+  'custom_url',
+  'code',
+  'images',
+  'picture',
+  'primary_image',
+  'spec_options_json',
+  'is_visible',
+  'is_featured_home',
+  'sort_order',
+  'created_at',
+  'updated_at',
+  'name',
+  'title',
+  'summary',
+  'content_html',
+  'seo_title',
+  'seo_description',
+  'publish_status',
+])
+
 interface ContentItemFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -97,6 +120,14 @@ export default function ContentItemFormDialog({
   const capabilities = useMemo(
     () => inferFormModelCapabilities(modelCode, contentModel?.fields || []),
     [contentModel?.fields, modelCode],
+  )
+  const dynamicBaseFields = useMemo(
+    () => (contentModel?.fields || []).filter((field) => (
+      !SYSTEM_FIELD_NAMES.has(field.field_name)
+      && Number(field.is_translatable || 0) === 0
+      && isFieldVisible(fieldMap, field.field_name)
+    )),
+    [contentModel?.fields, fieldMap],
   )
   const meta = useMemo(() => getModelMeta(capabilities), [capabilities])
   const allColumns = columnsData?.data || []
@@ -288,6 +319,52 @@ export default function ContentItemFormDialog({
                       rows={6}
                     />
                     <div className="text-xs text-muted-foreground">非翻译字段。所有语言共用同一份规格数据，一行一个值。</div>
+                  </div>
+                ) : null}
+                {dynamicBaseFields.length ? (
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {dynamicBaseFields.map((field) => {
+                      const fieldLabel = getFieldLabel(fieldMap, field.field_name, field.field_name)
+                      const value = baseData[field.field_name]
+                      const commonProps = {
+                        disabled: !isFieldEditable(fieldMap, field.field_name),
+                      }
+
+                      if (field.field_type === 'textarea') {
+                        return (
+                          <div key={field.field_name} className="space-y-2 md:col-span-2">
+                            <Label htmlFor={field.field_name}>{fieldLabel}</Label>
+                            <Textarea
+                              id={field.field_name}
+                              value={String(value || '')}
+                              {...commonProps}
+                              onChange={(event) => setBaseData({ ...baseData, [field.field_name]: event.target.value })}
+                              rows={4}
+                              placeholder={`请输入${fieldLabel}`}
+                            />
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <div key={field.field_name} className="space-y-2">
+                          <Label htmlFor={field.field_name}>{fieldLabel}</Label>
+                          <Input
+                            id={field.field_name}
+                            type={field.field_type === 'number' ? 'number' : 'text'}
+                            value={value === null || value === undefined ? '' : String(value)}
+                            {...commonProps}
+                            onChange={(event) => setBaseData({
+                              ...baseData,
+                              [field.field_name]: field.field_type === 'number'
+                                ? event.target.value
+                                : event.target.value,
+                            })}
+                            placeholder={`请输入${fieldLabel}`}
+                          />
+                        </div>
+                      )
+                    })}
                   </div>
                 ) : null}
 
@@ -554,6 +631,7 @@ function createBaseDataFromItem(item: ContentItem) {
     is_visible: managedItem.is_visible || 1,
     sort_order: item.sort_order || 0,
     created_at: sectionItem.created_at || '',
+    ...(managedItem.dynamic_fields && typeof managedItem.dynamic_fields === 'object' ? managedItem.dynamic_fields : {}),
   }
 }
 

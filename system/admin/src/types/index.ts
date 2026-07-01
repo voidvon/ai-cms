@@ -133,6 +133,8 @@ export interface ManagedContentItem {
   is_language_fallback?: boolean;
   translation_statuses?: ContentTranslationStatus[];
   translations?: Record<string, ManagedContentTranslation>;
+  dynamic_fields?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export interface ManagedContentTranslation {

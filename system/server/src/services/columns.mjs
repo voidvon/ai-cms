@@ -2,6 +2,7 @@ import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { ensureLanguagesSchema, getDefaultLanguage, listLanguages } from './languages.mjs';
 import { ensureTemplatesSchema } from './templates.mjs';
 import { ensureContentModelsSchema, getContentModelById } from './content-models.mjs';
+import { getContentTableName, getTranslationTableName } from './content-model-storage.mjs';
 import { resolveRelativePublicPath } from './column-paths.mjs';
 import { normalizeTemplateDataAssetsDeep } from './template-data-assets.mjs';
 
@@ -267,6 +268,7 @@ export function deleteColumnRecord(id) {
   }
 
   ensureTemplatesSchema();
+  deleteColumnBoundContent(existing);
   execute(
     'DELETE FROM template_bindings WHERE target_type = ? AND target_id = ?',
     ['column', id]
@@ -274,6 +276,42 @@ export function deleteColumnRecord(id) {
   execute('DELETE FROM column_translations WHERE column_id = ?', [id]);
   execute('DELETE FROM columns WHERE id = ?', [id]);
   return existing;
+}
+
+function deleteColumnBoundContent(column) {
+  const contentModelId = toInteger(column?.content_model_id, 0);
+  if (contentModelId <= 0) {
+    return;
+  }
+
+  const model = getContentModelById(contentModelId);
+  if (!model?.code) {
+    return;
+  }
+
+  const tableName = getContentTableName(model.code);
+  const translationTableName = getTranslationTableName(model.code);
+  const columnId = toInteger(column?.id, 0);
+  if (columnId <= 0) {
+    return;
+  }
+
+  execute(
+    `
+      DELETE FROM ${quoteIdentifier(translationTableName)}
+      WHERE entry_id IN (
+        SELECT id
+        FROM ${quoteIdentifier(tableName)}
+        WHERE column_id = ?
+      )
+    `,
+    [columnId]
+  );
+
+  execute(
+    `DELETE FROM ${quoteIdentifier(tableName)} WHERE column_id = ?`,
+    [columnId]
+  );
 }
 
 function hydrateColumns(rows, {
@@ -744,7 +782,7 @@ function resolveLanguageForContent(languageCode) {
 
 function assertEditableManualColumn(column) {
   const columnType = normalizeColumnType(column?.column_type);
-  if (columnType !== 'single' && columnType !== 'link') {
+  if (columnType !== 'single' && columnType !== 'link' && columnType !== 'list') {
     throw new Error('当前栏目不支持直接编辑');
   }
 }
@@ -953,6 +991,10 @@ function hasColumn(tableName, columnName) {
     return false;
   }
   return queryAll(`PRAGMA table_info(${tableName})`).some((column) => column.name === columnName);
+}
+
+function quoteIdentifier(value) {
+  return `"${String(value).replaceAll('"', '""')}"`;
 }
 
 function addColumnIfMissing(tableName, columnName, definition) {

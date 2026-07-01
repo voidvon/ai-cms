@@ -1,11 +1,33 @@
 import { execute, queryAll, queryOne } from '../db.mjs';
 import { getColumnById } from './columns.mjs';
+import { listConfiguredModelFields } from './content-model-fields.mjs';
 import { ensureContentModelStorageSchema, getContentTableName, getTranslationTableName } from './content-model-storage.mjs';
 import { getDefaultLanguage, listLanguages } from './languages.mjs';
 import { normalizeUploadedRelativePath } from './uploads.mjs';
 import { normalizeTemplateDataAssetsDeep } from './template-data-assets.mjs';
 
 const EMPTY_IMAGE_LIST = '[]';
+const SYSTEM_FIELD_NAMES = new Set([
+  'id',
+  'column_id',
+  'custom_url',
+  'code',
+  'images',
+  'spec_options_json',
+  'primary_image',
+  'is_visible',
+  'is_featured_home',
+  'sort_order',
+  'created_at',
+  'updated_at',
+  'name',
+  'summary',
+  'content_html',
+  'template_data_json',
+  'seo_title',
+  'seo_description',
+  'publish_status'
+]);
 
 /**
  * 获取模型的字段配置
@@ -27,6 +49,25 @@ function getModelFieldNames(modelCode) {
 function getModelFieldNameSet(modelCode) {
   const { mainFields, translationFields } = getModelFieldNames(modelCode);
   return new Set([...mainFields, ...translationFields]);
+}
+
+function isFieldTranslatable(modelCode, fieldName) {
+  return getModelFieldNames(modelCode).translationFields.includes(fieldName);
+}
+
+function hasTranslatableFields(modelCode) {
+  return getModelFieldNames(modelCode).translationFields.length > 0;
+}
+
+function getDynamicModelFields(modelCode) {
+  return listConfiguredModelFields(modelCode)
+    .filter((field) => !SYSTEM_FIELD_NAMES.has(String(field.field_name || '').trim()))
+    .sort((left, right) => {
+      if (Number(left.sort_order || 0) !== Number(right.sort_order || 0)) {
+        return Number(left.sort_order || 0) - Number(right.sort_order || 0);
+      }
+      return String(left.field_name || '').localeCompare(String(right.field_name || ''));
+    });
 }
 
 /**
@@ -61,6 +102,53 @@ function buildMainTableSelect(modelCode, alias = 'e') {
   });
 
   return selectParts.join(',\n        ');
+}
+
+function buildDynamicFieldSelect(modelCode, mainAlias = 'e') {
+  const fields = getDynamicModelFields(modelCode);
+  if (!fields.length) {
+    return '';
+  }
+
+  return fields.map((field) => {
+    const fieldName = quoteIdentifier(field.field_name);
+    if (Number(field.is_translatable || 0) === 1) {
+      return `coalesce(t.${fieldName}, dt.${fieldName}, ft.${fieldName}, '') AS ${fieldName}`;
+    }
+    return `${mainAlias}.${fieldName}`;
+  }).join(',\n        ');
+}
+
+function buildContentValueExpr(modelCode, fieldName, {
+  mainAlias = 'e',
+  emptyFallback = "''",
+  nullFallback = 'NULL',
+  publishFallback = "'published'"
+} = {}) {
+  const { mainFields, translationFields } = getModelFieldNames(modelCode);
+  const quotedFieldName = quoteIdentifier(fieldName);
+
+  if (translationFields.includes(fieldName)) {
+    if (fieldName === 'publish_status') {
+      return `coalesce(t.${quotedFieldName}, dt.${quotedFieldName}, ft.${quotedFieldName}, ${publishFallback})`;
+    }
+    if (fieldName === 'seo_title' || fieldName === 'seo_description') {
+      return `coalesce(t.${quotedFieldName}, dt.${quotedFieldName}, ft.${quotedFieldName})`;
+    }
+    return `coalesce(t.${quotedFieldName}, dt.${quotedFieldName}, ft.${quotedFieldName}, ${emptyFallback})`;
+  }
+
+  if (mainFields.includes(fieldName)) {
+    return `${mainAlias}.${quotedFieldName}`;
+  }
+
+  if (fieldName === 'publish_status') {
+    return publishFallback;
+  }
+  if (fieldName === 'seo_title' || fieldName === 'seo_description') {
+    return nullFallback;
+  }
+  return emptyFallback;
 }
 
 function getTranslationCreatedAtExpr(translationAlias, defaultTranslationAlias, entryAlias) {
@@ -113,15 +201,16 @@ export function listContentEntries(modelCode, {
         e.id,
         e.column_id,
         ${buildMainTableSelect(modelCode, 'e')},
+        ${buildDynamicFieldSelect(modelCode) ? `${buildDynamicFieldSelect(modelCode)},` : ''}
         e.created_at,
         e.updated_at,
-        coalesce(t.name, dt.name, ft.name, '') AS name,
-        coalesce(t.summary, dt.summary, ft.summary, '') AS summary,
-        coalesce(t.content_html, dt.content_html, ft.content_html, '') AS content_html,
+        ${buildContentValueExpr(modelCode, 'name')} AS name,
+        ${buildContentValueExpr(modelCode, 'summary')} AS summary,
+        ${buildContentValueExpr(modelCode, 'content_html')} AS content_html,
         ${getTranslationTemplateDataExpr('t', 'dt')} AS template_data_json,
-        coalesce(t.seo_title, dt.seo_title, ft.seo_title) AS seo_title,
-        coalesce(t.seo_description, dt.seo_description, ft.seo_description) AS seo_description,
-        coalesce(t.publish_status, dt.publish_status, ft.publish_status, 'published') AS translation_publish_status,
+        ${buildContentValueExpr(modelCode, 'seo_title')} AS seo_title,
+        ${buildContentValueExpr(modelCode, 'seo_description')} AS seo_description,
+        ${buildContentValueExpr(modelCode, 'publish_status')} AS translation_publish_status,
         ${getTranslationCreatedAtExpr('t', 'dt', 'e')} AS translation_created_at,
         coalesce(tc.name, dtc.name, '') AS column_name,
         ? AS requested_language_code,
@@ -212,15 +301,16 @@ export function listContentEntriesPaged(modelCode, {
         e.id,
         e.column_id,
         ${buildMainTableSelect(modelCode, 'e')},
+        ${buildDynamicFieldSelect(modelCode) ? `${buildDynamicFieldSelect(modelCode)},` : ''}
         e.created_at,
         e.updated_at,
-        coalesce(t.name, dt.name, ft.name, '') AS name,
-        coalesce(t.summary, dt.summary, ft.summary, '') AS summary,
-        coalesce(t.content_html, dt.content_html, ft.content_html, '') AS content_html,
+        ${buildContentValueExpr(modelCode, 'name')} AS name,
+        ${buildContentValueExpr(modelCode, 'summary')} AS summary,
+        ${buildContentValueExpr(modelCode, 'content_html')} AS content_html,
         ${getTranslationTemplateDataExpr('t', 'dt')} AS template_data_json,
-        coalesce(t.seo_title, dt.seo_title, ft.seo_title) AS seo_title,
-        coalesce(t.seo_description, dt.seo_description, ft.seo_description) AS seo_description,
-        coalesce(t.publish_status, dt.publish_status, ft.publish_status, 'published') AS translation_publish_status,
+        ${buildContentValueExpr(modelCode, 'seo_title')} AS seo_title,
+        ${buildContentValueExpr(modelCode, 'seo_description')} AS seo_description,
+        ${buildContentValueExpr(modelCode, 'publish_status')} AS translation_publish_status,
         ${getTranslationCreatedAtExpr('t', 'dt', 'e')} AS translation_created_at,
         coalesce(tc.name, dtc.name, '') AS column_name,
         ? AS requested_language_code,
@@ -280,15 +370,16 @@ export function getContentEntryById(modelCode, id, {
         e.id,
         e.column_id,
         ${buildMainTableSelect(modelCode, 'e')},
+        ${buildDynamicFieldSelect(modelCode) ? `${buildDynamicFieldSelect(modelCode)},` : ''}
         e.created_at,
         e.updated_at,
-        coalesce(t.name, dt.name, ft.name, '') AS name,
-        coalesce(t.summary, dt.summary, ft.summary, '') AS summary,
-        coalesce(t.content_html, dt.content_html, ft.content_html, '') AS content_html,
+        ${buildContentValueExpr(modelCode, 'name')} AS name,
+        ${buildContentValueExpr(modelCode, 'summary')} AS summary,
+        ${buildContentValueExpr(modelCode, 'content_html')} AS content_html,
         ${getTranslationTemplateDataExpr('t', 'dt')} AS template_data_json,
-        coalesce(t.seo_title, dt.seo_title, ft.seo_title) AS seo_title,
-        coalesce(t.seo_description, dt.seo_description, ft.seo_description) AS seo_description,
-        coalesce(t.publish_status, dt.publish_status, ft.publish_status, 'published') AS translation_publish_status,
+        ${buildContentValueExpr(modelCode, 'seo_title')} AS seo_title,
+        ${buildContentValueExpr(modelCode, 'seo_description')} AS seo_description,
+        ${buildContentValueExpr(modelCode, 'publish_status')} AS translation_publish_status,
         ${getTranslationCreatedAtExpr('t', 'dt', 'e')} AS translation_created_at,
         coalesce(tc.name, dtc.name, '') AS column_name,
         ? AS requested_language_code,
@@ -336,7 +427,8 @@ export function getContentEntryById(modelCode, id, {
           template_data: parseTemplateDataJson(translation.template_data_json),
           seo_title: translation.seo_title,
           seo_description: translation.seo_description,
-          publish_status: translation.publish_status
+          publish_status: translation.publish_status,
+          ...translation.dynamic_fields
         };
         return [translation.language_code, translationData];
       })
@@ -365,12 +457,12 @@ export function createContentEntry(modelCode, input) {
   const tableName = getContentTableName(modelCode);
   const translationTableName = getTranslationTableName(modelCode);
   const { mainFields } = getModelFieldNames(modelCode);
-  const defaultLanguage = getDefaultLanguage();
-  const defaultTranslation = resolveDefaultTranslation(payload.translations, defaultLanguage?.code);
   const now = new Date().toISOString();
   const insertFields = ['column_id'];
   const insertValues = [payload.base.column_id];
+  const dynamicFields = getDynamicModelFields(modelCode);
 
+  appendMainTableField(insertFields, insertValues, 'name', payload.base.name, mainFields);
   appendMainTableField(insertFields, insertValues, 'custom_url', payload.base.custom_url, mainFields);
   appendMainTableField(insertFields, insertValues, 'code', payload.base.code, mainFields);
   appendMainTableField(insertFields, insertValues, 'images', payload.base.images, mainFields);
@@ -379,6 +471,7 @@ export function createContentEntry(modelCode, input) {
   appendMainTableField(insertFields, insertValues, 'is_visible', payload.base.is_visible, mainFields);
   appendMainTableField(insertFields, insertValues, 'is_featured_home', payload.base.is_featured_home, mainFields);
   appendMainTableField(insertFields, insertValues, 'sort_order', payload.base.sort_order, mainFields);
+  appendDynamicMainTableFieldValues(insertFields, insertValues, payload.base.dynamic_fields, dynamicFields);
   insertFields.push('created_at', 'updated_at');
   insertValues.push(payload.base.created_at || now, now);
   const placeholders = insertFields.map(() => '?').join(', ');
@@ -392,7 +485,7 @@ export function createContentEntry(modelCode, input) {
     insertValues
   );
 
-  saveEntryTranslations(translationTableName, result.lastInsertRowid, payload.translations, now);
+  saveEntryTranslations(translationTableName, result.lastInsertRowid, payload.translations, now, dynamicFields);
   return getContentEntryById(modelCode, result.lastInsertRowid, {
     includeTranslations: true,
     includeTranslationStatuses: true
@@ -413,11 +506,12 @@ export function updateContentEntry(modelCode, id, input) {
   const tableName = getContentTableName(modelCode);
   const translationTableName = getTranslationTableName(modelCode);
   const { mainFields } = getModelFieldNames(modelCode);
-  const defaultLanguage = getDefaultLanguage();
   const now = new Date().toISOString();
   const updateAssignments = ['column_id = ?'];
   const updateValues = [payload.base.column_id];
+  const dynamicFields = getDynamicModelFields(modelCode);
 
+  appendMainTableAssignment(updateAssignments, updateValues, 'name', payload.base.name, mainFields);
   appendMainTableAssignment(updateAssignments, updateValues, 'custom_url', payload.base.custom_url, mainFields);
   appendMainTableAssignment(updateAssignments, updateValues, 'code', payload.base.code, mainFields);
   appendMainTableAssignment(updateAssignments, updateValues, 'images', payload.base.images, mainFields);
@@ -426,6 +520,7 @@ export function updateContentEntry(modelCode, id, input) {
   appendMainTableAssignment(updateAssignments, updateValues, 'is_visible', payload.base.is_visible, mainFields);
   appendMainTableAssignment(updateAssignments, updateValues, 'is_featured_home', payload.base.is_featured_home, mainFields);
   appendMainTableAssignment(updateAssignments, updateValues, 'sort_order', payload.base.sort_order, mainFields);
+  appendDynamicMainTableAssignments(updateAssignments, updateValues, payload.base.dynamic_fields, dynamicFields);
   updateAssignments.push('created_at = ?', 'updated_at = ?');
   updateValues.push(payload.base.created_at || existing.created_at || now, now, id);
 
@@ -439,7 +534,7 @@ export function updateContentEntry(modelCode, id, input) {
     updateValues
   );
 
-  saveEntryTranslations(translationTableName, id, payload.translations, now);
+  saveEntryTranslations(translationTableName, id, payload.translations, now, dynamicFields);
   return getContentEntryById(modelCode, id, {
     includeTranslations: true,
     includeTranslationStatuses: true
@@ -462,7 +557,11 @@ function loadEntryTranslations(modelCode, entryIds) {
     return new Map();
   }
   const translationTableName = getTranslationTableName(modelCode);
+  const dynamicFields = getDynamicModelFields(modelCode).filter((field) => Number(field.is_translatable || 0) === 1);
   const placeholders = entryIds.map(() => '?').join(', ');
+  const dynamicSelect = dynamicFields.length
+    ? `${dynamicFields.map((field) => `t.${quoteIdentifier(field.field_name)}`).join(',\n        ')},`
+    : '';
 
   const rows = queryAll(
     `
@@ -477,6 +576,7 @@ function loadEntryTranslations(modelCode, entryIds) {
         t.template_data_json,
         t.seo_title,
         t.seo_description,
+        ${dynamicSelect}
         t.publish_status
       FROM ${quoteIdentifier(translationTableName)} t
       INNER JOIN languages l ON l.id = t.language_id
@@ -499,7 +599,8 @@ function loadEntryTranslations(modelCode, entryIds) {
       template_data_json: row.template_data_json || null,
       seo_title: row.seo_title || '',
       seo_description: row.seo_description || '',
-      publish_status: normalizePublishStatus(row.publish_status)
+      publish_status: normalizePublishStatus(row.publish_status),
+      dynamic_fields: extractDynamicFieldValues(row, dynamicFields)
     });
     map.set(Number(row.entry_id), list);
   }
@@ -522,14 +623,41 @@ function appendMainTableAssignment(assignments, values, fieldName, fieldValue, m
   values.push(fieldValue);
 }
 
-function saveEntryTranslations(translationTableName, entryId, translations, now) {
+function appendDynamicMainTableFieldValues(fields, values, dynamicValues, dynamicFields) {
+  dynamicFields
+    .filter((field) => Number(field.is_translatable || 0) === 0)
+    .forEach((field) => {
+      fields.push(quoteIdentifier(field.field_name));
+      values.push(dynamicValues?.[field.field_name] ?? null);
+    });
+}
+
+function appendDynamicMainTableAssignments(assignments, values, dynamicValues, dynamicFields) {
+  dynamicFields
+    .filter((field) => Number(field.is_translatable || 0) === 0)
+    .forEach((field) => {
+      assignments.push(`${quoteIdentifier(field.field_name)} = ?`);
+      values.push(dynamicValues?.[field.field_name] ?? null);
+    });
+}
+
+function saveEntryTranslations(translationTableName, entryId, translations, now, dynamicFields = []) {
   const languageIdByCode = new Map(listLanguages().map((language) => [language.code, language.id]));
+  const translationFields = dynamicFields.filter((field) => Number(field.is_translatable || 0) === 1);
 
   for (const [languageCode, translation] of Object.entries(translations || {})) {
     const languageId = languageIdByCode.get(languageCode);
     if (!languageId) {
       continue;
     }
+
+    const dynamicColumnNames = translationFields.map((field) => quoteIdentifier(field.field_name));
+    const dynamicValues = translationFields.map((field) => translation?.dynamic_fields?.[field.field_name] ?? '');
+    const insertDynamicColumns = dynamicColumnNames.length ? `,\n          ${dynamicColumnNames.join(',\n          ')}` : '';
+    const insertDynamicPlaceholders = dynamicColumnNames.length ? `, ${dynamicColumnNames.map(() => '?').join(', ')}` : '';
+    const updateDynamicAssignments = dynamicColumnNames.length
+      ? `,\n          ${dynamicColumnNames.map((columnName) => `${columnName} = excluded.${columnName}`).join(',\n          ')}`
+      : '';
 
     execute(
       `
@@ -543,9 +671,10 @@ function saveEntryTranslations(translationTableName, entryId, translations, now)
           seo_title,
           seo_description,
           publish_status,
+          ${insertDynamicColumns ? `${insertDynamicColumns.slice(2)},` : ''}
           created_at,
           updated_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?${insertDynamicPlaceholders}, ?, ?)
         ON CONFLICT(entry_id, language_id) DO UPDATE SET
           name = excluded.name,
           summary = excluded.summary,
@@ -554,6 +683,7 @@ function saveEntryTranslations(translationTableName, entryId, translations, now)
           seo_title = excluded.seo_title,
           seo_description = excluded.seo_description,
           publish_status = excluded.publish_status,
+          ${updateDynamicAssignments ? `${updateDynamicAssignments.slice(2)},` : ''}
           updated_at = excluded.updated_at
       `,
       [
@@ -566,6 +696,7 @@ function saveEntryTranslations(translationTableName, entryId, translations, now)
         toNullableString(translation?.seo_title),
         toNullableString(translation?.seo_description),
         normalizePublishStatus(translation?.publish_status),
+        ...dynamicValues,
         now,
         now
       ]
@@ -589,6 +720,8 @@ function normalizeContentEntryInput(modelCode, input, { existingEntry = null } =
   const supportsImageGallery = fieldNames.has('images');
   const supportsPrimaryImage = fieldNames.has('primary_image');
   const supportsSpecOptions = fieldNames.has('spec_options_json');
+  const dynamicFields = getDynamicModelFields(modelCode);
+  const nameStoredOnMainTable = fieldNames.has('name') && !isFieldTranslatable(modelCode, 'name');
   const images = supportsImageGallery
     ? normalizeImageList(baseInput.images ?? existing.images)
     : [];
@@ -601,6 +734,9 @@ function normalizeContentEntryInput(modelCode, input, { existingEntry = null } =
     : singleImage;
   const customUrl = normalizeEntryCustomUrl(baseInput.custom_url ?? existing.custom_url);
   const nameField = resolveTranslationNameField(baseInput, input?.translations, existing);
+  const baseName = nameStoredOnMainTable
+    ? String(baseInput.name ?? existing.name ?? '').trim()
+    : '';
 
   const fallbackBase = {
     name: String(existing.title || existing.name || '').trim(),
@@ -610,20 +746,29 @@ function normalizeContentEntryInput(modelCode, input, { existingEntry = null } =
     seo_title: toNullableString(existing.seo_title),
     seo_description: toNullableString(existing.seo_description),
     publish_status: normalizePublishStatus(existing.publish_status),
-    created_at: toNullableString(existing.created_at)
+    created_at: toNullableString(existing.created_at),
+    ...extractDynamicFieldValues(existing, dynamicFields)
   };
 
-  const translations = normalizeTranslations(input?.translations || {}, {
-    defaultLanguageCode,
-    existingTranslations: existing.translations || {},
-    fallbackBase,
-    nameField,
-    requiredNameError: '请输入默认语言的名称'
-  });
+  if (nameStoredOnMainTable && !baseName) {
+    throw new Error('请输入名称');
+  }
+
+  const translations = hasTranslatableFields(modelCode)
+    ? normalizeTranslations(input?.translations || {}, {
+        defaultLanguageCode,
+        existingTranslations: existing.translations || {},
+        fallbackBase,
+        dynamicFields,
+        nameField,
+        requiredNameError: '请输入默认语言的名称'
+      })
+    : {};
 
   return {
     base: {
       column_id: column.id,
+      name: baseName,
       custom_url: customUrl,
       code: toNullableString(baseInput.code ?? existing.code) || '',
       images: supportsImageGallery ? JSON.stringify(images) : EMPTY_IMAGE_LIST,
@@ -632,7 +777,8 @@ function normalizeContentEntryInput(modelCode, input, { existingEntry = null } =
       is_visible: toBooleanInt(baseInput.is_visible ?? existing.is_visible, 1),
       is_featured_home: toBooleanInt(baseInput.is_featured_home ?? existing.is_featured_home ?? existing.is_featured, 0),
       sort_order: toInteger(baseInput.sort_order ?? existing.sort_order, 0),
-      created_at: toNullableString(baseInput.created_at ?? existing.created_at)
+      created_at: toNullableString(baseInput.created_at ?? existing.created_at),
+      dynamic_fields: normalizeDynamicBaseFields(baseInput, existing, dynamicFields)
     },
     translations
   };
@@ -642,11 +788,13 @@ function normalizeTranslations(translations, {
   defaultLanguageCode,
   existingTranslations = {},
   fallbackBase,
+  dynamicFields = [],
   nameField = 'name',
   requiredNameError = '请输入默认语言的名称'
 }) {
   const output = {};
   const knownCodes = new Set(listLanguages().map((language) => language.code));
+  const translatableFields = dynamicFields.filter((field) => Number(field.is_translatable || 0) === 1);
 
   for (const [languageCode, value] of Object.entries(translations || {})) {
     if (!knownCodes.has(languageCode)) {
@@ -668,7 +816,8 @@ function normalizeTranslations(translations, {
       template_data_json: normalizeTemplateDataJson(value?.template_data_json ?? value?.template_data ?? existingTranslations?.[languageCode]?.template_data_json ?? existingTranslations?.[languageCode]?.template_data ?? fallbackBase.template_data_json ?? fallbackBase.template_data ?? null),
       seo_title: toNullableString(value?.seo_title ?? existingTranslations?.[languageCode]?.seo_title ?? fallbackBase.seo_title),
       seo_description: toNullableString(value?.seo_description ?? existingTranslations?.[languageCode]?.seo_description ?? fallbackBase.seo_description),
-      publish_status: normalizePublishStatus(value?.publish_status ?? existingTranslations?.[languageCode]?.publish_status ?? fallbackBase.publish_status)
+      publish_status: normalizePublishStatus(value?.publish_status ?? existingTranslations?.[languageCode]?.publish_status ?? fallbackBase.publish_status),
+      dynamic_fields: normalizeDynamicTranslationFields(value, existingTranslations?.[languageCode], fallbackBase, translatableFields)
     };
   }
 
@@ -680,7 +829,8 @@ function normalizeTranslations(translations, {
       template_data_json: normalizeTemplateDataJson(fallbackBase.template_data_json ?? fallbackBase.template_data ?? null),
       seo_title: toNullableString(fallbackBase.seo_title),
       seo_description: toNullableString(fallbackBase.seo_description),
-      publish_status: normalizePublishStatus(fallbackBase.publish_status)
+      publish_status: normalizePublishStatus(fallbackBase.publish_status),
+      dynamic_fields: normalizeDynamicTranslationFields({}, existingTranslations?.[defaultLanguageCode], fallbackBase, translatableFields)
     };
   }
 
@@ -709,6 +859,7 @@ function mapEntryRow(modelCode, row) {
   const specOptions = parseSpecOptionsJson(row.spec_options_json);
   const requestedLanguageCode = row.requested_language_code || row.current_language_code || null;
   const resolvedLanguageCode = row.current_language_code || requestedLanguageCode;
+  const dynamicFields = getDynamicModelFields(modelCode);
   const base = {
     id: toInteger(row.id, 0),
     name: row.name || '',
@@ -742,16 +893,23 @@ function mapEntryRow(modelCode, row) {
       && resolvedLanguageCode !== requestedLanguageCode
     ),
     created_at: row.created_at,
-    updated_at: row.updated_at
+    updated_at: row.updated_at,
+    dynamic_fields: extractDynamicFieldValues(row, dynamicFields)
   };
 
-  return {
+  const entry = {
     ...base,
     title: base.name,
     picture: primaryImage,
     image: primaryImage,
     is_featured: base.is_featured_home
   };
+
+  dynamicFields.forEach((field) => {
+    entry[field.field_name] = entry.dynamic_fields[field.field_name];
+  });
+
+  return entry;
 }
 
 export function resolveContentEntryComparator(modelCode) {
@@ -1003,4 +1161,81 @@ function normalizePublishStatus(value) {
 
 function quoteIdentifier(value) {
   return `"${String(value).replaceAll('"', '""')}"`;
+}
+
+function normalizeDynamicBaseFields(baseInput, existing, fields) {
+  const output = {};
+
+  fields
+    .filter((field) => Number(field.is_translatable || 0) === 0)
+    .forEach((field) => {
+      output[field.field_name] = normalizeDynamicFieldValue(
+        baseInput?.[field.field_name] ?? existing?.[field.field_name],
+        field
+      );
+    });
+
+  return output;
+}
+
+function normalizeDynamicTranslationFields(value, existingTranslation, fallbackBase, fields) {
+  const output = {};
+
+  fields.forEach((field) => {
+    output[field.field_name] = normalizeDynamicFieldValue(
+      value?.[field.field_name]
+      ?? existingTranslation?.[field.field_name]
+      ?? fallbackBase?.[field.field_name],
+      field
+    );
+  });
+
+  return output;
+}
+
+function normalizeDynamicFieldValue(value, field) {
+  const fieldType = String(field?.field_type || '').trim().toLowerCase();
+
+  if (fieldType === 'number') {
+    if (value === undefined || value === null || value === '') {
+      return null;
+    }
+    const numericValue = Number(value);
+    if (!Number.isFinite(numericValue)) {
+      throw new Error(`${field.field_label || field.field_name} 必须是数字`);
+    }
+    return numericValue;
+  }
+
+  if (fieldType === 'boolean') {
+    return toBooleanInt(value, 0);
+  }
+
+  return value == null ? '' : String(value);
+}
+
+function extractDynamicFieldValues(source, fields) {
+  const output = {};
+  fields.forEach((field) => {
+    output[field.field_name] = readDynamicFieldValue(source?.[field.field_name], field);
+  });
+  return output;
+}
+
+function readDynamicFieldValue(value, field) {
+  const fieldType = String(field?.field_type || '').trim().toLowerCase();
+
+  if (fieldType === 'number') {
+    if (value === undefined || value === null || value === '') {
+      return null;
+    }
+    const numericValue = Number(value);
+    return Number.isFinite(numericValue) ? numericValue : null;
+  }
+
+  if (fieldType === 'boolean') {
+    return toBooleanInt(value, 0);
+  }
+
+  return value ?? '';
 }

@@ -12,6 +12,7 @@ import {
   Languages,
   LayoutDashboard,
   ListChecks,
+  ListOrdered,
   LogOut,
   Map,
   Moon,
@@ -57,6 +58,7 @@ export default function DashboardLayout() {
   const { resolvedTheme, setTheme } = useTheme()
   const [headerSlotElement, setHeaderSlotElement] = useState<HTMLDivElement | null>(null)
   const [documentTitleOverride, setDocumentTitleOverride] = useState<string>('')
+  const [hasMainContentPadding, setHasMainContentPadding] = useState(true)
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['currentUser'],
@@ -85,6 +87,7 @@ export default function DashboardLayout() {
     { path: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
     { path: '/columns', label: '栏目管理', icon: Folder },
     { path: '/content-model-data', label: '信息管理', icon: FileText },
+    { path: '/price-management', label: '价格管理', icon: ListOrdered },
     { path: '/media-assets', label: '附件管理', icon: Image },
   ] satisfies MenuItem[]
 
@@ -150,6 +153,7 @@ export default function DashboardLayout() {
 
   useEffect(() => {
     setDocumentTitleOverride('')
+    setHasMainContentPadding(true)
   }, [location.pathname])
 
   useEffect(() => {
@@ -264,9 +268,15 @@ export default function DashboardLayout() {
           </Breadcrumb>
           <div ref={setHeaderSlotElement} className="min-w-0 flex-1" />
         </header>
-        <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto">
+        <main className={`flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto ${hasMainContentPadding ? 'p-4' : 'p-0'}`}>
           <div className="min-h-0 flex-1">
-            <Outlet context={{ headerSlotElement, setDocumentTitle: setDocumentTitleOverride }} />
+            <Outlet
+              context={{
+                headerSlotElement,
+                setDocumentTitle: setDocumentTitleOverride,
+                setMainContentPadding: setHasMainContentPadding,
+              }}
+            />
           </div>
         </main>
       </SidebarInset>

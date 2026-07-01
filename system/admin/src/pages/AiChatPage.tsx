@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
 import type { DocumentCompany, DocumentCompanySlot, DocumentDraft, DocumentDraftConversationState, DocumentDraftStampPlacement, DocumentStamp, DocumentTemplate } from '@/types'
@@ -42,13 +43,15 @@ const DOCUMENT_TYPE_LABELS: Record<'quote' | 'contract', string> = {
 type DashboardHeaderContext = {
   headerSlotElement: HTMLDivElement | null
   setDocumentTitle: (value: string) => void
+  setMainContentPadding: (enabled: boolean) => void
 }
 
 const DEFAULT_DOCUMENT_PAGE_WIDTH = 794
 const DEFAULT_DOCUMENT_PAGE_PADDING = 38
 
 export default function AiChatPage() {
-  const { headerSlotElement, setDocumentTitle } = useOutletContext<DashboardHeaderContext>()
+  const { headerSlotElement, setDocumentTitle, setMainContentPadding } =
+    useOutletContext<DashboardHeaderContext>()
   const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const previewFrameRef = useRef<HTMLIFrameElement | null>(null)
@@ -64,7 +67,6 @@ export default function AiChatPage() {
   const [isStampManagerOpen, setIsStampManagerOpen] = useState(false)
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<Record<string, string>>({})
   const [selectedStampIdToApply, setSelectedStampIdToApply] = useState<string>('')
-  const [isStampEditMode, setIsStampEditMode] = useState(false)
   const [conversationState, setConversationState] = useState<DocumentDraftConversationState>({
     missing_fields: [],
     suggested_questions: [],
@@ -119,8 +121,6 @@ export default function AiChatPage() {
 
   const syncPreviewStampState = (override?: {
     stamps?: DocumentDraftStampPlacement[]
-    editMode?: boolean
-    activeStampId?: string
   }) => {
     const frameWindow = previewFrameRef.current?.contentWindow
     if (!frameWindow) {
@@ -128,22 +128,10 @@ export default function AiChatPage() {
     }
 
     const nextStamps = override?.stamps || currentDraftStamps
-    const nextActiveStampId = String(
-      override?.activeStampId
-      || nextStamps[0]?.id
-      || ''
-    )
-    const nextEditMode = typeof override?.editMode === 'boolean' ? override.editMode : isStampEditMode
 
     frameWindow.postMessage({
       type: 'document-preview-set-stamps',
       stamps: nextStamps,
-    }, window.location.origin)
-
-    frameWindow.postMessage({
-      type: 'document-preview-set-stamp-edit-mode',
-      enabled: nextEditMode,
-      activeStampId: nextActiveStampId,
     }, window.location.origin)
 
     window.setTimeout(() => {
@@ -155,17 +143,17 @@ export default function AiChatPage() {
         type: 'document-preview-set-stamps',
         stamps: nextStamps,
       }, window.location.origin)
-      latestFrameWindow.postMessage({
-        type: 'document-preview-set-stamp-edit-mode',
-        enabled: nextEditMode,
-        activeStampId: nextActiveStampId,
-      }, window.location.origin)
     }, 180)
   }
 
   useEffect(() => {
     setDocumentTitle(previewHeaderTitle || 'AI 文档工作台')
   }, [previewHeaderTitle, setDocumentTitle])
+
+  useEffect(() => {
+    setMainContentPadding(false)
+    return () => setMainContentPadding(true)
+  }, [setMainContentPadding])
 
   useEffect(() => {
     setTitleInputValue(String(currentDraft?.title || '').trim())
@@ -317,7 +305,7 @@ export default function AiChatPage() {
       return
     }
     syncPreviewStampState()
-  }, [currentDraft?.id, currentDraftStamps, isStampEditMode, previewVersion])
+  }, [currentDraft?.id, currentDraftStamps, previewVersion])
 
   const handleTemplateSelect = async (template: DocumentTemplate) => {
     await createDraftMutation.mutateAsync(template)
@@ -387,11 +375,8 @@ export default function AiChatPage() {
         stamps: nextStamps,
       },
     })
-    setIsStampEditMode(true)
     syncPreviewStampState({
       stamps: nextStamps,
-      editMode: true,
-      activeStampId: nextStamp.id,
     })
     await queryClient.setQueryData(['document-draft', currentDraft.id], { success: true, data: response.data })
     await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
@@ -679,7 +664,7 @@ export default function AiChatPage() {
             </div>
           ) : (
             <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px]">
-                <section className="flex h-full min-h-0 flex-col border-b lg:border-b-0 lg:border-r">
+                <section className="relative flex h-full min-h-0 flex-col border-b lg:border-b-0 lg:border-r">
                 <iframe
                   ref={previewFrameRef}
                   key={previewUrl}
@@ -688,67 +673,105 @@ export default function AiChatPage() {
                   onLoad={() => syncPreviewStampState()}
                   className="min-h-0 flex-1 bg-transparent"
                 />
-                </section>
-
-                <section className="flex h-full min-h-0 flex-col bg-background">
-                  <div className="border-b px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button type="button" variant="outline" size="sm" onClick={() => setIsCompanyManagerOpen(true)}>
-                        公司管理
+                <div className="pointer-events-none absolute bottom-5 right-5 z-10">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        type="button"
+                        size="icon"
+                        className="pointer-events-auto h-12 w-12 rounded-full shadow-lg"
+                        aria-label="打开文档工具"
+                      >
+                        <Settings2 className="h-5 w-5" />
                       </Button>
-                      {companySlots.map((slot) => (
-                        <div key={slot.key} className="flex flex-wrap items-center gap-2">
-                          <Select
-                            value={selectedCompanyIds[slot.key] || ''}
-                            onValueChange={(value) => setSelectedCompanyIds((current) => ({ ...current, [slot.key]: value }))}
-                          >
-                            <SelectTrigger className="w-[220px]">
-                              <SelectValue placeholder={`选择${slot.label}`} />
+                    </PopoverTrigger>
+                    <PopoverContent align="end" side="top" className="pointer-events-auto w-[360px] space-y-5 p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold">公司管理</p>
+                            <p className="text-xs text-muted-foreground">选择公司并填充到当前文档角色。</p>
+                          </div>
+                          <Button type="button" variant="outline" size="sm" onClick={() => setIsCompanyManagerOpen(true)}>
+                            公司管理
+                          </Button>
+                        </div>
+                        <div className="space-y-3">
+                          {companySlots.length > 0 ? companySlots.map((slot) => (
+                            <div key={slot.key} className="space-y-2">
+                              <div className="text-xs font-medium text-muted-foreground">{slot.label}</div>
+                              <div className="flex items-center gap-2">
+                                <Select
+                                  value={selectedCompanyIds[slot.key] || ''}
+                                  onValueChange={(value) => setSelectedCompanyIds((current) => ({ ...current, [slot.key]: value }))}
+                                >
+                                  <SelectTrigger className="flex-1">
+                                    <SelectValue placeholder={`选择${slot.label}`} />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {companies.map((company) => (
+                                      <SelectItem key={`${slot.key}-${company.id}`} value={String(company.id)}>
+                                        {company.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => void handleApplyCompany(slot)}
+                                  disabled={!selectedCompanyIds[slot.key]}
+                                >
+                                  填充
+                                </Button>
+                              </div>
+                            </div>
+                          )) : (
+                            <div className="rounded-lg border border-dashed px-3 py-4 text-xs leading-5 text-muted-foreground">
+                              当前模板还没有配置公司填充位置。
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="space-y-3 border-t pt-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold">印章管理</p>
+                            <p className="text-xs text-muted-foreground">添加印章后可直接拖拽，悬停时显示旋转按钮。</p>
+                          </div>
+                          <Button type="button" variant="outline" size="sm" onClick={() => setIsStampManagerOpen(true)}>
+                            <Stamp className="h-4 w-4" />
+                            印章管理
+                          </Button>
+                        </div>
+                        <div className="space-y-2">
+                          <Select value={selectedStampIdToApply} onValueChange={setSelectedStampIdToApply}>
+                            <SelectTrigger className="w-full">
+                              <SelectValue placeholder="选择要盖的章" />
                             </SelectTrigger>
                             <SelectContent>
-                              {companies.map((company) => (
-                                <SelectItem key={`${slot.key}-${company.id}`} value={String(company.id)}>
-                                  {company.name}
+                              {stamps.map((stamp) => (
+                                <SelectItem key={stamp.id} value={String(stamp.id)}>
+                                  {stamp.name}
                                 </SelectItem>
                               ))}
                             </SelectContent>
                           </Select>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            onClick={() => void handleApplyCompany(slot)}
-                            disabled={!selectedCompanyIds[slot.key]}
-                          >
-                            填充{slot.label}
-                          </Button>
+                          <div className="flex items-center gap-2">
+                            <Button type="button" size="sm" onClick={() => void handleApplyStamp()} disabled={!selectedStampIdToApply} className="flex-1">
+                              添加印章
+                            </Button>
+                          </div>
                         </div>
-                      ))}
-                      <Button type="button" variant="outline" size="sm" onClick={() => setIsStampManagerOpen(true)}>
-                        <Stamp className="h-4 w-4" />
-                        印章管理
-                      </Button>
-                      <Select value={selectedStampIdToApply} onValueChange={setSelectedStampIdToApply}>
-                        <SelectTrigger className="w-[220px]">
-                          <SelectValue placeholder="选择要盖的章" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {stamps.map((stamp) => (
-                            <SelectItem key={stamp.id} value={String(stamp.id)}>
-                              {stamp.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Button type="button" size="sm" onClick={() => void handleApplyStamp()} disabled={!selectedStampIdToApply}>
-                        添加印章
-                      </Button>
-                      <Button type="button" variant={isStampEditMode ? 'default' : 'outline'} size="sm" onClick={() => setIsStampEditMode((value) => !value)}>
-                        {isStampEditMode ? '结束拖拽' : '调整印章'}
-                      </Button>
-                    </div>
-                  </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                </section>
 
+                <section className="flex h-full min-h-0 flex-col bg-background">
                   <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
                     <div className="space-y-5">
                       <div className="rounded-2xl border bg-background p-4">
