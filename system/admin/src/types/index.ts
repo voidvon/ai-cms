@@ -699,3 +699,13 @@ export interface DocumentDraftConversationState {
   missing_fields: string[];
   suggested_questions: string[];
 }
+
+export interface DocumentAgentDraftStreamState {
+  isStreaming: boolean;
+  assistantText: string;
+  toolActivities: Array<{
+    type: 'tool_called' | 'tool_output';
+    toolName?: string;
+    item?: unknown;
+  }>;
+}

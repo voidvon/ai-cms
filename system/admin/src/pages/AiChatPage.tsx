@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bot, Loader2, Pencil, RefreshCw, Send, Settings2, Stamp, Trash2 } from 'lucide-react'
 import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { documentWorkspacesApi } from '@/api/document-workspaces'
+import { documentAgentApi } from '@/api/document-agent'
 import { ChatMessageItem } from '@/components/ai-chat/ChatMessageItem'
 import { DocumentCompanyManagerDialog } from '@/components/DocumentCompanyManagerDialog'
 import { DocumentStampManagerDialog } from '@/components/DocumentStampManagerDialog'
@@ -33,7 +34,7 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import type { DocumentCompany, DocumentCompanySlot, DocumentDraft, DocumentDraftConversationState, DocumentDraftStampPlacement, DocumentStamp, DocumentTemplate } from '@/types'
+import type { DocumentAgentDraftStreamState, DocumentCompany, DocumentCompanySlot, DocumentDraft, DocumentDraftConversationState, DocumentDraftStampPlacement, DocumentStamp, DocumentTemplate } from '@/types'
 
 const DOCUMENT_TYPE_LABELS: Record<'quote' | 'contract', string> = {
   quote: '报价单',
@@ -70,6 +71,11 @@ export default function AiChatPage() {
   const [conversationState, setConversationState] = useState<DocumentDraftConversationState>({
     missing_fields: [],
     suggested_questions: [],
+  })
+  const [streamState, setStreamState] = useState<DocumentAgentDraftStreamState>({
+    isStreaming: false,
+    assistantText: '',
+    toolActivities: [],
   })
   const draftId = String(searchParams.get('draft') || '').trim()
 
@@ -184,6 +190,11 @@ export default function AiChatPage() {
       missing_fields: [],
       suggested_questions: [],
     })
+    setStreamState({
+      isStreaming: false,
+      assistantText: '',
+      toolActivities: [],
+    })
     setInputValue('')
     setPreviewVersion((value) => value + 1)
   }, [draftId])
@@ -243,21 +254,76 @@ export default function AiChatPage() {
 
   const sendMessageMutation = useMutation({
     mutationFn: async ({ id, message }: { id: string; message: string }) => {
-      return documentWorkspacesApi.sendMessage(id, message)
+      return documentAgentApi.streamDraftMessage(id, message, {
+        onStarted: () => {
+          setStreamState({
+            isStreaming: true,
+            assistantText: '',
+            toolActivities: [],
+          })
+        },
+        onTextDelta: ({ delta }) => {
+          setStreamState((current) => ({
+            ...current,
+            assistantText: `${current.assistantText}${String(delta || '')}`,
+          }))
+        },
+        onToolCalled: (event) => {
+          setStreamState((current) => ({
+            ...current,
+            toolActivities: [...current.toolActivities, {
+              type: 'tool_called',
+              toolName: event.toolName,
+              item: event.item,
+            }],
+          }))
+        },
+        onToolOutput: (event) => {
+          setStreamState((current) => ({
+            ...current,
+            toolActivities: [...current.toolActivities, {
+              type: 'tool_output',
+              toolName: event.toolName,
+              item: event.item,
+            }],
+          }))
+        },
+        onDraftUpdated: ({ draft, missing_fields }) => {
+          setConversationState((current) => ({
+            ...current,
+            missing_fields: missing_fields || [],
+          }))
+          void queryClient.setQueryData(['document-draft', id], { success: true, data: draft })
+          setPreviewVersion((value) => value + 1)
+        },
+      })
     },
     onSuccess: async (response) => {
-      if (!response.data?.draft?.id) {
+      if (!response?.draft?.id) {
         return
       }
       setInputValue('')
+      setStreamState({
+        isStreaming: false,
+        assistantText: '',
+        toolActivities: [],
+      })
       setConversationState({
-        missing_fields: response.data.missing_fields || [],
-        suggested_questions: response.data.suggested_questions || [],
+        missing_fields: response.missing_fields || [],
+        suggested_questions: response.suggested_questions || [],
       })
       setPreviewVersion((value) => value + 1)
       await queryClient.invalidateQueries({ queryKey: ['document-companies'] })
       await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
-      await queryClient.setQueryData(['document-draft', response.data.draft.id], { success: true, data: response.data.draft })
+      await queryClient.setQueryData(['document-draft', response.draft.id], { success: true, data: response.draft })
+    },
+    onError: (error: any) => {
+      setStreamState({
+        isStreaming: false,
+        assistantText: '',
+        toolActivities: [],
+      })
+      toast.error(error?.message || error?.response?.data?.message || 'AI 文档助手执行失败')
     },
   })
 
@@ -850,6 +916,27 @@ export default function AiChatPage() {
                         </div>
                       ) : null}
 
+                      {streamState.toolActivities.length > 0 ? (
+                        <div className="rounded-2xl border bg-background p-4">
+                          <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">工具活动</p>
+                          <div className="mt-3 space-y-2">
+                            {streamState.toolActivities.map((activity, index) => (
+                              <div
+                                key={`${activity.type}-${activity.toolName || 'tool'}-${index}`}
+                                className="rounded-xl border bg-muted/20 px-3 py-2 text-sm"
+                              >
+                                <div className="flex items-center justify-between gap-3">
+                                  <span className="font-medium">{activity.toolName || 'tool'}</span>
+                                  <Badge variant="outline">
+                                    {activity.type === 'tool_called' ? '调用中' : '已返回'}
+                                  </Badge>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
                       {currentDraft.messages.length === 0 ? (
                         <ChatMessageItem
                           role="assistant"
@@ -865,8 +952,12 @@ export default function AiChatPage() {
                         ))
                       )}
 
-                      {sendMessageMutation.isPending ? (
-                        <ChatMessageItem pending role="assistant" />
+                      {streamState.isStreaming ? (
+                        <ChatMessageItem
+                          role="assistant"
+                          text={streamState.assistantText}
+                          pending={!streamState.assistantText}
+                        />
                       ) : null}
                     </div>
                   </div>

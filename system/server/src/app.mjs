@@ -141,6 +141,7 @@ async function registerCommonRoutes(app, { publicSite }) {
     await app.register(import('./routes/api/bulk-replace.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/ai.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/document-workspaces.mjs'), { prefix: '/api' });
+    await app.register(import('./routes/api/document-agent.mjs'), { prefix: '/api' });
     await app.register(import('./routes/admin/static-gen.mjs'), { prefix: '/admin' });
   }
 

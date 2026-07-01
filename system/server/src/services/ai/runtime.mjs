@@ -1,5 +1,7 @@
 import OpenAI from 'openai';
 import { Agent, run, setDefaultOpenAIClient } from '@openai/agents';
+import { setDefaultModelProvider } from '@openai/agents-core';
+import { OpenAIProvider } from '@openai/agents-openai';
 import { normalizeText } from './shared.mjs';
 
 export const DEFAULT_MODEL =
@@ -10,6 +12,7 @@ export const DEFAULT_MODEL =
 
 const OPENAI_BASE_URL = normalizeText(process.env.OPENAI_BASE_URL);
 let openaiClient = null;
+let openaiProvider = null;
 
 if (normalizeText(process.env.OPENAI_API_KEY)) {
   openaiClient = new OpenAI({
@@ -20,6 +23,14 @@ if (normalizeText(process.env.OPENAI_API_KEY)) {
 
 if (openaiClient) {
   setDefaultOpenAIClient(openaiClient);
+  openaiProvider = new OpenAIProvider({
+    openAIClient: openaiClient,
+    useResponses: false,
+    strictFeatureValidation: true,
+    useResponsesWebSocket: false,
+    cacheResponsesWebSocketModels: false,
+  });
+  setDefaultModelProvider(openaiProvider);
 }
 
 export function assertAiConfig() {
@@ -38,7 +49,11 @@ export function createAiAgent(config) {
 }
 
 export function runAiAgent(agent, input, options) {
-  return run(agent, input, options);
+  const modelProvider = getOpenAIModelProvider();
+  return run(agent, input, {
+    ...(options || {}),
+    modelProvider,
+  });
 }
 
 export function getOpenAIClient() {
@@ -49,6 +64,39 @@ export function getOpenAIClient() {
       ...(OPENAI_BASE_URL ? { baseURL: OPENAI_BASE_URL } : {}),
     });
     setDefaultOpenAIClient(openaiClient);
+    openaiProvider = new OpenAIProvider({
+      openAIClient: openaiClient,
+      useResponses: false,
+      strictFeatureValidation: true,
+      useResponsesWebSocket: false,
+      cacheResponsesWebSocketModels: false,
+    });
+    setDefaultModelProvider(openaiProvider);
   }
   return openaiClient;
+}
+
+export function getOpenAIModelProvider() {
+  assertAiConfig();
+  if (!openaiProvider) {
+    getOpenAIClient();
+  }
+  return openaiProvider;
+}
+
+export function getAiRuntimeDebug() {
+  return {
+    defaultModel: DEFAULT_MODEL,
+    openaiApiKeyPresent: Boolean(normalizeText(process.env.OPENAI_API_KEY)),
+    openaiBaseUrl: normalizeText(process.env.OPENAI_BASE_URL),
+    openaiAiModel: normalizeText(process.env.OPENAI_AI_MODEL),
+    openaiDefaultModel: normalizeText(process.env.OPENAI_DEFAULT_MODEL),
+    openaiContractModel: normalizeText(process.env.OPENAI_CONTRACT_MODEL),
+    providerConstructor: openaiProvider?.constructor?.name || '',
+    providerUsesResponses: false,
+    providerUsesResponsesWebSocket: false,
+    providerApiMode: 'chat_completions',
+    providerConversationMemory: 'local_session',
+    pid: process.pid,
+  };
 }
