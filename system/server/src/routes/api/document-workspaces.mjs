@@ -1,9 +1,10 @@
 import { requireAuth } from '../../middleware/auth.mjs';
 import { sendDocumentDraftMessage } from '../../services/ai/document-chat.mjs';
 import { createDocumentDraft, deleteDocumentDraft, getDocumentDraftById, listDocumentDrafts, updateDocumentDraft } from '../../services/document-drafts.mjs';
+import { createDocumentCompany, deleteDocumentCompany, listDocumentCompanies, updateDocumentCompany } from '../../services/document-companies.mjs';
 import { createDocumentStamp, deleteDocumentStamp, listDocumentStamps, updateDocumentStamp } from '../../services/document-stamps.mjs';
 import { renderDocumentDraftPreview } from '../../services/document-preview.mjs';
-import { listDocumentTemplates } from '../../services/document-templates.mjs';
+import { listDocumentTemplates, updateDocumentTemplateMetadata } from '../../services/document-templates.mjs';
 
 export default async function documentWorkspaceRoutes(app) {
   app.get('/document-templates', {
@@ -20,12 +21,84 @@ export default async function documentWorkspaceRoutes(app) {
     }
   });
 
+  app.put('/document-templates/:id', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      const template = updateDocumentTemplateMetadata(request.params.id, request.body || {});
+      if (!template) {
+        reply.code(404);
+        return { success: false, message: '文档模板不存在' };
+      }
+      return { success: true, data: template };
+    } catch (error) {
+      reply.code(error.statusCode || 400);
+      return { success: false, message: error.message };
+    }
+  });
+
   app.get('/document-drafts', {
     onRequest: [requireAuth],
   }, async (request, reply) => {
     try {
       const drafts = listDocumentDrafts({ limit: request.query?.limit });
       return { success: true, data: drafts };
+    } catch (error) {
+      reply.code(error.statusCode || 400);
+      return { success: false, message: error.message };
+    }
+  });
+
+  app.get('/document-companies', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      const companies = listDocumentCompanies({ search: request.query?.search });
+      return { success: true, data: companies };
+    } catch (error) {
+      reply.code(error.statusCode || 400);
+      return { success: false, message: error.message };
+    }
+  });
+
+  app.post('/document-companies', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      const company = createDocumentCompany(request.body || {});
+      return { success: true, data: company };
+    } catch (error) {
+      reply.code(error.statusCode || 400);
+      return { success: false, message: error.message };
+    }
+  });
+
+  app.put('/document-companies/:id', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      const company = updateDocumentCompany(request.params.id, request.body || {});
+      if (!company) {
+        reply.code(404);
+        return { success: false, message: '公司不存在' };
+      }
+      return { success: true, data: company };
+    } catch (error) {
+      reply.code(error.statusCode || 400);
+      return { success: false, message: error.message };
+    }
+  });
+
+  app.delete('/document-companies/:id', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      const deleted = deleteDocumentCompany(request.params.id);
+      if (!deleted) {
+        reply.code(404);
+        return { success: false, message: '公司不存在' };
+      }
+      return { success: true, data: { deleted: true, id: request.params.id } };
     } catch (error) {
       reply.code(error.statusCode || 400);
       return { success: false, message: error.message };

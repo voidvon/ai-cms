@@ -204,6 +204,41 @@ export function resolveDocumentTemplateForType(documentType, { themeId } = {}) {
   return templates[0] || null;
 }
 
+export function updateDocumentTemplateMetadata(id, input = {}, { themeId } = {}) {
+  ensureDocumentTemplatesSchema();
+  const existing = getDocumentTemplateById(id, { themeId });
+  if (!existing) {
+    return null;
+  }
+
+  const defaultPayload = normalizeDocumentTemplateDefaultPayload(input.default_payload ?? input.defaultPayload, existing.default_payload);
+  const now = new Date().toISOString();
+
+  execute(
+    `
+      UPDATE document_templates
+      SET
+        name = ?,
+        description = ?,
+        sort_order = ?,
+        default_payload_json = ?,
+        updated_at = ?
+      WHERE id = ? AND theme_id = ?
+    `,
+    [
+      String(input.name || existing.name || '').trim() || existing.name,
+      toNullableText(input.description ?? existing.description),
+      toInteger(input.sort_order ?? existing.sort_order, existing.sort_order),
+      JSON.stringify(defaultPayload),
+      now,
+      existing.id,
+      existing.theme_id,
+    ]
+  );
+
+  return getDocumentTemplateById(existing.id, { themeId: existing.theme_id });
+}
+
 function ensureThemeDocumentTemplates(themeId) {
   const normalizedThemeId = resolveThemeId(themeId);
   const availableTemplates = listTemplates({ themeId: normalizedThemeId });
@@ -254,18 +289,20 @@ function ensureThemeDocumentTemplates(themeId) {
 function upsertDocumentTemplateMetadata(themeId, definition, templateId) {
   const existing = queryOne(
     `
-      SELECT id
+      SELECT id, default_payload_json
       FROM document_templates
       WHERE theme_id = ? AND key = ?
       LIMIT 1
     `,
     [themeId, definition.key]
   );
-
-  const defaultPayloadJson = JSON.stringify(definition.default_payload);
   const now = new Date().toISOString();
 
   if (existing?.id) {
+    const mergedDefaultPayload = normalizeDocumentTemplateDefaultPayload(
+      safeParseJson(existing.default_payload_json, {}),
+      definition.default_payload
+    );
     execute(
       `
         UPDATE document_templates
@@ -285,7 +322,7 @@ function upsertDocumentTemplateMetadata(themeId, definition, templateId) {
         definition.document_type,
         templateId,
         definition.sort_order,
-        defaultPayloadJson,
+        JSON.stringify(mergedDefaultPayload),
         now,
         existing.id,
       ]
@@ -317,7 +354,7 @@ function upsertDocumentTemplateMetadata(themeId, definition, templateId) {
       definition.document_type,
       templateId,
       definition.sort_order,
-      defaultPayloadJson,
+      JSON.stringify(normalizeDocumentTemplateDefaultPayload(definition.default_payload, definition.default_payload)),
       now,
       now,
     ]
@@ -334,6 +371,38 @@ function hydrateDocumentTemplateRecord(row) {
     default_payload_json: String(row.default_payload_json || '{}'),
     default_payload: safeParseJson(row.default_payload_json, buildDefaultDraftPayload(row.document_type)),
   };
+}
+
+function normalizeDocumentTemplateDefaultPayload(input, fallbackPayload) {
+  const fallback = isPlainObject(fallbackPayload) ? fallbackPayload : {};
+  const source = isPlainObject(input) ? input : {};
+  const merged = deepMerge(fallback, source);
+  const meta = isPlainObject(merged.meta) ? merged.meta : {};
+  return {
+    ...merged,
+    meta: {
+      ...meta,
+      companySlots: normalizeCompanySlots(meta.companySlots),
+    },
+  };
+}
+
+function normalizeCompanySlots(value) {
+  const source = Array.isArray(value) ? value : [];
+  return source
+    .map((item, index) => {
+      if (!isPlainObject(item)) {
+        return null;
+      }
+      const key = String(item.key || `company-${index + 1}`).trim();
+      const role = String(item.role || '').trim() || (index === 0 ? 'seller' : 'customer');
+      const label = String(item.label || '').trim() || `公司 ${index + 1}`;
+      if (!key) {
+        return null;
+      }
+      return { key, role, label };
+    })
+    .filter(Boolean);
 }
 
 function ensureDocumentTemplatesSchemaColumns() {
@@ -455,6 +524,18 @@ export function buildDefaultDraftPayload(documentType, options = {}) {
     },
     meta: {
       documentNumberPrefix: normalizedDocumentNumberPrefix,
+      companySlots: [
+        {
+          key: 'seller',
+          role: 'seller',
+          label: isEnglish ? 'Seller Company' : '我方公司',
+        },
+        {
+          key: 'customer',
+          role: 'customer',
+          label: isEnglish ? 'Customer Company' : '对方公司',
+        },
+      ],
     },
   };
 
@@ -490,6 +571,31 @@ function safeParseJson(value, fallbackValue) {
   } catch {
     return fallbackValue;
   }
+}
+
+function deepMerge(baseValue, overrideValue) {
+  if (Array.isArray(baseValue) || Array.isArray(overrideValue)) {
+    return Array.isArray(overrideValue) ? overrideValue : (Array.isArray(baseValue) ? baseValue : []);
+  }
+
+  if (!isPlainObject(baseValue) || !isPlainObject(overrideValue)) {
+    return overrideValue == null ? baseValue : overrideValue;
+  }
+
+  const result = { ...baseValue };
+  for (const key of Object.keys(overrideValue)) {
+    result[key] = deepMerge(result[key], overrideValue[key]);
+  }
+  return result;
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function toNullableText(value) {
+  const normalized = String(value ?? '').trim();
+  return normalized || null;
 }
 
 function toInteger(value, fallbackValue = 0) {

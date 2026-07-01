@@ -1,4 +1,5 @@
 import { appendDocumentDraftMessages, getDocumentDraftById, updateDocumentDraft } from '../document-drafts.mjs';
+import { upsertDocumentCompanyFromParty } from '../document-companies.mjs';
 import { documentChatResponseSchema, normalizeDocumentDraftPayload, summarizeDocumentMissingFields } from '../document-draft-patch.mjs';
 import { assertAiConfig, DEFAULT_MODEL, getOpenAIClient } from './runtime.mjs';
 import { normalizeText } from './shared.mjs';
@@ -65,6 +66,13 @@ export async function sendDocumentDraftMessage({ draftId, message }) {
     draft_payload: normalizeDocumentDraftPayload(mergePatch(draft.draft_payload, patch), draft.document_type),
     replace_payload: true,
   });
+
+  if (nextDraft?.draft_payload?.seller) {
+    upsertDocumentCompanyFromParty(nextDraft.draft_payload.seller, { themeId: nextDraft.theme_id });
+  }
+  if (nextDraft?.draft_payload?.customer) {
+    upsertDocumentCompanyFromParty(nextDraft.draft_payload.customer, { themeId: nextDraft.theme_id });
+  }
 
   const missingFields = nextDraft
     ? summarizeDocumentMissingFields(nextDraft.draft_payload, nextDraft.document_type)

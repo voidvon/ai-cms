@@ -1,6 +1,7 @@
 import apiClient from './client'
 import type {
   ApiResponse,
+  DocumentCompany,
   DocumentDraft,
   DocumentDraftMessageResult,
   DocumentStamp,
@@ -17,10 +18,56 @@ export const documentWorkspacesApi = {
     return response.data
   },
 
+  updateTemplate: async (id: number, data: {
+    name?: string
+    description?: string
+    sort_order?: number
+    default_payload?: Record<string, unknown>
+  }) => {
+    const response = await apiClient.put<ApiResponse<DocumentTemplate>>(`/document-templates/${id}`, data)
+    return response.data
+  },
+
   listDrafts: async (limit?: number) => {
     const response = await apiClient.get<ApiResponse<DocumentDraft[]>>('/document-drafts', {
       params: typeof limit === 'number' ? { limit } : {},
     })
+    return response.data
+  },
+
+  listCompanies: async (search?: string) => {
+    const response = await apiClient.get<ApiResponse<DocumentCompany[]>>('/document-companies', {
+      params: search ? { search } : {},
+    })
+    return response.data
+  },
+
+  createCompany: async (data: {
+    name: string
+    contact?: string
+    phone?: string
+    email?: string
+    address?: string
+    notes?: string
+  }) => {
+    const response = await apiClient.post<ApiResponse<DocumentCompany>>('/document-companies', data)
+    return response.data
+  },
+
+  updateCompany: async (id: number, data: {
+    name?: string
+    contact?: string
+    phone?: string
+    email?: string
+    address?: string
+    notes?: string
+  }) => {
+    const response = await apiClient.put<ApiResponse<DocumentCompany>>(`/document-companies/${id}`, data)
+    return response.data
+  },
+
+  deleteCompany: async (id: number) => {
+    const response = await apiClient.delete<ApiResponse<{ deleted: boolean; id: string }>>(`/document-companies/${id}`)
     return response.data
   },
 

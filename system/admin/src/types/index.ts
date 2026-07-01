@@ -463,6 +463,25 @@ export interface DocumentDraftStampPlacement {
   rotation: number;
 }
 
+export interface DocumentCompany {
+  id: number;
+  theme_id: number;
+  name: string;
+  contact?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DocumentCompanySlot {
+  key: string;
+  role: 'seller' | 'customer' | string;
+  label: string;
+}
+
 export interface ApiResponse<T> {
   success: boolean;
   data?: T;

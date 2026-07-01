@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bot, Loader2, Pencil, RefreshCw, Send, Stamp, Trash2 } from 'lucide-react'
+import { Bot, Loader2, Pencil, RefreshCw, Send, Settings2, Stamp, Trash2 } from 'lucide-react'
 import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { documentWorkspacesApi } from '@/api/document-workspaces'
 import { ChatMessageItem } from '@/components/ai-chat/ChatMessageItem'
+import { DocumentCompanyManagerDialog } from '@/components/DocumentCompanyManagerDialog'
 import { DocumentStampManagerDialog } from '@/components/DocumentStampManagerDialog'
+import { DocumentTemplateCompanySlotsDialog } from '@/components/DocumentTemplateCompanySlotsDialog'
 import {
   PromptInput,
   PromptInputBody,
@@ -30,7 +32,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { toast } from 'sonner'
-import type { DocumentDraft, DocumentDraftConversationState, DocumentDraftStampPlacement, DocumentStamp, DocumentTemplate } from '@/types'
+import type { DocumentCompany, DocumentCompanySlot, DocumentDraft, DocumentDraftConversationState, DocumentDraftStampPlacement, DocumentStamp, DocumentTemplate } from '@/types'
 
 const DOCUMENT_TYPE_LABELS: Record<'quote' | 'contract', string> = {
   quote: '报价单',
@@ -55,9 +57,12 @@ export default function AiChatPage() {
   const [inputValue, setInputValue] = useState('')
   const [previewVersion, setPreviewVersion] = useState(0)
   const [deleteDraftId, setDeleteDraftId] = useState<string>('')
+  const [companySlotsTemplate, setCompanySlotsTemplate] = useState<DocumentTemplate | null>(null)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [titleInputValue, setTitleInputValue] = useState('')
+  const [isCompanyManagerOpen, setIsCompanyManagerOpen] = useState(false)
   const [isStampManagerOpen, setIsStampManagerOpen] = useState(false)
+  const [selectedCompanyIds, setSelectedCompanyIds] = useState<Record<string, string>>({})
   const [selectedStampIdToApply, setSelectedStampIdToApply] = useState<string>('')
   const [isStampEditMode, setIsStampEditMode] = useState(false)
   const [conversationState, setConversationState] = useState<DocumentDraftConversationState>({
@@ -89,8 +94,14 @@ export default function AiChatPage() {
     queryFn: () => documentWorkspacesApi.listStamps(),
   })
 
+  const companiesQuery = useQuery({
+    queryKey: ['document-companies'],
+    queryFn: () => documentWorkspacesApi.listCompanies(),
+  })
+
   const recentDrafts = draftsQuery.data?.data || []
   const stamps = (stampsQuery.data?.data || []) as DocumentStamp[]
+  const companies = (companiesQuery.data?.data || []) as DocumentCompany[]
 
   const draftQuery = useQuery({
     queryKey: ['document-draft', draftId],
@@ -103,6 +114,8 @@ export default function AiChatPage() {
     ? getDraftDocumentNumber(currentDraft) || currentDraft.title || '未命名文档'
     : ''
   const currentDraftStamps = Array.isArray(currentDraft?.draft_payload?.stamps) ? currentDraft.draft_payload.stamps : []
+  const currentTemplate = templates.find((item) => item.id === currentDraft?.document_template_id) || null
+  const companySlots = normalizeCompanySlots(currentTemplate?.default_payload?.meta)
 
   const syncPreviewStampState = (override?: {
     stamps?: DocumentDraftStampPlacement[]
@@ -188,6 +201,10 @@ export default function AiChatPage() {
   }, [draftId])
 
   useEffect(() => {
+    setSelectedCompanyIds({})
+  }, [currentDraft?.id])
+
+  useEffect(() => {
     const handler = async (event: MessageEvent) => {
       if (event.origin !== window.location.origin) {
         return
@@ -250,6 +267,7 @@ export default function AiChatPage() {
         suggested_questions: response.data.suggested_questions || [],
       })
       setPreviewVersion((value) => value + 1)
+      await queryClient.invalidateQueries({ queryKey: ['document-companies'] })
       await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
       await queryClient.setQueryData(['document-draft', response.data.draft.id], { success: true, data: response.data.draft })
     },
@@ -378,6 +396,42 @@ export default function AiChatPage() {
     await queryClient.setQueryData(['document-draft', currentDraft.id], { success: true, data: response.data })
     await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
     toast.success('印章已添加到预览')
+  }
+
+  const handleApplyCompany = async (slot: DocumentCompanySlot) => {
+    if (!currentDraft?.id) {
+      return
+    }
+
+    const role = slot.role === 'customer' ? 'customer' : 'seller'
+    const selectedId = selectedCompanyIds[slot.key] || ''
+    const company = companies.find((item) => item.id === Number(selectedId))
+    if (!company) {
+      toast.error('请选择公司')
+      return
+    }
+
+    const existingParty = currentDraft.draft_payload?.[role]
+    const nextParty = {
+      ...(existingParty && typeof existingParty === 'object' && !Array.isArray(existingParty) ? existingParty : {}),
+      name: company.contact || company.name,
+      company: company.name,
+      contact: company.contact || '',
+      address: company.address || '',
+      email: company.email || '',
+      phone: company.phone || '',
+    }
+
+    const response = await documentWorkspacesApi.updateDraft(currentDraft.id, {
+      draft_payload: {
+        ...(currentDraft.draft_payload || {}),
+        [role]: nextParty,
+      },
+    })
+    await queryClient.setQueryData(['document-draft', currentDraft.id], { success: true, data: response.data })
+    await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
+    setPreviewVersion((value) => value + 1)
+    toast.success(`${slot.label}已填充`)
   }
 
   const confirmDeleteDraft = () => {
@@ -515,6 +569,9 @@ export default function AiChatPage() {
                     >
                       销售合同
                     </Button>
+                    <Button type="button" variant="outline" onClick={() => setIsCompanyManagerOpen(true)}>
+                      公司管理
+                    </Button>
                     <Button type="button" variant="outline" onClick={() => setIsStampManagerOpen(true)}>
                       <Stamp className="h-4 w-4" />
                       印章管理
@@ -536,7 +593,22 @@ export default function AiChatPage() {
                               {template.description || '进入后可继续通过 AI 对话补全客户、产品、价格和条款信息。'}
                             </p>
                           </div>
-                          <Badge variant="outline">{DOCUMENT_TYPE_LABELS[template.document_type]}</Badge>
+                          <div className="flex items-center gap-2">
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={(event) => {
+                                event.preventDefault()
+                                event.stopPropagation()
+                                setCompanySlotsTemplate(template)
+                              }}
+                              aria-label={`配置 ${template.name} 的公司位置`}
+                            >
+                              <Settings2 className="h-4 w-4" />
+                            </Button>
+                            <Badge variant="outline">{DOCUMENT_TYPE_LABELS[template.document_type]}</Badge>
+                          </div>
                         </div>
                       </button>
                     ))}
@@ -621,6 +693,37 @@ export default function AiChatPage() {
                 <section className="flex h-full min-h-0 flex-col bg-background">
                   <div className="border-b px-4 py-3">
                     <div className="flex flex-wrap items-center gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => setIsCompanyManagerOpen(true)}>
+                        公司管理
+                      </Button>
+                      {companySlots.map((slot) => (
+                        <div key={slot.key} className="flex flex-wrap items-center gap-2">
+                          <Select
+                            value={selectedCompanyIds[slot.key] || ''}
+                            onValueChange={(value) => setSelectedCompanyIds((current) => ({ ...current, [slot.key]: value }))}
+                          >
+                            <SelectTrigger className="w-[220px]">
+                              <SelectValue placeholder={`选择${slot.label}`} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {companies.map((company) => (
+                                <SelectItem key={`${slot.key}-${company.id}`} value={String(company.id)}>
+                                  {company.name}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void handleApplyCompany(slot)}
+                            disabled={!selectedCompanyIds[slot.key]}
+                          >
+                            填充{slot.label}
+                          </Button>
+                        </div>
+                      ))}
                       <Button type="button" variant="outline" size="sm" onClick={() => setIsStampManagerOpen(true)}>
                         <Stamp className="h-4 w-4" />
                         印章管理
@@ -651,6 +754,16 @@ export default function AiChatPage() {
                       <div className="rounded-2xl border bg-background p-4">
                         <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">当前识别</p>
                         <div className="mt-3 grid gap-3 text-sm">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-muted-foreground">我方公司</span>
+                            <span className="text-right font-medium">
+                              {String(
+                                currentDraft.draft_payload?.seller?.company
+                                || currentDraft.draft_payload?.seller?.name
+                                || '-'
+                              )}
+                            </span>
+                          </div>
                           <div className="flex items-center justify-between gap-3">
                             <span className="text-muted-foreground">客户</span>
                             <span className="text-right font-medium">
@@ -787,6 +900,20 @@ export default function AiChatPage() {
         onOpenChange={setIsStampManagerOpen}
         stamps={stamps}
       />
+      <DocumentCompanyManagerDialog
+        open={isCompanyManagerOpen}
+        onOpenChange={setIsCompanyManagerOpen}
+        companies={companies}
+      />
+      <DocumentTemplateCompanySlotsDialog
+        open={Boolean(companySlotsTemplate)}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCompanySlotsTemplate(null)
+          }
+        }}
+        template={companySlotsTemplate}
+      />
     </div>
   )
 }
@@ -813,4 +940,27 @@ function getDraftDocumentNumber(draft?: DocumentDraft | null) {
   const payload = draft?.draft_payload || {}
   const fieldName = draft?.document_type === 'contract' ? 'contractNumber' : 'quoteNumber'
   return String(payload[fieldName] || '').trim()
+}
+
+function normalizeCompanySlots(meta: unknown): DocumentCompanySlot[] {
+  const source = meta && typeof meta === 'object' && !Array.isArray(meta)
+    ? (meta as Record<string, unknown>)
+    : {}
+  const rawSlots = Array.isArray(source.companySlots) ? source.companySlots : []
+
+  return rawSlots
+    .map((item, index) => {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) {
+        return null
+      }
+      const entry = item as Record<string, unknown>
+      const key = String(entry.key || `company-${index + 1}`).trim()
+      const role = String(entry.role || '').trim() || (index === 0 ? 'seller' : 'customer')
+      const label = String(entry.label || '').trim() || `公司 ${index + 1}`
+      if (!key) {
+        return null
+      }
+      return { key, role, label }
+    })
+    .filter(Boolean) as DocumentCompanySlot[]
 }
