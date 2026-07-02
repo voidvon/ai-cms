@@ -219,6 +219,8 @@ main() {
     --filter='P /data/***' \
     --filter='P /html/' \
     --filter='P /html/***' \
+    --filter='P /html_*/' \
+    --filter='P /html_*/***' \
     --filter='P /logs/' \
     --filter='P /logs/***' \
     --filter='P /node_modules/' \
