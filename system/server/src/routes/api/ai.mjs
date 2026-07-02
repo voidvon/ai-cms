@@ -2,8 +2,7 @@ import { createUIMessageStream, pipeUIMessageStreamToResponse } from 'ai';
 import { requireAuth } from '../../middleware/auth.mjs';
 import { getAiCapabilities, executeAiTask } from '../../services/ai/capabilities.mjs';
 import { resetAiConversation, streamAiChat } from '../../services/ai/chat.mjs';
-import { DEFAULT_MODEL, getOpenAIModelProvider } from '../../services/ai/runtime.mjs';
-import { createDocumentWorkspaceAgent } from '../../services/document-agent/agent.mjs';
+import { DEFAULT_MODEL } from '../../services/ai/runtime.mjs';
 
 async function parseBody(request) {
   if (request.body && typeof request.body === 'object') {
@@ -69,43 +68,6 @@ function formatAiError(error) {
 }
 
 export default async function aiRoutes(app) {
-  app.get('/ai/provider-debug', {
-    onRequest: [requireAuth],
-  }, async () => {
-    let providerName = '';
-    let providerConstructor = '';
-    try {
-      const provider = getOpenAIModelProvider();
-      providerName = provider?.name || '';
-      providerConstructor = provider?.constructor?.name || '';
-    } catch (error) {
-      providerName = '';
-      providerConstructor = `error:${error?.message || 'unknown'}`;
-    }
-
-    const documentAgent = createDocumentWorkspaceAgent();
-
-    return {
-      success: true,
-      data: {
-        defaultModel: DEFAULT_MODEL,
-        documentAgentModel: documentAgent?.model || '',
-        openaiApiKeyPresent: Boolean(String(process.env.OPENAI_API_KEY || '').trim()),
-        openaiBaseUrl: String(process.env.OPENAI_BASE_URL || '').trim(),
-        openaiAiModel: String(process.env.OPENAI_AI_MODEL || '').trim(),
-        openaiDefaultModel: String(process.env.OPENAI_DEFAULT_MODEL || '').trim(),
-        openaiContractModel: String(process.env.OPENAI_CONTRACT_MODEL || '').trim(),
-        providerName,
-        providerConstructor,
-        providerUsesResponses: false,
-        providerUsesResponsesWebSocket: false,
-        providerApiMode: 'chat_completions',
-        providerConversationMemory: 'local_session',
-        pid: process.pid,
-      },
-    };
-  });
-
   app.get('/ai/capabilities', {
     onRequest: [requireAuth],
   }, async () => {

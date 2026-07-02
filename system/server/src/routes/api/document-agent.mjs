@@ -58,7 +58,6 @@ export default async function documentAgentRoutes(app) {
         conversationId: started.conversation.id,
         runId: started.run.id,
         model: started.run.model,
-        runtimeDebug: started.runtimeDebug,
       });
 
       for await (const event of started.result) {

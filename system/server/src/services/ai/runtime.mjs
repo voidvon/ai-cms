@@ -11,32 +11,17 @@ export const DEFAULT_MODEL =
   'gpt-5';
 
 const OPENAI_BASE_URL = normalizeText(process.env.OPENAI_BASE_URL);
+const OPENAI_API_KEY = normalizeText(process.env.OPENAI_API_KEY);
 let openaiClient = null;
 let openaiProvider = null;
 let normalizedOpenAIProvider = null;
 
-if (normalizeText(process.env.OPENAI_API_KEY)) {
-  openaiClient = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY || 'missing-key',
-    ...(OPENAI_BASE_URL ? { baseURL: OPENAI_BASE_URL } : {}),
-  });
-}
-
-if (openaiClient) {
-  setDefaultOpenAIClient(openaiClient);
-  openaiProvider = new OpenAIProvider({
-    openAIClient: openaiClient,
-    useResponses: true,
-    strictFeatureValidation: true,
-    useResponsesWebSocket: false,
-    cacheResponsesWebSocketModels: false,
-  });
-  normalizedOpenAIProvider = createFlyapiResponsesCompatibilityProvider(openaiProvider);
-  setDefaultModelProvider(normalizedOpenAIProvider);
+if (OPENAI_API_KEY) {
+  initializeOpenAIRuntime();
 }
 
 export function assertAiConfig() {
-  if (!normalizeText(process.env.OPENAI_API_KEY)) {
+  if (!OPENAI_API_KEY) {
     const error = new Error('缺少 OPENAI_API_KEY，无法调用 OpenAI Agents SDK');
     error.statusCode = 400;
     throw error;
@@ -65,21 +50,7 @@ export function runAiAgent(agent, input, options) {
 export function getOpenAIClient() {
   assertAiConfig();
   if (!openaiClient) {
-    openaiClient = new OpenAI({
-      apiKey: process.env.OPENAI_API_KEY || 'missing-key',
-      ...(OPENAI_BASE_URL ? { baseURL: OPENAI_BASE_URL } : {}),
-    });
-    setDefaultOpenAIClient(openaiClient);
-    openaiProvider = new OpenAIProvider({
-      openAIClient: openaiClient,
-      useResponses: true,
-      strictFeatureValidation: true,
-      useResponsesWebSocket: false,
-      cacheResponsesWebSocketModels: false,
-    });
-    normalizedOpenAIProvider = null;
-    normalizedOpenAIProvider = createFlyapiResponsesCompatibilityProvider(openaiProvider);
-    setDefaultModelProvider(normalizedOpenAIProvider);
+    initializeOpenAIRuntime();
   }
   return openaiClient;
 }
@@ -95,25 +66,28 @@ export function getOpenAIModelProvider() {
   return normalizedOpenAIProvider;
 }
 
-export function getAiRuntimeDebug() {
-  return {
-    defaultModel: DEFAULT_MODEL,
-    openaiApiKeyPresent: Boolean(normalizeText(process.env.OPENAI_API_KEY)),
-    openaiBaseUrl: normalizeText(process.env.OPENAI_BASE_URL),
-    openaiAiModel: normalizeText(process.env.OPENAI_AI_MODEL),
-    openaiDefaultModel: normalizeText(process.env.OPENAI_DEFAULT_MODEL),
-    openaiContractModel: normalizeText(process.env.OPENAI_CONTRACT_MODEL),
-    providerConstructor: openaiProvider?.constructor?.name || '',
-    providerUsesResponses: true,
-    providerUsesResponsesWebSocket: false,
-    providerApiMode: 'responses',
-    providerConversationMemory: 'local_session',
-    pid: process.pid,
-  };
+function initializeOpenAIRuntime() {
+  openaiClient = new OpenAI({
+    apiKey: OPENAI_API_KEY || 'missing-key',
+    ...(OPENAI_BASE_URL ? { baseURL: OPENAI_BASE_URL } : {}),
+  });
+  setDefaultOpenAIClient(openaiClient);
+
+  openaiProvider = new OpenAIProvider({
+    openAIClient: openaiClient,
+    useResponses: true,
+    strictFeatureValidation: true,
+    useResponsesWebSocket: false,
+    cacheResponsesWebSocketModels: false,
+  });
+
+  normalizedOpenAIProvider = createFlyapiResponsesCompatibilityProvider(openaiProvider);
+  setDefaultModelProvider(normalizedOpenAIProvider);
 }
 
 function createFlyapiResponsesCompatibilityProvider(provider) {
   return {
+    name: 'flyapi-responses-compatibility-provider',
     async getModel(modelName) {
       const model = await provider.getModel(modelName);
       return createFlyapiResponsesCompatibilityModel(model);
