@@ -3,6 +3,7 @@ import { toolRegistry } from '../core/tool-registry.mjs';
 import { listModelColumns } from '../../columns.mjs';
 import { isAiDataSourceAvailable } from '../data-source-registry.mjs';
 import { queryColumnsForAi, queryContactsForAi, queryContentItemsForAi, queryNewsForAi } from '../query-service.mjs';
+import { getAiContentItemTranslationContext } from '../mention-context.mjs';
 
 /**
  * 注册所有数据库查询工具到全局工具注册中心
@@ -58,6 +59,30 @@ export function registerDatabaseTools() {
         parentId: parent_id,
         rootColumnId: root_column_id,
         limit,
+      });
+    },
+  });
+
+  toolRegistry.register({
+    name: 'get_content_item_translation',
+    description: '读取指定内容项的指定语言详情。默认 @信息 只提供默认语言；当用户询问其他语言或需要多语言对比时使用。',
+    category: 'database',
+    requiresAuth: true,
+    accessLevel: 'read',
+    requiredPermissions: ['read:content'],
+    dataSources: ['managed_content'],
+    isEnabled: () => isAiDataSourceAvailable('managed_content'),
+    parameters: z.object({
+      model_code: z.string().min(1).describe('内容模型编码，例如 product 或 news'),
+      id: z.number().int().positive().describe('内容 ID'),
+      language_code: z.string().min(1).describe('语言编码，例如 en、zh-CN'),
+    }),
+    async execute({ model_code, id, language_code }, context) {
+      return getAiContentItemTranslationContext({
+        user: context.user,
+        modelCode: model_code,
+        id,
+        languageCode: language_code,
       });
     },
   });

@@ -8,7 +8,6 @@ import { createAiChatTransport } from '@/api/ai-chat'
 import { aiApi } from '@/api/ai'
 import { AiConversationComposer, type AiConversationDisplayPart } from '@/components/ai-chat/AiConversationComposer'
 import { ChatWorkspaceShell, type ChatWorkspaceShellMessage } from '@/components/ai-chat/ChatWorkspaceShell'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import type {
@@ -16,7 +15,6 @@ import type {
   AiConversationMessageRecord,
   AiConversationRecord,
   AiMentionItem,
-  AiToolDefinition,
 } from '@/types'
 
 type DashboardHeaderContext = {
@@ -29,16 +27,9 @@ type ConversationView = {
   id: string
   title: string
   capability: string
-  selectedToolNames?: string[]
   updatedAt: string
   lastMessageText?: string
 }
-
-const TOOL_NAME_MIGRATIONS: Record<string, string> = {
-  query_products: 'query_content_items',
-}
-
-const PUBLIC_URL_PATTERN = /https?:\/\/[^\s<>"']+/i
 
 function createConversationId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -78,13 +69,11 @@ function normalizeChatMessageMetadata(metadata: unknown) {
   const value = metadata as {
     displayParts?: AiConversationDisplayPart[]
     mentions?: AiMentionItem[]
-    toolNames?: string[]
   }
 
   return {
     ...(Array.isArray(value.displayParts) ? { displayParts: value.displayParts } : {}),
     ...(Array.isArray(value.mentions) ? { mentions: value.mentions } : {}),
-    ...(Array.isArray(value.toolNames) ? { toolNames: value.toolNames } : {}),
   }
 }
 
@@ -93,7 +82,6 @@ function toConversationView(record: AiConversationRecord, messages: ChatWorkspac
     id: record.id,
     title: record.title || '新对话',
     capability: record.capability || 'general_chat',
-    selectedToolNames: Array.from(new Set((record.selected_tool_names || []).map((name) => TOOL_NAME_MIGRATIONS[name] || name))),
     updatedAt: record.updated_at,
     lastMessageText: messages[messages.length - 1]?.text || '',
   }
@@ -131,11 +119,6 @@ export default function AiConversationPage() {
     || 'general_chat'
   )
 
-  const { data: toolsResponse } = useQuery({
-    queryKey: ['ai-tools', defaultCapability],
-    queryFn: () => aiApi.tools(defaultCapability),
-  })
-
   const conversationsQuery = useQuery({
     queryKey: ['ai-conversations'],
     queryFn: () => aiApi.listConversations(30),
@@ -148,10 +131,6 @@ export default function AiConversationPage() {
   const capabilities = useMemo<AiChatCapabilityDefinition[]>(() => {
     return capabilityPayload?.capabilities || capabilityPayload?.chat_capabilities || []
   }, [capabilityPayload])
-
-  const availableTools = useMemo<AiToolDefinition[]>(() => {
-    return toolsResponse?.data?.tools || []
-  }, [toolsResponse])
 
   useEffect(() => {
     setDocumentTitle('AI 对话')
@@ -175,7 +154,6 @@ export default function AiConversationPage() {
       id,
       title: '新对话',
       capability: defaultCapability,
-      selectedToolNames: [],
     }).then((response) => {
       void queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
       setActiveConversationId(response.data?.id || id)
@@ -209,15 +187,11 @@ export default function AiConversationPage() {
     ))
   }, [activeConversationId, conversationRecords, persistedChatMessages])
 
-  const selectedToolNames = activeConversation?.selectedToolNames || []
-
   const transport = useMemo(() => {
     return createAiChatTransport({
       capability: activeConversation?.capability || defaultCapability,
-      toolNames: selectedToolNames,
-      explicitToolMode: true,
     })
-  }, [activeConversation?.capability, defaultCapability, selectedToolNames])
+  }, [activeConversation?.capability, defaultCapability])
 
   const initialChatMessages = useMemo(() => {
     return persistedChatMessages
@@ -289,7 +263,6 @@ export default function AiConversationPage() {
     await aiApi.updateConversation(activeConversation.id, {
       title: next.title,
       capability: next.capability,
-      selectedToolNames: next.selectedToolNames || [],
     })
     await queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
   }
@@ -300,7 +273,6 @@ export default function AiConversationPage() {
       id,
       title: '新对话',
       capability: defaultCapability,
-      selectedToolNames: [],
     })
     await queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
     setActiveConversationId(id)
@@ -327,7 +299,6 @@ export default function AiConversationPage() {
           id,
           title: '新对话',
           capability: defaultCapability,
-          selectedToolNames: [],
         })
         await queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
         setActiveConversationId(id)
@@ -339,32 +310,23 @@ export default function AiConversationPage() {
   const handleComposerSubmit = async ({
     text,
     mentions,
-    toolNames,
     displayParts,
   }: {
     text: string
     mentions: AiMentionItem[]
-    toolNames: string[]
     displayParts: AiConversationDisplayPart[]
   }) => {
-    const requestedToolNames = toolNames.length > 0 ? toolNames : selectedToolNames
-    const effectiveToolNames = PUBLIC_URL_PATTERN.test(text)
-      ? requestedToolNames.filter((name) => name !== 'fetch_url')
-      : requestedToolNames
     await chat.sendMessage(
       {
         text,
         metadata: {
           displayParts,
           mentions,
-          toolNames: effectiveToolNames,
         },
       },
       {
         body: {
           capability: activeConversation?.capability || defaultCapability,
-          toolMode: 'explicit',
-          toolNames: effectiveToolNames,
           ...(mentions.length > 0 ? { mentions } : {}),
         },
       }
@@ -405,17 +367,8 @@ export default function AiConversationPage() {
                 onClick={() => setActiveConversationId(conversation.id)}
                 className="block w-full pr-9 text-left"
               >
-                <div className="space-y-1">
-                  <div className="truncate text-sm font-medium">{conversation.title}</div>
-                  {(conversation.selectedToolNames || []).length > 0 ? (
-                    <div className="flex flex-wrap gap-1">
-                      {(conversation.selectedToolNames || []).slice(0, 2).map((toolName) => (
-                        <Badge key={`${conversation.id}-${toolName}`} variant="outline" className="text-[10px]">
-                          {toolName}
-                        </Badge>
-                      ))}
-                    </div>
-                  ) : null}
+                  <div className="space-y-1">
+                    <div className="truncate text-sm font-medium">{conversation.title}</div>
                   <div className="line-clamp-2 text-xs leading-5 text-muted-foreground">
                     {conversation.lastMessageText || '还没有消息'}
                   </div>
@@ -458,24 +411,19 @@ export default function AiConversationPage() {
         sidebar={sidebar}
         statusBadges={[
           { key: 'capability', label: `能力：${activeCapabilityLabel}` },
-          { key: 'tool-mode', label: selectedToolNames.length > 0 ? `显式工具 ${selectedToolNames.length}` : '自动工具关闭', tone: 'secondary' },
+          { key: 'tool-mode', label: 'Agent 自动工具', tone: 'secondary' },
           capabilitiesResponse?.data?.model ? { key: 'model', label: `模型：${capabilitiesResponse.data.model}`, tone: 'secondary' } : null,
         ].filter(Boolean) as Array<{ key: string; label: string; tone?: 'default' | 'outline' | 'secondary' }>}
         composer={(
           <AiConversationComposer
-            placeholder="问问AI，/ 选择工具 @ 搜索。"
-            availableTools={availableTools}
-            selectedToolNames={selectedToolNames}
+            placeholder="问问AI，@ 搜索栏目或信息。"
+            availableTools={[]}
+            selectedToolNames={[]}
+            enableTools={false}
             submitDisabled={chat.status === 'submitted' || chat.status === 'streaming'}
             submitStatus={chat.status === 'submitted' || chat.status === 'streaming' ? 'submitted' : 'ready'}
             onStop={() => chat.stop()}
-            onToolSelectionChange={(toolNames) => {
-              void updateActiveConversation((conversation) => ({
-                ...conversation,
-                selectedToolNames: toolNames,
-                updatedAt: new Date().toISOString(),
-              }))
-            }}
+            onToolSelectionChange={() => {}}
             onSubmit={handleComposerSubmit}
           />
         )}

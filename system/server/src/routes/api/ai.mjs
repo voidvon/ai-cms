@@ -4,6 +4,7 @@ import { getAiOrchestrator } from '../../services/ai/initialize.mjs';
 import { capabilityRegistry, toolRegistry } from '../../services/ai/core/index.mjs';
 import { getAiDataSourceStatus } from '../../services/ai/data-source-registry.mjs';
 import { searchAiMentions } from '../../services/ai/query-service.mjs';
+import { buildAiMentionContext } from '../../services/ai/mention-context.mjs';
 import { DEFAULT_MODEL } from '../../services/ai/runtime.mjs';
 import { executeContractTask } from '../../services/ai/skills/contract.mjs';
 import { fetchUrlForAi } from '../../services/ai/web-fetch.mjs';
@@ -387,11 +388,20 @@ export default async function aiRoutes(app) {
         summary: String(item?.summary || '').trim(),
       })).filter((item) => item.type && item.id > 0 && item.title)
       : [];
+    const effectiveMentions = mentions.length > 0
+      ? mentions
+      : getRecentAiConversationMentions(conversationId, request.adminUser);
 
     return sendAssistantStreamingTextStream(reply, messages, async (writeDelta) => {
       try {
         const orchestrator = getAiOrchestrator();
         const webPages = await fetchReferencedWebPages(messageText);
+        const mentionContext = effectiveMentions.length > 0
+          ? buildAiMentionContext({
+            user: request.adminUser,
+            mentions: effectiveMentions,
+          })
+          : null;
 
         const streamed = await orchestrator.chat({
           conversationId,
@@ -403,7 +413,8 @@ export default async function aiRoutes(app) {
           requestedToolNames,
           toolMode,
           additionalContext: {
-            mentions,
+            mentions: effectiveMentions,
+            mentionContext,
             webPages,
           },
         });
@@ -480,4 +491,32 @@ export default async function aiRoutes(app) {
       };
     }
   });
+}
+
+function getRecentAiConversationMentions(conversationId, user) {
+  try {
+    const messages = listAiConversationMessages(conversationId, {
+      user,
+      limit: 20,
+    });
+    for (let index = messages.length - 1; index >= 0; index -= 1) {
+      const mentions = messages[index]?.metadata?.mentions;
+      if (Array.isArray(mentions) && mentions.length > 0) {
+        return mentions.map((item) => ({
+          type: String(item?.type || '').trim(),
+          id: Number(item?.id || 0),
+          title: String(item?.title || '').trim(),
+          subtitle: String(item?.subtitle || '').trim(),
+          model_code: String(item?.model_code || '').trim(),
+          column_id: Number(item?.column_id || 0) || null,
+          column_name: String(item?.column_name || '').trim(),
+          code: String(item?.code || '').trim(),
+          summary: String(item?.summary || '').trim(),
+        })).filter((item) => item.type && item.id > 0);
+      }
+    }
+  } catch {
+    return [];
+  }
+  return [];
 }
