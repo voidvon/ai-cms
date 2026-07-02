@@ -174,11 +174,15 @@ export function queryContentItemsForAi({
 export function searchAiMentions({
   user,
   keyword,
+  type = '',
   limit = 8,
 } = {}) {
   assertAiServicePermission(user, ['read:content']);
 
   const normalizedKeyword = String(keyword || '').trim().toLowerCase();
+  const normalizedType = ['column', 'content'].includes(String(type || '').trim())
+    ? String(type || '').trim()
+    : '';
   const safeLimit = Math.min(Math.max(Number(limit) || 8, 1), 20);
 
   if (!normalizedKeyword) {
@@ -191,29 +195,31 @@ export function searchAiMentions({
   }
 
   const columns = listColumns({ includeTranslations: true });
-  const matchedColumns = columns
-    .map((column) => {
-      const score = scoreAiMentionColumn(column, normalizedKeyword);
-      if (score <= 0) {
-        return null;
-      }
+  const matchedColumns = normalizedType === 'content'
+    ? []
+    : columns
+      .map((column) => {
+        const score = scoreAiMentionColumn(column, normalizedKeyword);
+        if (score <= 0) {
+          return null;
+        }
 
-      return {
-        type: 'column',
-        id: Number(column.id || 0),
-        title: String(column.name || '').trim(),
-        subtitle: buildAiColumnSubtitle(column),
-        column_id: Number(column.id || 0),
-        column_name: String(column.name || '').trim(),
-        model_code: String(column.model_code || '').trim(),
-        summary: String(column.summary || '').trim(),
-        route_path: String(column.route_path || '').trim(),
-        score,
-      };
-    })
-    .filter(Boolean)
-    .sort(compareAiMentionItems)
-    .slice(0, safeLimit);
+        return {
+          type: 'column',
+          id: Number(column.id || 0),
+          title: String(column.name || '').trim(),
+          subtitle: buildAiColumnSubtitle(column),
+          column_id: Number(column.id || 0),
+          column_name: String(column.name || '').trim(),
+          model_code: String(column.model_code || '').trim(),
+          summary: String(column.summary || '').trim(),
+          route_path: String(column.route_path || '').trim(),
+          score,
+        };
+      })
+      .filter(Boolean)
+      .sort(compareAiMentionItems)
+      .slice(0, safeLimit);
 
   const modelCodes = Array.from(new Set(
     columns
@@ -221,30 +227,32 @@ export function searchAiMentions({
       .filter(Boolean)
   ));
 
-  const matchedContentItems = modelCodes
-    .flatMap((modelCode) => {
-      const page = searchContentItemsPaged(modelCode, normalizedKeyword, {
-        page: 1,
-        limit: Math.min(safeLimit * 2, 20),
-        visibleOnly: true,
-      });
+  const matchedContentItems = normalizedType === 'column'
+    ? []
+    : modelCodes
+      .flatMap((modelCode) => {
+        const page = searchContentItemsPaged(modelCode, normalizedKeyword, {
+          page: 1,
+          limit: Math.min(safeLimit * 2, 20),
+          visibleOnly: true,
+        });
 
-      return page.items.map((item) => ({
-        type: 'content',
-        id: Number(item.id || 0),
-        title: String(item.name || '').trim(),
-        subtitle: buildAiContentSubtitle(item, modelCode),
-        model_code: modelCode,
-        column_id: Number(item.column_id || 0) || null,
-        column_name: String(item.column_name || '').trim(),
-        code: String(item.code || '').trim(),
-        summary: String(item.search_excerpt || item.summary || '').trim(),
-        score: Number(item.search_score || 0),
-      }));
-    })
-    .filter((item) => item.score > 0)
-    .sort(compareAiMentionItems)
-    .slice(0, safeLimit);
+        return page.items.map((item) => ({
+          type: 'content',
+          id: Number(item.id || 0),
+          title: String(item.name || '').trim(),
+          subtitle: buildAiContentSubtitle(item, modelCode),
+          model_code: modelCode,
+          column_id: Number(item.column_id || 0) || null,
+          column_name: String(item.column_name || '').trim(),
+          code: String(item.code || '').trim(),
+          summary: String(item.search_excerpt || item.summary || '').trim(),
+          score: Number(item.search_score || 0),
+        }));
+      })
+      .filter((item) => item.score > 0)
+      .sort(compareAiMentionItems)
+      .slice(0, safeLimit);
 
   const items = [...matchedContentItems, ...matchedColumns]
     .sort(compareAiMentionItems)

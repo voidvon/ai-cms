@@ -192,6 +192,7 @@ export default async function aiRoutes(app) {
       const result = searchAiMentions({
         user: request.adminUser,
         keyword,
+        type: request.query?.type,
         limit: request.query?.limit ? Number.parseInt(String(request.query.limit), 10) : 8,
       });
 

@@ -420,13 +420,7 @@ export default function AiConversationPage() {
       {headerSlotElement ? createPortal(headerContent, headerSlotElement) : null}
       <ChatWorkspaceShell
         messages={shellMessages}
-        inputValue=""
-        onInputChange={() => {}}
-        onSubmit={() => {}}
         sidebarPosition="left"
-        submitDisabled={chat.status === 'submitted' || chat.status === 'streaming'}
-        submitStatus={chat.status === 'submitted' || chat.status === 'streaming' ? 'submitted' : 'ready'}
-        placeholder="问问AI，/ 选择工具 @ 搜索。"
         emptyTitle="开始新的 AI 对话"
         emptyDescription="当前入口以栏目内容查询和价格查询两类工具为主。"
         sidebar={sidebar}

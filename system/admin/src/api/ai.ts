@@ -23,9 +23,9 @@ export const aiApi = {
     return response.data
   },
 
-  searchMentions: async (q: string, limit = 8) => {
+  searchMentions: async (q: string, limit = 8, type?: AiMentionItem['type']) => {
     const response = await apiClient.get<ApiResponse<{ total: number; items: AiMentionItem[] }>>('/ai/mentions/search', {
-      params: { q, limit },
+      params: { q, limit, type },
     })
     return response.data
   },

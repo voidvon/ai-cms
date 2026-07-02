@@ -5,6 +5,7 @@ import { Loader2, Pencil, RefreshCw, Settings2, Stamp, Trash2 } from 'lucide-rea
 import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { documentWorkspacesApi } from '@/api/document-workspaces'
 import { documentAgentApi } from '@/api/document-agent'
+import { AiConversationComposer } from '@/components/ai-chat/AiConversationComposer'
 import { ChatWorkspaceShell, type ChatWorkspaceShellMessage } from '@/components/ai-chat/ChatWorkspaceShell'
 import { DocumentCompanyManagerDialog } from '@/components/DocumentCompanyManagerDialog'
 import { DocumentStampManagerDialog } from '@/components/DocumentStampManagerDialog'
@@ -50,7 +51,6 @@ export default function AiChatPage() {
   const previewFrameRef = useRef<HTMLIFrameElement | null>(null)
   const titleInputRef = useRef<HTMLInputElement | null>(null)
   const [selectedDocumentType, setSelectedDocumentType] = useState<'quote' | 'contract'>('quote')
-  const [inputValue, setInputValue] = useState('')
   const [previewVersion, setPreviewVersion] = useState(0)
   const [deleteDraftId, setDeleteDraftId] = useState<string>('')
   const [companySlotsTemplate, setCompanySlotsTemplate] = useState<DocumentTemplate | null>(null)
@@ -187,7 +187,6 @@ export default function AiChatPage() {
       assistantText: '',
       toolActivities: [],
     })
-    setInputValue('')
     setPreviewVersion((value) => value + 1)
   }, [draftId])
 
@@ -294,7 +293,6 @@ export default function AiChatPage() {
       if (!response?.draft?.id) {
         return
       }
-      setInputValue('')
       setStreamState({
         isStreaming: false,
         assistantText: '',
@@ -407,7 +405,7 @@ export default function AiChatPage() {
   }
 
   const handleSubmit = async ({ text }: { text?: string }) => {
-    const value = String(text || inputValue || '').trim()
+    const value = String(text || '').trim()
     if (!value || !currentDraft?.id) {
       return
     }
@@ -862,20 +860,22 @@ export default function AiChatPage() {
                   <ChatWorkspaceShell
                     layout="stacked"
                     messages={conversationMessages}
-                    inputValue={inputValue}
-                    onInputChange={setInputValue}
-                    onSubmit={() => void handleSubmit({ text: inputValue })}
-                    submitDisabled={!inputValue.trim() || sendMessageMutation.isPending}
-                    submitStatus={sendMessageMutation.isPending ? 'submitted' : 'ready'}
-                    placeholder={`例如：客户是上海某工厂，${currentDraft.document_type === 'quote' ? '报价' : '合同'}里先加入 BSA2T-25 两台，含税，交期两周`}
                     statusBadges={[
                       { key: 'template', label: `模板：${currentDraft.document_template_name}` },
                       { key: 'type', label: DOCUMENT_TYPE_LABELS[currentDraft.document_type], tone: 'secondary' },
                     ]}
-                    footerTools={(
-                      <div className="rounded-full border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
-                        当前模板：{currentDraft.document_template_name}
-                      </div>
+                    composer={(
+                      <AiConversationComposer
+                        placeholder={`例如：客户是上海某工厂，${currentDraft.document_type === 'quote' ? '报价' : '合同'}里先加入 BSA2T-25 两台，含税，交期两周`}
+                        availableTools={[]}
+                        selectedToolNames={[]}
+                        enableTools={false}
+                        enableMentions={false}
+                        submitDisabled={sendMessageMutation.isPending}
+                        submitStatus={sendMessageMutation.isPending ? 'submitted' : 'ready'}
+                        onToolSelectionChange={() => {}}
+                        onSubmit={(payload) => void handleSubmit({ text: payload.text })}
+                      />
                     )}
                     sidebar={(
                       <div className="space-y-5 px-4 py-5">
@@ -944,7 +944,7 @@ export default function AiChatPage() {
                                     key={question}
                                     type="button"
                                     className="rounded-xl border bg-background px-3 py-2 text-left text-sm transition hover:border-primary/40"
-                                    onClick={() => setInputValue(question)}
+                                    onClick={() => void handleSubmit({ text: question })}
                                   >
                                     {question}
                                   </button>

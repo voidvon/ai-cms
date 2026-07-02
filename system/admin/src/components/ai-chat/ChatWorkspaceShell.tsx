@@ -1,19 +1,11 @@
-import type { KeyboardEventHandler, ReactNode } from 'react'
-import { Bot, Loader2 } from 'lucide-react'
+import type { ReactNode } from 'react'
+import { Bot } from 'lucide-react'
 import {
   Conversation,
   ConversationContent,
   ConversationEmptyState,
   ConversationScrollButton,
 } from '@/components/ai-elements/conversation'
-import {
-  PromptInput,
-  PromptInputBody,
-  PromptInputFooter,
-  PromptInputSubmit,
-  PromptInputTextarea,
-  PromptInputTools,
-} from '@/components/ai-elements/prompt-input'
 import { ChatMessageItem, type ChatMessageMetadata } from '@/components/ai-chat/ChatMessageItem'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -33,24 +25,15 @@ export interface ChatWorkspaceShellMessage {
 
 interface ChatWorkspaceShellProps {
   messages: ChatWorkspaceShellMessage[]
-  inputValue: string
-  onInputChange: (value: string) => void
-  onInputKeyDown?: KeyboardEventHandler<HTMLTextAreaElement>
-  onSubmit: () => void
-  submitDisabled?: boolean
-  submitStatus?: 'ready' | 'submitted'
-  placeholder?: string
   emptyTitle?: string
   emptyDescription?: string
   sidebar?: ReactNode
-  footerTools?: ReactNode
   statusBadges?: Array<{
     key: string
     label: string
     tone?: 'default' | 'outline' | 'secondary'
   }>
-  composerHint?: ReactNode
-  composer?: ReactNode
+  composer: ReactNode
   className?: string
   children?: ReactNode
   layout?: 'split' | 'stacked'
@@ -59,19 +42,10 @@ interface ChatWorkspaceShellProps {
 
 export function ChatWorkspaceShell({
   messages,
-  inputValue,
-  onInputChange,
-  onInputKeyDown,
-  onSubmit,
-  submitDisabled = false,
-  submitStatus = 'ready',
-  placeholder,
   emptyTitle = '还没有消息',
   emptyDescription = '发送第一条消息开始对话。',
   sidebar,
-  footerTools,
   statusBadges = [],
-  composerHint,
   composer,
   className,
   children,
@@ -127,41 +101,7 @@ export function ChatWorkspaceShell({
 
         <div className="shrink-0 border-t bg-background/95 px-4 py-4 backdrop-blur">
           {children}
-          {composer ? (
-            composer
-          ) : (
-            <>
-              <PromptInput
-                onSubmit={(event) => {
-                  const nextValue = String(event.text || inputValue || '').trim()
-                  if (!nextValue || submitDisabled) {
-                    return
-                  }
-                  onSubmit()
-                }}
-              >
-                <PromptInputBody>
-                  <PromptInputTextarea
-                    value={inputValue}
-                    onChange={(event) => onInputChange(event.target.value)}
-                    onKeyDown={onInputKeyDown}
-                    placeholder={placeholder}
-                  />
-                </PromptInputBody>
-                <PromptInputFooter>
-                  <PromptInputTools>
-                    {footerTools || composerHint || null}
-                  </PromptInputTools>
-                  <PromptInputSubmit disabled={submitDisabled} status={submitStatus}>
-                    {submitStatus === 'submitted' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
-                  </PromptInputSubmit>
-                </PromptInputFooter>
-              </PromptInput>
-              {composerHint && !footerTools ? (
-                <div className="mt-3 text-xs text-muted-foreground">{composerHint}</div>
-              ) : null}
-            </>
-          )}
+          {composer}
         </div>
       </section>
   )
