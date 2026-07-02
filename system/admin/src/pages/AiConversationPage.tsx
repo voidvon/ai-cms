@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Chat, useChat } from '@ai-sdk/react'
 import { MessageSquarePlus, RefreshCw, Trash2 } from 'lucide-react'
 import { useOutletContext } from 'react-router-dom'
@@ -11,7 +11,13 @@ import { ChatWorkspaceShell, type ChatWorkspaceShellMessage } from '@/components
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
-import type { AiChatCapabilityDefinition, AiMentionItem, AiToolDefinition } from '@/types'
+import type {
+  AiChatCapabilityDefinition,
+  AiConversationMessageRecord,
+  AiConversationRecord,
+  AiMentionItem,
+  AiToolDefinition,
+} from '@/types'
 
 type DashboardHeaderContext = {
   headerSlotElement: HTMLDivElement | null
@@ -19,20 +25,20 @@ type DashboardHeaderContext = {
   setMainContentPadding: (enabled: boolean) => void
 }
 
-type StoredConversation = {
+type ConversationView = {
   id: string
   title: string
   capability: string
-  messages: ChatWorkspaceShellMessage[]
   selectedToolNames?: string[]
   updatedAt: string
+  lastMessageText?: string
 }
 
 const TOOL_NAME_MIGRATIONS: Record<string, string> = {
   query_products: 'query_content_items',
 }
 
-const STORAGE_KEY = 'spirax-admin-ai-conversations'
+const PUBLIC_URL_PATTERN = /https?:\/\/[^\s<>"']+/i
 
 function createConversationId() {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
@@ -41,38 +47,11 @@ function createConversationId() {
   return `ai-chat-${Date.now()}`
 }
 
-function migrateStoredConversation(conversation: StoredConversation): StoredConversation {
-  return {
-    ...conversation,
-    selectedToolNames: Array.from(new Set((conversation.selectedToolNames || []).map((name) => TOOL_NAME_MIGRATIONS[name] || name))),
-  }
-}
-
-function loadStoredConversations(): StoredConversation[] {
-  if (typeof window === 'undefined') {
-    return []
-  }
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    const parsed = raw ? JSON.parse(raw) : []
-    return Array.isArray(parsed) ? parsed.map(migrateStoredConversation) : []
-  } catch {
-    return []
-  }
-}
-
-function saveStoredConversations(conversations: StoredConversation[]) {
-  if (typeof window === 'undefined') {
-    return
-  }
-  window.localStorage.setItem(STORAGE_KEY, JSON.stringify(conversations.slice(0, 20)))
-}
-
 function toShellMessages(messages: any[]): ChatWorkspaceShellMessage[] {
   return messages.map((message) => ({
     id: String(message.id),
     role: message.role === 'assistant' ? 'assistant' : 'user',
-    text: extractMessageText(message.parts),
+    text: extractMessageText(message.parts) || String(message.text || message.content?.text || ''),
     parts: Array.isArray(message.parts) ? message.parts : [],
     metadata: normalizeChatMessageMetadata(message.metadata),
   }))
@@ -81,14 +60,14 @@ function toShellMessages(messages: any[]): ChatWorkspaceShellMessage[] {
 function extractMessageText(parts: any[] = []) {
   return parts
     .filter((part) => part?.type === 'text')
-    .map((part) => String(part.text || ''))
+    .map((part) => String(part.text ?? part.delta ?? part.value ?? part.content ?? ''))
     .join('')
 }
 
-function buildConversationTitle(messages: ChatWorkspaceShellMessage[]) {
-  const firstUser = messages.find((message) => message.role === 'user')
-  const source = String(firstUser?.text || '').trim()
-  return source ? source.slice(0, 24) : '新对话'
+function getMessagesContentSignature(messages: any[] = []) {
+  return messages
+    .map((message) => `${message.role}:${extractMessageText(message.parts) || String(message.text || message.content?.text || '')}`)
+    .join('|')
 }
 
 function normalizeChatMessageMetadata(metadata: unknown) {
@@ -109,10 +88,35 @@ function normalizeChatMessageMetadata(metadata: unknown) {
   }
 }
 
+function toConversationView(record: AiConversationRecord, messages: ChatWorkspaceShellMessage[] = []): ConversationView {
+  return {
+    id: record.id,
+    title: record.title || '新对话',
+    capability: record.capability || 'general_chat',
+    selectedToolNames: Array.from(new Set((record.selected_tool_names || []).map((name) => TOOL_NAME_MIGRATIONS[name] || name))),
+    updatedAt: record.updated_at,
+    lastMessageText: messages[messages.length - 1]?.text || '',
+  }
+}
+
+function toChatMessagesFromRecords(records: AiConversationMessageRecord[]) {
+  return records
+    .filter((message) => message.role === 'user' || message.role === 'assistant')
+    .map((message) => {
+      const text = String(message.content?.text || '')
+      return {
+        id: String(message.id),
+        role: message.role,
+        parts: [{ type: 'text', text }],
+        ...(message.metadata ? { metadata: message.metadata } : {}),
+      }
+    })
+}
+
 export default function AiConversationPage() {
   const { headerSlotElement, setDocumentTitle, setMainContentPadding } =
     useOutletContext<DashboardHeaderContext>()
-  const [conversations, setConversations] = useState<StoredConversation[]>([])
+  const queryClient = useQueryClient()
   const [activeConversationId, setActiveConversationId] = useState<string>('')
   const { data: capabilitiesResponse, isFetching: isCapabilitiesFetching, refetch } = useQuery({
     queryKey: ['ai-capabilities'],
@@ -132,6 +136,15 @@ export default function AiConversationPage() {
     queryFn: () => aiApi.tools(defaultCapability),
   })
 
+  const conversationsQuery = useQuery({
+    queryKey: ['ai-conversations'],
+    queryFn: () => aiApi.listConversations(30),
+  })
+
+  const conversationRecords = useMemo(() => {
+    return conversationsQuery.data?.data || []
+  }, [conversationsQuery.data])
+
   const capabilities = useMemo<AiChatCapabilityDefinition[]>(() => {
     return capabilityPayload?.capabilities || capabilityPayload?.chat_capabilities || []
   }, [capabilityPayload])
@@ -147,29 +160,54 @@ export default function AiConversationPage() {
   }, [setDocumentTitle, setMainContentPadding])
 
   useEffect(() => {
-    const stored = loadStoredConversations()
-    if (stored.length > 0) {
-      setConversations(stored)
-      setActiveConversationId(stored[0].id)
+    if (activeConversationId || conversationsQuery.isLoading) {
       return
     }
 
-    const initialConversation: StoredConversation = {
-      id: createConversationId(),
-      title: '新对话',
-      capability: defaultCapability,
-      messages: [],
-      selectedToolNames: [],
-      updatedAt: new Date().toISOString(),
+    const firstConversation = conversationRecords[0]
+    if (firstConversation) {
+      setActiveConversationId(firstConversation.id)
+      return
     }
 
-    setConversations([initialConversation])
-    setActiveConversationId(initialConversation.id)
-  }, [defaultCapability])
+    const id = createConversationId()
+    aiApi.createConversation({
+      id,
+      title: '新对话',
+      capability: defaultCapability,
+      selectedToolNames: [],
+    }).then((response) => {
+      void queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
+      setActiveConversationId(response.data?.id || id)
+    }).catch((error) => {
+      toast.error(error?.message || '创建 AI 会话失败')
+    })
+  }, [activeConversationId, conversationRecords, conversationsQuery.isLoading, defaultCapability, queryClient])
 
   const activeConversation = useMemo(() => {
-    return conversations.find((item) => item.id === activeConversationId) || null
-  }, [activeConversationId, conversations])
+    const record = conversationRecords.find((item) => item.id === activeConversationId)
+    return record ? toConversationView(record) : null
+  }, [activeConversationId, conversationRecords])
+
+  const messagesQuery = useQuery({
+    queryKey: ['ai-conversation-messages', activeConversationId],
+    queryFn: () => aiApi.listConversationMessages(activeConversationId, 100),
+    enabled: Boolean(activeConversationId),
+    refetchOnWindowFocus: false,
+  })
+
+  const persistedChatMessages = useMemo(() => {
+    return toChatMessagesFromRecords(messagesQuery.data?.data || [])
+  }, [messagesQuery.data])
+
+  const conversations = useMemo(() => {
+    const activeShellMessages = activeConversationId
+      ? toShellMessages(persistedChatMessages as any[])
+      : []
+    return conversationRecords.map((record) => (
+      toConversationView(record, record.id === activeConversationId ? activeShellMessages : [])
+    ))
+  }, [activeConversationId, conversationRecords, persistedChatMessages])
 
   const selectedToolNames = activeConversation?.selectedToolNames || []
 
@@ -182,16 +220,8 @@ export default function AiConversationPage() {
   }, [activeConversation?.capability, defaultCapability, selectedToolNames])
 
   const initialChatMessages = useMemo(() => {
-    if (!activeConversation) {
-      return []
-    }
-    return activeConversation.messages.map((message) => ({
-      id: message.id,
-      role: message.role,
-      parts: message.parts || (message.text ? [{ type: 'text', text: message.text }] : []),
-      ...(message.metadata ? { metadata: message.metadata } : {}),
-    }))
-  }, [activeConversation])
+    return persistedChatMessages
+  }, [persistedChatMessages])
 
   const chatInstance = useMemo(() => {
     return new Chat({
@@ -205,32 +235,35 @@ export default function AiConversationPage() {
         if (!activeConversation?.id) {
           return
         }
-        const shellMessages = toShellMessages(messages as any[])
-        const nextConversation: StoredConversation = {
-          id: activeConversation.id,
-          capability: activeConversation.capability || defaultCapability,
-          title: buildConversationTitle(shellMessages),
-          messages: shellMessages,
-          selectedToolNames: activeConversation.selectedToolNames || [],
-          updatedAt: new Date().toISOString(),
-        }
-        setConversations((current) => {
-          const next = [nextConversation, ...current.filter((item) => item.id !== nextConversation.id)]
-          saveStoredConversations(next)
-          return next
-        })
+        void queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
+        void queryClient.invalidateQueries({ queryKey: ['ai-conversation-messages', activeConversation.id] })
       },
     })
-  }, [activeConversation, defaultCapability, initialChatMessages, transport])
+  }, [activeConversation?.id])
 
   const chat = useChat({
     chat: chatInstance,
+    experimental_throttle: 0,
   })
+
+  const isChatStreaming = chat.status === 'submitted' || chat.status === 'streaming'
+
+  useEffect(() => {
+    if (isChatStreaming) {
+      return
+    }
+
+    const currentSignature = getMessagesContentSignature(chat.messages as any[])
+    const nextSignature = getMessagesContentSignature(initialChatMessages as any[])
+
+    if (currentSignature !== nextSignature) {
+      chat.setMessages(initialChatMessages as any[])
+    }
+  }, [activeConversationId, initialChatMessages, isChatStreaming])
 
   const shellMessages = useMemo<ChatWorkspaceShellMessage[]>(() => {
     const messages = toShellMessages(chat.messages as any[])
-    const isStreaming = chat.status === 'submitted' || chat.status === 'streaming'
-    if (!isStreaming) {
+    if (!isChatStreaming) {
       return messages
     }
 
@@ -244,65 +277,61 @@ export default function AiConversationPage() {
         ? { ...message, streaming: true, pending: !message.text?.trim() }
         : message
     ))
-  }, [chat.messages, chat.status])
+  }, [chat.messages, isChatStreaming])
 
   const activeCapabilityLabel = capabilities.find((item) => item.key === (activeConversation?.capability || defaultCapability))?.label || '通用对话'
 
-  const updateActiveConversation = (updater: (conversation: StoredConversation) => StoredConversation) => {
+  const updateActiveConversation = async (updater: (conversation: ConversationView) => ConversationView) => {
     if (!activeConversation) {
       return
     }
-    setConversations((current) => {
-      const next = current.map((conversation) => (
-        conversation.id === activeConversation.id
-          ? updater(conversation)
-          : conversation
-      ))
-      saveStoredConversations(next)
-      return next
+    const next = updater(activeConversation)
+    await aiApi.updateConversation(activeConversation.id, {
+      title: next.title,
+      capability: next.capability,
+      selectedToolNames: next.selectedToolNames || [],
     })
+    await queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
   }
 
-  const handleCreateConversation = () => {
-    const nextConversation: StoredConversation = {
-      id: createConversationId(),
+  const handleCreateConversation = async () => {
+    const id = createConversationId()
+    await aiApi.createConversation({
+      id,
       title: '新对话',
       capability: defaultCapability,
-      messages: [],
       selectedToolNames: [],
-      updatedAt: new Date().toISOString(),
-    }
-    const nextConversations = [nextConversation, ...conversations]
-    setConversations(nextConversations)
-    setActiveConversationId(nextConversation.id)
-    saveStoredConversations(nextConversations)
+    })
+    await queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
+    setActiveConversationId(id)
     chat.stop()
     chat.setMessages([])
   }
 
   const handleDeleteConversation = async (conversationId: string) => {
-    const nextConversations = conversations.filter((item) => item.id !== conversationId)
-    setConversations(nextConversations)
-    saveStoredConversations(nextConversations)
     try {
+      await aiApi.deleteConversation(conversationId)
       await aiApi.resetChat(conversationId)
     } catch {
-      // ignore reset failures for local-only history cleanup
+      // ignore reset failures after server-side delete
     }
+    await queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
+    await queryClient.invalidateQueries({ queryKey: ['ai-conversation-messages', conversationId] })
     if (conversationId === activeConversationId) {
-      const fallback = nextConversations[0] || {
-        id: createConversationId(),
-        title: '新对话',
-        capability: defaultCapability,
-        messages: [],
-        selectedToolNames: [],
-        updatedAt: new Date().toISOString(),
+      const remaining = conversationRecords.filter((item) => item.id !== conversationId)
+      if (remaining[0]) {
+        setActiveConversationId(remaining[0].id)
+      } else {
+        const id = createConversationId()
+        await aiApi.createConversation({
+          id,
+          title: '新对话',
+          capability: defaultCapability,
+          selectedToolNames: [],
+        })
+        await queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
+        setActiveConversationId(id)
       }
-      if (nextConversations.length === 0) {
-        saveStoredConversations([fallback])
-        setConversations([fallback])
-      }
-      setActiveConversationId(fallback.id)
       chat.setMessages([])
     }
   }
@@ -318,7 +347,10 @@ export default function AiConversationPage() {
     toolNames: string[]
     displayParts: AiConversationDisplayPart[]
   }) => {
-    const effectiveToolNames = toolNames.length > 0 ? toolNames : selectedToolNames
+    const requestedToolNames = toolNames.length > 0 ? toolNames : selectedToolNames
+    const effectiveToolNames = PUBLIC_URL_PATTERN.test(text)
+      ? requestedToolNames.filter((name) => name !== 'fetch_url')
+      : requestedToolNames
     await chat.sendMessage(
       {
         text,
@@ -332,7 +364,7 @@ export default function AiConversationPage() {
         body: {
           capability: activeConversation?.capability || defaultCapability,
           toolMode: 'explicit',
-          ...(effectiveToolNames.length > 0 ? { toolNames: effectiveToolNames } : {}),
+          toolNames: effectiveToolNames,
           ...(mentions.length > 0 ? { mentions } : {}),
         },
       }
@@ -351,7 +383,7 @@ export default function AiConversationPage() {
             <Button type="button" variant="outline" size="icon" onClick={() => void refetch()} disabled={isCapabilitiesFetching}>
               <RefreshCw className={`h-4 w-4 ${isCapabilitiesFetching ? 'animate-spin' : ''}`} />
             </Button>
-            <Button type="button" variant="outline" size="icon" onClick={handleCreateConversation}>
+            <Button type="button" variant="outline" size="icon" onClick={() => void handleCreateConversation()}>
               <MessageSquarePlus className="h-4 w-4" />
             </Button>
           </div>
@@ -385,7 +417,7 @@ export default function AiConversationPage() {
                     </div>
                   ) : null}
                   <div className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-                    {conversation.messages[conversation.messages.length - 1]?.text || '还没有消息'}
+                    {conversation.lastMessageText || '还没有消息'}
                   </div>
                   <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
                     {formatConversationTime(conversation.updatedAt)}
@@ -409,7 +441,7 @@ export default function AiConversationPage() {
 
   const headerContent = (
     <div className="hidden min-w-0 items-center justify-end gap-2 lg:flex">
-      <Button type="button" variant="outline" size="sm" onClick={handleCreateConversation}>
+      <Button type="button" variant="outline" size="sm" onClick={() => void handleCreateConversation()}>
         新对话
       </Button>
     </div>
@@ -438,7 +470,7 @@ export default function AiConversationPage() {
             submitStatus={chat.status === 'submitted' || chat.status === 'streaming' ? 'submitted' : 'ready'}
             onStop={() => chat.stop()}
             onToolSelectionChange={(toolNames) => {
-              updateActiveConversation((conversation) => ({
+              void updateActiveConversation((conversation) => ({
                 ...conversation,
                 selectedToolNames: toolNames,
                 updatedAt: new Date().toISOString(),

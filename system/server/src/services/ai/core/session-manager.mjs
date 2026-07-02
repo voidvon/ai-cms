@@ -1,10 +1,11 @@
 import { MemorySession } from '@openai/agents';
+import { listAiConversationMessages } from '../conversations.mjs';
 
 /**
  * 会话存储接口的抽象基类
  */
 export class SessionStorage {
-  async get(sessionId) {
+  async get(sessionId, options = {}) {
     throw new Error('SessionStorage.get must be implemented');
   }
 
@@ -16,7 +17,7 @@ export class SessionStorage {
     throw new Error('SessionStorage.delete must be implemented');
   }
 
-  async getMessages(sessionId) {
+  async getMessages(sessionId, options = {}) {
     throw new Error('SessionStorage.getMessages must be implemented');
   }
 }
@@ -81,22 +82,18 @@ export class DatabaseSessionStorage extends SessionStorage {
     this.cache.delete(sessionId);
   }
 
-  async getMessages(sessionId) {
-    // 从数据库读取历史消息
-    try {
-      const rows = this.db
-        .prepare(
-          `SELECT role, content, created_at
-           FROM ai_conversation_messages
-           WHERE conversation_id = ?
-           ORDER BY created_at ASC
-           LIMIT 50`
-        )
-        .all(sessionId);
+  async getMessages(sessionId, options = {}) {
+    if (!options.user) {
+      return [];
+    }
 
-      return rows.map((row) => ({
+    try {
+      return listAiConversationMessages(sessionId, {
+        user: options.user,
+        limit: 50,
+      }).map((row) => ({
         role: row.role,
-        content: typeof row.content === 'string' ? JSON.parse(row.content) : row.content,
+        content: row.content,
         created_at: row.created_at,
       }));
     } catch (error) {
@@ -106,17 +103,8 @@ export class DatabaseSessionStorage extends SessionStorage {
   }
 
   async saveMessage(sessionId, message) {
-    // 保存消息到数据库
-    try {
-      this.db
-        .prepare(
-          `INSERT INTO ai_conversation_messages (conversation_id, role, content, created_at)
-           VALUES (?, ?, ?, datetime('now'))`
-        )
-        .run(sessionId, message.role, JSON.stringify(message.content));
-    } catch (error) {
-      console.error('Failed to save message to database:', error);
-    }
+    // Message persistence is handled by the AI conversation service so it can
+    // enforce user ownership and save metadata consistently.
   }
 }
 
@@ -132,14 +120,14 @@ export class SessionManager {
    * 获取或创建会话
    */
   async getOrCreate(sessionId, options = {}) {
-    let session = await this.storage.get(sessionId);
+    let session = await this.storage.get(sessionId, options);
 
     if (!session) {
-      session = new MemorySession(sessionId);
+      session = new MemorySession({ sessionId });
 
       // 恢复历史消息
       if (options.restoreHistory) {
-        const messages = await this.storage.getMessages(sessionId);
+        const messages = await this.storage.getMessages(sessionId, options);
         if (messages.length > 0) {
           const items = messages
             .filter((msg) => msg.role === 'user' || msg.role === 'assistant')
@@ -147,13 +135,22 @@ export class SessionManager {
               const text = String(msg.content?.text || '').trim();
               if (!text) return null;
               return msg.role === 'assistant'
-                ? { role: 'assistant', content: text }
-                : { role: 'user', content: text };
+                ? {
+                  type: 'message',
+                  role: 'assistant',
+                  content: [{ type: 'output_text', text }],
+                  status: 'completed',
+                }
+                : {
+                  type: 'message',
+                  role: 'user',
+                  content: [{ type: 'input_text', text }],
+                };
             })
             .filter(Boolean);
 
           if (items.length > 0) {
-            session.addItems(items);
+            await session.addItems(items);
           }
         }
       }

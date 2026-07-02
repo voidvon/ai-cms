@@ -1,5 +1,6 @@
 import { runAiAgent } from '../runtime.mjs';
 import { composeMiddlewares } from './middleware.mjs';
+import { appendAiConversationMessage, touchAiConversation } from '../conversations.mjs';
 
 /**
  * AI 编排器 - 统一管理能力、工具、会话和中间件
@@ -57,14 +58,15 @@ export class AiOrchestrator {
       throw error;
     }
 
-    // 5. 获取或创建会话
-    const session = await this.sessionManager.getOrCreate(conversationId, {
-      restoreHistory: true,
-    });
-
-    // 6. 增强上下文
+    // 5. 增强上下文
     const enhancedContext = await capability.enhanceContext(context);
     enhancedContext.capability = capability;
+
+    // 6. 获取或创建会话
+    const session = await this.sessionManager.getOrCreate(conversationId, {
+      restoreHistory: true,
+      user: enhancedContext.user,
+    });
 
     // 7. 选择工具
     const toolNames = await capability.selectTools(enhancedContext);
@@ -124,12 +126,23 @@ export class AiOrchestrator {
     // 12. 保存会话
     await this.sessionManager.save(conversationId, session);
 
-    // 13. 持久化消息（如果存储支持）
-    if (typeof this.sessionManager.saveMessage === 'function') {
-      await this.sessionManager.saveMessage(conversationId, {
+    // 13. 持久化用户消息
+    if (enhancedContext.user) {
+      touchAiConversation(conversationId, {
+        user: enhancedContext.user,
+        title: message,
+        capability: capability.key,
+        selectedToolNames,
+      });
+      appendAiConversationMessage(conversationId, {
         role: 'user',
         content: { text: message },
-      });
+        metadata: {
+          capability: capability.key,
+          toolNames: selectedToolNames,
+          mentions: enhancedContext.mentions || [],
+        },
+      }, { user: enhancedContext.user });
     }
 
     return {

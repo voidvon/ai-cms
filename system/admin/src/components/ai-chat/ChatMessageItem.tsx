@@ -85,14 +85,13 @@ export function ChatMessageItem({
 
   return (
     <Message from={role}>
-      <div className="mb-1 text-[11px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-        {getRoleLabel(role)}
-      </div>
       <MessageContent
         className={
           error
             ? "rounded-2xl border border-destructive/40 bg-destructive/5 px-4 py-3 text-destructive shadow-sm"
-            : "rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm group-[.is-user]:border-transparent group-[.is-user]:bg-primary group-[.is-user]:text-primary-foreground"
+            : isAssistant
+              ? "w-full bg-transparent px-0 py-0 shadow-none"
+            : "rounded-2xl border border-border/60 bg-background px-4 py-3 shadow-sm group-[.is-user]:!rounded-3xl group-[.is-user]:border-0 group-[.is-user]:bg-muted/60 group-[.is-user]:text-foreground group-[.is-user]:shadow-none"
         }
       >
         {shouldShowPending ? (
@@ -102,7 +101,12 @@ export function ChatMessageItem({
         ) : error ? (
           <MessageResponse>{normalizedText}</MessageResponse>
         ) : isAssistant ? (
-          <AnimatedMessageResponse animate={streaming} text={normalizedText} />
+          <MessageResponse
+            isAnimating={streaming}
+            mode={streaming ? "streaming" : "static"}
+          >
+            {normalizedText}
+          </MessageResponse>
         ) : displayParts.length > 0 ? (
           <ReadonlyMessageParts parts={displayParts} fallbackText={normalizedText} />
         ) : (

@@ -15,6 +15,7 @@ Do not expose arbitrary SQL or unrestricted database access to the model.
 | `query_columns` | read | `read:content` | `columns` + translations | `/ai` |
 | `query_content_items` | read | `read:content` | managed content tables | `/ai` |
 | `price_lookup` | read | `read:prices` | stub price catalog | `/ai`, 文档工作台 |
+| `fetch_url` | read | `read:web` | public web URL | `/ai` |
 | `query_news` | read | `read:all` | `news` table | not in `/ai` whitelist |
 | `query_contacts` | read | `read:all` | `contacts` table | not in `/ai` whitelist |
 | `query_product_categories` | read | none | product column tree | not in `/ai` whitelist |
@@ -35,6 +36,7 @@ Do not expose arbitrary SQL or unrestricted database access to the model.
 - `write:products` -> `03`
 - `read:prices` -> `03`
 - `write:prices` -> `03`
+- `read:web` -> `03`
 - `read:documents` -> `03`
 - `write:documents` -> `03`
 - `read:all` -> `10`

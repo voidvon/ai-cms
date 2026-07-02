@@ -8,10 +8,10 @@ import { capabilityRegistry } from '../core/capability-registry.mjs';
 export const generalChatCapability = {
   key: 'general_chat',
   label: '通用对话',
-  description: '支持多轮对话、栏目内容查询、价格查询的 AI 助手',
+  description: '支持多轮对话、栏目内容查询、价格查询和公开网页读取的 AI 助手',
   icon: '💬',
   category: 'general',
-  visibleToolNames: ['query_columns', 'query_content_items', 'price_lookup'],
+  visibleToolNames: ['query_columns', 'query_content_items', 'price_lookup', 'fetch_url'],
 
   // 匹配器：作为 fallback 能力，优先级最低
   matcher: {
@@ -26,10 +26,11 @@ export const generalChatCapability = {
       instructions:
         instructions ||
         [
-          '你是后台里的 AI 助手，当前主要职责是查询栏目内容和价格信息。',
+          '你是后台里的 AI 助手，当前主要职责是查询栏目内容、价格信息，并读取用户给出的公开网页。',
           '你可以回答一般问题，但涉及系统数据时只围绕栏目、内容和价格三个方向工作。',
           '当用户询问站内内容时，优先调用 query_columns 和 query_content_items 工具查询栏目与内容。',
           '如果用户提到价格，可以使用 price_lookup 工具获取报价。',
+          '如果用户提供公开 http/https 网址并要求查看、总结或提取信息，使用 fetch_url 工具读取网页。',
           '如果用户请求联系方式、分类列表、新闻文章或其他未接入工具的数据，要明确说明当前入口暂不支持。',
           '保持友好、专业的语气，给出简洁明了的回复。',
         ].join('\n'),
@@ -52,6 +53,10 @@ export const generalChatCapability = {
       tools.push('price_lookup');
     }
 
+    if (hasPublicUrl(message)) {
+      tools.push('fetch_url');
+    }
+
     return tools;
   },
 
@@ -69,7 +74,7 @@ export const generalChatCapability = {
   // 构建动态指令
   buildInstructions: (context) => {
     const parts = [
-      '你是后台里的 AI 助手，当前主要职责是查询栏目内容和价格信息。',
+      '你是后台里的 AI 助手，当前主要职责是查询栏目内容、价格信息，并读取用户给出的公开网页。',
     ];
 
     // 根据用户权限调整指令
@@ -97,6 +102,19 @@ export const generalChatCapability = {
       parts.push(`用户本轮明确引用了这些站内实体：${mentionSummary}。请优先围绕这些真实数据回答。`);
     }
 
+    if (Array.isArray(context.webPages) && context.webPages.length > 0) {
+      const webPageContext = context.webPages
+        .map((page, index) => formatWebPageContext(page, index + 1))
+        .filter(Boolean)
+        .join('\n\n');
+      if (webPageContext) {
+        parts.push([
+          '用户本轮提供的网址已由系统预读取，下面是网页材料。回答时优先基于这些材料，不要再声称无法访问该网址。',
+          webPageContext,
+        ].join('\n'));
+      }
+    }
+
     // 根据对话历史调整指令
     if (context.conversationHistory?.topics) {
       const topics = context.conversationHistory.topics;
@@ -108,7 +126,8 @@ export const generalChatCapability = {
       }
     }
 
-    parts.push('当前入口以栏目和内容查询为主，不提供联系方式等其他未接入工具。');
+    parts.push('当用户提供公开网址并要求查看网页内容时，优先使用 fetch_url；不要声称已浏览未通过工具读取的网址。');
+    parts.push('当前入口以栏目、内容、价格和公开网页读取为主，不提供联系方式等其他未接入工具。');
     parts.push('保持友好、专业的语气，给出简洁明了的回复。');
 
     return parts.join('\n');
@@ -126,6 +145,25 @@ export const generalChatCapability = {
  */
 function hasKeywords(message, keywords) {
   return keywords.some((keyword) => message.includes(keyword));
+}
+
+function hasPublicUrl(message) {
+  return /https?:\/\/[^\s<>"']+/i.test(String(message || ''));
+}
+
+function formatWebPageContext(page, index) {
+  if (page?.error) {
+    return `网页 ${index}: ${page.url}\n读取失败: ${page.error}`;
+  }
+
+  const parts = [
+    `网页 ${index}: ${page.final_url || page.url}`,
+    page.title ? `标题: ${page.title}` : '',
+    page.description ? `描述: ${page.description}` : '',
+    page.text ? `正文摘录: ${String(page.text).slice(0, 5000)}` : '',
+  ].filter(Boolean);
+
+  return parts.join('\n');
 }
 
 /**

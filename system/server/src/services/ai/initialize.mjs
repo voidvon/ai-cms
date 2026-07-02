@@ -18,6 +18,7 @@ import {
 } from './core/index.mjs';
 import { registerAllTools } from './tools/index.mjs';
 import { registerAllCapabilities } from './capabilities/index.mjs';
+import { ensureAiConversationsSchema } from './conversations.mjs';
 
 let orchestrator = null;
 let isInitialized = false;
@@ -37,19 +38,22 @@ export function initializeAiService(options = {}) {
   // 2. 注册所有能力
   registerAllCapabilities();
 
-  // 3. 设置上下文构建器
+  // 3. 初始化 AI 会话表
+  ensureAiConversationsSchema();
+
+  // 4. 设置上下文构建器
   const db = getDb();
   contextBuilder.addProvider(new UserContextProvider(db));
   contextBuilder.addProvider(new ConversationHistoryProvider(db));
   contextBuilder.addProvider(new BusinessDataProvider(db));
 
-  // 4. 创建会话管理器
+  // 5. 创建会话管理器
   const sessionStorage = options.useDatabase
     ? new DatabaseSessionStorage(db)
     : new MemorySessionStorage();
   const sessionManager = new SessionManager(sessionStorage);
 
-  // 5. 设置中间件
+  // 6. 设置中间件
   const middlewares = [
     errorHandlerMiddleware(),
     auditMiddleware({ verbose: options.verbose || false }),
@@ -58,7 +62,7 @@ export function initializeAiService(options = {}) {
     rateLimitMiddleware({ maxRequests: 20, windowMs: 60000 }),
   ];
 
-  // 6. 创建编排器
+  // 7. 创建编排器
   orchestrator = new AiOrchestrator({
     sessionManager,
     capabilityRegistry,

@@ -6,6 +6,16 @@ import { getAiDataSourceStatus } from '../../services/ai/data-source-registry.mj
 import { searchAiMentions } from '../../services/ai/query-service.mjs';
 import { DEFAULT_MODEL } from '../../services/ai/runtime.mjs';
 import { executeContractTask } from '../../services/ai/skills/contract.mjs';
+import { fetchUrlForAi } from '../../services/ai/web-fetch.mjs';
+import {
+  appendAiConversationMessage,
+  createAiConversation,
+  deleteAiConversation,
+  getAiConversationById,
+  listAiConversationMessages,
+  listAiConversations,
+  updateAiConversation,
+} from '../../services/ai/conversations.mjs';
 
 async function parseBody(request) {
   if (request.body && typeof request.body === 'object') {
@@ -70,7 +80,119 @@ function formatAiError(error) {
   return `AI 服务请求失败：${message}`;
 }
 
+const PUBLIC_URL_PATTERN = /https?:\/\/[^\s<>"'，。；、]+/gi;
+
+async function fetchReferencedWebPages(messageText) {
+  const urls = Array.from(new Set(String(messageText || '').match(PUBLIC_URL_PATTERN) || [])).slice(0, 2);
+  if (urls.length === 0) {
+    return [];
+  }
+
+  const pages = [];
+  for (const url of urls) {
+    try {
+      const page = await fetchUrlForAi({ url, maxTextChars: 8000 });
+      pages.push({
+        url: page.url,
+        final_url: page.final_url,
+        status: page.status,
+        title: page.title,
+        description: page.description,
+        text: page.text,
+        links: page.links,
+        truncated: page.truncated,
+      });
+    } catch (error) {
+      pages.push({
+        url,
+        error: error.message || '网页读取失败',
+      });
+    }
+  }
+
+  return pages;
+}
+
 export default async function aiRoutes(app) {
+  app.get('/ai/conversations', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      return {
+        success: true,
+        data: listAiConversations({
+          user: request.adminUser,
+          limit: request.query?.limit,
+        }),
+      };
+    } catch (error) {
+      reply.code(error.statusCode || 400);
+      return { success: false, message: error.message || '获取 AI 会话失败' };
+    }
+  });
+
+  app.post('/ai/conversations', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      const conversation = createAiConversation(request.body || {}, { user: request.adminUser });
+      return { success: true, data: conversation };
+    } catch (error) {
+      reply.code(error.statusCode || 400);
+      return { success: false, message: error.message || '创建 AI 会话失败' };
+    }
+  });
+
+  app.get('/ai/conversations/:id', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    const conversation = getAiConversationById(request.params.id, { user: request.adminUser });
+    if (!conversation) {
+      reply.code(404);
+      return { success: false, message: 'AI 会话不存在' };
+    }
+    return { success: true, data: conversation };
+  });
+
+  app.patch('/ai/conversations/:id', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    const conversation = updateAiConversation(request.params.id, request.body || {}, { user: request.adminUser });
+    if (!conversation) {
+      reply.code(404);
+      return { success: false, message: 'AI 会话不存在' };
+    }
+    return { success: true, data: conversation };
+  });
+
+  app.delete('/ai/conversations/:id', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    const deleted = deleteAiConversation(request.params.id, { user: request.adminUser });
+    if (!deleted) {
+      reply.code(404);
+      return { success: false, message: 'AI 会话不存在' };
+    }
+    return { success: true, data: { deleted: true, id: request.params.id } };
+  });
+
+  app.get('/ai/conversations/:id/messages', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      return {
+        success: true,
+        data: listAiConversationMessages(request.params.id, {
+          user: request.adminUser,
+          limit: request.query?.limit,
+        }),
+      };
+    } catch (error) {
+      reply.code(error.statusCode || 400);
+      return { success: false, message: error.message || '获取 AI 会话消息失败' };
+    }
+  });
+
   // 获取可用能力列表
   app.get('/ai/capabilities', {
     onRequest: [requireAuth],
@@ -161,6 +283,7 @@ export default async function aiRoutes(app) {
             'write:products': ['03'],
             'read:prices': ['03'],
             'write:prices': ['03'],
+            'read:web': ['03'],
             'read:documents': ['03'],
             'write:documents': ['03'],
             'read:all': ['10'],
@@ -268,6 +391,7 @@ export default async function aiRoutes(app) {
     return sendAssistantStreamingTextStream(reply, messages, async (writeDelta) => {
       try {
         const orchestrator = getAiOrchestrator();
+        const webPages = await fetchReferencedWebPages(messageText);
 
         const streamed = await orchestrator.chat({
           conversationId,
@@ -280,11 +404,13 @@ export default async function aiRoutes(app) {
           toolMode,
           additionalContext: {
             mentions,
+            webPages,
           },
         });
 
         const reader = streamed.result.toTextStream().getReader();
         let hasDelta = false;
+        let assistantText = '';
 
         try {
           while (true) {
@@ -299,6 +425,7 @@ export default async function aiRoutes(app) {
             }
 
             hasDelta = true;
+            assistantText += delta;
             writeDelta(delta);
           }
         } finally {
@@ -309,7 +436,20 @@ export default async function aiRoutes(app) {
 
         if (!hasDelta) {
           const finalText = String(streamed.result.finalOutput || '').trim();
+          assistantText = finalText || '我已收到你的请求，但当前没有生成有效回复。';
           writeDelta(finalText || '我已收到你的请求，但当前没有生成有效回复。');
+        }
+
+        const normalizedAssistantText = String(assistantText || '').trim();
+        if (normalizedAssistantText) {
+          appendAiConversationMessage(conversationId, {
+            role: 'assistant',
+            content: { text: normalizedAssistantText },
+            metadata: {
+              capability: streamed.capability,
+              toolNames: streamed.tool_names || [],
+            },
+          }, { user: request.adminUser });
         }
       } catch (error) {
         console.error('AI chat error:', error);

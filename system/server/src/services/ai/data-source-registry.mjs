@@ -48,6 +48,13 @@ export function getAiDataSourceStatus() {
       available: true,
       dependencies: [],
     },
+    public_web_url: {
+      key: 'public_web_url',
+      label: '公开网页读取',
+      kind: 'external_http',
+      available: true,
+      dependencies: [],
+    },
     document_drafts: {
       key: 'document_drafts',
       label: '文档草稿',

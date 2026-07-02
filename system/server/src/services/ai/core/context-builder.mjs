@@ -1,5 +1,6 @@
 import { hasAiPermissions } from './permissions.mjs';
 import { getAiContentStats } from '../query-service.mjs';
+import { listAiConversationMessages } from '../conversations.mjs';
 
 /**
  * 上下文提供者接口
@@ -146,7 +147,7 @@ export class ConversationHistoryProvider extends ContextProvider {
 
     try {
       // 尝试从数据库加载历史消息
-      const messages = this.loadMessages(context.conversationId);
+      const messages = this.loadMessages(context.conversationId, context.user);
 
       return {
         ...context,
@@ -162,25 +163,23 @@ export class ConversationHistoryProvider extends ContextProvider {
     }
   }
 
-  loadMessages(conversationId) {
+  loadMessages(conversationId, user) {
     try {
-      const rows = this.db
-        .prepare(
-          `SELECT role, content, created_at
-           FROM ai_conversation_messages
-           WHERE conversation_id = ?
-           ORDER BY created_at ASC
-           LIMIT 50`
-        )
-        .all(conversationId);
+      const userId = Number.parseInt(String(user?.id || ''), 10);
+      if (!Number.isFinite(userId) || userId <= 0) {
+        return [];
+      }
 
-      return rows.map((row) => ({
+      return listAiConversationMessages(conversationId, {
+        user,
+        limit: 50,
+      }).map((row) => ({
         role: row.role,
-        content: typeof row.content === 'string' ? JSON.parse(row.content) : row.content,
+        content: row.content,
         created_at: row.created_at,
       }));
     } catch (error) {
-      console.warn('Table ai_conversation_messages may not exist:', error);
+      console.error('Failed to load conversation history:', error);
       return [];
     }
   }

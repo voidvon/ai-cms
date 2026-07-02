@@ -5,6 +5,7 @@ const PERMISSION_ALIAS_MAP = {
   'write:products': ['03'],
   'read:prices': ['03'],
   'write:prices': ['03'],
+  'read:web': ['03'],
   'read:documents': ['03'],
   'write:documents': ['03'],
   'read:all': ['10'],

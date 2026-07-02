@@ -25,7 +25,7 @@ ensureAccessLogsSchema();
 // 初始化 AI 服务
 try {
   initializeAiService({
-    useDatabase: false, // 使用内存存储，生产环境可改为 true
+    useDatabase: true,
     verbose: process.env.NODE_ENV === 'development',
   });
 } catch (error) {

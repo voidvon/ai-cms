@@ -604,7 +604,47 @@ export interface AiToolDefinition {
   category: string;
   requiresAuth: boolean;
   requiredPermissions: string[];
+  accessLevel?: string;
+  dataSources?: string[];
+  enabled?: boolean;
 }
+
+export interface AiConversationRecord {
+  id: string;
+  user_id: number;
+  title: string;
+  capability: string;
+  selected_tool_names: string[];
+  selected_tool_names_json?: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  deleted_at?: string | null;
+}
+
+export interface AiConversationMessageRecord {
+  id: number;
+  conversation_id: string;
+  user_id: number;
+  role: 'user' | 'assistant' | 'system' | 'tool';
+  content: {
+    text?: string;
+    [key: string]: unknown;
+  };
+  metadata: {
+    displayParts?: AiConversationDisplayPart[];
+    mentions?: AiMentionItem[];
+    toolNames?: string[];
+    capability?: string;
+    [key: string]: unknown;
+  };
+  created_at: string;
+}
+
+export type AiConversationDisplayPart =
+  | { type: 'text'; text: string }
+  | { type: 'mention'; mention: AiMentionItem }
+  | { type: 'tool'; name: string; category?: string };
 
 export interface AiMentionItem {
   type: 'column' | 'content';

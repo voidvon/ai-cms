@@ -1,6 +1,8 @@
 import apiClient from './client'
 import type {
   AiCapabilities,
+  AiConversationMessageRecord,
+  AiConversationRecord,
   AiMentionItem,
   AiContractDraftPayload,
   AiKnowledgePayload,
@@ -11,6 +13,44 @@ import type {
 } from '@/types'
 
 export const aiApi = {
+  listConversations: async (limit = 20) => {
+    const response = await apiClient.get<ApiResponse<AiConversationRecord[]>>('/ai/conversations', {
+      params: { limit },
+    })
+    return response.data
+  },
+
+  createConversation: async (data: {
+    id?: string
+    title?: string
+    capability?: string
+    selectedToolNames?: string[]
+  }) => {
+    const response = await apiClient.post<ApiResponse<AiConversationRecord>>('/ai/conversations', data)
+    return response.data
+  },
+
+  updateConversation: async (id: string, data: {
+    title?: string
+    capability?: string
+    selectedToolNames?: string[]
+  }) => {
+    const response = await apiClient.patch<ApiResponse<AiConversationRecord>>(`/ai/conversations/${encodeURIComponent(id)}`, data)
+    return response.data
+  },
+
+  deleteConversation: async (id: string) => {
+    const response = await apiClient.delete<ApiResponse<{ deleted: boolean; id: string }>>(`/ai/conversations/${encodeURIComponent(id)}`)
+    return response.data
+  },
+
+  listConversationMessages: async (id: string, limit = 100) => {
+    const response = await apiClient.get<ApiResponse<AiConversationMessageRecord[]>>(`/ai/conversations/${encodeURIComponent(id)}/messages`, {
+      params: { limit },
+    })
+    return response.data
+  },
+
   capabilities: async () => {
     const response = await apiClient.get<ApiResponse<AiCapabilities>>('/ai/capabilities')
     return response.data
