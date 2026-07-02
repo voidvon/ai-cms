@@ -3,7 +3,7 @@ import { toolRegistry } from '../core/tool-registry.mjs';
 import { listModelColumns } from '../../columns.mjs';
 import { isAiDataSourceAvailable } from '../data-source-registry.mjs';
 import { queryColumnsForAi, queryContactsForAi, queryContentItemsForAi, queryNewsForAi } from '../query-service.mjs';
-import { getAiContentItemTranslationContext } from '../mention-context.mjs';
+import { getAiContentItemTranslationContext, updateAiContentItemTranslationTitle } from '../mention-context.mjs';
 
 /**
  * 注册所有数据库查询工具到全局工具注册中心
@@ -83,6 +83,32 @@ export function registerDatabaseTools() {
         modelCode: model_code,
         id,
         languageCode: language_code,
+      });
+    },
+  });
+
+  toolRegistry.register({
+    name: 'update_content_item_translation_title',
+    description: '修改指定内容项在指定数据库语言版本中的标题/name。只用于用户明确要求修改标题时，不修改正文、SEO 或其他字段。',
+    category: 'database',
+    requiresAuth: true,
+    accessLevel: 'write',
+    requiredPermissions: ['write:content'],
+    dataSources: ['managed_content'],
+    isEnabled: () => isAiDataSourceAvailable('managed_content'),
+    parameters: z.object({
+      model_code: z.string().min(1).describe('内容模型编码，例如 product 或 news'),
+      id: z.number().int().positive().describe('内容 ID'),
+      language_code: z.string().min(1).describe('数据库 languages 表中的语言 code/name/native_name；无法确定时先询问用户，不要猜测'),
+      title: z.string().min(1).describe('新的标题/name'),
+    }),
+    async execute({ model_code, id, language_code, title }, context) {
+      return updateAiContentItemTranslationTitle({
+        user: context.user,
+        modelCode: model_code,
+        id,
+        languageCode: language_code,
+        title,
       });
     },
   });

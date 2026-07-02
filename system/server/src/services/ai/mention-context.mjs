@@ -1,8 +1,8 @@
 import { getColumnById, listColumns } from '../columns.mjs';
 import { buildColumnSlugPath, buildContentDetailUrlFromColumn } from '../column-paths.mjs';
-import { getContentItemById } from '../content-items.mjs';
+import { getContentItemById, updateContentItem } from '../content-items.mjs';
 import { getContentModelByCode } from '../content-models.mjs';
-import { getDefaultLanguage } from '../languages.mjs';
+import { getDefaultLanguage, listLanguages } from '../languages.mjs';
 import { assertAiServicePermission } from './query-service.mjs';
 
 const TEXT_FIELD_LIMITS = {
@@ -84,6 +84,88 @@ export function getAiContentItemTranslationContext({
     },
     languageCode: normalizedLanguageCode,
   });
+}
+
+export function updateAiContentItemTranslationTitle({
+  user,
+  modelCode,
+  id,
+  languageCode = '',
+  title,
+} = {}) {
+  assertAiServicePermission(user, ['write:content']);
+
+  const normalizedModelCode = String(modelCode || '').trim();
+  const safeId = Number.parseInt(String(id || ''), 10);
+  const normalizedTitle = String(title || '').trim();
+  const resolvedLanguageCode = resolveAiLanguageCode(languageCode);
+
+  if (!normalizedModelCode) {
+    const error = new Error('缺少内容模型编码');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!Number.isFinite(safeId) || safeId <= 0) {
+    const error = new Error('缺少内容 ID');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!resolvedLanguageCode) {
+    const error = new Error('缺少语言编码');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!normalizedTitle) {
+    const error = new Error('标题不能为空');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const existing = getContentItemById(normalizedModelCode, safeId, {
+    languageCode: resolvedLanguageCode,
+    includeTranslations: true,
+    includeTranslationStatuses: true,
+  });
+  if (!existing) {
+    const error = new Error('内容不存在');
+    error.statusCode = 404;
+    throw error;
+  }
+
+  const previousTitle = String(
+    existing.translations?.[resolvedLanguageCode]?.name
+    || existing.translations?.[resolvedLanguageCode]?.title
+    || existing.name
+    || ''
+  ).trim();
+
+  const updated = updateContentItem(normalizedModelCode, safeId, {
+    base: {
+      column_id: existing.column_id,
+    },
+    translations: {
+      [resolvedLanguageCode]: {
+        name: normalizedTitle,
+      },
+    },
+  });
+
+  return {
+    updated: true,
+    model_code: normalizedModelCode,
+    id: safeId,
+    language_code: resolvedLanguageCode,
+    previous_title: previousTitle,
+    title: normalizedTitle,
+    item: buildAiMentionContentItemContext({
+      mention: {
+        type: 'content',
+        id: safeId,
+        model_code: normalizedModelCode,
+      },
+      languageCode: resolvedLanguageCode,
+    }) || updated,
+  };
 }
 
 function buildAiMentionContentItemContext({ mention, languageCode }) {
@@ -234,4 +316,32 @@ function stripHtml(value) {
     .replace(/&#39;/gi, "'")
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function resolveAiLanguageCode(value) {
+  const languages = listLanguages();
+  const defaultLanguage = getDefaultLanguage() || languages[0] || null;
+  const raw = String(value || '').trim();
+  if (!raw) {
+    return defaultLanguage?.code || '';
+  }
+
+  const normalized = raw.toLowerCase();
+  const exact = languages.find((language) => String(language.code || '').toLowerCase() === normalized);
+  if (exact) {
+    return exact.code;
+  }
+
+  const byName = languages.find((language) => {
+    const name = String(language.name || '').toLowerCase();
+    const nativeName = String(language.native_name || '').toLowerCase();
+    return name === normalized || nativeName === normalized;
+  });
+  if (byName) {
+    return byName.code;
+  }
+
+  const error = new Error(`语言不存在：${raw}。可用语言：${languages.map((language) => `${language.code}(${language.name || language.native_name || ''})`).join(', ')}`);
+  error.statusCode = 400;
+  throw error;
 }
