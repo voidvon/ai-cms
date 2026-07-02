@@ -148,6 +148,8 @@ export default function DashboardLayout() {
     return String(getCurrentPageTitle()).trim() || '管理后台'
   }, [location.pathname])
 
+  const isMainPaddingDisabledByRoute = location.pathname === '/ai'
+
   const currentDocumentTitle = useMemo(() => {
     return String(documentTitleOverride || routeTitle).trim() || '管理后台'
   }, [documentTitleOverride, routeTitle])
@@ -269,16 +271,20 @@ export default function DashboardLayout() {
           </Breadcrumb>
           <div ref={setHeaderSlotElement} className="min-w-0 flex-1" />
         </header>
-        <main className={`flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto ${hasMainContentPadding ? 'p-4' : 'p-0'}`}>
-          <div className="min-h-0 flex-1">
-            <Outlet
-              context={{
-                headerSlotElement,
-                setDocumentTitle: setDocumentTitleOverride,
-                setMainContentPadding: setHasMainContentPadding,
-              }}
-            />
-          </div>
+        <main
+          className={`flex min-h-0 flex-1 flex-col ${
+            isMainPaddingDisabledByRoute ? 'overflow-hidden' : 'overflow-y-auto'
+          } ${
+            !isMainPaddingDisabledByRoute && hasMainContentPadding ? 'p-4' : 'p-0'
+          }`}
+        >
+          <Outlet
+            context={{
+              headerSlotElement,
+              setDocumentTitle: setDocumentTitleOverride,
+              setMainContentPadding: setHasMainContentPadding,
+            }}
+          />
         </main>
       </SidebarInset>
     </SidebarProvider>

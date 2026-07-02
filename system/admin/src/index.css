@@ -132,4 +132,82 @@
   .dark .rich-text-editor .ql-toolbar {
     @apply bg-muted/20;
   }
+
+  .ai-conversation-tiptap .tiptap {
+    min-height: 64px;
+    padding: 1.1rem 4.25rem 1.1rem 1.25rem;
+    font-size: 14px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .ai-conversation-tiptap .tiptap p.is-editor-empty:first-child::before {
+    content: attr(data-placeholder);
+    float: left;
+    height: 0;
+    pointer-events: none;
+    color: hsl(var(--muted-foreground));
+    font-style: normal;
+  }
+
+  .ai-conversation-tiptap .tiptap:focus {
+    outline: none;
+  }
+
+  .ai-conversation-tiptap .tiptap p {
+    margin: 0;
+  }
+
+  .ai-conversation-tiptap .tiptap.ProseMirror {
+    display: flex;
+    align-items: center;
+  }
+
+  .ai-conversation-tiptap .tiptap.ProseMirror p {
+    width: 100%;
+  }
+
+  .ai-conversation-tiptap .ai-mention-chip {
+    display: inline-flex;
+    align-items: center;
+    margin: 0 2px;
+    padding: 0.12rem 0.55rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: 9999px;
+    background: hsl(var(--secondary));
+    color: hsl(var(--secondary-foreground));
+    font-size: 0.85em;
+    line-height: 1.4;
+    user-select: none;
+    cursor: pointer;
+  }
+
+  .ai-conversation-tiptap .ai-tool-chip {
+    display: inline-flex;
+    align-items: center;
+    margin: 0 2px;
+    padding: 0.12rem 0.55rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: 9999px;
+    background: hsl(var(--muted));
+    color: hsl(var(--foreground));
+    font-size: 0.85em;
+    line-height: 1.4;
+    user-select: none;
+    cursor: pointer;
+  }
+
+  .ai-conversation-tiptap .ProseMirror-selectednode.ai-mention-chip,
+  .ai-conversation-tiptap .ProseMirror-selectednode.ai-tool-chip,
+  .ai-conversation-tiptap .ai-mention-chip[data-selected='true'] {
+    border-color: hsl(var(--ring));
+    background: hsl(var(--accent));
+    color: hsl(var(--accent-foreground));
+    box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2);
+  }
+
+  .ai-conversation-tiptap .tiptap:focus-visible {
+    outline: none;
+  }
 }

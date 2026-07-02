@@ -606,6 +606,18 @@ export interface AiToolDefinition {
   requiredPermissions: string[];
 }
 
+export interface AiMentionItem {
+  type: 'column' | 'content';
+  id: number;
+  title: string;
+  subtitle?: string;
+  model_code?: string;
+  column_id?: number | null;
+  column_name?: string;
+  code?: string;
+  summary?: string;
+}
+
 export interface AiTaskResult {
   task: string;
   status: 'stub' | 'ready' | string;

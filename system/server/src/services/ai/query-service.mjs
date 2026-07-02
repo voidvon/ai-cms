@@ -1,6 +1,6 @@
 import { getColumnById, listColumns } from '../columns.mjs';
 import { buildColumnTreeIndex, getDescendantColumnIds, isColumnUnderRoot } from '../column-tree.mjs';
-import { listContentItems, listContentItemsAdmin } from '../content-items.mjs';
+import { listContentItems, listContentItemsAdmin, searchContentItemsPaged } from '../content-items.mjs';
 import { getDb } from '../../db.mjs';
 import { hasAiPermissions } from './core/permissions.mjs';
 
@@ -171,6 +171,93 @@ export function queryContentItemsForAi({
   };
 }
 
+export function searchAiMentions({
+  user,
+  keyword,
+  limit = 8,
+} = {}) {
+  assertAiServicePermission(user, ['read:content']);
+
+  const normalizedKeyword = String(keyword || '').trim().toLowerCase();
+  const safeLimit = Math.min(Math.max(Number(limit) || 8, 1), 20);
+
+  if (!normalizedKeyword) {
+    return {
+      total: 0,
+      columns_total: 0,
+      content_total: 0,
+      items: [],
+    };
+  }
+
+  const columns = listColumns({ includeTranslations: true });
+  const matchedColumns = columns
+    .map((column) => {
+      const score = scoreAiMentionColumn(column, normalizedKeyword);
+      if (score <= 0) {
+        return null;
+      }
+
+      return {
+        type: 'column',
+        id: Number(column.id || 0),
+        title: String(column.name || '').trim(),
+        subtitle: buildAiColumnSubtitle(column),
+        column_id: Number(column.id || 0),
+        column_name: String(column.name || '').trim(),
+        model_code: String(column.model_code || '').trim(),
+        summary: String(column.summary || '').trim(),
+        route_path: String(column.route_path || '').trim(),
+        score,
+      };
+    })
+    .filter(Boolean)
+    .sort(compareAiMentionItems)
+    .slice(0, safeLimit);
+
+  const modelCodes = Array.from(new Set(
+    columns
+      .map((column) => String(column.model_code || '').trim())
+      .filter(Boolean)
+  ));
+
+  const matchedContentItems = modelCodes
+    .flatMap((modelCode) => {
+      const page = searchContentItemsPaged(modelCode, normalizedKeyword, {
+        page: 1,
+        limit: Math.min(safeLimit * 2, 20),
+        visibleOnly: true,
+      });
+
+      return page.items.map((item) => ({
+        type: 'content',
+        id: Number(item.id || 0),
+        title: String(item.name || '').trim(),
+        subtitle: buildAiContentSubtitle(item, modelCode),
+        model_code: modelCode,
+        column_id: Number(item.column_id || 0) || null,
+        column_name: String(item.column_name || '').trim(),
+        code: String(item.code || '').trim(),
+        summary: String(item.search_excerpt || item.summary || '').trim(),
+        score: Number(item.search_score || 0),
+      }));
+    })
+    .filter((item) => item.score > 0)
+    .sort(compareAiMentionItems)
+    .slice(0, safeLimit);
+
+  const items = [...matchedContentItems, ...matchedColumns]
+    .sort(compareAiMentionItems)
+    .slice(0, safeLimit);
+
+  return {
+    total: items.length,
+    columns_total: matchedColumns.length,
+    content_total: matchedContentItems.length,
+    items,
+  };
+}
+
 export function getAiContentStats({ user, rootColumnId = null, modelCode = '' } = {}) {
   assertAiServicePermission(user, ['read:content']);
 
@@ -322,4 +409,76 @@ function estimateStubUnitPrice(sku, quantity, region) {
   const regionFactor = String(region).toUpperCase() === 'CN' ? 1 : 1.15;
   const quantityFactor = quantity >= 10 ? 0.92 : quantity >= 5 ? 0.96 : 1;
   return Number((base * regionFactor * quantityFactor).toFixed(2));
+}
+
+function buildAiColumnSubtitle(column) {
+  const parts = [];
+  if (column.model_code) {
+    parts.push(`模型 ${column.model_code}`);
+  }
+  if (column.route_path) {
+    parts.push(column.route_path);
+  } else if (column.dir_name) {
+    parts.push(column.dir_name);
+  }
+  return parts.join(' · ');
+}
+
+function buildAiContentSubtitle(item, modelCode) {
+  const parts = [];
+  if (item.column_name) {
+    parts.push(String(item.column_name).trim());
+  }
+  if (modelCode) {
+    parts.push(`模型 ${modelCode}`);
+  }
+  if (item.code) {
+    parts.push(`编号 ${String(item.code).trim()}`);
+  }
+  return parts.join(' · ');
+}
+
+function scoreAiMentionColumn(column, normalizedKeyword) {
+  const fields = [
+    { value: column.name, weight: 240 },
+    { value: column.summary, weight: 100 },
+    { value: column.model_code, weight: 80 },
+    { value: column.route_path, weight: 60 },
+    { value: column.dir_name, weight: 50 },
+  ];
+
+  let score = 0;
+  for (const field of fields) {
+    score += scoreAiMentionText(field.value, normalizedKeyword, field.weight);
+  }
+  return score;
+}
+
+function scoreAiMentionText(value, normalizedKeyword, weight) {
+  const normalizedValue = String(value || '').trim().toLowerCase();
+  if (!normalizedValue) {
+    return 0;
+  }
+
+  const index = normalizedValue.indexOf(normalizedKeyword);
+  if (index === -1) {
+    return 0;
+  }
+
+  if (normalizedValue === normalizedKeyword) {
+    return weight + 120;
+  }
+  if (normalizedValue.startsWith(normalizedKeyword)) {
+    return weight + 60;
+  }
+  return Math.max(weight - Math.min(index, 40), 1);
+}
+
+function compareAiMentionItems(left, right) {
+  const scoreDiff = Number(right?.score || 0) - Number(left?.score || 0);
+  if (scoreDiff !== 0) {
+    return scoreDiff;
+  }
+
+  return String(left?.title || '').localeCompare(String(right?.title || ''));
 }

@@ -1,6 +1,7 @@
 import apiClient from './client'
 import type {
   AiCapabilities,
+  AiMentionItem,
   AiContractDraftPayload,
   AiKnowledgePayload,
   AiPriceQueryPayload,
@@ -18,6 +19,13 @@ export const aiApi = {
   tools: async (capability?: string) => {
     const response = await apiClient.get<ApiResponse<{ total: number; tools: AiToolDefinition[] }>>('/ai/tools', {
       params: capability ? { capability } : undefined,
+    })
+    return response.data
+  },
+
+  searchMentions: async (q: string, limit = 8) => {
+    const response = await apiClient.get<ApiResponse<{ total: number; items: AiMentionItem[] }>>('/ai/mentions/search', {
+      params: { q, limit },
     })
     return response.data
   },

@@ -21,6 +21,7 @@ import {
   ToolOutput,
 } from "@/components/ai-elements/tool";
 import { AnimatedMessageResponse } from "@/components/ai-chat/AnimatedMessageResponse";
+import type { AiMentionItem } from "@/types";
 import type {
   DynamicToolUIPart,
   SourceDocumentUIPart,
@@ -34,10 +35,23 @@ type ChatMessagePart = UIMessage["parts"][number];
 type ChatToolPart = ToolUIPart | DynamicToolUIPart;
 type ChatSourcePart = SourceUrlUIPart | SourceDocumentUIPart;
 
+export type AiConversationDisplayPart =
+  | { type: "text"; text: string }
+  | { type: "mention"; mention: AiMentionItem }
+  | { type: "tool"; name: string; category?: string };
+
+export type ChatMessageMetadata = {
+  displayParts?: AiConversationDisplayPart[];
+  mentions?: AiMentionItem[];
+  toolNames?: string[];
+};
+
 export type ChatMessageItemProps = {
   role: ChatMessageRole;
   text?: string;
   parts?: ChatMessagePart[];
+  metadata?: ChatMessageMetadata;
+  streaming?: boolean;
   pending?: boolean;
   error?: boolean;
   pendingLabel?: string;
@@ -51,6 +65,8 @@ export function ChatMessageItem({
   role,
   text = "",
   parts = [],
+  metadata,
+  streaming = false,
   pending = false,
   error = false,
   pendingLabel = "AI 正在整理回复...",
@@ -58,6 +74,7 @@ export function ChatMessageItem({
   const normalizedText = String(text || "").trim();
   const isAssistant = role === "assistant";
   const shouldShowPending = isAssistant && pending && !normalizedText;
+  const displayParts = Array.isArray(metadata?.displayParts) ? metadata.displayParts : [];
   const reasoningParts = parts.filter(isChatReasoningPart);
   const toolParts = parts.filter(isChatToolPart);
   const sourceParts = parts.filter(isChatSourcePart);
@@ -85,7 +102,9 @@ export function ChatMessageItem({
         ) : error ? (
           <MessageResponse>{normalizedText}</MessageResponse>
         ) : isAssistant ? (
-          <AnimatedMessageResponse text={normalizedText} />
+          <AnimatedMessageResponse animate={streaming} text={normalizedText} />
+        ) : displayParts.length > 0 ? (
+          <ReadonlyMessageParts parts={displayParts} fallbackText={normalizedText} />
         ) : (
           <AnimatedMessageResponse animate={false} text={normalizedText} />
         )}
@@ -141,6 +160,60 @@ export function ChatMessageItem({
           ))
         : null}
     </Message>
+  );
+}
+
+function ReadonlyMessageParts({
+  parts,
+  fallbackText,
+}: {
+  parts: AiConversationDisplayPart[];
+  fallbackText: string;
+}) {
+  const visibleParts = parts.filter((part) => {
+    if (part.type === "text") {
+      return part.text.length > 0;
+    }
+    if (part.type === "mention") {
+      return Boolean(part.mention?.title);
+    }
+    return Boolean(part.name);
+  });
+
+  if (visibleParts.length === 0) {
+    return <AnimatedMessageResponse animate={false} text={fallbackText} />;
+  }
+
+  return (
+    <div className="whitespace-pre-wrap break-words text-sm leading-7">
+      {visibleParts.map((part, index) => {
+        if (part.type === "text") {
+          return <span key={`text-${index}`}>{part.text}</span>;
+        }
+
+        if (part.type === "mention") {
+          return (
+            <span
+              key={`mention-${part.mention.type}-${part.mention.id}-${index}`}
+              className="mx-0.5 inline-flex max-w-full items-center rounded-full border border-primary-foreground/20 bg-primary-foreground/15 px-2 py-0.5 align-baseline text-xs font-medium text-primary-foreground"
+              title={part.mention.subtitle || part.mention.summary || part.mention.title}
+            >
+              @{part.mention.title}
+            </span>
+          );
+        }
+
+        return (
+          <span
+            key={`tool-${part.name}-${index}`}
+            className="mx-0.5 inline-flex max-w-full items-center rounded-full border border-primary-foreground/20 bg-primary-foreground/15 px-2 py-0.5 align-baseline text-xs font-medium text-primary-foreground"
+            title={part.category || part.name}
+          >
+            /{part.name}
+          </span>
+        );
+      })}
+    </div>
   );
 }
 

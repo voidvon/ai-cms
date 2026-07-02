@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import type { KeyboardEventHandler, ReactNode } from 'react'
 import { Bot, Loader2 } from 'lucide-react'
 import {
   Conversation,
@@ -14,7 +14,7 @@ import {
   PromptInputTextarea,
   PromptInputTools,
 } from '@/components/ai-elements/prompt-input'
-import { ChatMessageItem } from '@/components/ai-chat/ChatMessageItem'
+import { ChatMessageItem, type ChatMessageMetadata } from '@/components/ai-chat/ChatMessageItem'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { UIMessage } from 'ai'
@@ -24,6 +24,8 @@ export interface ChatWorkspaceShellMessage {
   role: 'user' | 'assistant'
   text?: string
   parts?: UIMessage['parts']
+  metadata?: ChatMessageMetadata
+  streaming?: boolean
   pending?: boolean
   error?: boolean
   pendingLabel?: string
@@ -33,6 +35,7 @@ interface ChatWorkspaceShellProps {
   messages: ChatWorkspaceShellMessage[]
   inputValue: string
   onInputChange: (value: string) => void
+  onInputKeyDown?: KeyboardEventHandler<HTMLTextAreaElement>
   onSubmit: () => void
   submitDisabled?: boolean
   submitStatus?: 'ready' | 'submitted'
@@ -47,15 +50,18 @@ interface ChatWorkspaceShellProps {
     tone?: 'default' | 'outline' | 'secondary'
   }>
   composerHint?: ReactNode
+  composer?: ReactNode
   className?: string
   children?: ReactNode
   layout?: 'split' | 'stacked'
+  sidebarPosition?: 'left' | 'right'
 }
 
 export function ChatWorkspaceShell({
   messages,
   inputValue,
   onInputChange,
+  onInputKeyDown,
   onSubmit,
   submitDisabled = false,
   submitStatus = 'ready',
@@ -66,12 +72,21 @@ export function ChatWorkspaceShell({
   footerTools,
   statusBadges = [],
   composerHint,
+  composer,
   className,
   children,
   layout = 'split',
+  sidebarPosition = 'right',
 }: ChatWorkspaceShellProps) {
   const conversationSection = (
-    <section className={cn('flex min-h-0 flex-col', layout === 'split' ? 'border-b lg:border-b-0 lg:border-r' : '')}>
+    <section className={cn(
+      'flex min-h-0 flex-col',
+      layout === 'split'
+        ? sidebarPosition === 'left'
+          ? 'border-b lg:order-2 lg:border-b-0 lg:border-l'
+          : 'border-b lg:border-b-0 lg:border-r'
+        : ''
+    )}>
         <div className="border-b bg-background/95 px-4 py-3 backdrop-blur">
           <div className="flex flex-wrap items-center gap-2">
             {statusBadges.map((badge) => (
@@ -98,6 +113,8 @@ export function ChatWorkspaceShell({
                   role={message.role}
                   text={message.text}
                   parts={message.parts}
+                  metadata={message.metadata}
+                  streaming={message.streaming}
                   pending={message.pending}
                   error={message.error}
                   pendingLabel={message.pendingLabel}
@@ -108,50 +125,76 @@ export function ChatWorkspaceShell({
           <ConversationScrollButton />
         </Conversation>
 
-        <div className="border-t bg-background/95 px-4 py-4 backdrop-blur">
+        <div className="shrink-0 border-t bg-background/95 px-4 py-4 backdrop-blur">
           {children}
-          <PromptInput
-            onSubmit={(event) => {
-              const nextValue = String(event.text || inputValue || '').trim()
-              if (!nextValue || submitDisabled) {
-                return
-              }
-              onSubmit()
-            }}
-          >
-            <PromptInputBody>
-              <PromptInputTextarea
-                value={inputValue}
-                onChange={(event) => onInputChange(event.target.value)}
-                placeholder={placeholder}
-              />
-            </PromptInputBody>
-            <PromptInputFooter>
-              <PromptInputTools>
-                {footerTools || composerHint || null}
-              </PromptInputTools>
-              <PromptInputSubmit disabled={submitDisabled} status={submitStatus}>
-                {submitStatus === 'submitted' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
-              </PromptInputSubmit>
-            </PromptInputFooter>
-          </PromptInput>
-          {composerHint && !footerTools ? (
-            <div className="mt-3 text-xs text-muted-foreground">{composerHint}</div>
-          ) : null}
+          {composer ? (
+            composer
+          ) : (
+            <>
+              <PromptInput
+                onSubmit={(event) => {
+                  const nextValue = String(event.text || inputValue || '').trim()
+                  if (!nextValue || submitDisabled) {
+                    return
+                  }
+                  onSubmit()
+                }}
+              >
+                <PromptInputBody>
+                  <PromptInputTextarea
+                    value={inputValue}
+                    onChange={(event) => onInputChange(event.target.value)}
+                    onKeyDown={onInputKeyDown}
+                    placeholder={placeholder}
+                  />
+                </PromptInputBody>
+                <PromptInputFooter>
+                  <PromptInputTools>
+                    {footerTools || composerHint || null}
+                  </PromptInputTools>
+                  <PromptInputSubmit disabled={submitDisabled} status={submitStatus}>
+                    {submitStatus === 'submitted' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Bot className="h-4 w-4" />}
+                  </PromptInputSubmit>
+                </PromptInputFooter>
+              </PromptInput>
+              {composerHint && !footerTools ? (
+                <div className="mt-3 text-xs text-muted-foreground">{composerHint}</div>
+              ) : null}
+            </>
+          )}
         </div>
       </section>
   )
 
   if (layout === 'stacked') {
-    return <div className={cn('flex h-full min-h-0 flex-col', className)}>{conversationSection}</div>
+    return <div className={cn('flex min-h-0 flex-1 flex-col overflow-hidden', className)}>{conversationSection}</div>
   }
 
   return (
-    <div className={cn('grid h-full min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px]', className)}>
-      {conversationSection}
-      <aside className="min-h-0 border-t bg-background lg:border-t-0">
-        {sidebar}
-      </aside>
+    <div
+      className={cn(
+        'grid h-full min-h-0 flex-1 grid-cols-1 overflow-hidden',
+        sidebarPosition === 'left'
+          ? 'lg:grid-cols-[420px_minmax(0,1fr)]'
+          : 'lg:grid-cols-[minmax(0,1fr)_420px]',
+        className
+      )}
+    >
+      {sidebarPosition === 'left' ? (
+        <>
+          <aside className="min-h-0 overflow-hidden border-t bg-background lg:order-1 lg:border-t-0">
+            {sidebar}
+          </aside>
+          {conversationSection}
+        </>
+      ) : (
+        <>
+          {conversationSection}
+          <aside className="min-h-0 overflow-hidden border-t bg-background lg:border-t-0">
+            {sidebar}
+          </aside>
+        </>
+      )}
     </div>
   )
 }

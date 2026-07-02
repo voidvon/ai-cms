@@ -3,6 +3,7 @@ import { requireAuth } from '../../middleware/auth.mjs';
 import { getAiOrchestrator } from '../../services/ai/initialize.mjs';
 import { capabilityRegistry, toolRegistry } from '../../services/ai/core/index.mjs';
 import { getAiDataSourceStatus } from '../../services/ai/data-source-registry.mjs';
+import { searchAiMentions } from '../../services/ai/query-service.mjs';
 import { DEFAULT_MODEL } from '../../services/ai/runtime.mjs';
 import { executeContractTask } from '../../services/ai/skills/contract.mjs';
 
@@ -175,6 +176,38 @@ export default async function aiRoutes(app) {
     }
   });
 
+  app.get('/ai/mentions/search', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      const keyword = String(request.query?.q || '').trim();
+      if (!keyword) {
+        reply.code(400);
+        return {
+          success: false,
+          message: '缺少搜索关键词',
+        };
+      }
+
+      const result = searchAiMentions({
+        user: request.adminUser,
+        keyword,
+        limit: request.query?.limit ? Number.parseInt(String(request.query.limit), 10) : 8,
+      });
+
+      return {
+        success: true,
+        data: result,
+      };
+    } catch (error) {
+      reply.code(error.statusCode || 400);
+      return {
+        success: false,
+        message: error.message || 'AI 提及搜索失败',
+      };
+    }
+  });
+
   // 执行 AI 任务（保持向后兼容）
   app.post('/ai/tasks/:taskKey/execute', {
     onRequest: [requireAuth],
@@ -217,6 +250,19 @@ export default async function aiRoutes(app) {
     const requestedToolNames = Array.isArray(body.toolNames)
       ? body.toolNames.map((item) => String(item || '').trim()).filter(Boolean)
       : [];
+    const mentions = Array.isArray(body.mentions)
+      ? body.mentions.map((item) => ({
+        type: String(item?.type || '').trim(),
+        id: Number(item?.id || 0),
+        title: String(item?.title || '').trim(),
+        subtitle: String(item?.subtitle || '').trim(),
+        model_code: String(item?.model_code || '').trim(),
+        column_id: Number(item?.column_id || 0) || null,
+        column_name: String(item?.column_name || '').trim(),
+        code: String(item?.code || '').trim(),
+        summary: String(item?.summary || '').trim(),
+      })).filter((item) => item.type && item.id > 0 && item.title)
+      : [];
 
     return sendAssistantStreamingTextStream(reply, messages, async (writeDelta) => {
       try {
@@ -231,6 +277,9 @@ export default async function aiRoutes(app) {
           stream: true,
           requestedToolNames,
           toolMode,
+          additionalContext: {
+            mentions,
+          },
         });
 
         const reader = streamed.result.toTextStream().getReader();

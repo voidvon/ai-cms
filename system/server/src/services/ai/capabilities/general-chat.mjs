@@ -84,6 +84,19 @@ export const generalChatCapability = {
       }
     }
 
+    if (Array.isArray(context.mentions) && context.mentions.length > 0) {
+      const mentionSummary = context.mentions
+        .slice(0, 5)
+        .map((item) => {
+          const suffix = item.type === 'column'
+            ? '栏目'
+            : `${item.column_name ? `，所属栏目 ${item.column_name}` : ''}${item.code ? `，编号 ${item.code}` : ''}`;
+          return `${item.title}（${item.type}${suffix}）`;
+        })
+        .join('；');
+      parts.push(`用户本轮明确引用了这些站内实体：${mentionSummary}。请优先围绕这些真实数据回答。`);
+    }
+
     // 根据对话历史调整指令
     if (context.conversationHistory?.topics) {
       const topics = context.conversationHistory.topics;
