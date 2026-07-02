@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Ellipsis, Pencil, Plus, Trash2 } from 'lucide-react'
 import { templateVariantsApi, templatesApi } from '@/api/advanced'
@@ -24,12 +24,11 @@ import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, Sele
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tree, type TreeItemData, type TreeMoveParams } from '@/components/ui/tree'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { TemplateCodeEditor } from '@/components/TemplateCodeEditor'
 import { TemplateVariableReference } from '@/components/TemplateVariableReference'
 import { formatRelativeTime } from '@/lib/datetime'
 import { toast } from 'sonner'
 import type { Template, TemplateVariant, TemplateVersion } from '@/types'
-
-const TemplateCodeEditor = lazy(() => import('@/components/TemplateCodeEditor').then((module) => ({ default: module.TemplateCodeEditor })))
 
 const previewModeLabelMap = {
   auto: '自动场景',
@@ -47,16 +46,6 @@ const templateTypeLabelMap: Record<Template['type'], string> = {
   single: '单页模板',
   not_found: '404模板',
   component: '组件模板',
-}
-
-function EditorFallback({ className }: { className?: string }) {
-  return (
-    <div className={className}>
-      <div className="flex min-h-[420px] items-center justify-center rounded-md border border-input bg-background text-sm text-muted-foreground">
-        编辑器加载中...
-      </div>
-    </div>
-  )
 }
 
 type TemplateForm = Pick<
@@ -934,28 +923,24 @@ export default function TemplateVariantsPage() {
                         </TabsList>
                       </div>
                       <TabsContent value="tsx" className="mt-0 flex-1 p-3">
-                        <Suspense fallback={<EditorFallback className="h-full min-h-[420px]" />}>
-                          <TemplateCodeEditor
-                            id="template-content"
-                            value={formData.tsx_source || ''}
-                            onChange={(tsx_source) => setFormData((current) => ({ ...current, tsx_source }))}
-                            placeholder="输入 TSX 模板内容"
-                            height="100%"
-                            className="h-full min-h-[420px]"
-                          />
-                        </Suspense>
+                        <TemplateCodeEditor
+                          id="template-content"
+                          value={formData.tsx_source || ''}
+                          onChange={(tsx_source) => setFormData((current) => ({ ...current, tsx_source }))}
+                          placeholder="输入 TSX 模板内容"
+                          height="100%"
+                          className="h-full min-h-[420px]"
+                        />
                       </TabsContent>
                       <TabsContent value="css" className="mt-0 flex-1 p-3">
-                        <Suspense fallback={<EditorFallback className="h-full min-h-[420px]" />}>
-                          <TemplateCodeEditor
-                            id="template-css"
-                            value={formData.css_source || ''}
-                            onChange={(css_source) => setFormData((current) => ({ ...current, css_source }))}
-                            placeholder="输入当前模板的局部样式"
-                            height="100%"
-                            className="h-full min-h-[420px]"
-                          />
-                        </Suspense>
+                        <TemplateCodeEditor
+                          id="template-css"
+                          value={formData.css_source || ''}
+                          onChange={(css_source) => setFormData((current) => ({ ...current, css_source }))}
+                          placeholder="输入当前模板的局部样式"
+                          height="100%"
+                          className="h-full min-h-[420px]"
+                        />
                       </TabsContent>
                     </Tabs>
                     <div className="min-h-0 overflow-auto">
@@ -1364,26 +1349,22 @@ function TemplateVersionCodeDialog({
               </TabsList>
             </div>
             <TabsContent value="tsx" className="mt-0 flex-1 p-3">
-              <Suspense fallback={<EditorFallback className="h-full min-h-[420px]" />}>
-                <TemplateCodeEditor
-                  value={version?.tsx_source || ''}
-                  onChange={() => {}}
-                  readOnly
-                  height="100%"
-                  className="h-full min-h-[420px]"
-                />
-              </Suspense>
+              <TemplateCodeEditor
+                value={version?.tsx_source || ''}
+                onChange={() => {}}
+                readOnly
+                height="100%"
+                className="h-full min-h-[420px]"
+              />
             </TabsContent>
             <TabsContent value="css" className="mt-0 flex-1 p-3">
-              <Suspense fallback={<EditorFallback className="h-full min-h-[420px]" />}>
-                <TemplateCodeEditor
-                  value={version?.css_source || ''}
-                  onChange={() => {}}
-                  readOnly
-                  height="100%"
-                  className="h-full min-h-[420px]"
-                />
-              </Suspense>
+              <TemplateCodeEditor
+                value={version?.css_source || ''}
+                onChange={() => {}}
+                readOnly
+                height="100%"
+                className="h-full min-h-[420px]"
+              />
             </TabsContent>
           </Tabs>
         </div>

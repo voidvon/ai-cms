@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { contentModelsApi } from '@/api/advanced'
 import { columnsApi } from '@/api/columns'
@@ -32,16 +32,11 @@ import { formatDate } from '@/lib/datetime'
 import { getFieldLabel, isFieldVisible, mapFieldsByName } from '@/lib/content-model-fields'
 import { toast } from 'sonner'
 import type { Column, ManagedContentItem, SectionContentItem } from '@/types'
-
-const ContentItemFormDialog = lazy(() => import('@/components/ContentItemFormDialog'))
+import ContentItemFormDialog from '@/components/ContentItemFormDialog'
 
 type ListedContentItem = ManagedContentItem | SectionContentItem
 
 const PAGE_LIMIT = 20
-
-function DialogFallback() {
-  return null
-}
 
 export default function ContentModelDataPage() {
   const queryClient = useQueryClient()
@@ -381,16 +376,14 @@ export default function ContentModelDataPage() {
       </AlertDialog>
 
       {formOpen ? (
-        <Suspense fallback={<DialogFallback />}>
-          <ContentItemFormDialog
-            open={formOpen}
-            onOpenChange={setFormOpen}
-            item={editingItem}
-            mode={editingItem ? 'edit' : 'create'}
-            modelCode={selectedModel.code}
-            defaultColumnId={selectedColumnId !== 'all' ? Number.parseInt(selectedColumnId, 10) : undefined}
-          />
-        </Suspense>
+        <ContentItemFormDialog
+          open={formOpen}
+          onOpenChange={setFormOpen}
+          item={editingItem}
+          mode={editingItem ? 'edit' : 'create'}
+          modelCode={selectedModel.code}
+          defaultColumnId={selectedColumnId !== 'all' ? Number.parseInt(selectedColumnId, 10) : undefined}
+        />
       ) : null}
     </div>
   )

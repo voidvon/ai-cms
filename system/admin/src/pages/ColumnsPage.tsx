@@ -1,4 +1,4 @@
-import { Suspense, lazy, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { contentModelsApi, templateVariantsApi, templatesApi } from '@/api/advanced'
@@ -37,13 +37,13 @@ import {
 import { formatDate } from '@/lib/datetime'
 import { toast } from 'sonner'
 import type { Column, ColumnNode, ContentModel, ManagedContentItem, SectionContentItem, Template, TemplateBinding } from '@/types'
+import ColumnTemplateBindingDialog from '@/components/ColumnTemplateBindingDialog'
+import ColumnNodeFormDialog from '@/components/ColumnNodeFormDialog'
+import ContentItemFormDialog from '@/components/ContentItemFormDialog'
+import ManualColumnFormDialog from '@/components/ManualColumnFormDialog'
 import type { ManualColumnFormValue } from '@/components/ManualColumnFormDialog'
 
 const DEFAULT_TEMPLATE_VALUE = '__default__'
-const ColumnTemplateBindingDialog = lazy(() => import('@/components/ColumnTemplateBindingDialog'))
-const ColumnNodeFormDialog = lazy(() => import('@/components/ColumnNodeFormDialog'))
-const ContentItemFormDialog = lazy(() => import('@/components/ContentItemFormDialog'))
-const ManualColumnFormDialog = lazy(() => import('@/components/ManualColumnFormDialog'))
 
 interface ColumnTreeNode extends Column {
   children: ColumnTreeNode[]
@@ -113,10 +113,6 @@ const COLUMN_KIND_META: Record<ColumnDisplayKind, { label: string; createLabel: 
     createLabel: '新增单页',
     showTreeBadge: true,
   },
-}
-
-function DialogFallback() {
-  return null
 }
 
 export default function ColumnsPage() {
@@ -897,16 +893,14 @@ export default function ColumnsPage() {
       </div>
 
       {contentItemFormOpen && activeContentModelCode ? (
-        <Suspense fallback={<DialogFallback />}>
-          <ContentItemFormDialog
-            open={contentItemFormOpen}
-            onOpenChange={setContentItemFormOpen}
-            item={editingContentItem}
-            mode={editingContentItem ? 'edit' : 'create'}
-            modelCode={activeContentModelCode}
-            defaultColumnId={selectedColumn?.id || undefined}
-          />
-        </Suspense>
+        <ContentItemFormDialog
+          open={contentItemFormOpen}
+          onOpenChange={setContentItemFormOpen}
+          item={editingContentItem}
+          mode={editingContentItem ? 'edit' : 'create'}
+          modelCode={activeContentModelCode}
+          defaultColumnId={selectedColumn?.id || undefined}
+        />
       ) : null}
 
       <Dialog open={rootNodeDialogOpen} onOpenChange={handleRootNodeDialogOpenChange}>
@@ -1023,56 +1017,50 @@ export default function ColumnsPage() {
       </Dialog>
 
       {manualColumnDialogOpen ? (
-        <Suspense fallback={<DialogFallback />}>
-          <ManualColumnFormDialog
-            open={manualColumnDialogOpen}
-            onOpenChange={handleManualColumnDialogOpenChange}
-            mode={manualColumnDialogMode}
-            column={editingColumnTarget || editingManualColumn}
-            initialKind={manualColumnDialogKind}
-            forceBasicOnly={Boolean(editingColumnTarget)}
-            columns={columns}
-            contentModels={contentModels}
-            listTemplates={listTemplates}
-            contentTemplates={contentTemplates}
-            singleTemplates={singleTemplates}
-            initialListTemplateId={selectedManualListBinding?.template_id ? String(selectedManualListBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
-            initialContentTemplateId={selectedManualContentBinding?.template_id ? String(selectedManualContentBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
-            initialSingleTemplateId={selectedManualSingleBinding?.template_id ? String(selectedManualSingleBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
-            submitting={createManualColumnMutation.isPending || updateManualColumnMutation.isPending || updateColumnMutation.isPending}
-            onSubmit={handleSubmitManualColumn}
-          />
-        </Suspense>
+        <ManualColumnFormDialog
+          open={manualColumnDialogOpen}
+          onOpenChange={handleManualColumnDialogOpenChange}
+          mode={manualColumnDialogMode}
+          column={editingColumnTarget || editingManualColumn}
+          initialKind={manualColumnDialogKind}
+          forceBasicOnly={Boolean(editingColumnTarget)}
+          columns={columns}
+          contentModels={contentModels}
+          listTemplates={listTemplates}
+          contentTemplates={contentTemplates}
+          singleTemplates={singleTemplates}
+          initialListTemplateId={selectedManualListBinding?.template_id ? String(selectedManualListBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
+          initialContentTemplateId={selectedManualContentBinding?.template_id ? String(selectedManualContentBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
+          initialSingleTemplateId={selectedManualSingleBinding?.template_id ? String(selectedManualSingleBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
+          submitting={createManualColumnMutation.isPending || updateManualColumnMutation.isPending || updateColumnMutation.isPending}
+          onSubmit={handleSubmitManualColumn}
+        />
       ) : null}
 
       {nodeFormOpen && nodeFormRootColumn ? (
-        <Suspense fallback={<DialogFallback />}>
-          <ColumnNodeFormDialog
-            open={nodeFormOpen}
-            onOpenChange={handleNodeFormOpenChange}
-            rootColumn={nodeFormRootColumn}
-            node={nodeFormMode === 'edit' ? editingNodeData?.data as ColumnNode | undefined : undefined}
-            currentParentId={nodeFormMode === 'create' ? creatingNodeTarget?.id || 0 : 0}
-            mode={nodeFormMode}
-          />
-        </Suspense>
+        <ColumnNodeFormDialog
+          open={nodeFormOpen}
+          onOpenChange={handleNodeFormOpenChange}
+          rootColumn={nodeFormRootColumn}
+          node={nodeFormMode === 'edit' ? editingNodeData?.data as ColumnNode | undefined : undefined}
+          currentParentId={nodeFormMode === 'create' ? creatingNodeTarget?.id || 0 : 0}
+          mode={nodeFormMode}
+        />
       ) : null}
 
       {bindingNodeTarget ? (
-        <Suspense fallback={<DialogFallback />}>
-          <ColumnTemplateBindingDialog
-            open={Boolean(bindingNodeTarget)}
-            onOpenChange={(open) => {
-              if (!open) {
-                setBindingNodeTarget(null)
-              }
-            }}
-            targetType={bindingNodeTarget.targetType}
-            targetId={bindingNodeTarget.id}
-            targetName={bindingNodeTarget.name}
-            templateTypes={bindingNodeTarget.renderDriver === 'page_tree' ? ['single'] : ['list', 'content']}
-          />
-        </Suspense>
+        <ColumnTemplateBindingDialog
+          open={Boolean(bindingNodeTarget)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setBindingNodeTarget(null)
+            }
+          }}
+          targetType={bindingNodeTarget.targetType}
+          targetId={bindingNodeTarget.id}
+          targetName={bindingNodeTarget.name}
+          templateTypes={bindingNodeTarget.renderDriver === 'page_tree' ? ['single'] : ['list', 'content']}
+        />
       ) : null}
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>

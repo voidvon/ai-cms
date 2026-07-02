@@ -1,66 +1,54 @@
-import { Suspense, lazy } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
-
-const LoginPage = lazy(() => import('@/pages/LoginPage'))
-const DashboardLayout = lazy(() => import('@/layouts/DashboardLayout'))
-const DashboardPage = lazy(() => import('@/pages/DashboardPage'))
-const ColumnsPage = lazy(() => import('@/pages/ColumnsPage'))
-const MediaAssetsPage = lazy(() => import('@/pages/MediaAssetsPage'))
-const TemplateVariantsPage = lazy(() => import('@/pages/TemplateVariantsPage'))
-const ContentModelsPage = lazy(() => import('@/pages/ContentModelsPage'))
-const ContentModelDataPage = lazy(() => import('@/pages/ContentModelDataPage'))
-const PriceManagementPage = lazy(() => import('@/pages/PriceManagementPage'))
-const AdminsPage = lazy(() => import('@/pages/AdminsPage'))
-const AdminLoginLogsPage = lazy(() => import('@/pages/AdminLoginLogsPage'))
-const StaticGenerationPage = lazy(() => import('@/pages/StaticGenerationPage'))
-const SiteConfigPage = lazy(() => import('@/pages/SiteConfigPage'))
-const SitemapDiagnosticsPage = lazy(() => import('@/pages/SitemapDiagnosticsPage'))
-const LlmsDiagnosticsPage = lazy(() => import('@/pages/LlmsDiagnosticsPage'))
-const LanguagesPage = lazy(() => import('@/pages/LanguagesPage'))
-const BulkReplacePage = lazy(() => import('@/pages/BulkReplacePage'))
-const AiChatPage = lazy(() => import('@/pages/AiChatPage'))
-const AiConversationPage = lazy(() => import('@/pages/AiConversationPage'))
-
-function RouteFallback() {
-  return (
-    <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
-      页面加载中...
-    </div>
-  )
-}
+import DashboardLayout from '@/layouts/DashboardLayout'
+import AdminLoginLogsPage from '@/pages/AdminLoginLogsPage'
+import AdminsPage from '@/pages/AdminsPage'
+import AiChatPage from '@/pages/AiChatPage'
+import AiConversationPage from '@/pages/AiConversationPage'
+import BulkReplacePage from '@/pages/BulkReplacePage'
+import ColumnsPage from '@/pages/ColumnsPage'
+import ContentModelDataPage from '@/pages/ContentModelDataPage'
+import ContentModelsPage from '@/pages/ContentModelsPage'
+import DashboardPage from '@/pages/DashboardPage'
+import LanguagesPage from '@/pages/LanguagesPage'
+import LlmsDiagnosticsPage from '@/pages/LlmsDiagnosticsPage'
+import LoginPage from '@/pages/LoginPage'
+import MediaAssetsPage from '@/pages/MediaAssetsPage'
+import PriceManagementPage from '@/pages/PriceManagementPage'
+import SiteConfigPage from '@/pages/SiteConfigPage'
+import SitemapDiagnosticsPage from '@/pages/SitemapDiagnosticsPage'
+import StaticGenerationPage from '@/pages/StaticGenerationPage'
+import TemplateVariantsPage from '@/pages/TemplateVariantsPage'
 
 function App() {
   return (
     <>
-      <Suspense fallback={<RouteFallback />}>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/" element={<DashboardLayout />}>
-            <Route index element={<Navigate to="/dashboard" replace />} />
-            <Route path="dashboard" element={<DashboardPage />} />
-            <Route path="columns" element={<ColumnsPage />} />
-            <Route path="themes" element={<TemplateVariantsPage />} />
-            <Route path="templates" element={<Navigate to="/themes" replace />} />
-            <Route path="content-models" element={<ContentModelsPage />} />
-            <Route path="content-model-data" element={<ContentModelDataPage />} />
-            <Route path="price-management" element={<PriceManagementPage />} />
-            <Route path="media-assets" element={<MediaAssetsPage />} />
-            <Route path="languages" element={<LanguagesPage />} />
-            <Route path="template-variants" element={<Navigate to="/themes" replace />} />
-            <Route path="admins" element={<AdminsPage />} />
-            <Route path="admin-login-logs" element={<AdminLoginLogsPage />} />
-            <Route path="static-gen" element={<StaticGenerationPage />} />
-            <Route path="site-config" element={<SiteConfigPage />} />
-            <Route path="bulk-replace" element={<BulkReplacePage />} />
-            <Route path="ai" element={<AiConversationPage />} />
-            <Route path="ai-docs" element={<AiChatPage />} />
-            <Route path="ai-assistant" element={<Navigate to="/ai" replace />} />
-            <Route path="sitemap-diagnostics" element={<SitemapDiagnosticsPage />} />
-            <Route path="llms-diagnostics" element={<LlmsDiagnosticsPage />} />
-          </Route>
-        </Routes>
-      </Suspense>
+      <Routes>
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/" element={<DashboardLayout />}>
+          <Route index element={<Navigate to="/dashboard" replace />} />
+          <Route path="dashboard" element={<DashboardPage />} />
+          <Route path="columns" element={<ColumnsPage />} />
+          <Route path="themes" element={<TemplateVariantsPage />} />
+          <Route path="templates" element={<Navigate to="/themes" replace />} />
+          <Route path="content-models" element={<ContentModelsPage />} />
+          <Route path="content-model-data" element={<ContentModelDataPage />} />
+          <Route path="price-management" element={<PriceManagementPage />} />
+          <Route path="media-assets" element={<MediaAssetsPage />} />
+          <Route path="languages" element={<LanguagesPage />} />
+          <Route path="template-variants" element={<Navigate to="/themes" replace />} />
+          <Route path="admins" element={<AdminsPage />} />
+          <Route path="admin-login-logs" element={<AdminLoginLogsPage />} />
+          <Route path="static-gen" element={<StaticGenerationPage />} />
+          <Route path="site-config" element={<SiteConfigPage />} />
+          <Route path="bulk-replace" element={<BulkReplacePage />} />
+          <Route path="ai" element={<AiConversationPage />} />
+          <Route path="ai-docs" element={<AiChatPage />} />
+          <Route path="ai-assistant" element={<Navigate to="/ai" replace />} />
+          <Route path="sitemap-diagnostics" element={<SitemapDiagnosticsPage />} />
+          <Route path="llms-diagnostics" element={<LlmsDiagnosticsPage />} />
+        </Route>
+      </Routes>
       <Toaster />
     </>
   )

@@ -5,6 +5,13 @@ import { ADMIN_VITE_TARGET } from '../shared/browser-targets.mjs'
 
 const apiProxyTarget = 'http://127.0.0.1:1231'
 
+const isNodePackage = (id: string, packageName: string) => {
+  const normalized = id.split(path.sep).join('/')
+  return normalized.includes(`/node_modules/${packageName}/`)
+    || normalized.includes(`/node_modules/.pnpm/`)
+      && normalized.includes(`/node_modules/${packageName}/`)
+}
+
 // https://vite.dev/config/
 export default defineConfig({
   base: '/admin/',
@@ -81,10 +88,6 @@ export default defineConfig({
             return 'react-query'
           }
 
-          if (id.includes('react-router-dom') || id.includes('react-dom') || id.includes('react')) {
-            return 'react-core'
-          }
-
           if (
             id.includes('@radix-ui/') ||
             id.includes('lucide-react') ||
@@ -95,6 +98,15 @@ export default defineConfig({
             id.includes('next-themes')
           ) {
             return 'ui-kit'
+          }
+
+          if (
+            isNodePackage(id, 'react') ||
+            isNodePackage(id, 'react-dom') ||
+            isNodePackage(id, 'react-router') ||
+            isNodePackage(id, 'react-router-dom')
+          ) {
+            return 'react-core'
           }
 
           return 'vendor'
