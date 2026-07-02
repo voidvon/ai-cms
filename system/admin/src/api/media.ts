@@ -21,7 +21,7 @@ export const mediaApi = {
     return response.data
   },
 
-  list: async (params: { page?: number; limit?: number; purpose?: string; status?: string }) => {
+  list: async (params: { page?: number; limit?: number; purpose?: string; usage?: string }) => {
     const response = await apiClient.get<ApiResponse<MediaAsset[]> & { items: MediaAsset[]; pagination: PaginationInfo }>(
       '/media-assets',
       { params },
@@ -33,6 +33,13 @@ export const mediaApi = {
     const response = await apiClient.post<ApiResponse<{ deletedFiles: number; deletedRows: number }>>(
       '/media-assets/cleanup',
       { purpose: purpose && purpose !== 'all' ? purpose : undefined },
+    )
+    return response.data
+  },
+
+  delete: async (id: number) => {
+    const response = await apiClient.delete<ApiResponse<{ deletedFile: boolean; deletedRow: boolean }>>(
+      `/media-assets/${id}`,
     )
     return response.data
   },

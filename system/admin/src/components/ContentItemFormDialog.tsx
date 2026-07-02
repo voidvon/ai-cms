@@ -16,7 +16,7 @@ import ImageUploadField from '@/components/ImageUploadField'
 import ImagesUploadField from '@/components/ImagesUploadField'
 import RichTextEditor from '@/components/RichTextEditor'
 import { buildColumnTreeOptions } from '@/lib/column-options'
-import { getFieldLabel, isFieldEditable, isFieldVisible, mapFieldsByName } from '@/lib/content-model-fields'
+import { getFieldLabel, isFieldEditable, mapFieldsByName } from '@/lib/content-model-fields'
 import { toast } from 'sonner'
 import type {
   ContentModel,
@@ -125,9 +125,8 @@ export default function ContentItemFormDialog({
     () => (contentModel?.fields || []).filter((field) => (
       !SYSTEM_FIELD_NAMES.has(field.field_name)
       && Number(field.is_translatable || 0) === 0
-      && isFieldVisible(fieldMap, field.field_name)
     )),
-    [contentModel?.fields, fieldMap],
+    [contentModel?.fields],
   )
   const meta = useMemo(() => getModelMeta(capabilities), [capabilities])
   const allColumns = columnsData?.data || []
@@ -237,7 +236,7 @@ export default function ContentItemFormDialog({
                   <div className="font-medium">基础字段</div>
                   <div className="text-sm text-muted-foreground">这些字段不区分语言，所有语言共用同一份数据。</div>
                 </div>
-                {isFieldVisible(fieldMap, 'code') ? (
+                {isFormFieldAvailable(fieldMap, 'code') ? (
                   <div className="space-y-2">
                     <Label htmlFor="code">{getFieldLabel(fieldMap, 'code', capabilities.codeFieldLabel)}</Label>
                     <Input
@@ -249,7 +248,7 @@ export default function ContentItemFormDialog({
                     />
                   </div>
                 ) : null}
-                {isFieldVisible(fieldMap, 'column_id') ? (
+                {isFormFieldAvailable(fieldMap, 'column_id') ? (
                   <div className="space-y-2">
                     <Label>{getFieldLabel(fieldMap, 'column_id', '所属栏目')}</Label>
                     <Select
@@ -279,7 +278,7 @@ export default function ContentItemFormDialog({
                     placeholder="留空则按栏目规则生成，例如 abcd/index.html"
                   />
                 </div>
-                {capabilities.primaryImageFieldName === 'picture' && isFieldVisible(fieldMap, 'picture') ? (
+                {capabilities.primaryImageFieldName === 'picture' && isFormFieldAvailable(fieldMap, 'picture') ? (
                   <div className="space-y-2">
                     <Label htmlFor="picture">{getFieldLabel(fieldMap, 'picture', capabilities.primaryImageFieldLabel)}</Label>
                     <div className={!isFieldEditable(fieldMap, 'picture') ? 'pointer-events-none opacity-70' : ''}>
@@ -293,7 +292,7 @@ export default function ContentItemFormDialog({
                     </div>
                   </div>
                 ) : null}
-                {capabilities.primaryImageFieldName === 'images' && isFieldVisible(fieldMap, 'images') ? (
+                {capabilities.primaryImageFieldName === 'images' && isFormFieldAvailable(fieldMap, 'images') ? (
                   <div className="space-y-2">
                     <Label htmlFor="images">{getFieldLabel(fieldMap, 'images', capabilities.primaryImageFieldLabel)}</Label>
                     <div className={!isFieldEditable(fieldMap, 'images') ? 'pointer-events-none opacity-70' : ''}>
@@ -307,7 +306,7 @@ export default function ContentItemFormDialog({
                     </div>
                   </div>
                 ) : null}
-                {capabilities.supportsSpecOptions && isFieldVisible(fieldMap, 'spec_options_json') ? (
+                {capabilities.supportsSpecOptions && isFormFieldAvailable(fieldMap, 'spec_options_json') ? (
                   <div className="space-y-2">
                     <Label htmlFor="spec_options_json">{getFieldLabel(fieldMap, 'spec_options_json', '产品规格')}</Label>
                     <Textarea
@@ -370,7 +369,7 @@ export default function ContentItemFormDialog({
 
                 {capabilities.supportsCreatedAt ? (
                   <div className="grid grid-cols-2 gap-4">
-                    {isFieldVisible(fieldMap, 'is_featured_home') ? (
+                    {isFormFieldAvailable(fieldMap, 'is_featured_home') ? (
                       <div className="space-y-2">
                         <Label htmlFor="is_featured_home">{getFieldLabel(fieldMap, 'is_featured_home', '推荐')}</Label>
                         <Select
@@ -388,7 +387,7 @@ export default function ContentItemFormDialog({
                         </Select>
                       </div>
                     ) : null}
-                    {isFieldVisible(fieldMap, 'created_at') ? (
+                    {isFormFieldAvailable(fieldMap, 'created_at') ? (
                       <div className="space-y-2">
                         <Label htmlFor="created_at">{getFieldLabel(fieldMap, 'created_at', '创建时间')}</Label>
                         <Input
@@ -403,7 +402,7 @@ export default function ContentItemFormDialog({
                   </div>
                 ) : (
                   <div className="grid grid-cols-3 gap-4">
-                    {capabilities.supportsVisibility && isFieldVisible(fieldMap, 'is_visible') ? (
+                    {capabilities.supportsVisibility && isFormFieldAvailable(fieldMap, 'is_visible') ? (
                       <div className="space-y-2">
                         <Label htmlFor="is_visible">{getFieldLabel(fieldMap, 'is_visible', '显示状态')}</Label>
                         <Select
@@ -421,7 +420,7 @@ export default function ContentItemFormDialog({
                         </Select>
                       </div>
                     ) : null}
-                    {isFieldVisible(fieldMap, 'is_featured_home') ? (
+                    {isFormFieldAvailable(fieldMap, 'is_featured_home') ? (
                       <div className="space-y-2">
                         <Label htmlFor="is_featured_home">{getFieldLabel(fieldMap, 'is_featured_home', '推荐')}</Label>
                         <Select
@@ -439,7 +438,7 @@ export default function ContentItemFormDialog({
                         </Select>
                       </div>
                     ) : null}
-                    {capabilities.supportsSortOrder && isFieldVisible(fieldMap, 'sort_order') ? (
+                    {capabilities.supportsSortOrder && isFormFieldAvailable(fieldMap, 'sort_order') ? (
                       <div className="space-y-2">
                         <Label htmlFor="sort_order">{getFieldLabel(fieldMap, 'sort_order', '排序')}</Label>
                         <Input
@@ -461,7 +460,7 @@ export default function ContentItemFormDialog({
               return (
                 <TabsContent key={language.id} value={language.code}>
                   <div className="grid gap-4 md:grid-cols-2">
-                    {isFieldVisible(fieldMap, capabilities.translationNameField) ? (
+                    {isFormFieldAvailable(fieldMap, capabilities.translationNameField) ? (
                       <div className="space-y-2">
                         <Label htmlFor={`translation_name_${language.code}`}>
                           {getFieldLabel(fieldMap, capabilities.translationNameField, capabilities.translationNameLabel)} {language.code === defaultLanguageCode ? '*' : ''}
@@ -483,7 +482,7 @@ export default function ContentItemFormDialog({
                         />
                       </div>
                     ) : null}
-                    {isFieldVisible(fieldMap, 'publish_status') ? (
+                    {isFormFieldAvailable(fieldMap, 'publish_status') ? (
                       <div className="space-y-2">
                         <Label>{getFieldLabel(fieldMap, 'publish_status', '发布状态')}</Label>
                         <Select
@@ -506,7 +505,7 @@ export default function ContentItemFormDialog({
                     ) : null}
                   </div>
 
-                  {isFieldVisible(fieldMap, 'summary') ? (
+                  {isFormFieldAvailable(fieldMap, 'summary') ? (
                     <div className="space-y-2">
                       <Label htmlFor={`summary_${language.code}`}>{getFieldLabel(fieldMap, 'summary', '摘要')}</Label>
                       <Textarea
@@ -522,7 +521,7 @@ export default function ContentItemFormDialog({
                       />
                     </div>
                   ) : null}
-                  {isFieldVisible(fieldMap, 'content_html') ? (
+                  {isFormFieldAvailable(fieldMap, 'content_html') ? (
                     <div className="space-y-2">
                       <Label>{getFieldLabel(fieldMap, 'content_html', '详细内容')}</Label>
                       <RichTextEditor
@@ -537,7 +536,7 @@ export default function ContentItemFormDialog({
                       />
                     </div>
                   ) : null}
-                  {isFieldVisible(fieldMap, 'seo_title') ? (
+                  {isFormFieldAvailable(fieldMap, 'seo_title') ? (
                     <div className="space-y-2">
                       <Label htmlFor={`seo_title_${language.code}`}>{getFieldLabel(fieldMap, 'seo_title', 'SEO标题')}</Label>
                       <Input
@@ -552,7 +551,7 @@ export default function ContentItemFormDialog({
                       />
                     </div>
                   ) : null}
-                  {isFieldVisible(fieldMap, 'seo_description') ? (
+                  {isFormFieldAvailable(fieldMap, 'seo_description') ? (
                     <div className="space-y-2">
                       <Label htmlFor={`seo_description_${language.code}`}>{getFieldLabel(fieldMap, 'seo_description', 'SEO描述')}</Label>
                       <Textarea
@@ -600,6 +599,10 @@ function getModelMeta(capabilities: FormModelCapabilities) {
     requiredNameError: capabilities.requiredNameError,
     columnPlaceholder: '请选择所属栏目',
   }
+}
+
+function isFormFieldAvailable(fieldMap: Map<string, ContentModelField>, fieldName: string, defaultAvailable = true) {
+  return fieldMap.has(fieldName) || defaultAvailable
 }
 
 function createEmptyBaseData(defaultColumnId?: number) {

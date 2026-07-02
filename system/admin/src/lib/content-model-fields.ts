@@ -4,14 +4,6 @@ export function mapFieldsByName(fields: ContentModelField[] = []) {
   return new Map(fields.map((field) => [field.field_name, field]))
 }
 
-export function isFieldVisible(fieldMap: Map<string, ContentModelField>, fieldName: string, defaultVisible = true) {
-  const field = fieldMap.get(fieldName)
-  if (!field) {
-    return defaultVisible
-  }
-  return Number(field.is_listed ?? 1) === 1
-}
-
 export function isFieldEditable(fieldMap: Map<string, ContentModelField>, fieldName: string, defaultEditable = true) {
   const field = fieldMap.get(fieldName)
   if (!field) {

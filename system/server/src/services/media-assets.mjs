@@ -81,12 +81,13 @@ export function ensureMediaAssetsSchema() {
       file_size INTEGER NOT NULL DEFAULT 0,
       relative_path TEXT NOT NULL UNIQUE,
       fs_path TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'active',
+      usage_references_json TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
     CREATE INDEX IF NOT EXISTS idx_media_assets_purpose ON media_assets(purpose, id);
-    CREATE INDEX IF NOT EXISTS idx_media_assets_status ON media_assets(status, id);
   `);
+
+  addColumnIfMissing('media_assets', 'usage_references_json', `TEXT NOT NULL DEFAULT '[]'`);
 
   schemaEnsured = true;
 }
@@ -125,8 +126,8 @@ export function uploadMediaAsset({ buffer, originalFilename, purpose }) {
         file_size,
         relative_path,
         fs_path,
-        status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active')
+        usage_references_json
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]')
     `,
     [
       'local',
@@ -157,7 +158,7 @@ export function getMediaAssetById(id) {
         file_size,
         relative_path,
         fs_path,
-        status,
+        usage_references_json,
         created_at
       FROM media_assets
       WHERE id = ?
@@ -166,7 +167,7 @@ export function getMediaAssetById(id) {
   );
 }
 
-export function listMediaAssets({ page = 1, limit = 50, purpose, status } = {}) {
+export function listMediaAssets({ page = 1, limit = 50, purpose, usage } = {}) {
   ensureMediaAssetsSchema();
 
   const safeLimit = Math.min(Math.max(Number.parseInt(String(limit), 10) || 50, 1), 200);
@@ -180,9 +181,13 @@ export function listMediaAssets({ page = 1, limit = 50, purpose, status } = {}) 
     params.push(resolvePurpose(purpose));
   }
 
-  if (status && status !== 'all') {
-    whereParts.push('status = ?');
-    params.push(normalizeStatus(status));
+  const usageFilter = usage;
+  if (usageFilter && usageFilter !== 'all') {
+    if (normalizeUsageFilter(usageFilter) === 'empty') {
+      whereParts.push(`(usage_references_json IS NULL OR TRIM(usage_references_json) = '' OR TRIM(usage_references_json) = '[]')`);
+    } else {
+      whereParts.push(`(usage_references_json IS NOT NULL AND TRIM(usage_references_json) NOT IN ('', '[]'))`);
+    }
   }
 
   const whereSql = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
@@ -198,7 +203,7 @@ export function listMediaAssets({ page = 1, limit = 50, purpose, status } = {}) 
         file_size,
         relative_path,
         fs_path,
-        status,
+        usage_references_json,
         created_at
       FROM media_assets
       ${whereSql}
@@ -207,10 +212,7 @@ export function listMediaAssets({ page = 1, limit = 50, purpose, status } = {}) 
       OFFSET ?
     `,
     [...params, safeLimit, offset],
-  ).map((item) => ({
-    ...item,
-    file_exists: fs.existsSync(item.fs_path),
-  }));
+  ).map((item) => decorateMediaAsset(item));
 
   const total = queryOne(
     `
@@ -232,28 +234,44 @@ export function listMediaAssets({ page = 1, limit = 50, purpose, status } = {}) 
   };
 }
 
-export function markMediaAssetStatusByPath(relativePath, status) {
+export function deleteMediaAsset(id, { force = false } = {}) {
   ensureMediaAssetsSchema();
-  const normalizedPath = String(relativePath || '').trim();
-  if (!normalizedPath || !['active', 'orphaned'].includes(String(status || ''))) {
-    return;
+
+  const asset = getMediaAssetById(id);
+  if (!asset) {
+    const error = new Error('附件不存在');
+    error.statusCode = 404;
+    throw error;
   }
 
-  execute(
-    `
-      UPDATE media_assets
-      SET status = ?
-      WHERE relative_path = ?
-    `,
-    [status, normalizedPath],
-  );
+  const usageReferences = refreshMediaAssetUsageReferences(asset);
+  if (usageReferences.length > 0 && !force) {
+    const error = new Error('附件仍在使用中，不能删除');
+    error.statusCode = 409;
+    error.usageReferences = usageReferences;
+    throw error;
+  }
+
+  let deletedFile = false;
+  if (asset.fs_path && fs.existsSync(asset.fs_path)) {
+    fs.unlinkSync(asset.fs_path);
+    deletedFile = true;
+  }
+
+  execute('DELETE FROM media_assets WHERE id = ?', [asset.id]);
+
+  return {
+    deletedFile,
+    deletedRow: true,
+    usageReferences,
+  };
 }
 
 export function cleanupOrphanedMediaAssets({ purpose } = {}) {
   ensureMediaAssetsSchema();
 
-  const whereParts = ['status = ?'];
-  const params = ['orphaned'];
+  const whereParts = [`(usage_references_json IS NULL OR TRIM(usage_references_json) = '' OR TRIM(usage_references_json) = '[]')`];
+  const params = [];
 
   if (purpose && purpose !== 'all') {
     whereParts.push('purpose = ?');
@@ -262,7 +280,18 @@ export function cleanupOrphanedMediaAssets({ purpose } = {}) {
 
   const items = queryAll(
     `
-      SELECT id, relative_path, fs_path
+      SELECT
+        id,
+        storage_driver,
+        purpose,
+        original_name,
+        mime_type,
+        file_ext,
+        file_size,
+        relative_path,
+        fs_path,
+        usage_references_json,
+        created_at
       FROM media_assets
       WHERE ${whereParts.join(' AND ')}
       ORDER BY id ASC
@@ -274,6 +303,11 @@ export function cleanupOrphanedMediaAssets({ purpose } = {}) {
   let deletedRows = 0;
 
   for (const item of items) {
+    const usageReferences = refreshMediaAssetUsageReferences(item);
+    if (usageReferences.length > 0) {
+      continue;
+    }
+
     if (item.fs_path && fs.existsSync(item.fs_path)) {
       fs.unlinkSync(item.fs_path);
       deletedFiles += 1;
@@ -296,8 +330,244 @@ function resolvePurpose(value) {
   return 'attachment';
 }
 
-function normalizeStatus(value) {
-  return String(value || '').trim() === 'orphaned' ? 'orphaned' : 'active';
+function addColumnIfMissing(tableName, columnName, definition) {
+  const columns = queryAll(`PRAGMA table_info(${quoteIdentifier(tableName)})`);
+  if (columns.some((column) => String(column.name || '') === columnName)) {
+    return;
+  }
+  execute(`ALTER TABLE ${quoteIdentifier(tableName)} ADD COLUMN ${quoteIdentifier(columnName)} ${definition}`);
+}
+
+function decorateMediaAsset(item) {
+  const usageReferences = parseUsageReferencesJson(item.usage_references_json);
+
+  return {
+    ...item,
+    file_exists: fs.existsSync(item.fs_path),
+    usage_references: usageReferences,
+    usage_count: usageReferences.length,
+  };
+}
+
+function refreshMediaAssetUsageReferences(asset) {
+  const usageReferences = findMediaAssetUsageReferences(asset);
+  execute(
+    `
+      UPDATE media_assets
+      SET
+        usage_references_json = ?
+      WHERE id = ?
+    `,
+    [
+      JSON.stringify(usageReferences),
+      asset.id,
+    ],
+  );
+  return usageReferences;
+}
+
+function parseUsageReferencesJson(value) {
+  try {
+    const parsed = JSON.parse(String(value || '[]'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function findMediaAssetUsageReferences(asset) {
+  const relativePath = String(asset?.relative_path || '').trim();
+  if (!relativePath) {
+    return [];
+  }
+
+  const references = [];
+  const seen = new Set();
+  const contentModels = queryAll(
+    `
+      SELECT code, name, source_table
+      FROM content_models
+      WHERE source_table IS NOT NULL
+        AND TRIM(source_table) <> ''
+      ORDER BY sort_order ASC, id ASC
+    `,
+  );
+  const modelByMainTable = new Map();
+  const modelByTranslationTable = new Map();
+
+  for (const model of contentModels) {
+    const tableName = String(model.source_table || '').trim();
+    if (!isSafeIdentifier(tableName)) {
+      continue;
+    }
+    modelByMainTable.set(tableName, model);
+    modelByTranslationTable.set(`${tableName}_translations`, model);
+  }
+
+  const scanTargets = [
+    { table: 'columns', label: '栏目', columns: ['name'], scanColumns: ['images'] },
+    { table: 'document_stamps', label: '文档印章', columns: ['name'], scanColumns: ['image_path'] },
+    { table: 'site_config', label: '站点配置', columns: [], scanColumns: null },
+    { table: 'site_config_translations', label: '站点配置翻译', columns: [], scanColumns: null },
+    { table: 'templates', label: '模板', columns: ['name', 'code'], scanColumns: ['tsx_source', 'css_source', 'published_tsx_source', 'published_css_source'] },
+    { table: 'template_versions', label: '模板历史版本', columns: ['template_id', 'version_no'], scanColumns: ['tsx_source', 'css_source'] },
+    ...contentModels.flatMap((model) => {
+      const tableName = String(model.source_table || '').trim();
+      if (!isSafeIdentifier(tableName)) {
+        return [];
+      }
+      return [
+        {
+          table: tableName,
+          label: `${model.name || model.code}内容`,
+          columns: ['name', 'title', 'code'],
+          scanColumns: null,
+        },
+        {
+          table: `${tableName}_translations`,
+          label: `${model.name || model.code}内容翻译`,
+          columns: ['name', 'title'],
+          scanColumns: null,
+        },
+      ];
+    }),
+  ];
+
+  for (const target of scanTargets) {
+    if (!hasTable(target.table)) {
+      continue;
+    }
+    const tableColumns = queryAll(`PRAGMA table_info(${quoteIdentifier(target.table)})`);
+    const columnNames = tableColumns.map((column) => String(column.name || '')).filter(Boolean);
+    const textColumns = tableColumns
+      .filter((column) => shouldScanColumn(column, target.scanColumns))
+      .map((column) => String(column.name || ''))
+      .filter(Boolean);
+    if (textColumns.length === 0) {
+      continue;
+    }
+
+    const selectColumns = new Set(['id', ...textColumns]);
+    for (const column of target.columns || []) {
+      if (columnNames.includes(column)) {
+        selectColumns.add(column);
+      }
+    }
+    if (columnNames.includes('entry_id')) {
+      selectColumns.add('entry_id');
+    }
+    if (columnNames.includes('language_id')) {
+      selectColumns.add('language_id');
+    }
+
+    const rows = queryAll(
+      `
+        SELECT ${Array.from(selectColumns).map((column) => quoteIdentifier(column)).join(', ')}
+        FROM ${quoteIdentifier(target.table)}
+      `,
+    );
+
+    for (const row of rows) {
+      for (const column of textColumns) {
+        if (!textContainsMediaPath(row[column], relativePath)) {
+          continue;
+        }
+
+        const reference = buildUsageReference({
+          row,
+          column,
+          target,
+          model: modelByMainTable.get(target.table) || modelByTranslationTable.get(target.table) || null,
+        });
+        const key = `${reference.table}:${reference.record_id}:${reference.field}:${reference.entry_id || ''}:${reference.language_id || ''}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          references.push(reference);
+        }
+      }
+    }
+  }
+
+  return references;
+}
+
+function shouldScanColumn(column, explicitColumns) {
+  const name = String(column?.name || '');
+  if (name === 'relative_path' || name === 'fs_path') {
+    return false;
+  }
+  if (Array.isArray(explicitColumns)) {
+    return explicitColumns.includes(name);
+  }
+  const type = String(column?.type || '').toUpperCase();
+  return type.includes('TEXT') || type.includes('CHAR') || type.includes('CLOB');
+}
+
+function textContainsMediaPath(value, relativePath) {
+  const text = String(value ?? '');
+  if (!text) {
+    return false;
+  }
+  return text.includes(relativePath) || text.includes(relativePath.replace(/^\/uploads\//, '/upload/'));
+}
+
+function buildUsageReference({ row, column, target, model }) {
+  const recordId = Number(row?.id || 0) || null;
+  const entryId = Number(row?.entry_id || 0) || null;
+  const languageId = Number(row?.language_id || 0) || null;
+  const recordName = String(row?.name || row?.title || row?.code || '').trim();
+  const titleParts = [target.label];
+
+  if (recordName) {
+    titleParts.push(recordName);
+  } else if (entryId) {
+    titleParts.push(`内容 #${entryId}`);
+  } else if (recordId) {
+    titleParts.push(`#${recordId}`);
+  }
+
+  return {
+    table: target.table,
+    field: column,
+    record_id: recordId,
+    entry_id: entryId,
+    language_id: languageId,
+    label: titleParts.join(' - '),
+    model_code: model?.code || null,
+    model_name: model?.name || null,
+  };
+}
+
+function hasTable(tableName) {
+  if (!isSafeIdentifier(tableName)) {
+    return false;
+  }
+  return Boolean(queryOne(
+    `
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table'
+        AND name = ?
+      LIMIT 1
+    `,
+    [tableName],
+  ));
+}
+
+function isSafeIdentifier(value) {
+  return /^[A-Za-z_][A-Za-z0-9_]*$/.test(String(value || ''));
+}
+
+function quoteIdentifier(value) {
+  const identifier = String(value || '');
+  if (!isSafeIdentifier(identifier)) {
+    throw new Error(`invalid identifier: ${identifier}`);
+  }
+  return `"${identifier.replaceAll('"', '""')}"`;
+}
+
+function normalizeUsageFilter(value) {
+  return String(value || '').trim() === 'orphaned' ? 'empty' : 'present';
 }
 
 function buildFileName(extension) {

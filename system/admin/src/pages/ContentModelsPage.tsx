@@ -121,7 +121,6 @@ export default function ContentModelsPage() {
                         <TableHead>数据库类型</TableHead>
                         <TableHead>翻译</TableHead>
                         <TableHead>搜索</TableHead>
-                        <TableHead>列表</TableHead>
                         <TableHead>编辑</TableHead>
                         <TableHead>属性</TableHead>
                       </TableRow>
@@ -177,27 +176,6 @@ export default function ContentModelsPage() {
                           </TableCell>
                           <TableCell>
                             <Select
-                              value={String(field.is_listed ?? 1)}
-                              disabled={updateFieldMutation.isPending}
-                              onValueChange={(value) => {
-                                updateFieldMutation.mutate({
-                                  modelId: selectedModel.id,
-                                  fieldName: field.field_name,
-                                  patch: buildFieldPatch(field, { is_listed: Number.parseInt(value, 10) }),
-                                })
-                              }}
-                            >
-                              <SelectTrigger className="w-20">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="1">显示</SelectItem>
-                                <SelectItem value="0">隐藏</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </TableCell>
-                          <TableCell>
-                            <Select
                               value={String(field.is_editable ?? 1)}
                               disabled={field.is_primary === 1 || updateFieldMutation.isPending}
                               onValueChange={(value) => {
@@ -245,7 +223,6 @@ function buildFieldPatch(field: any, patch: Record<string, unknown>) {
     field_label: field.field_label,
     field_type: field.field_type,
     is_required: field.is_required,
-    is_listed: field.is_listed ?? 1,
     is_editable: field.is_editable ?? 1,
     is_translatable: field.is_translatable ?? 0,
     is_searchable: field.is_searchable ?? inferSearchableDefault(field.field_name),

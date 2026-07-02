@@ -297,7 +297,6 @@ export interface ContentModelField {
   is_required: number;
   is_primary: number;
   is_system: number;
-  is_listed?: number;
   is_editable?: number;
   is_translatable?: number;
   is_searchable?: number;
@@ -437,9 +436,21 @@ export interface MediaAsset {
   file_size: number;
   relative_path: string;
   fs_path: string;
-  status: 'active' | 'orphaned' | string;
   file_exists?: boolean;
+  usage_count?: number;
+  usage_references?: MediaAssetUsageReference[];
   created_at?: string;
+}
+
+export interface MediaAssetUsageReference {
+  table: string;
+  field: string;
+  record_id?: number | null;
+  entry_id?: number | null;
+  language_id?: number | null;
+  label: string;
+  model_code?: string | null;
+  model_name?: string | null;
 }
 
 export interface DocumentStamp {

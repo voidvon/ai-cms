@@ -1,6 +1,7 @@
 import { requireAuth } from '../../middleware/auth.mjs';
 import {
   cleanupOrphanedMediaAssets,
+  deleteMediaAsset,
   listMediaAssets,
   uploadMediaAsset,
 } from '../../services/media-assets.mjs';
@@ -9,12 +10,12 @@ export default async function mediaRoutes(app) {
   app.get('/media-assets', {
     onRequest: [requireAuth],
   }, async (request) => {
-    const { page, limit, purpose, status } = request.query;
+    const { page, limit, purpose, usage } = request.query;
     const result = listMediaAssets({
       page: page ? Number.parseInt(page, 10) : undefined,
       limit: limit ? Number.parseInt(limit, 10) : undefined,
       purpose,
-      status,
+      usage,
     });
 
     return { success: true, ...result };
@@ -30,6 +31,34 @@ export default async function mediaRoutes(app) {
       message: '孤儿资源已清理',
       data: result,
     };
+  });
+
+  app.delete('/media-assets/:id', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      const result = deleteMediaAsset(request.params.id);
+      return {
+        success: true,
+        message: '附件已删除',
+        data: result,
+      };
+    } catch (error) {
+      if (error.statusCode === 404) {
+        return reply.notFound(error.message || '附件不存在');
+      }
+      if (error.statusCode === 409) {
+        return reply.code(409).send({
+          success: false,
+          message: error.message || '附件仍在使用中，不能删除',
+          data: {
+            usage_references: error.usageReferences || [],
+          },
+        });
+      }
+      app.log.error(error);
+      return reply.internalServerError(error.message || '删除失败');
+    }
   });
 
   app.post('/media/upload', {

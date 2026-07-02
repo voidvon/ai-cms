@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { buildColumnPathMap, buildColumnTreeOptions } from '@/lib/column-options'
 import { formatDate } from '@/lib/datetime'
-import { getFieldLabel, isFieldVisible, mapFieldsByName } from '@/lib/content-model-fields'
+import { getFieldLabel, mapFieldsByName } from '@/lib/content-model-fields'
 import { toast } from 'sonner'
 import type { Column, ManagedContentItem, SectionContentItem } from '@/types'
 import ContentItemFormDialog from '@/components/ContentItemFormDialog'
@@ -129,11 +129,11 @@ export default function ContentModelDataPage() {
   const pagination = itemsData?.pagination
   const titleFieldName = fieldMap.has('title') ? 'title' : 'name'
   const titleFieldLabel = getFieldLabel(fieldMap, titleFieldName, titleFieldName === 'title' ? '标题' : '名称')
-  const showCode = isFieldVisible(fieldMap, 'code', false)
-  const showFeatured = isFieldVisible(fieldMap, 'is_featured_home', false)
-  const showVisibility = isFieldVisible(fieldMap, 'is_visible', false)
-  const showSortOrder = isFieldVisible(fieldMap, 'sort_order', false)
-  const showCreatedAt = isFieldVisible(fieldMap, 'created_at', false)
+  const showCode = fieldMap.has('code')
+  const showFeatured = fieldMap.has('is_featured_home')
+  const showVisibility = fieldMap.has('is_visible')
+  const showSortOrder = fieldMap.has('sort_order')
+  const showCreatedAt = fieldMap.has('created_at')
 
   const handleSelectModel = (nextModelCode: string) => {
     setSelectedModelCode(nextModelCode)

@@ -1,10 +1,21 @@
 import { useRef, useState } from 'react'
-import { Copy, FileUp, Link as LinkIcon } from 'lucide-react'
+import { Copy, Eye, FileUp, Link as LinkIcon, Trash2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { mediaApi } from '@/api/media'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import ImagePreview from '@/components/ImagePreview'
@@ -39,10 +50,10 @@ const PURPOSE_OPTIONS = [
   })),
 ]
 
-const STATUS_OPTIONS = [
-  { value: 'all', label: '全部状态' },
-  { value: 'active', label: '使用中' },
-  { value: 'orphaned', label: '孤儿资源' },
+const USAGE_OPTIONS = [
+  { value: 'all', label: '全部使用位置' },
+  { value: 'active', label: '有使用位置' },
+  { value: 'orphaned', label: '无使用位置' },
 ]
 
 export default function MediaAssetsPage() {
@@ -50,12 +61,14 @@ export default function MediaAssetsPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [page, setPage] = useState(1)
   const [purpose, setPurpose] = useState('all')
-  const [status, setStatus] = useState('all')
+  const [usage, setUsage] = useState('all')
   const [latestUploadedAsset, setLatestUploadedAsset] = useState<MediaAsset | null>(null)
+  const [usageAsset, setUsageAsset] = useState<MediaAsset | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<MediaAsset | null>(null)
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['media-assets', page, LIMIT, purpose, status],
-    queryFn: () => mediaApi.list({ page, limit: LIMIT, purpose, status }),
+    queryKey: ['media-assets', page, LIMIT, purpose, usage],
+    queryFn: () => mediaApi.list({ page, limit: LIMIT, purpose, usage }),
   })
 
   const cleanupMutation = useMutation({
@@ -64,7 +77,7 @@ export default function MediaAssetsPage() {
       queryClient.invalidateQueries({ queryKey: ['media-assets'] })
       const deletedRows = response.data?.deletedRows || 0
       const deletedFiles = response.data?.deletedFiles || 0
-      toast.success(`已清理 ${deletedRows} 条孤儿资源，删除 ${deletedFiles} 个文件`)
+      toast.success(`已清理 ${deletedRows} 条未使用资源，删除 ${deletedFiles} 个文件`)
       setPage(1)
     },
     onError: (mutationError: any) => {
@@ -78,12 +91,28 @@ export default function MediaAssetsPage() {
       setLatestUploadedAsset(response.data)
       queryClient.invalidateQueries({ queryKey: ['media-assets'] })
       setPurpose('attachment')
-      setStatus('all')
+      setUsage('all')
       setPage(1)
       toast.success('附件上传成功')
     },
     onError: (mutationError: any) => {
       toast.error(mutationError.response?.data?.message || mutationError.message || '附件上传失败')
+    },
+  })
+
+  const deleteMutation = useMutation({
+    mutationFn: async (asset: MediaAsset) => mediaApi.delete(asset.id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['media-assets'] })
+      setDeleteTarget(null)
+      toast.success('附件已删除')
+    },
+    onError: (mutationError: any) => {
+      const references = mutationError.response?.data?.data?.usage_references
+      if (Array.isArray(references) && references.length > 0 && deleteTarget) {
+        setUsageAsset({ ...deleteTarget, usage_references: references, usage_count: references.length })
+      }
+      toast.error(mutationError.response?.data?.message || mutationError.message || '删除失败')
     },
   })
 
@@ -133,14 +162,14 @@ export default function MediaAssetsPage() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <CardTitle>附件管理</CardTitle>
-              <CardDescription>上传附件、直接获取 URL，并查看本地媒体资产状态。</CardDescription>
+              <CardDescription>上传附件、直接获取 URL，并查看本地媒体资产使用位置。</CardDescription>
             </div>
             <Button
               variant="outline"
               onClick={() => cleanupMutation.mutate()}
               disabled={cleanupMutation.isPending}
             >
-              {cleanupMutation.isPending ? '清理中...' : '清理孤儿资源'}
+              {cleanupMutation.isPending ? '清理中...' : '清理未使用资源'}
             </Button>
           </div>
         </CardHeader>
@@ -228,11 +257,11 @@ export default function MediaAssetsPage() {
             </div>
 
             <div className="space-y-2">
-              <div className="text-sm font-medium">状态</div>
+              <div className="text-sm font-medium">使用位置</div>
               <Select
-                value={status}
+                value={usage}
                 onValueChange={(value) => {
-                  setStatus(value)
+                  setUsage(value)
                   setPage(1)
                 }}
               >
@@ -240,7 +269,7 @@ export default function MediaAssetsPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {STATUS_OPTIONS.map((option) => (
+                  {USAGE_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
@@ -262,11 +291,11 @@ export default function MediaAssetsPage() {
                   <TableHead>类型</TableHead>
                   <TableHead>预览</TableHead>
                   <TableHead>文件名</TableHead>
-                  <TableHead>URL</TableHead>
                   <TableHead>大小</TableHead>
-                  <TableHead>状态</TableHead>
+                  <TableHead>使用位置</TableHead>
                   <TableHead>本地文件</TableHead>
                   <TableHead>创建时间</TableHead>
+                  <TableHead className="text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -304,28 +333,44 @@ export default function MediaAssetsPage() {
                           <span className="text-sm text-muted-foreground">非图片</span>
                         )}
                       </TableCell>
-                      <TableCell className="max-w-[220px] truncate">
-                        {item.original_name || '-'}
-                      </TableCell>
-                      <TableCell className="max-w-[280px]">
-                        <div className="flex items-center gap-2">
-                          <span className="truncate text-sm text-muted-foreground">{item.relative_path}</span>
+                      <TableCell className="group max-w-[260px]">
+                        <span className="inline">
+                          <a
+                            href={buildAbsoluteAssetUrl(item.relative_path)}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                            title={item.original_name || item.relative_path}
+                          >
+                            {item.original_name || item.relative_path}
+                          </a>
                           <Button
                             type="button"
                             variant="ghost"
-                            size="icon"
-                            className="shrink-0"
-                            onClick={() => copyText(item.relative_path, '已复制 URL')}
+                            size="icon-sm"
+                            className="ml-1 inline-flex align-middle opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                            onClick={() => copyText(buildAbsoluteAssetUrl(item.relative_path), '已复制完整 URL')}
+                            aria-label={`复制 ${item.original_name || item.relative_path} 的完整 URL`}
                           >
                             <Copy className="size-4" />
                           </Button>
-                        </div>
+                        </span>
                       </TableCell>
                       <TableCell>{formatFileSize(item.file_size)}</TableCell>
                       <TableCell>
-                        <Badge variant={item.status === 'orphaned' ? 'secondary' : 'outline'}>
-                          {item.status === 'orphaned' ? '孤儿资源' : '使用中'}
-                        </Badge>
+                        {item.usage_count ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setUsageAsset(item)}
+                          >
+                            <Eye className="size-4" />
+                            {item.usage_count} 处
+                          </Button>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <Badge variant={item.file_exists ? 'outline' : 'destructive'}>
@@ -333,6 +378,17 @@ export default function MediaAssetsPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>{formatRelativeTime(item.created_at)}</TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          type="button"
+                          variant="destructiveGhost"
+                          size="icon-sm"
+                          onClick={() => setDeleteTarget(item)}
+                          aria-label={`删除 ${item.original_name || item.relative_path}`}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))
                 )}
@@ -405,6 +461,77 @@ export default function MediaAssetsPage() {
           )}
         </CardContent>
       </Card>
+
+      <Dialog open={Boolean(usageAsset)} onOpenChange={(open) => !open && setUsageAsset(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>使用位置</DialogTitle>
+            <DialogDescription>{usageAsset?.relative_path}</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[55vh] overflow-auto rounded border">
+            {usageAsset?.usage_references?.length ? (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>位置</TableHead>
+                    <TableHead>表</TableHead>
+                    <TableHead>字段</TableHead>
+                    <TableHead>ID</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {usageAsset.usage_references.map((reference, index) => (
+                    <TableRow key={`${reference.table}-${reference.field}-${reference.record_id || reference.entry_id || index}`}>
+                      <TableCell className="max-w-[260px]">
+                        <div className="truncate font-medium">{reference.label || '-'}</div>
+                        {reference.model_name ? (
+                          <div className="text-xs text-muted-foreground">{reference.model_name}</div>
+                        ) : null}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{reference.table}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{reference.field}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {reference.entry_id ? `entry ${reference.entry_id}` : reference.record_id || '-'}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            ) : (
+              <div className="p-6 text-center text-sm text-muted-foreground">未记录使用位置</div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除附件</AlertDialogTitle>
+            <AlertDialogDescription>
+              删除后会移除附件记录和本地文件。提交删除时会重新检查使用位置，如果仍被内容、栏目或模板引用，将不会删除。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="rounded border bg-muted/20 p-3 text-sm text-muted-foreground">
+            {deleteTarget?.original_name || deleteTarget?.relative_path || '-'}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleteMutation.isPending}>取消</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteMutation.isPending}
+              onClick={(event) => {
+                event.preventDefault()
+                if (deleteTarget) {
+                  deleteMutation.mutate(deleteTarget)
+                }
+              }}
+            >
+              {deleteMutation.isPending ? '删除中...' : '删除'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -419,6 +546,10 @@ function formatPurpose(purpose: string) {
 function isImageAsset(item: MediaAsset) {
   return String(item.mime_type || '').startsWith('image/')
     || ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp'].includes(String(item.file_ext || '').toLowerCase())
+}
+
+function buildAbsoluteAssetUrl(relativePath: string) {
+  return new URL(relativePath || '/', window.location.origin).toString()
 }
 
 function formatFileSize(size: number) {
