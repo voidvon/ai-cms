@@ -5,6 +5,7 @@ import {
   finalizeDocumentAgentRun,
   startDocumentAgentRun,
 } from '../../services/document-agent/orchestrator.mjs';
+import { assertAiServicePermission } from '../../services/ai/query-service.mjs';
 
 async function parseBody(request) {
   if (request.body && typeof request.body === 'object') {
@@ -22,6 +23,13 @@ export default async function documentAgentRoutes(app) {
   app.post('/document-drafts/:id/assistant/stream', {
     onRequest: [requireAuth],
   }, async (request, reply) => {
+    try {
+      assertAiServicePermission(request.adminUser, ['write:documents']);
+    } catch (error) {
+      reply.code(error.statusCode || 403);
+      return { success: false, message: error.message };
+    }
+
     const body = await parseBody(request);
     const draftId = String(request.params?.id || '').trim();
     const message = String(body.message || '').trim();
@@ -51,7 +59,11 @@ export default async function documentAgentRoutes(app) {
     let started = null;
 
     try {
-      started = await startDocumentAgentRun({ draftId, message });
+      started = await startDocumentAgentRun({
+        draftId,
+        message,
+        user: request.adminUser,
+      });
 
       writeSseEvent(reply, 'started', {
         draftId,

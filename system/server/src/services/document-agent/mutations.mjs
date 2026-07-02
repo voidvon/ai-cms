@@ -5,6 +5,7 @@ import {
 import { getDocumentDraftById, updateDocumentDraft } from '../document-drafts.mjs';
 import { upsertDocumentCompanyFromParty } from '../document-companies.mjs';
 import { recordDraftMutation, syncLegacyDraftMessages } from './store.mjs';
+import { assertAiServicePermission } from '../ai/query-service.mjs';
 
 export function mergeDocumentDraftPatch(baseValue, overrideValue) {
   if (overrideValue === null || overrideValue === undefined) {
@@ -34,7 +35,10 @@ export function applyDocumentPatchMutation({
   patch,
   summary,
   syncConversationId,
+  user,
 }) {
+  assertAiServicePermission(user, ['write:documents']);
+
   const draft = getDocumentDraftById(draftId);
   if (!draft) {
     const error = new Error('文档草稿不存在');
@@ -84,6 +88,7 @@ export function setDocumentPartyMutation({
   party,
   summary,
   syncConversationId,
+  user,
 }) {
   return applyDocumentPatchMutation({
     draftId,
@@ -91,6 +96,7 @@ export function setDocumentPartyMutation({
     patch: { [role]: party },
     summary: summary || `更新${role === 'customer' ? '客户' : '我方公司'}信息`,
     syncConversationId,
+    user,
   });
 }
 
@@ -101,6 +107,7 @@ export function replaceDocumentItemsMutation({
   pricing,
   summary,
   syncConversationId,
+  user,
 }) {
   const patch = {
     items,
@@ -113,6 +120,7 @@ export function replaceDocumentItemsMutation({
     patch,
     summary: summary || '更新产品明细',
     syncConversationId,
+    user,
   });
 }
 
@@ -122,6 +130,7 @@ export function setDocumentTermsMutation({
   terms,
   summary,
   syncConversationId,
+  user,
 }) {
   return applyDocumentPatchMutation({
     draftId,
@@ -129,6 +138,7 @@ export function setDocumentTermsMutation({
     patch: { terms },
     summary: summary || '更新条款信息',
     syncConversationId,
+    user,
   });
 }
 
@@ -138,6 +148,7 @@ export function setDocumentPricingMutation({
   pricing,
   summary,
   syncConversationId,
+  user,
 }) {
   return applyDocumentPatchMutation({
     draftId,
@@ -145,6 +156,7 @@ export function setDocumentPricingMutation({
     patch: { pricing },
     summary: summary || '更新价格信息',
     syncConversationId,
+    user,
   });
 }
 

@@ -231,6 +231,7 @@ export default async function documentWorkspaceRoutes(app) {
       const result = await sendDocumentDraftMessage({
         draftId: request.params.id,
         message: request.body?.message,
+        user: request.adminUser,
       });
       return { success: true, data: result };
     } catch (error) {

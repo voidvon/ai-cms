@@ -12,7 +12,7 @@ import {
   syncLegacyDraftMessages,
 } from './store.mjs';
 
-export async function startDocumentAgentRun({ draftId, message }) {
+export async function startDocumentAgentRun({ draftId, message, user = null }) {
   assertAiConfig();
 
   const snapshot = buildDocumentAgentContext(draftId);
@@ -40,6 +40,7 @@ export async function startDocumentAgentRun({ draftId, message }) {
     stream: true,
     session,
     context: {
+      user,
       draftId,
       conversationId: conversation.id,
       runId: runRecord.id,

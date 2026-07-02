@@ -14,12 +14,23 @@ import { ensureAdminGroupSchema } from './services/admin-groups.mjs';
 import { applySecurityHeaders } from './services/security-headers.mjs';
 import { createSiteListenerManager } from './site-listener-manager.mjs';
 import { withPortConflictDetails } from './utils/port-diagnostics.mjs';
+import { initializeAiService } from './services/ai/initialize.mjs';
 
 const require = createRequire(import.meta.url);
 
 getDb();
 ensureAdminGroupSchema();
 ensureAccessLogsSchema();
+
+// 初始化 AI 服务
+try {
+  initializeAiService({
+    useDatabase: false, // 使用内存存储，生产环境可改为 true
+    verbose: process.env.NODE_ENV === 'development',
+  });
+} catch (error) {
+  console.warn('Failed to initialize AI service:', error.message);
+}
 
 export async function createApp(options = {}) {
   const publicSite = normalizePublicSiteOptions(options.publicSite);

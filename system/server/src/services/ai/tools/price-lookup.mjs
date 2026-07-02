@@ -1,6 +1,8 @@
 import { tool } from '@openai/agents';
 import { z } from 'zod';
 import { normalizeText } from '../shared.mjs';
+import { lookupPriceForAi } from '../query-service.mjs';
+import { hasAiPermissions } from '../core/permissions.mjs';
 
 export function estimateUnitPrice(sku, quantity, region) {
   const skuScore = Array.from(String(sku || ''))
@@ -21,18 +23,29 @@ export function createPriceLookupTool() {
       region: z.string().default('CN'),
       currency: z.string().default('CNY'),
     }),
-    async execute({ sku, quantity, region, currency }) {
-      const normalizedSku = normalizeText(sku).toUpperCase();
-      const unitPrice = estimateUnitPrice(normalizedSku, quantity, region);
-      return {
-        sku: normalizedSku,
+    async execute({ sku, quantity, region, currency }, runContext) {
+      const user = runContext?.context?.user || null;
+      if (!user || !hasAiPermissions(user, ['read:prices'])) {
+        const normalizedSku = normalizeText(sku).toUpperCase();
+        const unitPrice = estimateUnitPrice(normalizedSku, quantity, region);
+        return {
+          sku: normalizedSku,
+          quantity,
+          region,
+          currency,
+          unit_price: unitPrice,
+          line_total: Number((unitPrice * quantity).toFixed(2)),
+          price_source: 'stub_price_catalog',
+        };
+      }
+
+      return lookupPriceForAi({
+        user,
+        sku: normalizeText(sku),
         quantity,
         region,
         currency,
-        unit_price: unitPrice,
-        line_total: Number((unitPrice * quantity).toFixed(2)),
-        price_source: 'stub_price_catalog',
-      };
+      });
     },
   });
 }

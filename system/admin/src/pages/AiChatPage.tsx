@@ -1,22 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Bot, Loader2, Pencil, RefreshCw, Send, Settings2, Stamp, Trash2 } from 'lucide-react'
+import { Loader2, Pencil, RefreshCw, Settings2, Stamp, Trash2 } from 'lucide-react'
 import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { documentWorkspacesApi } from '@/api/document-workspaces'
 import { documentAgentApi } from '@/api/document-agent'
-import { ChatMessageItem } from '@/components/ai-chat/ChatMessageItem'
+import { ChatWorkspaceShell, type ChatWorkspaceShellMessage } from '@/components/ai-chat/ChatWorkspaceShell'
 import { DocumentCompanyManagerDialog } from '@/components/DocumentCompanyManagerDialog'
 import { DocumentStampManagerDialog } from '@/components/DocumentStampManagerDialog'
 import { DocumentTemplateCompanySlotsDialog } from '@/components/DocumentTemplateCompanySlotsDialog'
-import {
-  PromptInput,
-  PromptInputBody,
-  PromptInputFooter,
-  PromptInputSubmit,
-  PromptInputTextarea,
-  PromptInputTools,
-} from '@/components/ai-elements/prompt-input'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -365,6 +357,35 @@ export default function AiChatPage() {
   })
 
   const previewUrl = currentDraft ? `${documentWorkspacesApi.getPreviewUrl(currentDraft.id)}?v=${previewVersion}` : ''
+
+  const conversationMessages = useMemo<ChatWorkspaceShellMessage[]>(() => {
+    if (!currentDraft) {
+      return []
+    }
+
+    const baseMessages = currentDraft.messages.length === 0
+      ? [{
+          id: 'document-assistant-welcome',
+          role: 'assistant' as const,
+          text: `当前已进入${DOCUMENT_TYPE_LABELS[currentDraft.document_type]}工作台。你可以先告诉我客户名称、产品型号和数量，我会先补齐基础草稿。`,
+        }]
+      : currentDraft.messages.map((message, index) => ({
+          id: `${message.created_at}-${index}`,
+          role: message.role,
+          text: message.text,
+        }))
+
+    if (streamState.isStreaming) {
+      baseMessages.push({
+        id: `streaming-${currentDraft.id}`,
+        role: 'assistant',
+        text: streamState.assistantText,
+        pending: !streamState.assistantText,
+      })
+    }
+
+    return baseMessages
+  }, [currentDraft, streamState.assistantText, streamState.isStreaming])
 
   useEffect(() => {
     if (!currentDraft?.id) {
@@ -838,9 +859,27 @@ export default function AiChatPage() {
                 </section>
 
                 <section className="flex h-full min-h-0 flex-col bg-background">
-                  <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
-                    <div className="space-y-5">
-                      <div className="rounded-2xl border bg-background p-4">
+                  <ChatWorkspaceShell
+                    layout="stacked"
+                    messages={conversationMessages}
+                    inputValue={inputValue}
+                    onInputChange={setInputValue}
+                    onSubmit={() => void handleSubmit({ text: inputValue })}
+                    submitDisabled={!inputValue.trim() || sendMessageMutation.isPending}
+                    submitStatus={sendMessageMutation.isPending ? 'submitted' : 'ready'}
+                    placeholder={`例如：客户是上海某工厂，${currentDraft.document_type === 'quote' ? '报价' : '合同'}里先加入 BSA2T-25 两台，含税，交期两周`}
+                    statusBadges={[
+                      { key: 'template', label: `模板：${currentDraft.document_template_name}` },
+                      { key: 'type', label: DOCUMENT_TYPE_LABELS[currentDraft.document_type], tone: 'secondary' },
+                    ]}
+                    footerTools={(
+                      <div className="rounded-full border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+                        当前模板：{currentDraft.document_template_name}
+                      </div>
+                    )}
+                    sidebar={(
+                      <div className="space-y-5 px-4 py-5">
+                        <div className="rounded-2xl border bg-background p-4">
                         <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">当前识别</p>
                         <div className="mt-3 grid gap-3 text-sm">
                           <div className="flex items-center justify-between gap-3">
@@ -882,10 +921,10 @@ export default function AiChatPage() {
                             <span className="text-right font-medium">{String(currentDraft.draft_payload?.terms?.payment || '-')}</span>
                           </div>
                         </div>
-                      </div>
+                        </div>
 
-                      {conversationState.missing_fields.length > 0 || conversationState.suggested_questions.length > 0 ? (
-                        <div className="rounded-2xl border bg-muted/20 p-4">
+                        {conversationState.missing_fields.length > 0 || conversationState.suggested_questions.length > 0 ? (
+                          <div className="rounded-2xl border bg-muted/20 p-4">
                           {conversationState.missing_fields.length > 0 ? (
                             <div className="space-y-2">
                               <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">待补充字段</p>
@@ -913,11 +952,11 @@ export default function AiChatPage() {
                               </div>
                             </div>
                           ) : null}
-                        </div>
-                      ) : null}
+                          </div>
+                        ) : null}
 
-                      {streamState.toolActivities.length > 0 ? (
-                        <div className="rounded-2xl border bg-background p-4">
+                        {streamState.toolActivities.length > 0 ? (
+                          <div className="rounded-2xl border bg-background p-4">
                           <p className="text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">工具活动</p>
                           <div className="mt-3 space-y-2">
                             {streamState.toolActivities.map((activity, index) => (
@@ -934,58 +973,11 @@ export default function AiChatPage() {
                               </div>
                             ))}
                           </div>
-                        </div>
-                      ) : null}
-
-                      {currentDraft.messages.length === 0 ? (
-                        <ChatMessageItem
-                          role="assistant"
-                          text={`当前已进入${DOCUMENT_TYPE_LABELS[currentDraft.document_type]}工作台。你可以先告诉我客户名称、产品型号和数量，我会先补齐基础草稿。`}
-                        />
-                      ) : (
-                        currentDraft.messages.map((message, index) => (
-                          <ChatMessageItem
-                            key={`${message.created_at}-${index}`}
-                            role={message.role}
-                            text={message.text}
-                          />
-                        ))
-                      )}
-
-                      {streamState.isStreaming ? (
-                        <ChatMessageItem
-                          role="assistant"
-                          text={streamState.assistantText}
-                          pending={!streamState.assistantText}
-                        />
-                      ) : null}
-                    </div>
-                  </div>
-
-                  <div className="border-t bg-background/95 px-4 py-4 backdrop-blur">
-                    <PromptInput onSubmit={({ text }) => void handleSubmit({ text: text || inputValue })}>
-                      <PromptInputBody>
-                        <PromptInputTextarea
-                          value={inputValue}
-                          onChange={(event) => setInputValue(event.target.value)}
-                          placeholder={`例如：客户是上海某工厂，${currentDraft.document_type === 'quote' ? '报价' : '合同'}里先加入 BSA2T-25 两台，含税，交期两周`}
-                        />
-                      </PromptInputBody>
-                      <PromptInputFooter>
-                        <PromptInputTools>
-                          <div className="rounded-full border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
-                            当前模板：{currentDraft.document_template_name}
                           </div>
-                        </PromptInputTools>
-                        <PromptInputSubmit
-                          disabled={!inputValue.trim() || sendMessageMutation.isPending}
-                          status={sendMessageMutation.isPending ? 'submitted' : 'ready'}
-                        >
-                          {!sendMessageMutation.isPending ? <Send className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-                        </PromptInputSubmit>
-                      </PromptInputFooter>
-                    </PromptInput>
-                  </div>
+                        ) : null}
+                      </div>
+                    )}
+                  />
                 </section>
             </div>
           )}

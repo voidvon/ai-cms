@@ -61,6 +61,7 @@ export function createDocumentAgentTools() {
             party: input.customer,
             summary: input.summary,
             syncConversationId: context.conversationId,
+            user: context.user,
           });
         },
       })
@@ -89,6 +90,7 @@ export function createDocumentAgentTools() {
             party: input.seller,
             summary: input.summary,
             syncConversationId: context.conversationId,
+            user: context.user,
           });
         },
       })
@@ -128,6 +130,7 @@ export function createDocumentAgentTools() {
             pricing: input.pricing,
             summary: input.summary,
             syncConversationId: context.conversationId,
+            user: context.user,
           });
         },
       })
@@ -156,6 +159,7 @@ export function createDocumentAgentTools() {
             terms: input.terms,
             summary: input.summary,
             syncConversationId: context.conversationId,
+            user: context.user,
           });
         },
       })
@@ -183,6 +187,7 @@ export function createDocumentAgentTools() {
             pricing: input.pricing,
             summary: input.summary,
             syncConversationId: context.conversationId,
+            user: context.user,
           });
         },
       })
@@ -204,6 +209,7 @@ export function createDocumentAgentTools() {
             patch,
             summary: input.summary,
             syncConversationId: context.conversationId,
+            user: context.user,
           });
         },
       })

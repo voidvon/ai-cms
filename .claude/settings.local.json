@@ -9,7 +9,10 @@
       "Read(//Users/yytest/.claude/**)",
       "Bash(curl -s \"http://127.0.0.1:3000/api/products/admin?page=1&limit=10\" -H \"Cookie: $\\(grep -r 'admin_token' ~/.claude)",
       "Bash(node *)",
-      "Bash(curl -s \"http://127.0.0.1:3000/api/products/admin?page=1&limit=10&language=zh-CN\")"
+      "Bash(curl -s \"http://127.0.0.1:3000/api/products/admin?page=1&limit=10&language=zh-CN\")",
+      "Bash(pkill -f \"node server.mjs\")",
+      "Bash(curl -s http://127.0.0.1:3000/api/health)",
+      "Bash(curl -s -m 5 http://127.0.0.1:3000/api/health)"
     ]
   }
 }

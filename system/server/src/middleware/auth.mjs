@@ -1,5 +1,6 @@
 import { getAdminSession, deleteAdminSession } from '../services/sessions.mjs';
 import { hasAdminPermission } from '../services/admin-permissions.mjs';
+import { hasAiPermissions } from '../services/ai/core/permissions.mjs';
 
 /**
  * Fastify 钩子：从 cookie 中提取 session token 并加载会话信息
@@ -20,7 +21,10 @@ export async function authHook(request, reply) {
         permission_flags: session.permission_flags,
         group_id: session.group_id,
         group_code: session.group_code,
-        group_name: session.group_name
+        group_name: session.group_name,
+        hasPermissions(requiredPermissions) {
+          return hasAiPermissions(this, requiredPermissions);
+        }
       };
     }
   }

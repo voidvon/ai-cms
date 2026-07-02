@@ -577,20 +577,33 @@ export interface AiChatCapabilityDefinition {
   key: string;
   label: string;
   description: string;
+  icon?: string;
+  category?: string;
+  available?: boolean;
 }
 
 export interface AiCapabilities {
   provider: string;
   status: 'stub' | 'ready' | string;
   default_chat_capability: string;
-  chat_capabilities: AiChatCapabilityDefinition[];
-  task_capabilities: AiTaskDefinition[];
-  recommendedArchitecture: {
+  chat_capabilities?: AiChatCapabilityDefinition[];
+  capabilities?: AiChatCapabilityDefinition[];
+  task_capabilities?: AiTaskDefinition[];
+  recommendedArchitecture?: {
     ui: string;
     api: string;
     orchestration: string;
     files: string;
   };
+  model?: string;
+}
+
+export interface AiToolDefinition {
+  name: string;
+  description: string;
+  category: string;
+  requiresAuth: boolean;
+  requiredPermissions: string[];
 }
 
 export interface AiTaskResult {

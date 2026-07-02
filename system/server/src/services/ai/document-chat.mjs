@@ -4,6 +4,7 @@ import { documentChatResponseSchema, normalizeDocumentDraftPayload, summarizeDoc
 import { assertAiConfig, DEFAULT_MODEL, getOpenAIClient } from './runtime.mjs';
 import { normalizeText } from './shared.mjs';
 import { zodResponseFormat } from 'openai/helpers/zod';
+import { assertAiServicePermission } from './query-service.mjs';
 
 function buildDocumentChatMessages(draft, message) {
   return [
@@ -34,8 +35,9 @@ function buildDocumentChatMessages(draft, message) {
   ];
 }
 
-export async function sendDocumentDraftMessage({ draftId, message }) {
+export async function sendDocumentDraftMessage({ draftId, message, user }) {
   assertAiConfig();
+  assertAiServicePermission(user, ['write:documents']);
 
   const draft = getDocumentDraftById(draftId);
   if (!draft) {

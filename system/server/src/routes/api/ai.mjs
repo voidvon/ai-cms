@@ -1,8 +1,10 @@
 import { createUIMessageStream, pipeUIMessageStreamToResponse } from 'ai';
 import { requireAuth } from '../../middleware/auth.mjs';
-import { getAiCapabilities, executeAiTask } from '../../services/ai/capabilities.mjs';
-import { resetAiConversation, streamAiChat } from '../../services/ai/chat.mjs';
+import { getAiOrchestrator } from '../../services/ai/initialize.mjs';
+import { capabilityRegistry, toolRegistry } from '../../services/ai/core/index.mjs';
+import { getAiDataSourceStatus } from '../../services/ai/data-source-registry.mjs';
 import { DEFAULT_MODEL } from '../../services/ai/runtime.mjs';
+import { executeContractTask } from '../../services/ai/skills/contract.mjs';
 
 async function parseBody(request) {
   if (request.body && typeof request.body === 'object') {
@@ -68,22 +70,121 @@ function formatAiError(error) {
 }
 
 export default async function aiRoutes(app) {
+  // 获取可用能力列表
   app.get('/ai/capabilities', {
     onRequest: [requireAuth],
-  }, async () => {
-    return {
-      success: true,
-      data: getAiCapabilities(),
-    };
+  }, async (request) => {
+    try {
+      const orchestrator = getAiOrchestrator();
+      const capabilities = orchestrator.getCapabilities({
+        userId: request.adminUser?.id,
+        user: request.adminUser,
+      });
+
+      return {
+        success: true,
+        data: {
+          provider: 'openai_agents_js',
+          status: 'ready',
+          default_chat_capability: 'general_chat',
+          capabilities,
+          model: DEFAULT_MODEL,
+        },
+      };
+    } catch (error) {
+      return {
+        success: true,
+        data: {
+          provider: 'openai_agents_js',
+          status: 'stub',
+          error: error.message,
+          capabilities: [],
+        },
+      };
+    }
   });
 
+  // 获取可用工具列表
+  app.get('/ai/tools', {
+    onRequest: [requireAuth],
+  }, async (request) => {
+    try {
+      const orchestrator = getAiOrchestrator();
+      const capabilityKey = String(request.query?.capability || '').trim();
+      const tools = orchestrator.getTools({
+        user: request.adminUser,
+        ...(capabilityKey ? { capabilityKey } : {}),
+      });
+
+      return {
+        success: true,
+        data: {
+          total: tools.length,
+          tools,
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || '获取工具列表失败',
+      };
+    }
+  });
+
+  app.get('/ai/governance', {
+    onRequest: [requireAuth],
+  }, async (request) => {
+    try {
+      const capabilityKey = String(request.query?.capability || '').trim();
+      const tools = toolRegistry.listGovernance({
+        user: request.adminUser,
+      }).filter((tool) => {
+        if (!capabilityKey) {
+          return true;
+        }
+        const capability = capabilityRegistry.get(capabilityKey);
+        const visibleToolNames = Array.isArray(capability?.visibleToolNames) ? capability.visibleToolNames : [];
+        return visibleToolNames.includes(tool.name);
+      });
+
+      return {
+        success: true,
+        data: {
+          capability: capabilityKey || null,
+          tools,
+          data_sources: getAiDataSourceStatus(),
+          permission_aliases: {
+            'read:content': ['03'],
+            'write:content': ['03'],
+            'read:products': ['03'],
+            'write:products': ['03'],
+            'read:prices': ['03'],
+            'write:prices': ['03'],
+            'read:documents': ['03'],
+            'write:documents': ['03'],
+            'read:all': ['10'],
+            'write:all': ['10'],
+          },
+        },
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || '获取 AI 治理信息失败',
+      };
+    }
+  });
+
+  // 执行 AI 任务（保持向后兼容）
   app.post('/ai/tasks/:taskKey/execute', {
     onRequest: [requireAuth],
   }, async (request, reply) => {
     try {
       const body = await parseBody(request);
       const taskKey = String(request.params?.taskKey || '').trim();
-      const result = await executeAiTask(taskKey, body);
+
+      // 任务执行仍使用旧的实现（保持向后兼容）
+      const result = await executeContractTask(taskKey, body);
 
       return {
         success: true,
@@ -99,6 +200,7 @@ export default async function aiRoutes(app) {
     }
   });
 
+  // AI 对话接口（使用新架构）
   app.post('/ai/chat', {
     onRequest: [requireAuth],
   }, async (request, reply) => {
@@ -109,52 +211,83 @@ export default async function aiRoutes(app) {
       ? lastMessage.parts.filter((part) => part?.type === 'text').map((part) => String(part.text || ''))
       : [];
     const messageText = textParts.join('\n').trim();
-    const conversationId = body.conversationId || body.chatId || body.id || '';
-    const capability = body.capability || '';
+    const conversationId = body.conversationId || body.chatId || body.id || `chat-${Date.now()}`;
+    const capabilityKey = body.capability || '';
+    const toolMode = body.toolMode === 'explicit' ? 'explicit' : 'auto';
+    const requestedToolNames = Array.isArray(body.toolNames)
+      ? body.toolNames.map((item) => String(item || '').trim()).filter(Boolean)
+      : [];
 
     return sendAssistantStreamingTextStream(reply, messages, async (writeDelta) => {
-      const streamed = await streamAiChat({
-        conversationId,
-        capability,
-        message: messageText,
-      });
-      const reader = streamed.result.toTextStream().getReader();
-      let hasDelta = false;
-
       try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
-            break;
-          }
+        const orchestrator = getAiOrchestrator();
 
-          const delta = String(value || '');
-          if (!delta) {
-            continue;
-          }
+        const streamed = await orchestrator.chat({
+          conversationId,
+          message: messageText,
+          userId: request.adminUser?.id,
+          user: request.adminUser || null,
+          capabilityKey,
+          stream: true,
+          requestedToolNames,
+          toolMode,
+        });
 
-          hasDelta = true;
-          writeDelta(delta);
+        const reader = streamed.result.toTextStream().getReader();
+        let hasDelta = false;
+
+        try {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) {
+              break;
+            }
+
+            const delta = String(value || '');
+            if (!delta) {
+              continue;
+            }
+
+            hasDelta = true;
+            writeDelta(delta);
+          }
+        } finally {
+          reader.releaseLock();
         }
-      } finally {
-        reader.releaseLock();
-      }
 
-      await streamed.result.completed;
+        await streamed.result.completed;
 
-      if (!hasDelta) {
-        writeDelta(streamed.getFinalText() || '我已收到你的请求，但当前没有生成有效回复。');
+        if (!hasDelta) {
+          const finalText = String(streamed.result.finalOutput || '').trim();
+          writeDelta(finalText || '我已收到你的请求，但当前没有生成有效回复。');
+        }
+      } catch (error) {
+        console.error('AI chat error:', error);
+        writeDelta(formatAiError(error));
       }
     });
   });
 
+  // 重置对话
   app.post('/ai/chat/reset', {
     onRequest: [requireAuth],
   }, async (request) => {
     const body = await parseBody(request);
-    return {
-      success: true,
-      data: resetAiConversation(body.conversation_id || body.conversationId || body.chat_id || body.chatId || ''),
-    };
+    const conversationId = body.conversation_id || body.conversationId || body.chat_id || body.chatId || '';
+
+    try {
+      const orchestrator = getAiOrchestrator();
+      const result = await orchestrator.resetConversation(conversationId);
+
+      return {
+        success: true,
+        data: result,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || '重置对话失败',
+      };
+    }
   });
 }

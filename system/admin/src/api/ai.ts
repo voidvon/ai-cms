@@ -5,12 +5,20 @@ import type {
   AiKnowledgePayload,
   AiPriceQueryPayload,
   AiTaskResult,
+  AiToolDefinition,
   ApiResponse,
 } from '@/types'
 
 export const aiApi = {
   capabilities: async () => {
     const response = await apiClient.get<ApiResponse<AiCapabilities>>('/ai/capabilities')
+    return response.data
+  },
+
+  tools: async (capability?: string) => {
+    const response = await apiClient.get<ApiResponse<{ total: number; tools: AiToolDefinition[] }>>('/ai/tools', {
+      params: capability ? { capability } : undefined,
+    })
     return response.data
   },
 

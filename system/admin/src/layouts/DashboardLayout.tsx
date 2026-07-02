@@ -85,7 +85,8 @@ export default function DashboardLayout() {
 
   const topLevelItems = [
     { path: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
-    { path: '/ai', label: 'AI 文档', icon: Bot },
+    { path: '/ai', label: 'AI 对话', icon: Bot },
+    { path: '/ai-docs', label: 'AI 文档', icon: FileText },
     { path: '/price-management', label: '价格管理', icon: ListOrdered },
     { path: '/content-model-data', label: '信息管理', icon: FileText },
     { path: '/columns', label: '栏目管理', icon: Folder },
