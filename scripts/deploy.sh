@@ -30,27 +30,27 @@ trap cleanup EXIT
 
 require_command() {
   if ! command -v "$1" >/dev/null 2>&1; then
-    printf 'Missing required command: %s\n' "$1" >&2
+    printf '缺少必需命令：%s\n' "$1" >&2
     exit 1
   fi
 }
 
 print_usage() {
   cat <<EOF
-Usage: ./scripts/deploy.sh [options]
+用法：./scripts/deploy.sh [选项]
 
-Options:
-  --data                         Upload local sqlite database after gzip compression and overwrite remote database
-  --build-site                   Run remote static generation after deploy
-  --db-path <path>               Local sqlite database path
-  --host <host>                  Remote host, default: ${REMOTE_HOST}
-  --user <user>                  Remote user, default: ${REMOTE_USER}
-  --dir <dir>                    Remote app dir, default: ${REMOTE_DIR}
-  --runtime-manager <mode>       Runtime manager: bt, bt-manual, plain. Default: ${DEPLOY_RUNTIME_MANAGER}
-  --bt-restart-command <cmd>     Restart command used when runtime manager is bt
-  --max-sqlite-backups <count>   Remote sqlite backup retention, default: ${MAX_SQLITE_BACKUPS}
-  --health-url <url>             Health check base url, default: ${HEALTH_CHECK_URL}
-  --help                         Show this help message
+选项：
+  --data                         gzip 压缩并上传本地 sqlite 数据库，覆盖远端数据库
+  --build-site                   部署后在远端执行静态生成
+  --db-path <path>               本地 sqlite 数据库路径
+  --host <host>                  远端主机，默认：${REMOTE_HOST}
+  --user <user>                  远端用户，默认：${REMOTE_USER}
+  --dir <dir>                    远端应用目录，默认：${REMOTE_DIR}
+  --runtime-manager <mode>       运行管理模式：bt、bt-manual、plain。默认：${DEPLOY_RUNTIME_MANAGER}
+  --bt-restart-command <cmd>     runtime-manager 为 bt 时使用的重启命令
+  --max-sqlite-backups <count>   远端 sqlite 备份保留数量，默认：${MAX_SQLITE_BACKUPS}
+  --health-url <url>             健康检查基础 URL，默认：${HEALTH_CHECK_URL}
+  --help                         显示此帮助信息
 EOF
 }
 
@@ -65,7 +65,7 @@ parse_args() {
         ;;
       --db-path)
         [ "$#" -ge 2 ] || {
-          printf 'Missing value for --db-path\n' >&2
+          printf '缺少 --db-path 的参数值\n' >&2
           exit 1
         }
         LOCAL_SQLITE_DB_PATH="$2"
@@ -73,7 +73,7 @@ parse_args() {
         ;;
       --host)
         [ "$#" -ge 2 ] || {
-          printf 'Missing value for --host\n' >&2
+          printf '缺少 --host 的参数值\n' >&2
           exit 1
         }
         REMOTE_HOST="$2"
@@ -81,7 +81,7 @@ parse_args() {
         ;;
       --user)
         [ "$#" -ge 2 ] || {
-          printf 'Missing value for --user\n' >&2
+          printf '缺少 --user 的参数值\n' >&2
           exit 1
         }
         REMOTE_USER="$2"
@@ -89,7 +89,7 @@ parse_args() {
         ;;
       --dir)
         [ "$#" -ge 2 ] || {
-          printf 'Missing value for --dir\n' >&2
+          printf '缺少 --dir 的参数值\n' >&2
           exit 1
         }
         REMOTE_DIR="$2"
@@ -97,7 +97,7 @@ parse_args() {
         ;;
       --runtime-manager)
         [ "$#" -ge 2 ] || {
-          printf 'Missing value for --runtime-manager\n' >&2
+          printf '缺少 --runtime-manager 的参数值\n' >&2
           exit 1
         }
         DEPLOY_RUNTIME_MANAGER="$2"
@@ -105,7 +105,7 @@ parse_args() {
         ;;
       --bt-restart-command)
         [ "$#" -ge 2 ] || {
-          printf 'Missing value for --bt-restart-command\n' >&2
+          printf '缺少 --bt-restart-command 的参数值\n' >&2
           exit 1
         }
         BT_RESTART_COMMAND="$2"
@@ -113,7 +113,7 @@ parse_args() {
         ;;
       --max-sqlite-backups)
         [ "$#" -ge 2 ] || {
-          printf 'Missing value for --max-sqlite-backups\n' >&2
+          printf '缺少 --max-sqlite-backups 的参数值\n' >&2
           exit 1
         }
         MAX_SQLITE_BACKUPS="$2"
@@ -121,7 +121,7 @@ parse_args() {
         ;;
       --health-url)
         [ "$#" -ge 2 ] || {
-          printf 'Missing value for --health-url\n' >&2
+          printf '缺少 --health-url 的参数值\n' >&2
           exit 1
         }
         HEALTH_CHECK_URL="$2"
@@ -132,7 +132,7 @@ parse_args() {
         exit 0
         ;;
       *)
-        printf 'Unknown option: %s\n\n' "$1" >&2
+        printf '未知选项：%s\n\n' "$1" >&2
         print_usage >&2
         exit 1
         ;;
@@ -144,8 +144,8 @@ parse_args() {
 prompt_private_key() {
   local line=""
 
-  printf 'Paste the SSH private key for %s@%s.\n' "${REMOTE_USER}" "${REMOTE_HOST}" >&2
-  printf 'The input will stop automatically after the END PRIVATE KEY line.\n' >&2
+  printf '请粘贴用于连接 %s@%s 的 SSH 私钥。\n' "${REMOTE_USER}" "${REMOTE_HOST}" >&2
+  printf '读取到 END PRIVATE KEY 行后会自动结束输入。\n' >&2
   : > "${KEY_FILE}"
 
   while IFS= read -r line; do
@@ -159,11 +159,11 @@ prompt_private_key() {
   chmod 600 "${KEY_FILE}"
 
   if ! grep -Eq 'BEGIN .+PRIVATE KEY' "${KEY_FILE}" || ! grep -Eq 'END .+PRIVATE KEY' "${KEY_FILE}"; then
-    printf 'The pasted content does not look like an SSH private key.\n' >&2
+    printf '粘贴的内容看起来不是有效的 SSH 私钥。\n' >&2
     exit 1
   fi
 
-  read -r -p 'Private key captured. Press Enter to continue...' _ < /dev/tty
+  read -r -p '私钥已读取，按回车继续...' _ < /dev/tty
 }
 
 main() {
@@ -173,7 +173,7 @@ main() {
   require_command ssh
   require_command rsync
 
-  printf '\n[deploy] Building dist package...\n'
+  printf '\n[deploy] 正在构建 dist 发布包...\n'
   (
     cd "${PROJECT_ROOT}"
     npm run build:dist
@@ -185,16 +185,16 @@ main() {
     require_command gzip
 
     if [ ! -f "${LOCAL_SQLITE_DB_PATH}" ]; then
-      printf 'Local sqlite database not found: %s\n' "${LOCAL_SQLITE_DB_PATH}" >&2
+      printf '未找到本地 sqlite 数据库：%s\n' "${LOCAL_SQLITE_DB_PATH}" >&2
       exit 1
     fi
 
     LOCAL_DB_ARCHIVE_FILE="$(mktemp "${TMPDIR:-/tmp}/node-cms-site-sqlite.XXXXXX.gz")"
-    printf '[deploy] Compressing local sqlite database...\n'
+    printf '[deploy] 正在压缩本地 sqlite 数据库...\n'
     gzip -c "${LOCAL_SQLITE_DB_PATH}" > "${LOCAL_DB_ARCHIVE_FILE}"
 
     if [ "${BUILD_STATIC_ON_DEPLOY}" != "1" ]; then
-      printf '[deploy] Warning: DEPLOY_UPLOAD_DB=1 but BUILD_STATIC_ON_DEPLOY=0; remote html/ will not be regenerated.\n'
+      printf '[deploy] 警告：已启用数据库上传，但未启用静态生成；远端 html/ 不会重新生成。\n'
     fi
   fi
 
@@ -205,10 +205,10 @@ main() {
     -o IdentitiesOnly=yes
   )
 
-  printf '[deploy] Ensuring remote directory exists...\n'
+  printf '[deploy] 正在确认远端目录存在...\n'
   ssh "${ssh_options[@]}" "${REMOTE_USER}@${REMOTE_HOST}" "mkdir -p '${REMOTE_DIR}' '${REMOTE_DIR}/.deploy'"
 
-  printf '[deploy] Syncing dist package to %s...\n' "${REMOTE_DIR}"
+  printf '[deploy] 正在同步 dist 发布包到 %s...\n' "${REMOTE_DIR}"
   rsync -az --delete \
     --rsh="ssh ${ssh_options[*]}" \
     --filter='P /.deploy/' \
@@ -234,16 +234,16 @@ main() {
     "${PROJECT_ROOT}/dist/" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
 
   if [ "${DEPLOY_UPLOAD_DB}" = "1" ]; then
-    printf '[deploy] Uploading compressed sqlite database...\n'
+    printf '[deploy] 正在上传压缩后的 sqlite 数据库...\n'
     rsync -az \
       --rsh="ssh ${ssh_options[*]}" \
       "${LOCAL_DB_ARCHIVE_FILE}" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/.deploy/site.sqlite.gz"
   fi
 
   if [ "${BUILD_STATIC_ON_DEPLOY}" = "1" ]; then
-    printf '[deploy] Installing dependencies and rebuilding static pages...\n'
+    printf '[deploy] 正在检查依赖并重新生成静态页面...\n'
   else
-    printf '[deploy] Installing dependencies without static page generation...\n'
+    printf '[deploy] 正在检查依赖，本次不生成静态页面...\n'
   fi
 
   ssh "${ssh_options[@]}" "${REMOTE_USER}@${REMOTE_HOST}" \
@@ -315,7 +315,7 @@ create_sqlite_backup() {
   local backup_dir="$2"
 
   if [ ! -f "${db_file}" ]; then
-    printf '[deploy] No sqlite database found, skipping backup.\n'
+    printf '[deploy] 未找到 sqlite 数据库，跳过备份。\n'
     return 0
   fi
 
@@ -333,7 +333,7 @@ create_sqlite_backup() {
   fi
 
   prune_sqlite_backups "${backup_dir}"
-  printf '[deploy] SQLite backup created: %s\n' "${backup_file}"
+  printf '[deploy] SQLite 备份已创建：%s\n' "${backup_file}"
 }
 
 restore_uploaded_sqlite_database() {
@@ -342,7 +342,7 @@ restore_uploaded_sqlite_database() {
   local backup_dir="$3"
 
   if [ ! -f "${archive_file}" ]; then
-    printf '[deploy] Expected uploaded sqlite archive not found: %s\n' "${archive_file}" >&2
+    printf '[deploy] 未找到预期的已上传 sqlite 压缩包：%s\n' "${archive_file}" >&2
     exit 1
   fi
 
@@ -355,7 +355,7 @@ restore_uploaded_sqlite_database() {
   rm -f "${archive_file}"
 
   SKIP_PRE_RESTART_SQLITE_BACKUP=1
-  printf '[deploy] Uploaded sqlite database restored to: %s\n' "${db_file}"
+  printf '[deploy] 已将上传的 sqlite 数据库恢复到：%s\n' "${db_file}"
 }
 
 ensure_runtime_permissions() {
@@ -385,14 +385,14 @@ run_local_health_checks() {
   local base_url="${HEALTH_CHECK_URL:-https://www.spiraxsteam.com}"
 
   if ! command -v curl >/dev/null 2>&1; then
-    printf '[deploy] curl not found, skipping health checks.\n'
+    printf '[deploy] 未找到 curl，跳过健康检查。\n'
     return 0
   fi
 
-  printf '[deploy] Running health checks on %s ...\n' "${base_url}"
+  printf '[deploy] 正在对 %s 执行健康检查...\n' "${base_url}"
   curl -fsS --max-time 15 -o /dev/null "${base_url}/"
   curl -fsS --max-time 15 -o /dev/null "${base_url}/admin/"
-  printf '[deploy] Health checks passed: / and /admin/\n'
+  printf '[deploy] 健康检查通过：/ 和 /admin/\n'
 }
 
 start_app_as_www() {
@@ -417,11 +417,11 @@ start_app_as_www() {
   sleep 2
 
   if [ -z "${new_pid}" ] || ! kill -0 "${new_pid}" 2>/dev/null; then
-    printf 'Remote service failed to start as user www. Check %s\n' "${log_file}" >&2
+    printf '远端服务未能以 www 用户启动。请检查 %s\n' "${log_file}" >&2
     exit 1
   fi
 
-  printf 'Deployment finished. PID=%s\n' "${new_pid}"
+  printf '部署完成。PID=%s\n' "${new_pid}"
   run_local_health_checks
 }
 
@@ -429,8 +429,42 @@ run_static_generation_if_requested() {
   if [ "${BUILD_STATIC_ON_DEPLOY:-0}" = "1" ]; then
     npm run build:site
   else
-    printf '[deploy] Skipping static page generation; existing html/ is preserved.\n'
+    printf '[deploy] 跳过静态页面生成，保留现有 html/。\n'
   fi
+}
+
+install_npm_dependencies_if_needed() {
+  local package_dir="$1"
+  local cache_key_name="$2"
+  local label="$3"
+  local stamp_file="${APP_DIR}/.deploy/${cache_key_name}.sha256"
+  local current_hash
+  local previous_hash
+
+  if [ ! -f "${package_dir}/package.json" ]; then
+    printf '[deploy] 未找到 %s 的 package.json，跳过依赖安装。\n' "${label}"
+    return 0
+  fi
+
+  current_hash="$(
+    cd "${package_dir}"
+    {
+      sha256sum package.json
+      if [ -f package-lock.json ]; then
+        sha256sum package-lock.json
+      fi
+    } | sha256sum | awk '{print $1}'
+  )"
+  previous_hash="$(cat "${stamp_file}" 2>/dev/null || true)"
+
+  if [ "${current_hash}" = "${previous_hash}" ] && [ -d "${package_dir}/node_modules" ]; then
+    printf '[deploy] %s 依赖未变化，跳过 npm install。\n' "${label}"
+    return 0
+  fi
+
+  printf '[deploy] 正在安装 %s 依赖...\n' "${label}"
+  npm --prefix "${package_dir}" install --omit=dev
+  printf '%s\n' "${current_hash}" > "${stamp_file}"
 }
 
 mkdir -p "${APP_DIR}" "${APP_DIR}/.deploy" "${APP_DIR}/data" "${APP_DIR}/html" "${APP_DIR}/logs" "${APP_DIR}/uploads"
@@ -442,13 +476,13 @@ if [ -f .env.production ]; then
   set +a
 fi
 
-npm --prefix system/server install --omit=dev
-npm --prefix system/admin install --omit=dev
+install_npm_dependencies_if_needed "${APP_DIR}/system/server" "system-server-deps" "服务端"
+install_npm_dependencies_if_needed "${APP_DIR}/system/admin" "system-admin-deps" "后台前端"
 
 if [ "${DEPLOY_RUNTIME_MANAGER:-bt-manual}" = "bt" ]; then
   if [ "${DEPLOY_UPLOAD_DB:-0}" = "1" ]; then
-    printf '[deploy] Warning: DEPLOY_RUNTIME_MANAGER=bt may keep the app running while database is replaced.\n'
-    printf '[deploy] Consider using bt-manual mode or providing a stop/start command outside this script.\n'
+    printf '[deploy] 警告：DEPLOY_RUNTIME_MANAGER=bt 可能会在替换数据库时保持应用运行。\n'
+    printf '[deploy] 建议使用 bt-manual 模式，或在脚本外提供停止/启动命令。\n'
     restore_uploaded_sqlite_database "${UPLOADED_SQLITE_ARCHIVE_FILE}" "${SQLITE_DB_FILE}" "${SQLITE_BACKUP_DIR}"
   fi
 
@@ -458,12 +492,12 @@ if [ "${DEPLOY_RUNTIME_MANAGER:-bt-manual}" = "bt" ]; then
   run_static_generation_if_requested
   ensure_runtime_permissions "${APP_DIR}"
   if [ -n "${BT_RESTART_COMMAND:-}" ]; then
-    printf '[deploy] Running BT restart command...\n'
+    printf '[deploy] 正在执行 BT 重启命令...\n'
     bash -lc "${BT_RESTART_COMMAND}"
     run_local_health_checks
   else
-    printf '[deploy] BT-managed project detected. Files are updated and static pages are rebuilt.\n'
-    printf '[deploy] Restart or reload the Node project from BT panel if it does not auto-reload.\n'
+    printf '[deploy] 检测到 BT 管理项目。文件已更新，静态页面已重新生成。\n'
+    printf '[deploy] 如果项目没有自动重载，请在 BT 面板中重启或重载 Node 项目。\n'
   fi
 elif [ "${DEPLOY_RUNTIME_MANAGER:-bt-manual}" = "bt-manual" ]; then
   terminate_app_processes_by_cwd "${APP_DIR}"
@@ -502,16 +536,16 @@ else
   sleep 2
 
   if ! kill -0 "${NEW_PID}" 2>/dev/null; then
-    printf 'Remote service failed to start. Check %s\n' "${LOG_FILE}" >&2
+    printf '远端服务启动失败。请检查 %s\n' "${LOG_FILE}" >&2
     exit 1
   fi
 
-  printf 'Deployment finished. PID=%s\n' "${NEW_PID}"
+  printf '部署完成。PID=%s\n' "${NEW_PID}"
   run_local_health_checks
 fi
 EOF
 
-  printf '[deploy] Done.\n'
+  printf '[deploy] 完成。\n'
 }
 
 main "$@"
