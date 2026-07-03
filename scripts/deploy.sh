@@ -425,6 +425,14 @@ start_app_as_www() {
   run_local_health_checks
 }
 
+run_static_generation_if_requested() {
+  if [ "${BUILD_STATIC_ON_DEPLOY:-0}" = "1" ]; then
+    npm run build:site
+  else
+    printf '[deploy] Skipping static page generation; existing html/ is preserved.\n'
+  fi
+}
+
 mkdir -p "${APP_DIR}" "${APP_DIR}/.deploy" "${APP_DIR}/data" "${APP_DIR}/html" "${APP_DIR}/logs" "${APP_DIR}/uploads"
 cd "${APP_DIR}"
 
@@ -436,11 +444,6 @@ fi
 
 npm --prefix system/server install --omit=dev
 npm --prefix system/admin install --omit=dev
-if [ "${BUILD_STATIC_ON_DEPLOY:-0}" = "1" ]; then
-  npm run build:site
-else
-  printf '[deploy] Skipping static page generation; existing html/ is preserved.\n'
-fi
 
 if [ "${DEPLOY_RUNTIME_MANAGER:-bt-manual}" = "bt" ]; then
   if [ "${DEPLOY_UPLOAD_DB:-0}" = "1" ]; then
@@ -452,6 +455,7 @@ if [ "${DEPLOY_RUNTIME_MANAGER:-bt-manual}" = "bt" ]; then
   if [ "${SKIP_PRE_RESTART_SQLITE_BACKUP}" != "1" ]; then
     create_sqlite_backup "${SQLITE_DB_FILE}" "${SQLITE_BACKUP_DIR}"
   fi
+  run_static_generation_if_requested
   ensure_runtime_permissions "${APP_DIR}"
   if [ -n "${BT_RESTART_COMMAND:-}" ]; then
     printf '[deploy] Running BT restart command...\n'
@@ -469,6 +473,7 @@ elif [ "${DEPLOY_RUNTIME_MANAGER:-bt-manual}" = "bt-manual" ]; then
   if [ "${SKIP_PRE_RESTART_SQLITE_BACKUP}" != "1" ]; then
     create_sqlite_backup "${SQLITE_DB_FILE}" "${SQLITE_BACKUP_DIR}"
   fi
+  run_static_generation_if_requested
   ensure_runtime_permissions "${APP_DIR}"
   start_app_as_www "${APP_DIR}" "${LOG_FILE}" "${PID_FILE}"
 else
@@ -489,6 +494,7 @@ else
   if [ "${SKIP_PRE_RESTART_SQLITE_BACKUP}" != "1" ]; then
     create_sqlite_backup "${SQLITE_DB_FILE}" "${SQLITE_BACKUP_DIR}"
   fi
+  run_static_generation_if_requested
   ensure_runtime_permissions "${APP_DIR}"
   nohup env NODE_ENV=production npm start >> "${LOG_FILE}" 2>&1 &
   NEW_PID="$!"
