@@ -18,7 +18,7 @@ export function normalizeUploadedRelativePath(relativePath) {
   return normalizeSupportedUploadPath(relativePath);
 }
 
-export function normalizeLegacyAssetText(value, siteConfig = null) {
+export function normalizeLegacyAssetText(value, siteConfig = null, options = {}) {
   const input = String(value ?? '');
   if (!input) {
     return input;
@@ -26,17 +26,65 @@ export function normalizeLegacyAssetText(value, siteConfig = null) {
 
   return input.replace(
     /https?:\/\/[^/\s"'<>]+\/uploads\/(?:images|skin|pdfs|files)\/[^\s"'<>)]*|\/uploads\/(?:images|skin|pdfs|files)\/[^\s"'<>)]*/gi,
-    (matched) => resolvePublicAssetUrl(matched, siteConfig)
+    (matched) => resolvePublicAssetUrl(matched, siteConfig, options)
   );
 }
 
-export function resolvePublicAssetUrl(relativePath, siteConfig = null) {
+export function resolvePublicAssetUrl(relativePath, siteConfig = null, options = {}) {
   const normalized = normalizeUploadedRelativePath(relativePath);
   if (!normalized) {
     return '';
   }
-  const baseUrl = String(siteConfig?.assets_public_base_url || '').trim().replace(/\/+$/g, '');
+  const baseUrl = resolvePublicAssetBaseUrl(siteConfig, options);
   return baseUrl ? `${baseUrl}${normalized}` : normalized;
+}
+
+export function resolveRuntimeAssetUrl(relativePath, siteConfig = null) {
+  return resolvePublicAssetUrl(relativePath, siteConfig, { preferInternalInDevelopment: true });
+}
+
+export function resolveRuntimeAssetBaseUrl(siteConfig = null) {
+  return resolvePublicAssetBaseUrl(siteConfig, { preferInternalInDevelopment: true });
+}
+
+export function normalizeRuntimeAssetText(value, siteConfig = null) {
+  return normalizeLegacyAssetText(value, siteConfig, { preferInternalInDevelopment: true });
+}
+
+function resolvePublicAssetBaseUrl(siteConfig = null, options = {}) {
+  if (options.preferInternalInDevelopment && process.env.NODE_ENV === 'development') {
+    const internalBaseUrl = resolveInternalAssetBaseUrl(siteConfig);
+    if (internalBaseUrl) {
+      return internalBaseUrl;
+    }
+  }
+
+  return String(siteConfig?.assets_public_base_url || '').trim().replace(/\/+$/g, '');
+}
+
+function resolveInternalAssetBaseUrl(siteConfig = null) {
+  const port = Number(siteConfig?.assets_port || 0);
+  if (!Number.isInteger(port) || port <= 0) {
+    return '';
+  }
+
+  const host = normalizeInternalAssetHost(siteConfig?.assets_bind_host);
+  return `http://${formatHostnameForUrl(host)}:${port}`;
+}
+
+function normalizeInternalAssetHost(value) {
+  const host = String(value || '').trim();
+  if (!host || host === '0.0.0.0') {
+    return '127.0.0.1';
+  }
+  if (host === '::' || host === '[::]') {
+    return '::1';
+  }
+  return host.replace(/^\[|\]$/g, '');
+}
+
+function formatHostnameForUrl(hostname) {
+  return String(hostname || '').includes(':') ? `[${String(hostname).replace(/^\[|\]$/g, '')}]` : hostname;
 }
 
 function resolveUploadCandidate(normalized) {

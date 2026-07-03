@@ -14,6 +14,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { resolveAssetUrl } from '@/lib/assets'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { toast } from 'sonner'
 import type { DocumentStamp } from '@/types'
@@ -53,6 +54,16 @@ export function DocumentStampManagerDialog({ open, onOpenChange, stamps }: Props
     () => stamps.find((item) => item.id === form.id) || null,
     [stamps, form.id]
   )
+
+  const formImagePreviewUrl = useMemo(() => {
+    if (!form.image_path) {
+      return ''
+    }
+    if (selectedStamp?.image_path === form.image_path && selectedStamp.image_public_url) {
+      return selectedStamp.image_public_url
+    }
+    return resolveAssetUrl(form.image_path)
+  }, [form.image_path, selectedStamp])
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => mediaApi.upload(file, 'document_stamp'),
@@ -180,7 +191,7 @@ export function DocumentStampManagerDialog({ open, onOpenChange, stamps }: Props
                     }`}
                   >
                     <div className="flex h-12 w-12 items-center justify-center overflow-hidden rounded border bg-white">
-                      {stamp.image_path ? <img src={stamp.image_path} alt={stamp.name} className="max-h-full max-w-full object-contain" /> : null}
+                      {stamp.image_path ? <img src={stamp.image_public_url || stamp.image_path} alt={stamp.name} className="max-h-full max-w-full object-contain" /> : null}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="truncate text-sm font-medium">{stamp.name}</div>
@@ -226,8 +237,8 @@ export function DocumentStampManagerDialog({ open, onOpenChange, stamps }: Props
                 placeholder="/uploads/images/..."
               />
               <div className="flex min-h-[240px] items-center justify-center rounded-xl border bg-muted/10 p-4">
-                {form.image_path ? (
-                  <img src={form.image_path} alt={form.name || 'stamp'} className="max-h-[220px] max-w-full object-contain" />
+                {formImagePreviewUrl ? (
+                  <img src={formImagePreviewUrl} alt={form.name || 'stamp'} className="max-h-[220px] max-w-full object-contain" />
                 ) : (
                   <div className="text-sm text-muted-foreground">上传后在这里预览</div>
                 )}

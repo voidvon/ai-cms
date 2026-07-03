@@ -1,6 +1,8 @@
 import { getTemplateById } from './templates.mjs';
 import { getDocumentDraftById } from './document-drafts.mjs';
 import { buildDocumentPaginationCss, buildDocumentPaginationScript } from './document-pagination.mjs';
+import { getSiteConfig } from './site.mjs';
+import { normalizeRuntimeAssetText, resolveRuntimeAssetUrl } from './uploads.mjs';
 import { renderTsxTemplate } from '../tsx-template-renderer.mjs';
 import { getTsxTemplateStyleAsset } from '../tsx-template-styles.mjs';
 
@@ -19,6 +21,7 @@ export function renderDocumentDraftPreview(draftId) {
     throw error;
   }
 
+  const siteConfig = getSiteConfig();
   const html = renderTsxTemplate(template.tsx_source || '', {
     draft: draft.draft_payload,
     workspace: {
@@ -34,7 +37,12 @@ export function renderDocumentDraftPreview(draftId) {
 
   const cssAsset = getDocumentTemplateStyleAsset(template);
   return {
-    html: injectPreviewDocumentShell(html, cssAsset?.cssText || '', draft),
+    html: injectPreviewDocumentShell(
+      normalizeRuntimeAssetText(html, siteConfig),
+      normalizeRuntimeAssetText(cssAsset?.cssText || '', siteConfig),
+      draft,
+      siteConfig
+    ),
     draft,
   };
 }
@@ -56,7 +64,7 @@ function getDocumentTemplateStyleAsset(template) {
   });
 }
 
-function injectPreviewDocumentShell(html, cssText, draft) {
+function injectPreviewDocumentShell(html, cssText, draft, siteConfig = null) {
   const normalizedHtml = String(html || '');
   const styleTag = [
     '<style data-document-preview="base">',
@@ -68,7 +76,7 @@ function injectPreviewDocumentShell(html, cssText, draft) {
     cssText ? `<style data-document-preview="template">\n${cssText}\n</style>` : '',
   ].filter(Boolean).join('\n');
   const scriptTag = buildDocumentPaginationScript();
-  const draftContextScriptTag = buildDocumentPreviewDraftContextScript(draft);
+  const draftContextScriptTag = buildDocumentPreviewDraftContextScript(draft, siteConfig);
   const stampScriptTag = buildDocumentStampPreviewScript();
 
   if (/<\/head>/i.test(normalizedHtml)) {
@@ -79,10 +87,12 @@ function injectPreviewDocumentShell(html, cssText, draft) {
   return `${styleTag}\n${normalizedHtml}\n${scriptTag}\n${draftContextScriptTag}\n${stampScriptTag}`;
 }
 
-function buildDocumentPreviewDraftContextScript(draft) {
+function buildDocumentPreviewDraftContextScript(draft, siteConfig = null) {
   const context = {
     id: String(draft?.id || ''),
-    stamps: Array.isArray(draft?.draft_payload?.stamps) ? draft.draft_payload.stamps : [],
+    stamps: Array.isArray(draft?.draft_payload?.stamps)
+      ? draft.draft_payload.stamps.map((stamp) => normalizePreviewStampAsset(stamp, siteConfig))
+      : [],
   };
 
   return [
@@ -90,6 +100,20 @@ function buildDocumentPreviewDraftContextScript(draft) {
     `window.__DOCUMENT_PREVIEW_DRAFT__ = ${serializeInlineJson(context)};`,
     '</script>',
   ].join('\n');
+}
+
+function normalizePreviewStampAsset(stamp, siteConfig = null) {
+  if (!stamp || typeof stamp !== 'object') {
+    return stamp;
+  }
+
+  const imagePath = String(stamp.imagePath || stamp.image_path || '').trim();
+  const imagePublicUrl = resolveRuntimeAssetUrl(imagePath, siteConfig);
+  return {
+    ...stamp,
+    imagePath: imagePublicUrl || imagePath,
+    image_path: imagePublicUrl || imagePath,
+  };
 }
 
 function previewBaseCss() {

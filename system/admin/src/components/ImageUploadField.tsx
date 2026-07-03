@@ -3,6 +3,7 @@ import { ImagePlus, Trash2, Upload } from 'lucide-react'
 import { mediaApi, type MediaPurpose } from '@/api/media'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { resolveAssetUrl } from '@/lib/assets'
 import { toast } from 'sonner'
 
 interface ImageUploadFieldProps {
@@ -28,7 +29,7 @@ export default function ImageUploadField({
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const normalizedValue = String(value || '').trim()
-  const previewSrc = normalizedValue && !PLACEHOLDER_IMAGES.has(normalizedValue) ? normalizedValue : ''
+  const previewSrc = normalizedValue && !PLACEHOLDER_IMAGES.has(normalizedValue) ? resolveAssetUrl(normalizedValue) : ''
 
   const handleSelectFile = () => {
     if (!isUploading) {

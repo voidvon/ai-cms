@@ -3,6 +3,7 @@ import { GripVertical, ImagePlus, Trash2, Upload } from 'lucide-react'
 import { mediaApi, type MediaPurpose } from '@/api/media'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { resolveAssetUrl } from '@/lib/assets'
 import { toast } from 'sonner'
 
 interface ImagesUploadFieldProps {
@@ -101,7 +102,7 @@ export default function ImagesUploadField({
           </div>
         ) : (
           normalizedValue.map((item, index) => {
-            const previewSrc = item && !PLACEHOLDER_IMAGES.has(item) ? item : ''
+            const previewSrc = item && !PLACEHOLDER_IMAGES.has(item) ? resolveAssetUrl(item) : ''
             return (
               <div key={`${item}-${index}`} className="space-y-2 rounded-md border p-3">
                 <div className="overflow-hidden rounded-md border bg-muted/20">

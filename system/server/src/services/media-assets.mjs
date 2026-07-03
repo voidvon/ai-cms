@@ -11,6 +11,8 @@ import {
   UPLOAD_MAX_SIZE_KB,
 } from '../config.mjs';
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
+import { getSiteConfig } from './site.mjs';
+import { resolveRuntimeAssetUrl } from './uploads.mjs';
 
 const PURPOSE_TARGETS = {
   product_cover: {
@@ -146,7 +148,7 @@ export function uploadMediaAsset({ buffer, originalFilename, purpose }) {
 
 export function getMediaAssetById(id) {
   ensureMediaAssetsSchema();
-  return queryOne(
+  return decorateMediaAsset(queryOne(
     `
       SELECT
         id,
@@ -164,7 +166,7 @@ export function getMediaAssetById(id) {
       WHERE id = ?
     `,
     [id],
-  );
+  ), getSiteConfig());
 }
 
 export function listMediaAssets({ page = 1, limit = 50, purpose, usage } = {}) {
@@ -191,6 +193,7 @@ export function listMediaAssets({ page = 1, limit = 50, purpose, usage } = {}) {
   }
 
   const whereSql = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
+  const siteConfig = getSiteConfig();
   const items = queryAll(
     `
       SELECT
@@ -212,7 +215,7 @@ export function listMediaAssets({ page = 1, limit = 50, purpose, usage } = {}) {
       OFFSET ?
     `,
     [...params, safeLimit, offset],
-  ).map((item) => decorateMediaAsset(item));
+  ).map((item) => decorateMediaAsset(item, siteConfig));
 
   const total = queryOne(
     `
@@ -338,11 +341,16 @@ function addColumnIfMissing(tableName, columnName, definition) {
   execute(`ALTER TABLE ${quoteIdentifier(tableName)} ADD COLUMN ${quoteIdentifier(columnName)} ${definition}`);
 }
 
-function decorateMediaAsset(item) {
+function decorateMediaAsset(item, siteConfig = null) {
+  if (!item) {
+    return null;
+  }
+
   const usageReferences = parseUsageReferencesJson(item.usage_references_json);
 
   return {
     ...item,
+    public_url: resolveRuntimeAssetUrl(item.relative_path, siteConfig),
     file_exists: fs.existsSync(item.fs_path),
     usage_references: usageReferences,
     usage_count: usageReferences.length,

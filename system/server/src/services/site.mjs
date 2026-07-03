@@ -2,6 +2,7 @@ import { HOST, PORT } from '../config.mjs';
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { ensureLanguagesSchema, getDefaultLanguage, hasMultipleEnabledLanguages, listLanguages } from './languages.mjs';
 import { normalizeTemplateDataAssetsDeep } from './template-data-assets.mjs';
+import { resolveRuntimeAssetBaseUrl } from './uploads.mjs';
 
 const SITE_TRANSLATABLE_FIELDS = [
   'web_name',
@@ -82,6 +83,7 @@ export function getSiteConfig(languageCode = null, options = {}) {
     base_web_url: normalizeAbsoluteUrl(base.web_url) || '',
     web_url: siteUrl || output.web_url || '',
     resolved_web_url: siteUrl || '',
+    runtime_assets_base_url: resolveRuntimeAssetBaseUrl(output),
     language_site_host: resolveLanguageSiteHost(selectedLanguage.code),
     language_site_path_prefix: selectedLanguage?.site?.path_prefix || '/',
     language_site_mode: selectedLanguage?.site?.site_mode || 'subdir'

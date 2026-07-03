@@ -45,6 +45,7 @@ import {
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
+import { resolveAssetUrl } from '@/lib/assets'
 
 interface RichTextEditorProps {
   value: string
@@ -83,6 +84,44 @@ const highlightOptions = [
 function normalizeEditorHtml(value: string) {
   const trimmed = value.trim()
   return trimmed === '<p></p>' || trimmed === '<p><br></p>' ? '' : trimmed
+}
+
+function normalizeEditorAssetDisplay(root: HTMLElement | null) {
+  if (!root) {
+    return
+  }
+
+  root.querySelectorAll<HTMLImageElement>('img[src]').forEach((image) => {
+    const storedSrc = image.getAttribute('data-relative-src') || image.getAttribute('src') || ''
+    const displaySrc = resolveAssetUrl(storedSrc)
+    if (displaySrc && displaySrc !== storedSrc) {
+      image.setAttribute('data-relative-src', storedSrc)
+      image.setAttribute('src', displaySrc)
+    }
+  })
+}
+
+function readEditorStorageHtml(editor: NonNullable<ReturnType<typeof useEditor>>) {
+  const root = editor.view.dom
+  const restoredImages: Array<{ image: HTMLImageElement; displaySrc: string; storedSrc: string }> = []
+
+  root.querySelectorAll<HTMLImageElement>('img[data-relative-src]').forEach((image) => {
+    const storedSrc = image.getAttribute('data-relative-src') || ''
+    const displaySrc = image.getAttribute('src') || ''
+    if (storedSrc && displaySrc && storedSrc !== displaySrc) {
+      image.setAttribute('src', storedSrc)
+      restoredImages.push({ image, displaySrc, storedSrc })
+    }
+  })
+
+  const html = normalizeEditorHtml(editor.getHTML())
+
+  restoredImages.forEach(({ image, displaySrc, storedSrc }) => {
+    image.setAttribute('src', displaySrc)
+    image.setAttribute('data-relative-src', storedSrc)
+  })
+
+  return html
 }
 
 function ToolbarButton({ active, disabled, label, onClick, children }: ToolbarButtonProps) {
@@ -144,11 +183,19 @@ export default function RichTextEditor({
       },
     },
     onUpdate: ({ editor }) => {
-      const nextHtml = normalizeEditorHtml(editor.getHTML())
+      const nextHtml = readEditorStorageHtml(editor)
       lastHtmlRef.current = nextHtml
       onChangeRef.current(nextHtml)
+      queueMicrotask(() => normalizeEditorAssetDisplay(editor.view.dom))
     },
   }, [placeholder])
+
+  useEffect(() => {
+    if (!editor) {
+      return
+    }
+    normalizeEditorAssetDisplay(editor.view.dom)
+  }, [editor])
 
   useEffect(() => {
     editor?.setEditable(!readOnly)
@@ -166,6 +213,7 @@ export default function RichTextEditor({
 
     editor.commands.setContent(normalizedValue, { emitUpdate: false })
     lastHtmlRef.current = normalizedValue
+    queueMicrotask(() => normalizeEditorAssetDisplay(editor.view.dom))
   }, [editor, value])
 
   const disabled = readOnly || !editor

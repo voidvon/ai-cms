@@ -29,6 +29,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatRelativeTime } from '@/lib/datetime'
+import { resolveMediaAssetUrl } from '@/lib/assets'
 import { toast } from 'sonner'
 import type { MediaAsset } from '@/types'
 
@@ -151,9 +152,7 @@ export default function MediaAssetsPage() {
   const items: MediaAsset[] = data?.items || []
   const pagination = data?.pagination
   const latestRelativeUrl = latestUploadedAsset?.relative_path || ''
-  const latestAbsoluteUrl = latestRelativeUrl
-    ? new URL(latestRelativeUrl, window.location.origin).toString()
-    : ''
+  const latestPublicUrl = getMediaAssetPublicUrl(latestUploadedAsset)
 
   return (
     <div className="h-full min-h-0">
@@ -214,12 +213,12 @@ export default function MediaAssetsPage() {
                   <div className="space-y-2">
                     <Label htmlFor="latest-absolute-url">完整 URL</Label>
                     <div className="flex gap-2">
-                      <Input id="latest-absolute-url" readOnly value={latestAbsoluteUrl} />
+                      <Input id="latest-absolute-url" readOnly value={latestPublicUrl} />
                       <Button
                         type="button"
                         variant="outline"
                         size="icon"
-                        onClick={() => copyText(latestAbsoluteUrl, '已复制完整 URL')}
+                        onClick={() => copyText(latestPublicUrl, '已复制完整 URL')}
                       >
                         <LinkIcon className="size-4" />
                       </Button>
@@ -313,7 +312,7 @@ export default function MediaAssetsPage() {
                       <TableCell>
                         {isImageAsset(item) ? (
                           <ImagePreview
-                            src={item.relative_path}
+                            src={getMediaAssetPublicUrl(item)}
                             alt={item.original_name || '资源预览'}
                             title={item.original_name || item.relative_path}
                           >
@@ -323,7 +322,7 @@ export default function MediaAssetsPage() {
                               aria-label={`预览 ${item.original_name || '图片'}`}
                             >
                               <img
-                                src={item.relative_path}
+                                src={getMediaAssetPublicUrl(item)}
                                 alt={item.original_name || '资源预览'}
                                 className="h-full w-full object-contain"
                               />
@@ -336,7 +335,7 @@ export default function MediaAssetsPage() {
                       <TableCell className="group max-w-[260px]">
                         <span className="inline">
                           <a
-                            href={buildAbsoluteAssetUrl(item.relative_path)}
+                            href={getMediaAssetPublicUrl(item)}
                             target="_blank"
                             rel="noreferrer"
                             className="text-sm font-medium text-primary underline-offset-4 hover:underline"
@@ -349,7 +348,7 @@ export default function MediaAssetsPage() {
                             variant="ghost"
                             size="icon-sm"
                             className="ml-1 inline-flex align-middle opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                            onClick={() => copyText(buildAbsoluteAssetUrl(item.relative_path), '已复制完整 URL')}
+                            onClick={() => copyText(getMediaAssetPublicUrl(item), '已复制完整 URL')}
                             aria-label={`复制 ${item.original_name || item.relative_path} 的完整 URL`}
                           >
                             <Copy className="size-4" />
@@ -548,8 +547,8 @@ function isImageAsset(item: MediaAsset) {
     || ['.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp'].includes(String(item.file_ext || '').toLowerCase())
 }
 
-function buildAbsoluteAssetUrl(relativePath: string) {
-  return new URL(relativePath || '/', window.location.origin).toString()
+function getMediaAssetPublicUrl(item?: MediaAsset | null) {
+  return resolveMediaAssetUrl(item) || new URL('/', window.location.origin).toString()
 }
 
 function formatFileSize(size: number) {

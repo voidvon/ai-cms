@@ -444,7 +444,7 @@ export default function AiChatPage() {
       id: `stamp-${Date.now()}`,
       stampId: stamp.id,
       name: stamp.name,
-      imagePath: stamp.image_path,
+      imagePath: stamp.image_public_url || stamp.image_path,
       page: 1,
       x: centeredX,
       y: centeredY,

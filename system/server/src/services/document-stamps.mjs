@@ -1,6 +1,8 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { getMediaAssetById } from './media-assets.mjs';
+import { getSiteConfig } from './site.mjs';
 import { getSelectedTemplateVariant } from './template-variants.mjs';
+import { resolveRuntimeAssetUrl } from './uploads.mjs';
 
 let schemaEnsured = false;
 
@@ -30,6 +32,7 @@ export function ensureDocumentStampsSchema() {
 export function listDocumentStamps({ themeId } = {}) {
   ensureDocumentStampsSchema();
   const normalizedThemeId = resolveThemeId(themeId);
+  const siteConfig = getSiteConfig();
   return queryAll(
     `
       SELECT
@@ -45,7 +48,7 @@ export function listDocumentStamps({ themeId } = {}) {
       ORDER BY updated_at DESC, id DESC
     `,
     [normalizedThemeId]
-  ).map(hydrateDocumentStampRecord);
+  ).map((row) => hydrateDocumentStampRecord(row, siteConfig));
 }
 
 export function getDocumentStampById(id, { themeId } = {}) {
@@ -67,7 +70,7 @@ export function getDocumentStampById(id, { themeId } = {}) {
     `,
     [id, normalizedThemeId]
   );
-  return hydrateDocumentStampRecord(row);
+  return hydrateDocumentStampRecord(row, getSiteConfig());
 }
 
 export function createDocumentStamp(input = {}, { themeId } = {}) {
@@ -166,15 +169,17 @@ function normalizeDocumentStampInput(input = {}, options = {}) {
   };
 }
 
-function hydrateDocumentStampRecord(row) {
+function hydrateDocumentStampRecord(row, siteConfig = null) {
   if (!row) {
     return null;
   }
 
+  const imagePath = String(row.image_path || '').trim();
   return {
     ...row,
     image_asset_id: toInteger(row.image_asset_id, null),
-    image_path: String(row.image_path || '').trim(),
+    image_path: imagePath,
+    image_public_url: resolveRuntimeAssetUrl(imagePath, siteConfig),
   };
 }
 

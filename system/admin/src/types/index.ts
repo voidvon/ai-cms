@@ -407,6 +407,7 @@ export interface SiteConfig {
   assets_bind_host?: string | null;
   assets_port?: number | null;
   assets_public_base_url?: string | null;
+  runtime_assets_base_url?: string | null;
   seo_default_title?: string | null;
   seo_default_description?: string | null;
   seo_home_title?: string | null;
@@ -435,6 +436,7 @@ export interface MediaAsset {
   file_ext?: string;
   file_size: number;
   relative_path: string;
+  public_url?: string;
   fs_path: string;
   file_exists?: boolean;
   usage_count?: number;
@@ -459,6 +461,7 @@ export interface DocumentStamp {
   name: string;
   image_asset_id?: number | null;
   image_path: string;
+  image_public_url?: string;
   created_at?: string;
   updated_at?: string;
 }
