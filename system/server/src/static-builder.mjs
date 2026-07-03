@@ -13,6 +13,7 @@ import { buildLlmsFiles } from './services/llms.mjs';
 import {
   buildColumnPublicUrl,
   buildSectionColumnPublicUrl,
+  filterPublicSectionColumns,
   resolveLegacyColumnPublicId,
   resolvePublicSectionContext
 } from './services/public-sections.mjs';
@@ -454,7 +455,7 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
   });
 
   // 先获取 columns 用于动态生成 section 列表
-  const columns = listColumns({ languageCode: targetLanguages[0]?.code || null });
+  const columns = filterPublicSectionColumns(listColumns({ languageCode: targetLanguages[0]?.code || null }));
   const requestedSections = normalizeSections(sections, columns);
   const targetDefinitions = listStaticBuildTargetDefinitions({ columns });
   const targetMap = new Map(targetDefinitions.map((definition) => [definition.value, definition]));
@@ -632,7 +633,7 @@ function reportStaticBuildProgress(type, payload = {}) {
 }
 
 function listStaticBuildTargetDefinitions({ columns = null } = {}) {
-  const resolvedColumns = Array.isArray(columns) ? columns : listColumns();
+  const resolvedColumns = filterPublicSectionColumns(Array.isArray(columns) ? columns : listColumns());
   const publicSections = resolvePublicSectionContext(resolvedColumns);
   const rootColumns = resolvedColumns.filter((item) => item?.column_semantics?.is_root);
   const managedColumnRoots = rootColumns.filter((item) => item?.column_semantics?.render_driver === 'managed_column');
@@ -1232,7 +1233,7 @@ function buildSectionDetailPagesByDir({
 
 function getLegacyTemplateContext(languageCode = null) {
   const site = getSiteConfig(languageCode);
-  const columns = listColumns({ languageCode });
+  const columns = filterPublicSectionColumns(listColumns({ languageCode }));
   const publicSections = resolvePublicSectionContext(columns);
   const sectionContent = buildSectionContentContext({
     languageCode,
@@ -4000,7 +4001,7 @@ function buildLegacyRelatedManagedItems(items, templateContext = null) {
 }
 
 function buildLegacyIndexFeaturedManagedItems(site = null) {
-  const managedColumnRoot = findManagedColumnRoot(listColumns());
+  const managedColumnRoot = findManagedColumnRoot(filterPublicSectionColumns(listColumns()));
   const items = managedColumnRoot
     ? listManagedColumnItems(managedColumnRoot, { featured: true, visibleOnly: true, limit: 8 }).slice(0, 8)
     : [];
@@ -4016,7 +4017,7 @@ function buildLegacyIndexFeaturedManagedItems(site = null) {
 }
 
 function buildLegacyIndexFeaturedManagedItemLinks(site = null) {
-  const managedColumnRoot = findManagedColumnRoot(listColumns());
+  const managedColumnRoot = findManagedColumnRoot(filterPublicSectionColumns(listColumns()));
   const items = managedColumnRoot
     ? listManagedColumnItems(managedColumnRoot, { featured: true, visibleOnly: true, limit: 32 })
       .slice()
@@ -4028,7 +4029,7 @@ function buildLegacyIndexFeaturedManagedItemLinks(site = null) {
 }
 
 function buildLegacyIndexNews(site = null) {
-  const columns = listColumns();
+  const columns = filterPublicSectionColumns(listColumns());
   const publicSections = resolvePublicSectionContext(columns);
   const sectionContent = buildSectionContentContext({
     columns,
@@ -4046,7 +4047,7 @@ function buildLegacyIndexNews(site = null) {
 }
 
 function buildLegacyServiceIndex(site = null) {
-  const columns = listColumns();
+  const columns = filterPublicSectionColumns(listColumns());
   const publicSections = resolvePublicSectionContext(columns);
   const sectionContent = buildSectionContentContext({
     columns,
@@ -4088,7 +4089,7 @@ export function resolveStaticBuildSectionKey(section, { languageCode = null, col
     return 'all';
   }
 
-  const resolvedColumns = columns || listColumns({ languageCode });
+  const resolvedColumns = filterPublicSectionColumns(columns || listColumns({ languageCode }));
   const target = listStaticBuildTargetDefinitions({ columns: resolvedColumns }).find((definition) => (
     definition.value === normalized || definition.aliases.includes(normalized)
   ));
@@ -4097,7 +4098,7 @@ export function resolveStaticBuildSectionKey(section, { languageCode = null, col
 }
 
 export function listStaticBuildTargetGroups({ languageCode = null, columns = null } = {}) {
-  const resolvedColumns = columns || listColumns({ languageCode });
+  const resolvedColumns = filterPublicSectionColumns(columns || listColumns({ languageCode }));
   const definitions = listStaticBuildTargetDefinitions({ columns: resolvedColumns });
   const grouped = new Map();
 
@@ -4121,7 +4122,7 @@ export function listStaticBuildTargetGroups({ languageCode = null, columns = nul
 }
 
 export function listStaticBuildSectionKeys({ languageCode = null, columns = null } = {}) {
-  const resolvedColumns = columns || listColumns({ languageCode });
+  const resolvedColumns = filterPublicSectionColumns(columns || listColumns({ languageCode }));
   return listStaticBuildTargetDefinitions({ columns: resolvedColumns }).map((item) => item.value);
 }
 
@@ -4178,7 +4179,7 @@ function cleanupManagedStaticFiles(outputRoot, { columns = null } = {}) {
 }
 
 function collectManagedStaticDirs(columns = null) {
-  const resolvedColumns = Array.isArray(columns) ? columns : listColumns();
+  const resolvedColumns = filterPublicSectionColumns(Array.isArray(columns) ? columns : listColumns());
   const publicSections = resolvePublicSectionContext(resolvedColumns);
   const dirs = new Set(LEGACY_MANAGED_STATIC_DIRS);
 

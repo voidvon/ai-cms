@@ -1,0 +1,4 @@
+interface:
+  display_name: "修改 CMS 模板"
+  short_description: "按数据库真源修改 CMS 主题模板和静态生成"
+  default_prompt: "Use $modify-cms-template to modify a database-backed CMS theme template in this project."

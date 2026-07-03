@@ -2,6 +2,7 @@ import { buildColumnTreeIndex } from './column-tree.mjs';
 import { resolveRelativePublicPath } from './column-paths.mjs';
 
 const SERVICE_SECTION_PATTERN = /(service|services|support|knowledge|learn|training|服务|知识|学习|培训)/i;
+const NON_PUBLIC_SECTION_MODEL_CODES = new Set(['price_record']);
 
 export function resolveLegacyColumnPublicId(columnNode) {
   // 公共栏目标识统一直接使用栏目 ID
@@ -9,7 +10,7 @@ export function resolveLegacyColumnPublicId(columnNode) {
 }
 
 export function resolvePublicSectionContext(columns) {
-  const rows = Array.isArray(columns) ? columns : [];
+  const rows = filterPublicSectionColumns(Array.isArray(columns) ? columns : []);
   const allById = new Map(rows.map((item) => [toInteger(item?.id, 0), item]));
   const sectionRows = rows
     .filter((item) => (
@@ -65,6 +66,12 @@ export function resolvePublicSectionContext(columns) {
       return rootSections.find((item) => item.sectionType === normalized) || null;
     }
   };
+}
+
+export function filterPublicSectionColumns(columns) {
+  return (Array.isArray(columns) ? columns : []).filter((column) => (
+    !NON_PUBLIC_SECTION_MODEL_CODES.has(String(column?.model_code || '').trim())
+  ));
 }
 
 export function buildColumnPublicUrl(column, publicSections) {
