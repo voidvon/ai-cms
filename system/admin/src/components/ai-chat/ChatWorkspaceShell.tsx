@@ -54,7 +54,7 @@ export function ChatWorkspaceShell({
 }: ChatWorkspaceShellProps) {
   const conversationSection = (
     <section className={cn(
-      'flex min-h-0 flex-col',
+      'flex min-h-0 flex-1 flex-col',
       layout === 'split'
         ? sidebarPosition === 'left'
           ? 'border-b lg:order-2 lg:border-b-0 lg:border-l'
