@@ -225,8 +225,7 @@
   }
 
   .ai-conversation-tiptap .tiptap.ProseMirror {
-    display: flex;
-    align-items: center;
+    display: block;
   }
 
   .ai-conversation-tiptap .tiptap.ProseMirror p {

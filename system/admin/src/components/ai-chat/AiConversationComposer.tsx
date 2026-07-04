@@ -228,6 +228,14 @@ function getToolTokens(editor: NonNullable<ReturnType<typeof useEditor>>) {
   return uniqueTools(toolNames)
 }
 
+function detectCoarsePointerInput() {
+  if (typeof window === 'undefined') {
+    return false
+  }
+
+  return window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0
+}
+
 function pushTextPart(parts: AiConversationDisplayPart[], text: string) {
   if (!text) {
     return
@@ -362,9 +370,11 @@ export function AiConversationComposer({
   const activeCommandIndexRef = useRef(0)
   const activeMentionCategoryIndexRef = useRef(0)
   const activeMentionIndexRef = useRef(0)
+  const isCoarsePointerInputRef = useRef(false)
   const [plainText, setPlainText] = useState('')
   const [mentionItems, setMentionItems] = useState<AiMentionItem[]>([])
   const [isMentionLoading, setIsMentionLoading] = useState(false)
+  const [isCoarsePointerInput, setIsCoarsePointerInput] = useState(false)
   const [activeCommandIndex, setActiveCommandIndex] = useState(0)
   const [activeMentionCategoryIndex, setActiveMentionCategoryIndex] = useState(0)
   const [activeMentionIndex, setActiveMentionIndex] = useState(0)
@@ -380,7 +390,7 @@ export function AiConversationComposer({
         listItem: false,
         codeBlock: false,
         horizontalRule: false,
-        hardBreak: false,
+        hardBreak: true,
         history: true,
       }),
       Placeholder.configure({
@@ -398,6 +408,10 @@ export function AiConversationComposer({
         const hasCommandSuggestions = enableTools && commandMatchRef.current !== null && filteredToolsRef.current.length > 0
         const hasMentionCategorySuggestions = enableMentions && mentionMatchRef.current !== null && mentionMatchRef.current.mentionType === null
         const hasMentionSuggestions = enableMentions && mentionMatchRef.current !== null && mentionMatchRef.current.mentionType !== null && mentionItemsRef.current.length > 0
+
+        if (event.key === 'Enter' && (event.shiftKey || isCoarsePointerInputRef.current)) {
+          return false
+        }
 
         if (event.key === 'Enter') {
           event.preventDefault()
@@ -512,6 +526,23 @@ export function AiConversationComposer({
   useEffect(() => {
     selectedToolNamesRef.current = selectedToolNames
   }, [selectedToolNames])
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(pointer: coarse)')
+    const updateInputMode = () => {
+      setIsCoarsePointerInput(detectCoarsePointerInput())
+    }
+
+    updateInputMode()
+    mediaQuery.addEventListener('change', updateInputMode)
+    return () => {
+      mediaQuery.removeEventListener('change', updateInputMode)
+    }
+  }, [])
+
+  useEffect(() => {
+    isCoarsePointerInputRef.current = isCoarsePointerInput
+  }, [isCoarsePointerInput])
 
   useEffect(() => {
     setActiveCommandIndex(0)
