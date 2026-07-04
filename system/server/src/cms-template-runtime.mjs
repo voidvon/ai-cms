@@ -803,7 +803,10 @@ function writeBundledStyleAssets(dirPath, bundlePlan) {
       .map((asset) => String(asset.cssText || '').trim())
       .filter(Boolean)
       .join('');
-    fs.writeFileSync(path.join(dirPath, `${bundle.code}.css`), cssText, 'utf8');
+    const contentHash = createHash('sha256').update(cssText).digest('hex').slice(0, 12);
+    const fileName = `${bundle.code}_${contentHash}.css`;
+    bundle.fileName = fileName;
+    fs.writeFileSync(path.join(dirPath, fileName), cssText, 'utf8');
   }
 }
 
@@ -863,7 +866,11 @@ function replaceStyleRuntimePlaceholders(outputRoot, bundlePlan, templateClientA
       }
 
       const bundleCodes = bundlePlan.renderGroupBundles.get(payload.renderGroupKey) || [];
-      const runtimeParts = bundleCodes.map((bundleCode) => `<link rel="stylesheet" href="/${templateClientAssetDir}/${bundleCode}.css">`);
+      const runtimeParts = bundleCodes.map((bundleCode) => {
+        const bundle = bundlePlan.bundles.get(bundleCode);
+        const fileName = bundle?.fileName || `${bundleCode}.css`;
+        return `<link rel="stylesheet" href="/${templateClientAssetDir}/${fileName}">`;
+      });
 
       return runtimeParts.join('\n');
     });
