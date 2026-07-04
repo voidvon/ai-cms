@@ -48,9 +48,10 @@ export default function LanguageFormDialog({ open, onOpenChange, language, mode 
   }, [language, mode, open])
 
   const derivedOutputDir = useMemo(
-    () => deriveOutputDir(formData.code, formData.site.site_mode, formData.site.path_prefix),
-    [formData.code, formData.site.path_prefix, formData.site.site_mode]
+    () => deriveOutputDir(formData.code, formData.site.site_mode, formData.site.path_prefix, formData.site.output_dir),
+    [formData.code, formData.site.output_dir, formData.site.path_prefix, formData.site.site_mode]
   )
+  const isRootStandaloneSite = formData.site.site_mode === 'standalone' && derivedOutputDir === 'html'
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -90,7 +91,7 @@ export default function LanguageFormDialog({ open, onOpenChange, language, mode 
       toast.error('请输入语言名称')
       return
     }
-    if (formData.site.site_mode === 'standalone') {
+    if (formData.site.site_mode === 'standalone' && !isRootStandaloneSite) {
       if (!formData.site.host.trim()) {
         toast.error('独立站点必须填写正式域名')
         return
@@ -216,15 +217,15 @@ export default function LanguageFormDialog({ open, onOpenChange, language, mode 
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="host">{formData.site.site_mode === 'standalone' ? '独立域名 *' : '独立域名'}</Label>
+                <Label htmlFor="host">{formData.site.site_mode === 'standalone' && !isRootStandaloneSite ? '独立域名 *' : '独立域名'}</Label>
                 <Input
                   id="host"
-                  required={formData.site.site_mode === 'standalone'}
+                  required={formData.site.site_mode === 'standalone' && !isRootStandaloneSite}
                   value={formData.site.host}
                   onChange={(e) => setFormData({ ...formData, site: { ...formData.site, host: e.target.value } })}
                   placeholder={formData.site.site_mode === 'standalone' ? 'ru.example.com' : '可留空'}
                 />
-                {formData.site.site_mode === 'standalone' ? (
+                {formData.site.site_mode === 'standalone' && !isRootStandaloneSite ? (
                   <div className="text-xs text-muted-foreground">
                     独立站点必须填写正式访问域名，`sitemap`、`robots`、`llms`、canonical 会基于这个域名生成。
                   </div>
@@ -249,13 +250,13 @@ export default function LanguageFormDialog({ open, onOpenChange, language, mode 
                   <Input
                     id="access_port"
                     type="number"
-                    required={formData.site.site_mode === 'standalone'}
+                    required={formData.site.site_mode === 'standalone' && !isRootStandaloneSite}
                     value={formData.site.access_port}
                     onChange={(e) => setFormData({ ...formData, site: { ...formData.site, access_port: e.target.value } })}
                     placeholder="例如 1233"
                   />
                   <div className="text-xs text-muted-foreground">
-                    独立站点必须填写访问端口，保存后会自动启动该站点监听。
+                    {isRootStandaloneSite ? '根目录独立站点复用主站静态目录，不需要单独监听端口。' : '独立站点必须填写访问端口，保存后会自动启动该站点监听。'}
                   </div>
                 </div>
                 <div className="space-y-2">
@@ -319,7 +320,12 @@ function createEmptyFormData(mode: 'create' | 'edit' = 'create') {
   }
 }
 
-function deriveOutputDir(code: string, siteMode: 'subdir' | 'standalone', pathPrefix: string) {
+function deriveOutputDir(code: string, siteMode: 'subdir' | 'standalone', pathPrefix: string, currentOutputDir?: string) {
+  const normalizedOutputDir = String(currentOutputDir || '').trim().replace(/^\/+|\/+$/g, '')
+  if (normalizedOutputDir === 'html') {
+    return 'html'
+  }
+
   if (siteMode === 'standalone') {
     const normalizedCode = String(code || '')
       .trim()

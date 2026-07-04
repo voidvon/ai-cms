@@ -82,6 +82,11 @@ async function ensureStandalonePortAvailable(input, existing = null) {
   if (siteMode !== 'standalone') {
     return;
   }
+  const outputDir = String(input?.site?.output_dir ?? existing?.site?.output_dir ?? '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  const pathPrefix = normalizePathPrefix(input?.site?.path_prefix ?? existing?.site?.path_prefix ?? '/');
+  if (outputDir === 'html' && pathPrefix === '/') {
+    return;
+  }
 
   const bindHost = String(input?.site?.bind_host ?? existing?.site?.bind_host ?? '127.0.0.1').trim() || '127.0.0.1';
   const accessPort = Number.parseInt(String(input?.site?.access_port ?? existing?.site?.access_port ?? ''), 10);
@@ -114,4 +119,13 @@ function probePortAvailability(port, host) {
       server.close(() => resolve(true));
     });
   });
+}
+
+function normalizePathPrefix(value) {
+  const normalized = String(value ?? '').trim();
+  if (!normalized || normalized === '/') {
+    return '/';
+  }
+  const withSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
+  return withSlash.replace(/\/+$/, '');
 }

@@ -1,16 +1,14 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { languagesApi } from '@/api/languages'
-import { templateVariantsApi } from '@/api/advanced'
 import {
   staticGenerationApi,
   type BuildResult,
   type DatabaseCheckpointResult,
   type StaticBuildProgressEvent,
-  type StaticSectionGroup,
 } from '@/api/static-generation'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import type { Language } from '@/types'
@@ -22,23 +20,30 @@ export default function StaticGenerationPage() {
   const [buildScopeLabel, setBuildScopeLabel] = useState('')
   const [buildEvents, setBuildEvents] = useState<StaticBuildProgressEvent[]>([])
   const [recentFiles, setRecentFiles] = useState<Array<{ path: string; type: string; languageCode?: string | null }>>([])
-  const { data: selectedThemeData } = useQuery({
-    queryKey: ['selected-theme'],
-    queryFn: () => templateVariantsApi.getSelected(),
-  })
   const { data: languagesData } = useQuery({
     queryKey: ['languages'],
     queryFn: () => languagesApi.list(),
   })
-  const { data: sectionGroupsData } = useQuery({
-    queryKey: ['static-build-sections'],
-    queryFn: () => staticGenerationApi.listSections(),
-  })
 
   const languages = languagesData?.data || []
-  const sectionGroups = sectionGroupsData?.data || []
   const enabledLanguages = useMemo(
     () => languages.filter((item) => Number(item.is_enabled || 0) === 1),
+    [languages]
+  )
+  const enabledStandaloneLanguages = useMemo(
+    () => enabledLanguages.filter((item) => item.site?.site_mode === 'standalone'),
+    [enabledLanguages]
+  )
+  const enabledSubdirLanguages = useMemo(
+    () => enabledLanguages.filter((item) => item.site?.site_mode !== 'standalone'),
+    [enabledLanguages]
+  )
+  const standaloneLanguages = useMemo(
+    () => languages.filter((item) => item.site?.site_mode === 'standalone'),
+    [languages]
+  )
+  const subdirLanguages = useMemo(
+    () => languages.filter((item) => item.site?.site_mode !== 'standalone'),
     [languages]
   )
   const outputDirConflicts = useMemo(() => {
@@ -52,45 +57,53 @@ export default function StaticGenerationPage() {
     return Array.from(grouped.entries()).filter(([, items]) => items.length > 1)
   }, [enabledLanguages])
 
+  const runBuildStream = (
+    section: string,
+    languageCode?: string,
+    options: { resetOnStarted?: boolean; scopePrefix?: string } = {}
+  ) => staticGenerationApi.buildStream(
+    section,
+    {
+      onStarted: ({ normalizedSection, languageCode: currentLanguageCode }) => {
+        const scope = currentLanguageCode ? `语言 ${currentLanguageCode}` : '全部已启用语言'
+        setBuildScopeLabel(`${options.scopePrefix || ''}${scope} / ${normalizedSection}`)
+        if (options.resetOnStarted !== false) {
+          setBuildEvents([])
+          setRecentFiles([])
+        }
+      },
+      onProgress: (event) => {
+        setBuildEvents((current) => {
+          const next = [...current, event]
+          return next.slice(-60)
+        })
+        if (event.type === 'file_written' && event.relativePath) {
+          setRecentFiles((current) => {
+            const next = [
+              {
+                path: event.relativePath || '',
+                type: event.fileType || 'file',
+                languageCode: event.languageCode,
+              },
+              ...current,
+            ]
+            return next.slice(0, 30)
+          })
+        }
+      },
+      onCompleted: (result) => {
+        setLastBuild(result)
+      },
+      onError: (error) => {
+        throw new Error(error.message || '生成失败')
+      },
+    },
+    languageCode
+  )
+
   const buildMutation = useMutation({
     mutationFn: ({ section, languageCode }: { section: string; languageCode?: string }) =>
-      staticGenerationApi.buildStream(
-        section,
-        {
-          onStarted: ({ normalizedSection, languageCode: currentLanguageCode }) => {
-            const scope = currentLanguageCode ? `语言 ${currentLanguageCode}` : '全部已启用语言'
-            setBuildScopeLabel(`${scope} / ${normalizedSection}`)
-            setBuildEvents([])
-            setRecentFiles([])
-          },
-          onProgress: (event) => {
-            setBuildEvents((current) => {
-              const next = [...current, event]
-              return next.slice(-60)
-            })
-            if (event.type === 'file_written' && event.relativePath) {
-              setRecentFiles((current) => {
-                const next = [
-                  {
-                    path: event.relativePath || '',
-                    type: event.fileType || 'file',
-                    languageCode: event.languageCode,
-                  },
-                  ...current,
-                ]
-                return next.slice(0, 30)
-              })
-            }
-          },
-          onCompleted: (result) => {
-            setLastBuild(result)
-          },
-          onError: (error) => {
-            throw new Error(error.message || '生成失败')
-          },
-        },
-        languageCode
-      ),
+      runBuildStream(section, languageCode),
     onSuccess: (data) => {
       if (data.success) {
         setLastBuild(data)
@@ -127,9 +140,58 @@ export default function StaticGenerationPage() {
   })
 
   const handleBuild = (section: string, languageCode?: string) => {
+    if (languageCode) {
+      const language = languages.find((item) => item.code === languageCode)
+      if (language && Number(language.is_enabled || 0) !== 1) {
+        toast.error(`语言 ${languageCode} 已停用，不能生成`)
+        return
+      }
+    }
     setBuilding(true)
     setLastBuild(null)
     buildMutation.mutate({ section, languageCode })
+  }
+
+  const handleBuildLanguageGroup = async (targetLanguages: Language[], label: string) => {
+    if (targetLanguages.length === 0) {
+      toast.error(`当前没有启用的${label}`)
+      return
+    }
+
+    setBuilding(true)
+    setLastBuild(null)
+    setBuildEvents([])
+    setRecentFiles([])
+
+    const languageBuilds: NonNullable<NonNullable<BuildResult['result']>['languageBuilds']> = []
+    let totalFiles = 0
+    let totalRecords = 0
+
+    try {
+      for (const language of targetLanguages) {
+        const result = await runBuildStream('all', language.code, {
+          resetOnStarted: false,
+          scopePrefix: `${label} / `,
+        })
+        totalFiles += result.totalFiles || 0
+        totalRecords += result.totalRecords || 0
+        languageBuilds.push(...(result.result?.languageBuilds || []))
+      }
+
+      const combinedResult: BuildResult = {
+        success: true,
+        totalFiles,
+        totalRecords,
+        languageCode: null,
+        result: { languageBuilds },
+      }
+      setLastBuild(combinedResult)
+      toast.success(`${label}生成成功：${targetLanguages.length} 个语言，文件数：${totalFiles}，记录数：${totalRecords}`)
+    } catch (error) {
+      toast.error(getApiErrorMessage(error, `${label}生成失败`))
+    } finally {
+      setBuilding(false)
+    }
   }
 
   const activeTargets = useMemo(() => {
@@ -143,89 +205,60 @@ export default function StaticGenerationPage() {
     <div className="h-full overflow-y-auto pr-1">
       <div className="space-y-4 pb-4">
         <Card>
-        <CardHeader>
-          <CardTitle>静态页面生成</CardTitle>
-          <CardDescription>
-            生成静态 HTML 文件。当前默认主题：{selectedThemeData?.data?.template_name || '未选择'}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="rounded border p-4 space-y-3">
-            <div className="flex items-center gap-2">
-              <h3 className="font-semibold">语言输出目录</h3>
-              <Badge variant="outline">{enabledLanguages.length} 个启用语言</Badge>
-            </div>
-            <div className="space-y-2">
-              {enabledLanguages.map((language) => (
-                <div key={language.id} className="flex flex-wrap items-center gap-2 text-sm">
-                  <Badge variant={language.is_default ? 'default' : 'outline'}>
-                    {language.code}
-                  </Badge>
-                  <span>{language.name}</span>
-                  <Badge variant="outline">
-                    {language.site?.site_mode === 'standalone' ? '独立站点' : '子目录站点'}
-                  </Badge>
-                  <span className="text-muted-foreground">输出到</span>
-                  <code className="rounded bg-muted px-2 py-0.5 text-xs">{language.site?.output_dir || 'html'}</code>
-                  {language.site?.site_mode === 'standalone' ? (
-                    <>
-                      <span className="text-muted-foreground">访问端口</span>
-                      <code className="rounded bg-muted px-2 py-0.5 text-xs">{language.site?.bind_host || '127.0.0.1'}:{language.site?.access_port || '-'}</code>
-                    </>
-                  ) : (
-                    <>
-                      <span className="text-muted-foreground">路径前缀</span>
-                      <code className="rounded bg-muted px-2 py-0.5 text-xs">{language.site?.path_prefix || '/'}</code>
-                    </>
-                  )}
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => handleBuild('all', language.code)}
-                    disabled={building}
-                  >
-                    仅生成该语言
-                  </Button>
+        <CardContent className="space-y-6 pt-6">
+          <LanguageOutputGroup
+            title="独立站点"
+            languages={standaloneLanguages}
+            building={building}
+            action={(
+              <>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBuildLanguageGroup(enabledStandaloneLanguages, '独立站点')}
+                  disabled={building || enabledStandaloneLanguages.length === 0}
+                >
+                  全部生成
+                </Button>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => handleBuild('all')}
+                  disabled={building}
+                >
+                  生成全站
+                </Button>
+              </>
+            )}
+            onBuildLanguage={(languageCode) => handleBuild('all', languageCode)}
+          />
+          <LanguageOutputGroup
+            title="子站点"
+            languages={subdirLanguages}
+            building={building}
+            action={(
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => handleBuildLanguageGroup(enabledSubdirLanguages, '子站点')}
+                disabled={building || enabledSubdirLanguages.length === 0}
+              >
+                全部生成
+              </Button>
+            )}
+            onBuildLanguage={(languageCode) => handleBuild('all', languageCode)}
+          />
+          {outputDirConflicts.length > 0 ? (
+            <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+              存在语言输出目录冲突，以下语言会互相覆盖：
+              {outputDirConflicts.map(([outputDir, conflictLanguages]) => (
+                <div key={outputDir}>
+                  <code className="mx-1 rounded bg-white px-1.5 py-0.5 text-xs">{outputDir}</code>
+                  {conflictLanguages.map((item) => item.code).join(' / ')}
                 </div>
               ))}
             </div>
-            {outputDirConflicts.length > 0 ? (
-              <div className="rounded border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-                存在语言输出目录冲突，以下语言会互相覆盖：
-                {outputDirConflicts.map(([outputDir, conflictLanguages]) => (
-                  <div key={outputDir}>
-                    <code className="mx-1 rounded bg-white px-1.5 py-0.5 text-xs">{outputDir}</code>
-                    {conflictLanguages.map((item) => item.code).join(' / ')}
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-
-          {sectionGroups.map((section) => (
-            <div key={section.title} className="space-y-2">
-              <h3 className="font-semibold">{section.title}</h3>
-              <div className="flex flex-wrap gap-2">
-                {section.items.map((item) => (
-                  <Button
-                    key={item.value}
-                    variant="outline"
-                    onClick={() => handleBuild(item.value)}
-                    disabled={building}
-                  >
-                    {item.label}
-                  </Button>
-                ))}
-              </div>
-            </div>
-          ))}
-
-          <div className="pt-4 border-t">
-            <h3 className="font-semibold mb-2">全站生成</h3>
-            <Button onClick={() => handleBuild('all')} disabled={building}>
-              {building ? '生成中...' : '生成全站'}
-            </Button>
-          </div>
+          ) : null}
 
           {building || recentFiles.length > 0 || activeTargets.length > 0 ? (
             <div className="rounded border p-4 space-y-4">
@@ -269,12 +302,6 @@ export default function StaticGenerationPage() {
           ) : null}
 
           <div className="pt-4 border-t space-y-3">
-            <div>
-              <h3 className="font-semibold">数据库日志清理</h3>
-              <p className="text-sm text-muted-foreground">
-                `site.sqlite-wal` 是 SQLite 的写前日志，不是普通缓存。点击后会执行 checkpoint 并尝试截断 WAL 文件。
-              </p>
-            </div>
             <Button
               variant="outline"
               onClick={() => checkpointMutation.mutate()}
@@ -316,6 +343,57 @@ export default function StaticGenerationPage() {
         </CardContent>
         </Card>
       </div>
+    </div>
+  )
+}
+
+function LanguageOutputGroup({
+  title,
+  languages,
+  building,
+  action,
+  onBuildLanguage,
+}: {
+  title: string
+  languages: Language[]
+  building: boolean
+  action?: ReactNode
+  onBuildLanguage: (languageCode: string) => void
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <h4 className="text-sm font-semibold">{title}</h4>
+        <Badge variant="outline">{languages.length}</Badge>
+        {action}
+      </div>
+      {languages.length > 0 ? (
+        <div className="space-y-2">
+          {languages.map((language) => {
+            const disabled = Number(language.is_enabled || 0) !== 1
+            return (
+              <div key={language.id} className="flex flex-wrap items-center gap-2 text-sm">
+                <Badge variant={language.is_default ? 'default' : 'outline'}>
+                  {language.code}
+                </Badge>
+                {disabled ? <Badge variant="secondary">停用</Badge> : null}
+                <span className="text-muted-foreground">输出到</span>
+                <code className="rounded bg-muted px-2 py-0.5 text-xs">{language.site?.output_dir || 'html'}</code>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => onBuildLanguage(language.code)}
+                  disabled={building || disabled}
+                >
+                  生成
+                </Button>
+              </div>
+            )
+          })}
+        </div>
+      ) : (
+        <div className="text-sm text-muted-foreground">暂无语言</div>
+      )}
     </div>
   )
 }

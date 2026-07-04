@@ -4322,11 +4322,14 @@ function resolveLanguageOutputRoot(baseOutputRoot, language) {
     return requestedRoot;
   }
 
+  const defaultRootName = path.basename(DEFAULT_OUTPUT_ROOT);
   if (String(language?.site?.site_mode || '').trim() === 'standalone') {
+    if (configuredOutputDir === defaultRootName || configuredOutputDir === 'html') {
+      return requestedRoot;
+    }
     return path.resolve(PROJECT_ROOT, configuredOutputDir);
   }
 
-  const defaultRootName = path.basename(DEFAULT_OUTPUT_ROOT);
   if (configuredOutputDir === defaultRootName || configuredOutputDir === 'html') {
     return requestedRoot;
   }

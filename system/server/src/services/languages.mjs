@@ -272,15 +272,16 @@ export function deleteLanguage(id) {
 }
 
 export function deriveLanguageSiteOutputDir({ siteMode = SITE_MODE_SUBDIR, pathPrefix = '/', languageCode = '' } = {}) {
+  const normalizedPathPrefix = normalizePathPrefix(pathPrefix);
   if (siteMode === SITE_MODE_STANDALONE) {
     return `html_${buildStandaloneOutputSuffix(languageCode)}`;
   }
 
-  if (pathPrefix === '/') {
+  if (normalizedPathPrefix === '/') {
     return 'html';
   }
 
-  return `html${pathPrefix}`;
+  return `html${normalizedPathPrefix}`;
 }
 
 function ensureDefaultLanguage() {
@@ -416,7 +417,8 @@ function normalizeLanguageInput(input, { isCreate = false } = {}) {
 }
 
 function normalizeSiteInput(input, { languageCode = '', isDefault = 0 } = {}) {
-  const siteMode = normalizeSiteMode(input?.site_mode);
+  const explicitSiteMode = normalizeSiteMode(input?.site_mode);
+  const siteMode = resolveEffectiveSiteMode(input, explicitSiteMode);
   const pathPrefix = siteMode === SITE_MODE_STANDALONE ? '/' : normalizePathPrefix(input?.path_prefix);
   const accessPort = siteMode === SITE_MODE_STANDALONE ? normalizePort(input?.access_port) : null;
   const bindHost = siteMode === SITE_MODE_STANDALONE ? normalizeBindHost(input?.bind_host) : null;
@@ -424,7 +426,7 @@ function normalizeSiteInput(input, { languageCode = '', isDefault = 0 } = {}) {
   return {
     host: toNullableString(input?.host),
     path_prefix: pathPrefix,
-    output_dir: deriveLanguageSiteOutputDir({ siteMode, pathPrefix, languageCode }),
+    output_dir: normalizeOutputDir(input?.output_dir) || deriveLanguageSiteOutputDir({ siteMode, pathPrefix, languageCode }),
     site_mode: siteMode,
     access_port: accessPort,
     bind_host: bindHost,
@@ -437,6 +439,9 @@ function normalizeSiteInput(input, { languageCode = '', isDefault = 0 } = {}) {
 function validateLanguageSiteConfig(payload, { currentLanguageId = null } = {}) {
   const site = payload.site || {};
   if (site.site_mode === SITE_MODE_STANDALONE) {
+    if (isRootStandaloneSite(site)) {
+      return;
+    }
     if (!String(site.host || '').trim()) {
       throw new Error('独立站点必须配置正式域名');
     }
@@ -466,6 +471,11 @@ function validateLanguageSiteConfig(payload, { currentLanguageId = null } = {}) 
   }
 }
 
+function isRootStandaloneSite(site) {
+  return normalizeOutputDir(site?.output_dir) === 'html'
+    && normalizePathPrefix(site?.path_prefix) === '/';
+}
+
 function ensureAtLeastOneEnabledLanguage(currentLanguageId) {
   const anotherEnabled = queryOne(
     `
@@ -491,6 +501,15 @@ function normalizeSiteMode(value) {
   return normalized;
 }
 
+function resolveEffectiveSiteMode(input, fallbackMode = SITE_MODE_SUBDIR) {
+  const outputDir = String(input?.output_dir || '').trim().replace(/\\/g, '/').replace(/\/+$/g, '');
+  const pathPrefix = normalizePathPrefix(input?.path_prefix);
+  if (fallbackMode === SITE_MODE_SUBDIR && outputDir === 'html' && pathPrefix === '/') {
+    return SITE_MODE_STANDALONE;
+  }
+  return fallbackMode;
+}
+
 function normalizePathPrefix(value) {
   const normalized = String(value ?? '').trim();
   if (normalized === '' || normalized === '/') {
@@ -498,6 +517,14 @@ function normalizePathPrefix(value) {
   }
   const withSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
   return withSlash.replace(/\/+$/, '');
+}
+
+function normalizeOutputDir(value) {
+  const normalized = String(value || '').trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '');
+  if (!normalized || normalized.includes('..')) {
+    return '';
+  }
+  return normalized;
 }
 
 function normalizePort(value) {
@@ -527,8 +554,15 @@ function buildStandaloneOutputSuffix(languageCode) {
 }
 
 function mapLanguageRow(row) {
-  const siteMode = normalizeSiteMode(row.site_mode || SITE_MODE_SUBDIR);
   const pathPrefix = row.path_prefix || '/';
+  const siteMode = resolveEffectiveSiteMode(
+    {
+      site_mode: row.site_mode,
+      output_dir: row.output_dir,
+      path_prefix: pathPrefix
+    },
+    normalizeSiteMode(row.site_mode || SITE_MODE_SUBDIR)
+  );
   const outputDir = row.output_dir || deriveLanguageSiteOutputDir({
     siteMode,
     pathPrefix,
