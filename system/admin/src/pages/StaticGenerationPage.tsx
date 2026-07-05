@@ -13,6 +13,8 @@ import { Badge } from '@/components/ui/badge'
 import { toast } from 'sonner'
 import type { Language } from '@/types'
 
+const DEFAULT_DEV_SITE_PORT = 1231
+
 export default function StaticGenerationPage() {
   const [building, setBuilding] = useState(false)
   const [lastBuild, setLastBuild] = useState<BuildResult | null>(null)
@@ -371,6 +373,8 @@ function LanguageOutputGroup({
         <div className="space-y-2">
           {languages.map((language) => {
             const disabled = Number(language.is_enabled || 0) !== 1
+            const outputDir = language.site?.output_dir || 'html'
+            const targetUrl = getLanguageTargetUrl(language)
             return (
               <div key={language.id} className="flex flex-wrap items-center gap-2 text-sm">
                 <Badge variant={language.is_default ? 'default' : 'outline'}>
@@ -378,7 +382,19 @@ function LanguageOutputGroup({
                 </Badge>
                 {disabled ? <Badge variant="secondary">停用</Badge> : null}
                 <span className="text-muted-foreground">输出到</span>
-                <code className="rounded bg-muted px-2 py-0.5 text-xs">{language.site?.output_dir || 'html'}</code>
+                {targetUrl ? (
+                  <a
+                    className="rounded bg-muted px-2 py-0.5 font-mono text-xs text-primary underline-offset-4 hover:underline"
+                    href={targetUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    title={`打开目标网站：${targetUrl}`}
+                  >
+                    {outputDir}
+                  </a>
+                ) : (
+                  <code className="rounded bg-muted px-2 py-0.5 text-xs">{outputDir}</code>
+                )}
                 <Button
                   size="sm"
                   variant="outline"
@@ -396,6 +412,46 @@ function LanguageOutputGroup({
       )}
     </div>
   )
+}
+
+function getLanguageTargetUrl(language: Language) {
+  const site = language.site
+  if (!site) {
+    return ''
+  }
+
+  const devHost = getDevPreviewHost(site.bind_host)
+  const siteMode = String(site.site_mode || '').trim()
+
+  if (siteMode === 'standalone') {
+    const port = Number(site.access_port || 0) || DEFAULT_DEV_SITE_PORT
+    return `http://${devHost}:${port}/`
+  }
+
+  const pathPrefix = normalizePathPrefix(site.path_prefix)
+  return `http://${devHost}:${DEFAULT_DEV_SITE_PORT}${pathPrefix === '/' ? '/' : `${pathPrefix}/`}`
+}
+
+function getDevPreviewHost(bindHost?: string | null) {
+  const host = String(bindHost || '').trim()
+  if (host && host !== '0.0.0.0' && host !== '::') {
+    return host
+  }
+
+  if (typeof window !== 'undefined' && window.location.hostname) {
+    return window.location.hostname
+  }
+
+  return '127.0.0.1'
+}
+
+function normalizePathPrefix(value?: string | null) {
+  const normalized = String(value || '').trim()
+  if (!normalized || normalized === '/') {
+    return '/'
+  }
+  const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`
+  return withLeadingSlash.replace(/\/+$/g, '')
 }
 
 function getApiErrorMessage(error: unknown, fallback: string) {

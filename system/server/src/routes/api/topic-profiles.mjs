@@ -1,0 +1,51 @@
+import { requireAuth } from '../../middleware/auth.mjs';
+import {
+  deleteTopicProfile,
+  getTopicProfileByColumnId,
+  listTopicProfiles,
+  saveTopicProfile
+} from '../../services/topic-profiles.mjs';
+
+export default async function topicProfilesRoutes(app) {
+  app.get('/topic-profiles', {
+    onRequest: [requireAuth]
+  }, async (request) => {
+    const { language, lang } = request.query;
+    return {
+      success: true,
+      data: listTopicProfiles({ languageCode: language ?? lang })
+    };
+  });
+
+  app.get('/topic-profiles/:columnId', {
+    onRequest: [requireAuth]
+  }, async (request, reply) => {
+    const { language, lang } = request.query;
+    const profile = getTopicProfileByColumnId(request.params.columnId, { languageCode: language ?? lang });
+    if (!profile) {
+      reply.code(404);
+      return { success: false, message: '专题配置不存在' };
+    }
+    return { success: true, data: profile };
+  });
+
+  app.put('/topic-profiles/:columnId', {
+    onRequest: [requireAuth]
+  }, async (request, reply) => {
+    try {
+      const { language, lang } = request.query;
+      const profile = saveTopicProfile(request.params.columnId, request.body || {}, { languageCode: language ?? lang });
+      return { success: true, data: profile, message: '专题配置已保存' };
+    } catch (error) {
+      reply.code(400);
+      return { success: false, message: error.message };
+    }
+  });
+
+  app.delete('/topic-profiles/:columnId', {
+    onRequest: [requireAuth]
+  }, async (request) => {
+    const deleted = deleteTopicProfile(request.params.columnId);
+    return { success: true, data: { deleted }, message: deleted ? '专题配置已删除' : '专题配置不存在' };
+  });
+}

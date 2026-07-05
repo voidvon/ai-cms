@@ -102,10 +102,13 @@ export function listSectionEntries(section, {
 }
 
 export function shouldRenderSectionRootAsList(section) {
-  if (String(section?.rootColumn?.model_code || '').trim() === 'topic') {
+  const templateData = section?.rootColumn?.template_data && typeof section.rootColumn.template_data === 'object'
+    ? section.rootColumn.template_data
+    : {};
+  const pageKind = String(templateData.pageKind || '').trim().toLowerCase();
+  if (templateData.renderFullSectionTree === true || pageKind === 'series-tree') {
     return true;
   }
-  const pageKind = String(section?.rootColumn?.template_data?.pageKind || '').trim().toLowerCase();
   return pageKind === 'section-list-root';
 }
 

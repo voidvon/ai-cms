@@ -1183,7 +1183,12 @@ function getSectionListColumns(templateContext, section) {
 }
 
 function shouldRenderFullSectionColumnTree(section) {
-  return String(section?.rootColumn?.model_code || '').trim() === 'topic';
+  const templateData = section?.rootColumn?.template_data && typeof section.rootColumn.template_data === 'object'
+    ? section.rootColumn.template_data
+    : {};
+  const pageKind = String(templateData.pageKind || '').trim().toLowerCase();
+  return templateData.renderFullSectionTree === true
+    || pageKind === 'series-tree';
 }
 
 function buildSectionListOutputPath(section, columnNode, pageNumber) {

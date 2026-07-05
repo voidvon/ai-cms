@@ -349,8 +349,9 @@ function hydrateColumns(rows, {
     const resolvedSeoDescription = fallbackTranslation?.seo_description ?? null;
     const resolvedPublishStatus = fallbackTranslation?.publish_status ?? 'published';
     const resolvedLanguageCode = fallbackTranslation?.language_code || selectedLanguage.default_code || selectedLanguage.code;
+    const resolvedTemplateData = parseTemplateDataJson(resolvedTemplateDataJson);
     const modelCode = inferModelCode(row, rowById, modelCodeById);
-    const semantics = inferColumnSemantics(row, rowById, semanticsById, modelCode);
+    const semantics = inferColumnSemantics(row, rowById, semanticsById, modelCode, resolvedTemplateData);
 
     const base = {
       ...row,
@@ -358,7 +359,7 @@ function hydrateColumns(rows, {
       summary: resolvedSummary,
       content_html: resolvedContentHtml,
       template_data_json: resolvedTemplateDataJson,
-      template_data: parseTemplateDataJson(resolvedTemplateDataJson),
+      template_data: resolvedTemplateData,
       seo_title: resolvedSeoTitle ?? null,
       seo_description: resolvedSeoDescription ?? null,
       publish_status: resolvedPublishStatus,
@@ -838,7 +839,7 @@ function inferModelCode(row, rowById, modelCodeById) {
   return null;
 }
 
-function inferColumnSemantics(row, rowById, semanticsById, modelCode) {
+function inferColumnSemantics(row, rowById, semanticsById, modelCode, templateData = null) {
   const columnId = toInteger(row?.id, 0);
   if (columnId > 0 && semanticsById.has(columnId)) {
     return semanticsById.get(columnId);
@@ -868,7 +869,7 @@ function inferColumnSemantics(row, rowById, semanticsById, modelCode) {
     structureKind = 'collection';
     const resolvedPath = String(resolveColumnResolvedRoutePath(row, null, rowById) || '').trim();
     const hasDetailRule = Boolean(toNullableString(row?.detail_rule));
-    renderDriver = inferCollectionRenderDriver({ resolvedPath, hasDetailRule });
+    renderDriver = inferCollectionRenderDriver({ resolvedPath, hasDetailRule, templateData });
     generationModes = ['list'];
     if (toNullableInteger(row?.content_model_id) && toNullableString(row?.detail_rule)) {
       generationModes.push('detail');
@@ -1212,7 +1213,13 @@ function createColumnsIndexes() {
   `);
 }
 
-function inferCollectionRenderDriver({ resolvedPath, hasDetailRule }) {
+function inferCollectionRenderDriver({ resolvedPath, hasDetailRule, templateData = null }) {
+  const pageKind = templateData && typeof templateData === 'object'
+    ? String(templateData.pageKind || '').trim().toLowerCase()
+    : '';
+  if (templateData?.renderFullSectionTree === true || pageKind === 'series-tree') {
+    return COLUMN_TREE_MODEL_CONFIGS.news.renderDriver;
+  }
   if (String(resolvedPath || '').trim().startsWith(COLUMN_TREE_MODEL_CONFIGS.product.rootBasePath)) {
     return COLUMN_TREE_MODEL_CONFIGS.product.renderDriver;
   }
