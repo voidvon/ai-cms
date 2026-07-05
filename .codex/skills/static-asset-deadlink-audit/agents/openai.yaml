@@ -1,0 +1,4 @@
+interface:
+  display_name: "Static Asset Audit"
+  short_description: "Audit html static asset dead links"
+  default_prompt: "Use $static-asset-deadlink-audit to analyze dead static asset links under ./html with the project's runtime path mappings."

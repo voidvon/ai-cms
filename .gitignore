@@ -1,6 +1,11 @@
 .DS_Store
-.codex/
+.codex/*
+!.codex/skills/
+!.codex/skills/**
+.codex/skills/ui-ux-pro-max/
 .seo-cache/
+__pycache__/
+*.py[cod]
 
 /html/
 /html_*/

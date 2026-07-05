@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spirax Keyword Splitter"
+  short_description: "Split keyword CSVs into classified files"
+  default_prompt: "Use $spirax-keyword-splitter to classify and split Spirax keyword CSVs into product and non-product category files."
