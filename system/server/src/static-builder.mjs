@@ -108,7 +108,11 @@ function buildArticleUrl(entry, templateContext, sectionOverride = null) {
     throw new Error(`内容 ${entry.id} 的栏目 ${entry.column_id} 未找到或缺少根栏目配置`);
   }
 
-  return buildContentDetailUrlFromColumn(entry, section.rootColumn);
+  const entryColumnId = normalizeInteger(entry?.column_id, 0);
+  const entryColumn = templateContext?.sectionCategoryById?.get?.(entryColumnId)
+    || (normalizeInteger(section.rootColumn?.id, 0) === entryColumnId ? section.rootColumn : null)
+    || section.rootColumn;
+  return buildContentDetailUrlFromColumn(entry, entryColumn);
 }
 
 function prefixSitePathForContext(url, site = null, options = {}) {
@@ -1029,7 +1033,7 @@ function buildSectionCategoryPagesByDir({
     return createBuildResult(sectionKey, defaultSectionLabel, 0, 0);
   }
   const dirName = section.dirName;
-  const columnList = getSectionTopLevelCategories(templateContext, section);
+  const columnList = getSectionListColumns(templateContext, section);
   const items = getSectionEntries(templateContext, section);
   const columnBuckets = groupBy(items, (item) => normalizeInteger(item.column_id, 0));
   const hasSectionRootLanding = shouldRenderSectionRootLanding(section?.rootColumn);
@@ -1137,7 +1141,11 @@ function buildSectionCategoryPagesByDir({
       const columnDirName = String(columnNode.dir_name || '').trim();
       // 子栏目使用目录结构: /services/introduction/index.html
       // 根栏目使用根目录: /services/index.html, /services/index-2.html
-      if (!isRootCategory && columnDirName) {
+      if (shouldRenderFullSectionColumnTree(section)) {
+        const outputPath = buildSectionListOutputPath(section, columnNode, pageNumber);
+        writeTextFile(outputRoot, outputPath, html, templateContext.site);
+        filesWritten += 1;
+      } else if (!isRootCategory && columnDirName) {
         // 子栏目有目录名，使用目录结构
         const fileName = pageNumber === 1 ? 'index.html' : `index-${pageNumber}.html`;
         const relativePath = path.join(dirName, columnDirName, fileName);
@@ -1160,6 +1168,33 @@ function buildSectionCategoryPagesByDir({
     buildRegisteredTsxAssets(outputRoot);
   }
   return createBuildResult(sectionKey, defaultSectionLabel, effectiveColumnList.length, filesWritten);
+}
+
+function getSectionListColumns(templateContext, section) {
+  if (!shouldRenderFullSectionColumnTree(section)) {
+    return getSectionTopLevelCategories(templateContext, section);
+  }
+
+  const rootColumnId = normalizeInteger(section?.rootColumnId, 0);
+  return (templateContext.sectionCategoriesByRootId?.get(rootColumnId) || [])
+    .filter((item) => normalizeInteger(item?.id, 0) !== rootColumnId)
+    .slice()
+    .sort(compareCategoryOrder);
+}
+
+function shouldRenderFullSectionColumnTree(section) {
+  return String(section?.rootColumn?.model_code || '').trim() === 'topic';
+}
+
+function buildSectionListOutputPath(section, columnNode, pageNumber) {
+  const publicUrl = buildSectionColumnPublicUrl(section, columnNode);
+  const outputPath = resolveColumnRouteOutputPath(publicUrl);
+  if (pageNumber <= 1) {
+    return outputPath;
+  }
+  return outputPath.endsWith('index.html')
+    ? outputPath.replace(/index\.html$/u, `index-${pageNumber}.html`)
+    : outputPath;
 }
 
 function buildSectionDetailPagesByDir({
@@ -2856,7 +2891,7 @@ function buildLegacySectionContentDetailPageProps({ templateContext, section, se
   const sectionLabel = resolvedSectionConfig.sectionLabel;
   const sectionPrimaryImage = getPrimaryTemplateImage(resolvedSectionConfig.rootColumn);
   const articleUrl = resolvedSectionConfig.rootColumn
-    ? prefixSitePathForContext(buildContentDetailUrlFromColumn(item, resolvedSectionConfig.rootColumn), templateContext.site, { allowApi: false, allowAssets: false })
+    ? buildSiteScopedArticleUrl(item, templateContext, resolvedSectionConfig)
     : prefixSitePathForContext(`/news/detail/${normalizeInteger(item.id, 0)}.html`, templateContext.site, { allowApi: false, allowAssets: false });
   const sectionUrl = prefixSitePathForContext(`/${sectionDir}/`, templateContext.site, { allowApi: false, allowAssets: false });
   const relatedArticles = getSectionEntries(templateContext, resolvedSectionConfig)
@@ -2902,6 +2937,7 @@ function buildLegacySectionContentDetailPageProps({ templateContext, section, se
     columnName: columnNode?.name || '',
     bodyHtml: normalizeLegacyBodyHtml(item.content_html, templateContext.site, { fallbackAlt: item.title }) || '',
     currentArticle: {
+      ...item,
       id: normalizeInteger(item.id, 0),
       title: item.title || '',
       summary: resolveRenderableContentSummary(item),

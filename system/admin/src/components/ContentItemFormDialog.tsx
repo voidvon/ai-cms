@@ -15,6 +15,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import ImageUploadField from '@/components/ImageUploadField'
 import ImagesUploadField from '@/components/ImagesUploadField'
 import RichTextEditor from '@/components/RichTextEditor'
+import TopicRelationsEditor, { TOPIC_RELATION_FIELD_NAMES } from '@/components/TopicRelationsEditor'
 import { buildColumnTreeOptions } from '@/lib/column-options'
 import { getFieldLabel, isFieldEditable, mapFieldsByName } from '@/lib/content-model-fields'
 import { toast } from 'sonner'
@@ -115,7 +116,8 @@ export default function ContentItemFormDialog({
     queryFn: () => contentModelsApi.list(),
   })
 
-  const contentModel = (contentModelsData?.data || []).find((entry: ContentModel) => entry.code === modelCode)
+  const contentModels = useMemo(() => contentModelsData?.data || [], [contentModelsData?.data])
+  const contentModel = contentModels.find((entry: ContentModel) => entry.code === modelCode)
   const fieldMap = useMemo(() => mapFieldsByName(contentModel?.fields || []), [contentModel?.fields])
   const capabilities = useMemo(
     () => inferFormModelCapabilities(modelCode, contentModel?.fields || []),
@@ -124,9 +126,10 @@ export default function ContentItemFormDialog({
   const dynamicBaseFields = useMemo(
     () => (contentModel?.fields || []).filter((field) => (
       !SYSTEM_FIELD_NAMES.has(field.field_name)
+      && !(modelCode === 'topic' && TOPIC_RELATION_FIELD_NAMES.has(field.field_name))
       && Number(field.is_translatable || 0) === 0
     )),
-    [contentModel?.fields],
+    [contentModel?.fields, modelCode],
   )
   const meta = useMemo(() => getModelMeta(capabilities), [capabilities])
   const allColumns = columnsData?.data || []
@@ -213,12 +216,14 @@ export default function ContentItemFormDialog({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Tabs value={activeLanguage} onValueChange={setActiveLanguage} className="rounded border p-4">
+          <Tabs value={activeLanguage} onValueChange={setActiveLanguage} className={modelCode === 'topic' ? '' : 'rounded border p-4'}>
             <div className="space-y-3">
-              <div>
-                <div className="font-medium">内容信息</div>
-                <div className="text-sm text-muted-foreground">基础信息与多语言内容分栏编辑。</div>
-              </div>
+              {modelCode === 'topic' ? null : (
+                <div>
+                  <div className="font-medium">内容信息</div>
+                  <div className="text-sm text-muted-foreground">基础信息与多语言内容分栏编辑。</div>
+                </div>
+              )}
               <TabsList className="w-full justify-start">
                 <TabsTrigger value="base">基础信息</TabsTrigger>
                 {languages.map((language) => (
@@ -365,6 +370,16 @@ export default function ContentItemFormDialog({
                       )
                     })}
                   </div>
+                ) : null}
+
+                {modelCode === 'topic' ? (
+                  <TopicRelationsEditor
+                    value={baseData}
+                    onChange={(patch) => setBaseData({ ...baseData, ...patch })}
+                    contentModels={contentModels}
+                    columns={allColumns}
+                    defaultLanguageCode={defaultLanguageCode}
+                  />
                 ) : null}
 
                 {capabilities.supportsCreatedAt ? (

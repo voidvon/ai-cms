@@ -89,6 +89,7 @@ export default function DashboardLayout() {
     { path: '/ai-docs', label: 'AI 文档', icon: FileText },
     { path: '/price-management', label: '价格管理', icon: ListOrdered },
     { path: '/content-model-data', label: '信息管理', icon: FileText },
+    { path: '/topics', label: '专题管理', icon: FileText },
     { path: '/columns', label: '栏目管理', icon: Folder },
     { path: '/media-assets', label: '附件管理', icon: Image },
   ] satisfies MenuItem[]

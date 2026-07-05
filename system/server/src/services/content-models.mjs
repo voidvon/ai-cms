@@ -20,6 +20,12 @@ const BUILTIN_MODELS = [
     description: '新闻列表和新闻详情'
   },
   {
+    code: 'topic',
+    name: '专题',
+    source_table: 'content_topic',
+    description: 'SEO专题、产品专题和应用专题'
+  },
+  {
     code: 'price_record',
     name: '价格条目',
     source_table: 'content_price_record',
@@ -49,6 +55,18 @@ const FIELD_LABELS = {
   requirements_html: '具体要求',
   images: '产品图片',
   spec_options_json: '产品规格',
+  topic_type: '专题类型',
+  primary_keyword: '主关键词',
+  keyword_group: '关键词组',
+  parent_topic_code: '父级专题编码',
+  related_content_json: '关联内容',
+  related_product_categories_json: '关联产品分类',
+  related_products_json: '关联产品',
+  related_resources_json: '关联资料',
+  related_tools_json: '关联工具',
+  related_industries_json: '关联行业',
+  module_config_json: '模块配置',
+  template_variant_key: '模板变体标识',
   picture: '图片',
   is_featured_home: '首页推荐',
   is_visible: '显示',
@@ -488,6 +506,275 @@ function ensureBuiltinModelFields() {
       sort_order: field.sort_order,
       settings_json: null
     }, field);
+  });
+
+  const topicFields = [
+    {
+      field_name: 'column_id',
+      field_label: '所属专题栏目',
+      field_type: 'number',
+      is_required: 1,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 0,
+      sort_order: 1
+    },
+    {
+      field_name: 'custom_url',
+      field_label: '自定义文件名',
+      field_type: 'text',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 0,
+      sort_order: 2
+    },
+    {
+      field_name: 'code',
+      field_label: '专题编码',
+      field_type: 'text',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 1,
+      sort_order: 3
+    },
+    {
+      field_name: 'images',
+      field_label: '专题图片',
+      field_type: 'images',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 0,
+      sort_order: 4
+    },
+    {
+      field_name: 'topic_type',
+      field_label: '专题类型',
+      field_type: 'text',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 1,
+      sort_order: 10
+    },
+    {
+      field_name: 'parent_topic_code',
+      field_label: '父级专题编码',
+      field_type: 'text',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 0,
+      sort_order: 12
+    },
+    {
+      field_name: 'primary_keyword',
+      field_label: '主关键词',
+      field_type: 'text',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 1,
+      sort_order: 20
+    },
+    {
+      field_name: 'keyword_group',
+      field_label: '关键词组',
+      field_type: 'textarea',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 1,
+      sort_order: 30
+    },
+    {
+      field_name: 'related_content_json',
+      field_label: '关联内容',
+      field_type: 'textarea',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 0,
+      sort_order: 40
+    },
+    {
+      field_name: 'related_product_categories_json',
+      field_label: '关联产品分类',
+      field_type: 'textarea',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 0,
+      sort_order: 50
+    },
+    {
+      field_name: 'related_products_json',
+      field_label: '关联产品',
+      field_type: 'textarea',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 0,
+      sort_order: 60
+    },
+    {
+      field_name: 'related_resources_json',
+      field_label: '关联资料',
+      field_type: 'textarea',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 0,
+      sort_order: 70
+    },
+    {
+      field_name: 'related_tools_json',
+      field_label: '关联工具',
+      field_type: 'textarea',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 0,
+      sort_order: 80
+    },
+    {
+      field_name: 'related_industries_json',
+      field_label: '关联行业',
+      field_type: 'textarea',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 0,
+      sort_order: 90
+    },
+    {
+      field_name: 'module_config_json',
+      field_label: '模块配置',
+      field_type: 'textarea',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 0,
+      sort_order: 100
+    },
+    {
+      field_name: 'template_variant_key',
+      field_label: '模板变体标识',
+      field_type: 'text',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 0,
+      sort_order: 110
+    },
+    {
+      field_name: 'is_visible',
+      field_label: '显示状态',
+      field_type: 'boolean',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 0,
+      sort_order: 120
+    },
+    {
+      field_name: 'is_featured_home',
+      field_label: '首页推荐',
+      field_type: 'boolean',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 0,
+      sort_order: 130
+    },
+    {
+      field_name: 'sort_order',
+      field_label: '排序',
+      field_type: 'number',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 0,
+      is_searchable: 0,
+      sort_order: 140
+    },
+    {
+      field_name: 'name',
+      field_label: '专题名称',
+      field_type: 'text',
+      is_required: 1,
+      is_editable: 1,
+      is_translatable: 1,
+      is_searchable: 1,
+      sort_order: 200
+    },
+    {
+      field_name: 'summary',
+      field_label: '专题摘要',
+      field_type: 'textarea',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 1,
+      is_searchable: 1,
+      sort_order: 210
+    },
+    {
+      field_name: 'content_html',
+      field_label: '专题正文',
+      field_type: 'richtext',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 1,
+      is_searchable: 1,
+      sort_order: 220
+    },
+    {
+      field_name: 'seo_title',
+      field_label: 'SEO标题',
+      field_type: 'text',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 1,
+      is_searchable: 1,
+      sort_order: 230
+    },
+    {
+      field_name: 'seo_description',
+      field_label: 'SEO描述',
+      field_type: 'textarea',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 1,
+      is_searchable: 1,
+      sort_order: 240
+    },
+    {
+      field_name: 'publish_status',
+      field_label: '发布状态',
+      field_type: 'text',
+      is_required: 0,
+      is_editable: 1,
+      is_translatable: 1,
+      is_searchable: 0,
+      sort_order: 250
+    }
+  ];
+
+  topicFields.forEach((field) => {
+    upsertConfiguredModelField('topic', field.field_name, {
+      field_label: field.field_label,
+      field_type: field.field_type,
+      is_required: field.is_required,
+      is_editable: field.is_editable,
+      is_translatable: field.is_translatable,
+      is_searchable: field.is_searchable,
+      sort_order: field.sort_order,
+      settings_json: null
+    }, {
+      ...field,
+      is_system: 1
+    });
   });
 
 }

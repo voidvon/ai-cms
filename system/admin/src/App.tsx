@@ -19,6 +19,7 @@ import SiteConfigPage from '@/pages/SiteConfigPage'
 import SitemapDiagnosticsPage from '@/pages/SitemapDiagnosticsPage'
 import StaticGenerationPage from '@/pages/StaticGenerationPage'
 import TemplateVariantsPage from '@/pages/TemplateVariantsPage'
+import TopicManagementPage from '@/pages/TopicManagementPage'
 
 function App() {
   return (
@@ -33,6 +34,7 @@ function App() {
           <Route path="templates" element={<Navigate to="/themes" replace />} />
           <Route path="content-models" element={<ContentModelsPage />} />
           <Route path="content-model-data" element={<ContentModelDataPage />} />
+          <Route path="topics" element={<TopicManagementPage />} />
           <Route path="price-management" element={<PriceManagementPage />} />
           <Route path="media-assets" element={<MediaAssetsPage />} />
           <Route path="languages" element={<LanguagesPage />} />

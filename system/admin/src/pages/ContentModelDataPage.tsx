@@ -38,7 +38,21 @@ type ListedContentItem = ManagedContentItem | SectionContentItem
 
 const PAGE_LIMIT = 20
 
-export default function ContentModelDataPage() {
+interface ContentModelDataPageProps {
+  initialModelCode?: string
+  pageTitle?: string
+  pageDescription?: string
+  lockModelSelection?: boolean
+  createButtonLabel?: string
+}
+
+export default function ContentModelDataPage({
+  initialModelCode = '',
+  pageTitle = '信息',
+  pageDescription = '统一管理内容模型下的信息，默认进入第一个模型，可在上方切换。',
+  lockModelSelection = false,
+  createButtonLabel = '新增内容',
+}: ContentModelDataPageProps) {
   const queryClient = useQueryClient()
   const [selectedModelCode, setSelectedModelCode] = useState('')
   const [selectedColumnId, setSelectedColumnId] = useState('all')
@@ -67,10 +81,16 @@ export default function ContentModelDataPage() {
     if (!models.length) {
       return
     }
+    if ((lockModelSelection || !selectedModelCode) && initialModelCode && models.some((model) => model.code === initialModelCode) && selectedModelCode !== initialModelCode) {
+      setSelectedModelCode(initialModelCode)
+      setSelectedColumnId('all')
+      setPage(1)
+      return
+    }
     if (!selectedModelCode || !models.some((model) => model.code === selectedModelCode)) {
       setSelectedModelCode(models[0].code)
     }
-  }, [models, selectedModelCode])
+  }, [initialModelCode, lockModelSelection, models, selectedModelCode])
 
   const selectedModel = useMemo(
     () => models.find((model) => model.code === selectedModelCode) || models[0] || null,
@@ -136,6 +156,9 @@ export default function ContentModelDataPage() {
   const showCreatedAt = fieldMap.has('created_at')
 
   const handleSelectModel = (nextModelCode: string) => {
+    if (lockModelSelection) {
+      return
+    }
     setSelectedModelCode(nextModelCode)
     setSelectedColumnId('all')
     setPage(1)
@@ -187,32 +210,34 @@ export default function ContentModelDataPage() {
         <CardHeader>
           <div className="flex items-start justify-between gap-3">
             <div>
-              <CardTitle>信息</CardTitle>
-              <CardDescription>统一管理内容模型下的信息，默认进入第一个模型，可在上方切换。</CardDescription>
+              <CardTitle>{pageTitle}</CardTitle>
+              <CardDescription>{pageDescription}</CardDescription>
             </div>
-            <Button onClick={handleCreate}>新增内容</Button>
+            <Button onClick={handleCreate}>{createButtonLabel}</Button>
           </div>
         </CardHeader>
       </Card>
 
       <Card>
         <CardContent className="space-y-4 pt-6">
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,260px)_minmax(0,260px)_minmax(0,1fr)]">
-            <div className="space-y-2">
-              <Label>内容模型</Label>
-              <Select value={selectedModel.code} onValueChange={handleSelectModel}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {models.map((model) => (
-                    <SelectItem key={model.id} value={model.code}>
-                      {model.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+          <div className={lockModelSelection ? 'grid gap-4 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)]' : 'grid gap-4 lg:grid-cols-[minmax(0,260px)_minmax(0,260px)_minmax(0,1fr)]'}>
+            {!lockModelSelection ? (
+              <div className="space-y-2">
+                <Label>内容模型</Label>
+                <Select value={selectedModel.code} onValueChange={handleSelectModel}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {models.map((model) => (
+                      <SelectItem key={model.id} value={model.code}>
+                        {model.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : null}
 
             <div className="space-y-2">
               <Label>所属栏目</Label>
@@ -280,7 +305,7 @@ export default function ContentModelDataPage() {
                         <TableCell>{(item as ManagedContentItem).is_visible === 1 ? <Badge>显示</Badge> : <Badge variant="secondary">隐藏</Badge>}</TableCell>
                       ) : null}
                       {showSortOrder ? <TableCell>{Number(item.sort_order || 0)}</TableCell> : null}
-                      {showCreatedAt ? <TableCell>{formatDate(item.created_at)}</TableCell> : null}
+                      {showCreatedAt ? <TableCell>{formatDate(resolveCreatedAt(item))}</TableCell> : null}
                       <TableCell className="text-right">
                         <Button variant="ghost" size="sm" onClick={() => handleEdit(item)}>编辑</Button>
                         <Button variant="destructiveGhost" size="sm" onClick={() => handleDelete(item)}>删除</Button>
@@ -390,7 +415,11 @@ export default function ContentModelDataPage() {
 }
 
 function resolveContentItemTitle(item: ListedContentItem) {
-  return 'title' in item ? item.title : item.name
+  return 'title' in item ? String(item.title || '') : String(item.name || '')
+}
+
+function resolveCreatedAt(item: ListedContentItem) {
+  return 'created_at' in item ? String(item.created_at || '') : ''
 }
 
 function resolveColumnLabel(

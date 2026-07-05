@@ -62,6 +62,10 @@ const MANAGED_MODEL_META = {
     code: 'news',
     isSectionContent: true,
   },
+  topic: {
+    code: 'topic',
+    isSectionContent: true,
+  },
 } as const
 
 type ManagedModelCode = keyof typeof MANAGED_MODEL_META

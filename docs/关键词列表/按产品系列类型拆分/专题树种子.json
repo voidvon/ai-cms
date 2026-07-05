@@ -1,0 +1,260 @@
+{
+  "model_code": "topic",
+  "root": {
+    "name": "专题",
+    "route_path": "/topics/",
+    "detail_rule": "{id}.html",
+    "topic_type": "topic_root"
+  },
+  "nodes": [
+    {
+      "code": "steam-traps",
+      "name": "疏水阀专题",
+      "slug": "steam-traps",
+      "primary_keyword": "steam traps",
+      "topic_type": "product_family",
+      "keyword_source_file": "480-710-疏水阀.csv",
+      "keyword_count": 710,
+      "volume": 480,
+      "related_product_categories": ["疏水阀"],
+      "children": [
+        {
+          "code": "float-steam-traps",
+          "name": "浮球式疏水阀",
+          "slug": "float-steam-traps",
+          "primary_keyword": "ball float steam trap",
+          "topic_type": "product_type",
+          "keyword_signal_count": 160,
+          "related_product_categories": ["疏水阀", "浮球式疏水阀"]
+        },
+        {
+          "code": "thermodynamic-steam-traps",
+          "name": "热动力疏水阀",
+          "slug": "thermodynamic-steam-traps",
+          "primary_keyword": "thermodynamic steam trap",
+          "topic_type": "product_type",
+          "keyword_signal_count": 77,
+          "related_product_categories": ["疏水阀", "热动力疏水阀"]
+        },
+        {
+          "code": "thermostatic-steam-traps",
+          "name": "恒温疏水阀",
+          "slug": "thermostatic-steam-traps",
+          "primary_keyword": "thermostatic steam trap",
+          "topic_type": "product_type",
+          "keyword_signal_count": 33,
+          "related_product_categories": ["疏水阀", "恒温疏水阀", "平衡压力疏水阀"]
+        },
+        {
+          "code": "inverted-bucket-steam-traps",
+          "name": "倒吊桶疏水阀",
+          "slug": "inverted-bucket-steam-traps",
+          "primary_keyword": "inverted bucket steam trap",
+          "topic_type": "product_type",
+          "keyword_signal_count": 53,
+          "related_product_categories": ["疏水阀", "倒吊桶疏水阀"]
+        }
+      ]
+    },
+    {
+      "code": "pressure-reducing-valves",
+      "name": "减压阀专题",
+      "slug": "pressure-reducing-valves",
+      "primary_keyword": "pressure reducing valve",
+      "topic_type": "product_family",
+      "keyword_source_file": "70-307-减压阀.csv",
+      "keyword_count": 307,
+      "volume": 70,
+      "related_product_categories": ["减压阀"],
+      "children": [
+        {
+          "code": "pilot-operated-pressure-reducing-valves",
+          "name": "先导式减压阀",
+          "slug": "pilot-operated-pressure-reducing-valves",
+          "primary_keyword": "pilot operated pressure reducing valve",
+          "topic_type": "product_type",
+          "keyword_signal_count": 165,
+          "related_product_categories": ["减压阀", "先导式减压阀"]
+        },
+        {
+          "code": "direct-acting-pressure-reducing-valves",
+          "name": "直接作用式减压阀",
+          "slug": "direct-acting-pressure-reducing-valves",
+          "primary_keyword": "direct acting pressure reducing valve",
+          "topic_type": "product_type",
+          "keyword_signal_count": 51,
+          "related_product_categories": ["减压阀", "直接作用式减压阀"]
+        },
+        {
+          "code": "pressure-reducing-stations",
+          "name": "减压站",
+          "slug": "pressure-reducing-stations",
+          "primary_keyword": "pressure reducing station",
+          "topic_type": "solution",
+          "keyword_signal_count": 7,
+          "related_product_categories": ["减压阀", "减压站"]
+        }
+      ]
+    },
+    {
+      "code": "strainers",
+      "name": "过滤器专题",
+      "slug": "strainers",
+      "primary_keyword": "strainer",
+      "topic_type": "product_family",
+      "keyword_source_file": "30-257-过滤器.csv",
+      "keyword_count": 257,
+      "volume": 30,
+      "related_product_categories": ["过滤器"],
+      "children": [
+        {
+          "code": "y-type-strainers",
+          "name": "Y型过滤器",
+          "slug": "y-type-strainers",
+          "primary_keyword": "y strainer",
+          "topic_type": "product_type",
+          "keyword_signal_count": 15,
+          "related_product_categories": ["过滤器", "Y型过滤器"]
+        },
+        {
+          "code": "basket-strainers",
+          "name": "篮式过滤器",
+          "slug": "basket-strainers",
+          "primary_keyword": "basket strainer",
+          "topic_type": "product_type",
+          "keyword_signal_count": 3,
+          "related_product_categories": ["过滤器", "篮式过滤器"]
+        },
+        {
+          "code": "steam-filters",
+          "name": "蒸汽过滤器",
+          "slug": "steam-filters",
+          "primary_keyword": "steam filter",
+          "topic_type": "product_type",
+          "keyword_signal_count": 11,
+          "related_product_categories": ["过滤器", "蒸汽过滤器", "洁净蒸汽过滤器"]
+        }
+      ]
+    },
+    {
+      "code": "condensate-pumps",
+      "name": "冷凝水泵专题",
+      "slug": "condensate-pumps",
+      "primary_keyword": "condensate pump",
+      "topic_type": "product_family",
+      "keyword_source_file": "70-96-冷凝水泵.csv",
+      "keyword_count": 96,
+      "volume": 70,
+      "related_product_categories": ["冷凝水泵"],
+      "children": [
+        {
+          "code": "pump-traps",
+          "name": "泵疏水阀",
+          "slug": "pump-traps",
+          "primary_keyword": "pump trap",
+          "topic_type": "product_type",
+          "keyword_signal_count": 59,
+          "related_product_categories": ["冷凝水泵", "泵疏水阀", "APT"]
+        },
+        {
+          "code": "condensate-recovery-pump-packages",
+          "name": "冷凝水回收泵组",
+          "slug": "condensate-recovery-pump-packages",
+          "primary_keyword": "condensate recovery pump package",
+          "topic_type": "solution",
+          "keyword_signal_count": 9,
+          "related_product_categories": ["冷凝水泵", "泵组", "接收罐"]
+        }
+      ]
+    },
+    {
+      "code": "check-valves",
+      "name": "止回阀专题",
+      "slug": "check-valves",
+      "primary_keyword": "check valve",
+      "topic_type": "product_family",
+      "keyword_source_file": "140-65-止回阀.csv",
+      "keyword_count": 65,
+      "volume": 140,
+      "related_product_categories": ["止回阀"],
+      "children": [
+        {
+          "code": "disc-check-valves",
+          "name": "圆盘止回阀",
+          "slug": "disc-check-valves",
+          "primary_keyword": "disc check valve",
+          "topic_type": "product_type",
+          "related_product_categories": ["止回阀", "圆盘止回阀"]
+        },
+        {
+          "code": "wafer-check-valves",
+          "name": "对夹式止回阀",
+          "slug": "wafer-check-valves",
+          "primary_keyword": "wafer check valve",
+          "topic_type": "product_type",
+          "related_product_categories": ["止回阀", "对夹式止回阀"]
+        }
+      ]
+    },
+    {
+      "code": "separators",
+      "name": "汽水分离器专题",
+      "slug": "separators",
+      "primary_keyword": "steam separator",
+      "topic_type": "product_family",
+      "keyword_source_file": "90-92-汽水分离器.csv",
+      "keyword_count": 92,
+      "volume": 90,
+      "related_product_categories": ["汽水分离器"],
+      "children": [
+        {
+          "code": "steam-separators",
+          "name": "蒸汽分离器",
+          "slug": "steam-separators",
+          "primary_keyword": "steam separator",
+          "topic_type": "product_type",
+          "related_product_categories": ["汽水分离器", "蒸汽分离器"]
+        },
+        {
+          "code": "compressed-air-separators",
+          "name": "压缩空气分离器",
+          "slug": "compressed-air-separators",
+          "primary_keyword": "compressed air separator",
+          "topic_type": "product_type",
+          "related_product_categories": ["汽水分离器", "压缩空气分离器"]
+        }
+      ]
+    },
+    {
+      "code": "control-valves",
+      "name": "控制阀专题",
+      "slug": "control-valves",
+      "primary_keyword": "control valve",
+      "topic_type": "product_family",
+      "keyword_source_file": "40-135-控制阀.csv",
+      "keyword_count": 135,
+      "volume": 40,
+      "related_product_categories": ["控制阀"],
+      "children": [
+        {
+          "code": "temperature-control-valves",
+          "name": "温度控制阀",
+          "slug": "temperature-control-valves",
+          "primary_keyword": "temperature control valve",
+          "topic_type": "product_type",
+          "keyword_signal_count": 10,
+          "related_product_categories": ["控制阀", "温度控制阀", "自力式控制阀"]
+        },
+        {
+          "code": "steam-control-valves",
+          "name": "蒸汽控制阀",
+          "slug": "steam-control-valves",
+          "primary_keyword": "steam control valve",
+          "topic_type": "product_type",
+          "keyword_signal_count": 3,
+          "related_product_categories": ["控制阀", "蒸汽控制阀"]
+        }
+      ]
+    }
+  ]
+}

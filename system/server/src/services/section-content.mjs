@@ -102,6 +102,9 @@ export function listSectionEntries(section, {
 }
 
 export function shouldRenderSectionRootAsList(section) {
+  if (String(section?.rootColumn?.model_code || '').trim() === 'topic') {
+    return true;
+  }
   const pageKind = String(section?.rootColumn?.template_data?.pageKind || '').trim().toLowerCase();
   return pageKind === 'section-list-root';
 }
