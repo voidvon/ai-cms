@@ -5,9 +5,12 @@ import { contentModelsApi } from '@/api/advanced'
 import { columnsApi } from '@/api/columns'
 import { contentItemsApi } from '@/api/content-items'
 import { languagesApi } from '@/api/languages'
+import { topicProfilesApi, type TopicProfile, type TopicProfilePayload } from '@/api/topic-profiles'
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -19,6 +22,7 @@ import { buildColumnTreeOptions } from '@/lib/column-options'
 import { getFieldLabel, isFieldEditable, mapFieldsByName } from '@/lib/content-model-fields'
 import { toast } from 'sonner'
 import type {
+  Column,
   ContentModel,
   ContentModelField,
   ManagedContentItem,
@@ -30,6 +34,15 @@ import type {
 type ContentItem = ManagedContentItem | SectionContentItem
 type ContentItemTranslation = ManagedContentTranslation | SectionContentTranslation
 type TranslationNameField = 'title' | 'name'
+
+interface TopicColumnNode extends Column {
+  children: TopicColumnNode[]
+}
+
+interface RelatedContentRef {
+  model: string
+  id: number
+}
 
 interface FormModelCapabilities {
   translationNameField: TranslationNameField
@@ -91,6 +104,9 @@ export default function ContentItemFormDialog({
   const [activeLanguage, setActiveLanguage] = useState('zh-CN')
   const [baseData, setBaseData] = useState<Record<string, unknown>>(createEmptyBaseData(defaultColumnId))
   const [translations, setTranslations] = useState<Record<string, ContentItemTranslation>>({})
+  const [selectedTopicColumnId, setSelectedTopicColumnId] = useState('')
+  const [selectedTopicLanguageCode, setSelectedTopicLanguageCode] = useState('')
+  const [topicSelectorOpen, setTopicSelectorOpen] = useState(false)
 
   const { data: languagesData } = useQuery({
     queryKey: ['languages'],
@@ -98,6 +114,7 @@ export default function ContentItemFormDialog({
   })
   const languages = useMemo(() => languagesData?.data || [], [languagesData?.data])
   const defaultLanguageCode = languages.find((language) => language.is_default === 1)?.code || 'zh-CN'
+  const topicLanguageCode = selectedTopicLanguageCode || defaultLanguageCode
   const availableLanguageCodes = useMemo(() => languages.map((language) => language.code), [languages])
 
   const { data: itemDetailData } = useQuery({
@@ -107,12 +124,17 @@ export default function ContentItemFormDialog({
   })
 
   const { data: columnsData } = useQuery({
-    queryKey: ['columns', defaultLanguageCode],
-    queryFn: () => columnsApi.list({ language: defaultLanguageCode }),
+    queryKey: ['columns', topicLanguageCode],
+    queryFn: () => columnsApi.list({ language: topicLanguageCode }),
   })
   const { data: contentModelsData } = useQuery({
     queryKey: ['content-models'],
     queryFn: () => contentModelsApi.list(),
+  })
+  const { data: topicProfilesData } = useQuery({
+    queryKey: ['topic-profiles', topicLanguageCode],
+    queryFn: () => topicProfilesApi.list({ language: topicLanguageCode }),
+    enabled: open,
   })
 
   const contentModels = useMemo(() => contentModelsData?.data || [], [contentModelsData?.data])
@@ -131,6 +153,21 @@ export default function ContentItemFormDialog({
   )
   const meta = useMemo(() => getModelMeta(capabilities), [capabilities])
   const allColumns = columnsData?.data || []
+  const topicColumns = useMemo(() => resolveTopicColumns(allColumns), [allColumns])
+  const selectedTopicColumn = topicColumns.find((column) => column.id === Number.parseInt(selectedTopicColumnId, 10)) || null
+  const topicProfiles = topicProfilesData?.data || []
+  const topicProfilesByColumnId = useMemo(() => (
+    new Map(topicProfiles.map((profile) => [profile.column_id, profile]))
+  ), [topicProfiles])
+  const currentContentRef = item?.id ? { model: modelCode, id: Number(item.id) } : null
+  const linkedTopicColumnIds = useMemo(() => {
+    if (!currentContentRef) {
+      return new Set<number>()
+    }
+    return new Set(topicProfiles
+      .filter((profile) => relatedContentRefsContains(profile.related_content_json, currentContentRef))
+      .map((profile) => profile.column_id))
+  }, [currentContentRef?.id, currentContentRef?.model, topicProfiles])
   const modelColumns = allColumns.filter((column) => (
     Number(column.content_model_id || 0) === Number(contentModel?.id || 0)
     && column.column_type === 'list'
@@ -159,6 +196,18 @@ export default function ContentItemFormDialog({
     }
   }, [item, itemDetailData?.data, mode, defaultColumnId, defaultLanguageCode, availableLanguageCodes.join('|'), capabilities])
 
+  useEffect(() => {
+    if (!selectedTopicColumnId && topicColumns.length > 0) {
+      setSelectedTopicColumnId(String(topicColumns[0].id))
+    }
+  }, [selectedTopicColumnId, topicColumns])
+
+  useEffect(() => {
+    if (!selectedTopicLanguageCode && defaultLanguageCode) {
+      setSelectedTopicLanguageCode(defaultLanguageCode)
+    }
+  }, [selectedTopicLanguageCode, defaultLanguageCode])
+
   const mutation = useMutation({
     mutationFn: async () => {
       const payload = {
@@ -177,6 +226,26 @@ export default function ContentItemFormDialog({
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || '操作失败')
+    },
+  })
+
+  const addToTopicMutation = useMutation({
+    mutationFn: async (topicColumnId: number) => {
+      if (!currentContentRef) {
+        throw new Error('内容保存后才能关联专题')
+      }
+      const profile = topicProfilesByColumnId.get(topicColumnId) || null
+      const refs = parseRelatedContentRefs(profile?.related_content_json || '[]')
+      const exists = refs.some((ref) => ref.model === currentContentRef.model && ref.id === currentContentRef.id)
+      const nextRefs = exists ? refs : [...refs, currentContentRef]
+      return topicProfilesApi.save(topicColumnId, buildTopicProfilePayload(profile, nextRefs), { language: topicLanguageCode })
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['topic-profiles'] })
+      toast.success('已添加到专题')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || error.message || '添加专题失败')
     },
   })
 
@@ -202,6 +271,15 @@ export default function ContentItemFormDialog({
         ...patch,
       },
     }))
+  }
+
+  const handleAddToTopic = () => {
+    const topicColumnId = Number.parseInt(selectedTopicColumnId, 10)
+    if (!topicColumnId) {
+      toast.error('请选择专题')
+      return
+    }
+    addToTopicMutation.mutate(topicColumnId)
   }
 
   return (
@@ -453,6 +531,81 @@ export default function ContentItemFormDialog({
                     ) : null}
                   </div>
                 )}
+                <div className="space-y-3 rounded border p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <div className="font-medium">专题关联</div>
+                      <div className="text-sm text-muted-foreground">将当前内容添加到某个语言版本的专题栏目。</div>
+                    </div>
+                    <div className="w-40 space-y-1">
+                      <Label>专题语言</Label>
+                      <Select value={topicLanguageCode} onValueChange={setSelectedTopicLanguageCode}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {languages.map((language) => (
+                            <SelectItem key={language.id} value={language.code}>
+                              {language.name}{language.code === defaultLanguageCode ? ' *' : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  {mode !== 'edit' || !item?.id ? (
+                    <div className="rounded border border-dashed p-3 text-sm text-muted-foreground">
+                      内容创建后才会生成 ID，请保存后再编辑并添加到专题。
+                    </div>
+                  ) : topicColumns.length === 0 ? (
+                    <div className="rounded border border-dashed p-3 text-sm text-muted-foreground">
+                      未找到 `/topics/` 专题栏目树。
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                        <Popover open={topicSelectorOpen} onOpenChange={setTopicSelectorOpen}>
+                          <PopoverTrigger asChild>
+                            <Button type="button" variant="outline" className="justify-between">
+                              <span className="truncate">
+                                {selectedTopicColumn ? selectedTopicColumn.name : '选择专题'}
+                              </span>
+                              <span className="ml-3 text-xs text-muted-foreground">展开</span>
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent align="start" className="w-[640px] max-w-[min(640px,var(--radix-popover-content-available-width))] p-0">
+                            <TopicCascader
+                              columns={topicColumns}
+                              value={Number.parseInt(selectedTopicColumnId, 10) || undefined}
+                              linkedTopicColumnIds={linkedTopicColumnIds}
+                              onValueChange={(column) => {
+                                setSelectedTopicColumnId(String(column.id))
+                                setTopicSelectorOpen(false)
+                              }}
+                            />
+                          </PopoverContent>
+                        </Popover>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleAddToTopic}
+                          disabled={addToTopicMutation.isPending || linkedTopicColumnIds.has(Number.parseInt(selectedTopicColumnId, 10))}
+                        >
+                          {linkedTopicColumnIds.has(Number.parseInt(selectedTopicColumnId, 10)) ? '已关联' : '添加到专题'}
+                        </Button>
+                      </div>
+                      {linkedTopicColumnIds.size > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {topicColumns
+                            .filter((column) => linkedTopicColumnIds.has(column.id))
+                            .map((column) => (
+                              <Badge key={column.id} variant="secondary">{column.name}</Badge>
+                            ))}
+                        </div>
+                      ) : null}
+                    </div>
+                  )}
+                </div>
               </div>
             </TabsContent>
 
@@ -604,6 +757,206 @@ function getModelMeta(capabilities: FormModelCapabilities) {
 
 function isFormFieldAvailable(fieldMap: Map<string, ContentModelField>, fieldName: string, defaultAvailable = true) {
   return fieldMap.has(fieldName) || defaultAvailable
+}
+
+function TopicCascader({
+  columns,
+  value,
+  linkedTopicColumnIds,
+  onValueChange,
+}: {
+  columns: Column[]
+  value?: number
+  linkedTopicColumnIds: Set<number>
+  onValueChange: (column: Column) => void
+}) {
+  const roots = useMemo(() => buildTopicColumnTree(columns), [columns])
+  const selectedPath = useMemo(() => resolveTopicPath(columns, value), [columns, value])
+  const [activePath, setActivePath] = useState<number[]>([])
+
+  useEffect(() => {
+    setActivePath(selectedPath.map((column) => column.id).slice(0, -1))
+  }, [selectedPath.map((column) => column.id).join('/')])
+
+  const columnsByParent = useMemo(() => {
+    const levels: TopicColumnNode[][] = [roots]
+    let currentNodes = roots
+    for (const activeId of activePath) {
+      const activeNode = currentNodes.find((node) => node.id === activeId)
+      if (!activeNode?.children.length) {
+        break
+      }
+      levels.push(activeNode.children)
+      currentNodes = activeNode.children
+    }
+    return levels
+  }, [activePath, roots])
+
+  const handleActivate = (levelIndex: number, node: TopicColumnNode) => {
+    setActivePath([...activePath.slice(0, levelIndex), node.id])
+  }
+
+  return (
+    <div className="min-h-[260px]">
+      <div className="border-b px-3 py-2 text-sm text-muted-foreground">
+        {selectedPath.length ? selectedPath.map((column) => column.name).join(' / ') : '请选择专题'}
+      </div>
+      <div className="flex max-h-[360px] overflow-x-auto overflow-y-hidden">
+        {columnsByParent.map((levelNodes, levelIndex) => (
+          <div key={levelIndex} className="min-w-52 border-r last:border-r-0">
+            <div className="max-h-[360px] overflow-y-auto p-1">
+              {levelNodes.map((node) => {
+                const active = activePath[levelIndex] === node.id
+                const selected = value === node.id
+                const linked = linkedTopicColumnIds.has(node.id)
+                return (
+                  <div
+                    key={node.id}
+                    className={[
+                      'flex w-full items-stretch justify-between gap-1 rounded text-sm hover:bg-muted',
+                      active || selected ? 'bg-muted' : '',
+                    ].join(' ')}
+                    onMouseEnter={() => node.children.length && handleActivate(levelIndex, node)}
+                  >
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 px-2 py-2 text-left"
+                      onClick={() => {
+                        if (node.children.length) {
+                          handleActivate(levelIndex, node)
+                          return
+                        }
+                        onValueChange(node)
+                      }}
+                    >
+                      <span className="block truncate font-medium">{node.name}</span>
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">{node.route_path || `ID ${node.id}`}</span>
+                    </button>
+                    <div className="flex shrink-0 items-center gap-1 pr-2">
+                      {linked ? <Badge variant="secondary" className="h-5 px-1.5 text-[10px]">已关联</Badge> : null}
+                      {node.children.length ? (
+                        <>
+                          <button
+                            type="button"
+                            className="rounded border px-1.5 py-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+                            onClick={() => onValueChange(node)}
+                          >
+                            选中
+                          </button>
+                          <span className="text-muted-foreground">›</span>
+                        </>
+                      ) : null}
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function resolveTopicColumns(columns: Column[]) {
+  const byId = new Map(columns.map((column) => [column.id, column]))
+  const root = columns.find((column) => (
+    Number(column.parent_id || 0) <= 0
+    && String(column.dir_name || '').trim() === 'topics'
+    && String(column.route_path || '').trim() === '/topics/'
+  ))
+  if (!root) {
+    return []
+  }
+
+  return columns.filter((column) => {
+    let current: Column | undefined = column
+    while (current) {
+      if (current.id === root.id) {
+        return true
+      }
+      const parentId: number = Number(current.parent_id || 0)
+      current = parentId > 0 ? byId.get(parentId) : undefined
+    }
+    return false
+  })
+}
+
+function buildTopicColumnTree(columns: Column[]) {
+  const nodes = new Map<number, TopicColumnNode>()
+  const roots: TopicColumnNode[] = []
+
+  for (const column of columns) {
+    nodes.set(column.id, { ...column, children: [] })
+  }
+
+  for (const node of nodes.values()) {
+    const parent = node.parent_id ? nodes.get(Number(node.parent_id)) : null
+    if (parent) {
+      parent.children.push(node)
+    } else {
+      roots.push(node)
+    }
+  }
+
+  sortTopicColumnNodes(roots)
+  return roots
+}
+
+function sortTopicColumnNodes(nodes: TopicColumnNode[]) {
+  nodes.sort((a, b) => {
+    const sortPriority = Number(a.sort_order || 0) - Number(b.sort_order || 0)
+    return sortPriority !== 0 ? sortPriority : a.id - b.id
+  })
+  for (const node of nodes) {
+    sortTopicColumnNodes(node.children)
+  }
+}
+
+function resolveTopicPath(columns: Column[], value?: number) {
+  if (!value) {
+    return []
+  }
+  const byId = new Map(columns.map((column) => [column.id, column]))
+  const path: Column[] = []
+  let current = byId.get(value)
+  while (current) {
+    path.unshift(current)
+    const parentId = Number(current.parent_id || 0)
+    current = parentId > 0 ? byId.get(parentId) : undefined
+  }
+  return path
+}
+
+function parseRelatedContentRefs(value: string): RelatedContentRef[] {
+  try {
+    const parsed = JSON.parse(value || '[]')
+    if (!Array.isArray(parsed)) {
+      return []
+    }
+    return parsed
+      .map((entry) => ({
+        model: String(entry?.model || '').trim(),
+        id: Number(entry?.id || 0),
+      }))
+      .filter((entry) => entry.model && entry.id > 0)
+  } catch {
+    return []
+  }
+}
+
+function relatedContentRefsContains(value: string, target: RelatedContentRef) {
+  return parseRelatedContentRefs(value).some((ref) => ref.model === target.model && ref.id === target.id)
+}
+
+function buildTopicProfilePayload(profile: TopicProfile | null, refs: RelatedContentRef[]): TopicProfilePayload {
+  return {
+    seo_title: profile?.seo_title || '',
+    intro_html: profile?.intro_html || '',
+    topic_keyword: profile?.topic_keyword || '',
+    related_content_json: JSON.stringify(refs),
+    sort_order: Number(profile?.sort_order || 0),
+  }
 }
 
 function createEmptyBaseData(defaultColumnId?: number) {

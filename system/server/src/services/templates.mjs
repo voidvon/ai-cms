@@ -13,7 +13,7 @@ import { buildContentDetailUrlFromColumn } from './column-paths.mjs';
 import { normalizeUploadedRelativePath } from './uploads.mjs';
 import { getSiteConfig, normalizeLanguageSitePathPrefix, prefixLanguageSitePath } from './site.mjs';
 
-export const TEMPLATE_TYPES = ['home', 'list', 'content', 'single', 'not_found', 'component'];
+export const TEMPLATE_TYPES = ['home', 'list', 'content', 'single', 'not_found', 'topic', 'component'];
 export const TEMPLATE_ENGINES = ['tsx'];
 const MAX_TEMPLATE_VERSIONS = 10;
 const CONTENT_TYPE_PRODUCT_ID = 1;
@@ -55,7 +55,7 @@ const TEMPLATES_TABLE_SCHEMA = `
     id INTEGER PRIMARY KEY,
     theme_id INTEGER,
     name TEXT NOT NULL,
-    type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'single', 'not_found', 'component')),
+    type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'single', 'not_found', 'topic', 'component')),
     code TEXT NOT NULL,
     engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
     tsx_source TEXT NOT NULL DEFAULT '',
@@ -136,7 +136,7 @@ export function ensureTemplatesSchema() {
       id INTEGER PRIMARY KEY,
       theme_id INTEGER,
       name TEXT NOT NULL,
-      type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'single', 'not_found', 'component')),
+      type TEXT NOT NULL CHECK (type IN ('home', 'list', 'content', 'single', 'not_found', 'topic', 'component')),
       code TEXT NOT NULL,
       engine TEXT NOT NULL DEFAULT 'tsx' CHECK (engine IN ('tsx')),
       tsx_source TEXT NOT NULL DEFAULT '',
@@ -156,7 +156,7 @@ export function ensureTemplatesSchema() {
       theme_id INTEGER NOT NULL,
       target_type TEXT NOT NULL,
       target_id INTEGER,
-      template_type TEXT NOT NULL CHECK (template_type IN ('home', 'list', 'content', 'single', 'not_found')),
+      template_type TEXT NOT NULL CHECK (template_type IN ('home', 'list', 'content', 'single', 'not_found', 'topic')),
       template_id INTEGER NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -2262,7 +2262,7 @@ function normalizeBindingTarget(themeId, targetType, targetId, templateType) {
   if (!['site', 'content_type', 'column'].includes(normalizedTargetType)) {
     throw new Error('invalid binding target type');
   }
-  if (!['home', 'list', 'content', 'single', 'not_found'].includes(templateType)) {
+  if (!['home', 'list', 'content', 'single', 'not_found', 'topic'].includes(templateType)) {
     throw new Error('invalid binding template type');
   }
 
@@ -2715,7 +2715,7 @@ function ensureTemplateBindingsThemeScope() {
   if (
     String(sql).includes('theme_id INTEGER NOT NULL')
     && String(sql).includes('UNIQUE (theme_id, target_type, target_id, template_type)')
-    && String(sql).includes("CHECK (template_type IN ('home', 'list', 'content', 'single', 'not_found'))")
+    && String(sql).includes("CHECK (template_type IN ('home', 'list', 'content', 'single', 'not_found', 'topic'))")
     && String(sql).includes('REFERENCES templates(id)')
     && !String(sql).includes('templates__old_theme_code_scope')
     && !String(sql).includes('templates__old_engine_check')
@@ -2734,7 +2734,7 @@ function ensureTemplateBindingsThemeScope() {
       theme_id INTEGER NOT NULL,
       target_type TEXT NOT NULL,
       target_id INTEGER,
-      template_type TEXT NOT NULL CHECK (template_type IN ('home', 'list', 'content', 'single', 'not_found')),
+      template_type TEXT NOT NULL CHECK (template_type IN ('home', 'list', 'content', 'single', 'not_found', 'topic')),
       template_id INTEGER NOT NULL,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -2777,7 +2777,7 @@ function ensureTemplateCodeThemeScope() {
     String(sql).includes('theme_id INTEGER')
     && String(sql).includes('UNIQUE (theme_id, code)')
     && !String(sql).includes('code TEXT NOT NULL UNIQUE')
-    && String(sql).includes("CHECK (type IN ('home', 'list', 'content', 'single', 'not_found', 'component'))")
+    && String(sql).includes("CHECK (type IN ('home', 'list', 'content', 'single', 'not_found', 'topic', 'component'))")
   ) {
     return;
   }
@@ -2819,7 +2819,7 @@ function ensureTemplatesEngineConstraint() {
   if (
     String(sql).includes("DEFAULT 'tsx'")
     && String(sql).includes("CHECK (engine IN ('tsx'))")
-    && String(sql).includes("CHECK (type IN ('home', 'list', 'content', 'single', 'not_found', 'component'))")
+    && String(sql).includes("CHECK (type IN ('home', 'list', 'content', 'single', 'not_found', 'topic', 'component'))")
   ) {
     return;
   }

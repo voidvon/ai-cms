@@ -6,7 +6,7 @@ import { createCmsTemplateRuntime } from './cms-template-runtime.mjs';
 import { listColumns } from './services/columns.mjs';
 import { listColumnNodes, listColumnNodesByRoot } from './services/column-nodes.mjs';
 import { getDescendantColumnIds } from './services/column-tree.mjs';
-import { listContentItems } from './services/content-items.mjs';
+import { getContentItemById, listContentItems } from './services/content-items.mjs';
 import { buildRobotsTxt } from './services/robots.mjs';
 import { buildSitemap } from './services/sitemap.mjs';
 import { buildLlmsFiles } from './services/llms.mjs';
@@ -38,6 +38,7 @@ import {
   resolveLanguageSitePublicBaseUrl
 } from './services/site.mjs';
 import { ensureTemplatesSchema } from './services/templates.mjs';
+import { getTopicProfileByColumnId, listTopicProfiles } from './services/topic-profiles.mjs';
 import { listLanguages } from './services/languages.mjs';
 import { resolveNormalizedTemplateImagePath } from './services/template-data-assets.mjs';
 import { escapeHtml } from './utils/html.mjs';
@@ -820,6 +821,294 @@ export function buildManualSinglePageColumns({ outputRoot = DEFAULT_OUTPUT_ROOT,
     buildRegisteredTsxAssets(outputRoot);
   }
   return createBuildResult('column-pages', '单页栏目', items.length, filesWritten);
+}
+
+export function buildTopicColumnPage({ outputRoot = DEFAULT_OUTPUT_ROOT, columnId, languageCode = null, finalizeAssets = true } = {}) {
+  const normalizedColumnId = normalizeInteger(columnId, 0);
+  if (normalizedColumnId <= 0) {
+    throw new Error('专题栏目 ID 无效');
+  }
+
+  ensureTemplatesSchema();
+  const templateContext = getLegacyTemplateContext(languageCode);
+  const column = templateContext.columns.find((item) => normalizeInteger(item.id, 0) === normalizedColumnId) || null;
+  if (!column) {
+    throw new Error('专题栏目不存在');
+  }
+
+  const routePath = String(column.route_path || '').trim();
+  if (!routePath) {
+    throw new Error('专题栏目缺少访问路径');
+  }
+
+  const profile = getTopicProfileByColumnId(normalizedColumnId, { languageCode: templateContext.languageCode });
+  const topicColumns = collectTopicColumns(templateContext.columns);
+  const topicColumnIds = new Set(topicColumns.map((item) => normalizeInteger(item.id, 0)));
+  if (!topicColumnIds.has(normalizedColumnId)) {
+    throw new Error('当前栏目不在 /topics/ 专题栏目树内');
+  }
+  const topicProfiles = listTopicProfiles({ languageCode: templateContext.languageCode });
+  const topicProfilesByColumnId = new Map(topicProfiles.map((item) => [normalizeInteger(item.column_id, 0), item]));
+  const topicChildrenByParent = groupBy(topicColumns, (item) => normalizeInteger(item.parent_id, 0));
+  const descendantTopicIds = collectDescendantTopicColumnIds(topicChildrenByParent, normalizedColumnId);
+  const aggregateColumnIds = [normalizedColumnId, ...descendantTopicIds];
+  const aggregateProfiles = aggregateColumnIds
+    .map((id) => topicProfilesByColumnId.get(id) || null)
+    .filter(Boolean);
+  const parent = templateContext.columns.find((item) => normalizeInteger(item.id, 0) === normalizeInteger(column.parent_id, 0)) || null;
+  const topicUrl = prefixSitePathForContext(routePath, templateContext.site, {
+    allowApi: false,
+    allowAssets: false
+  });
+  const relatedCards = buildTopicRelatedContentCards(aggregateProfiles, templateContext);
+  const topicNavigationItems = buildTopicNavigationItems({
+    column,
+    parent,
+    topicChildrenByParent,
+    templateContext
+  });
+  const columnPageContent = resolveDedicatedColumnPageContent(column, templateContext.languageCode);
+  const topicIntroHtml = normalizeLegacyBodyHtml(profile?.intro_html, templateContext.site, { fallbackAlt: column.name || profile?.column_name || 'Topics' }) || '';
+  const topicIntroText = extractRenderableContentBodySummary(profile?.intro_html) || '';
+  const description = normalizeRenderableLegacyText(columnPageContent?.seo_description || columnPageContent?.summary || topicIntroText || profile?.topic_keyword || '');
+  const title = column.name || profile?.column_name || 'Topics';
+  const seoTitle = String(profile?.seo_title || '').trim() || columnPageContent?.seo_title || title;
+  const mastheadImage = getPrimaryTemplateImage(column);
+  const html = renderCmsSitePage('topic-column-page', {
+    ...buildLegacyCommonProps(templateContext),
+    ...buildLegacyPageContextProps({
+      pageType: 'topic',
+      title,
+      url: topicUrl,
+      section: {
+        type: 'topic',
+        name: parent?.name || 'Topics',
+        url: parent ? prefixSitePathForContext(parent.route_path || '/topics/', templateContext.site, { allowApi: false, allowAssets: false }) : prefixSitePathForContext('/topics/', templateContext.site, { allowApi: false, allowAssets: false })
+      },
+      columnChain: buildTemplateColumnChain({
+        column,
+        columns: templateContext.columns,
+        type: 'topic',
+        urlBuilder: (item) => prefixSitePathForContext(item.route_path || '/', templateContext.site, { allowApi: false, allowAssets: false })
+      }),
+      columnType: 'topic',
+      columnUrl: topicUrl,
+      parentColumn: parent,
+      parentColumnType: 'topic',
+      parentColumnUrl: parent ? prefixSitePathForContext(parent.route_path || '/', templateContext.site, { allowApi: false, allowAssets: false }) : ''
+    }),
+    title,
+    itemDescription: description,
+    description,
+    currentColumnDescription: description,
+    topicIntroHtml,
+    introHtml: topicIntroHtml,
+    contentHtml: topicIntroHtml,
+    bodyHtml: topicIntroHtml,
+    currentColumnHeroImage: mastheadImage,
+    topicProfile: profile,
+    relatedContentRefs: aggregateProfiles.flatMap((item) => parseTopicRelatedContentRefs(item?.related_content_json)),
+    secondaryMenuItems: topicNavigationItems,
+    secondaryMenuTitle: resolveTopicNavigationTitle({ column, parent, topicChildrenByParent }),
+    secondaryMenuParentUrl: parent ? prefixSitePathForContext(parent.route_path || '/', templateContext.site, { allowApi: false, allowAssets: false }) : '',
+    items: relatedCards,
+    articleCardItems: relatedCards,
+    managedCardItems: relatedCards,
+    pagination: { page: 1, pageCount: 1, totalRecords: relatedCards.length },
+    sectionLabel: parent?.name || 'Topics',
+    seoMeta: buildSeoMeta({
+      title: seoTitle,
+      description: columnPageContent?.seo_description || topicIntroText || templateContext.site.seo_default_description || title,
+      url: topicUrl,
+      image: mastheadImage,
+      site: templateContext.site
+    }),
+    jsonLd: buildJsonLdOrganization(templateContext.site),
+    faviconLinks: generateFaviconLinks(),
+    themeColorMetas: generateThemeColorMetas(),
+    hreflangLinks: buildHreflangLinks(templateContext.site, { url: topicUrl })
+  }, templateContext, {
+    templateType: 'topic',
+    fallbackCode: 'topic',
+    targets: [{ target_type: 'column', target_id: normalizedColumnId }],
+    renderGroup: buildColumnRenderGroup({
+      rootColumn: column,
+      pageKind: 'topic',
+      fallbackKey: `topic-column-${normalizedColumnId}`
+    })
+  });
+
+  const outputPath = resolveColumnRouteOutputPath(routePath);
+  writeTextFile(outputRoot, outputPath, html, templateContext.site);
+
+  if (finalizeAssets) {
+    buildRegisteredTsxAssets(outputRoot);
+  }
+
+  return {
+    ...createBuildResult(`topic:${normalizedColumnId}`, title, 1, 1),
+    columnId: normalizedColumnId,
+    url: topicUrl,
+    outputPath
+  };
+}
+
+function collectTopicColumns(columns) {
+  const rows = Array.isArray(columns) ? columns : [];
+  const root = rows.find((column) => (
+    normalizeInteger(column.parent_id, 0) <= 0
+    && String(column.dir_name || '').trim() === 'topics'
+    && String(column.route_path || '').trim() === '/topics/'
+  ));
+  if (!root) {
+    return [];
+  }
+  const rowsById = new Map(rows.map((column) => [normalizeInteger(column.id, 0), column]));
+  return rows.filter((column) => {
+    let current = column;
+    while (current) {
+      if (normalizeInteger(current.id, 0) === normalizeInteger(root.id, 0)) {
+        return true;
+      }
+      const parentId = normalizeInteger(current.parent_id, 0);
+      current = parentId > 0 ? rowsById.get(parentId) : null;
+    }
+    return false;
+  });
+}
+
+function collectDescendantTopicColumnIds(childrenByParent, columnId) {
+  const output = [];
+  const queue = [...(childrenByParent.get(normalizeInteger(columnId, 0)) || [])];
+  while (queue.length > 0) {
+    const item = queue.shift();
+    const id = normalizeInteger(item?.id, 0);
+    if (!id) {
+      continue;
+    }
+    output.push(id);
+    queue.push(...(childrenByParent.get(id) || []));
+  }
+  return output;
+}
+
+function buildTopicNavigationItems({ column, parent, topicChildrenByParent, templateContext }) {
+  const columnId = normalizeInteger(column?.id, 0);
+  const directChildren = (topicChildrenByParent.get(columnId) || []).filter((item) => normalizeInteger(item.id, 0) !== columnId);
+  const siblingItems = parent
+    ? (topicChildrenByParent.get(normalizeInteger(parent.id, 0)) || [])
+    : [column].filter(Boolean);
+  const sourceItems = directChildren.length > 0 ? directChildren : siblingItems;
+  return sourceItems.map((item) => {
+    const url = prefixSitePathForContext(item.route_path || '/', templateContext.site, {
+      allowApi: false,
+      allowAssets: false
+    });
+    return {
+      id: normalizeInteger(item.id, 0),
+      label: item.name || '',
+      title: item.name || '',
+      url,
+      href: url,
+      active: normalizeInteger(item.id, 0) === columnId
+    };
+  });
+}
+
+function resolveTopicNavigationTitle({ column, parent, topicChildrenByParent }) {
+  const hasChildren = (topicChildrenByParent.get(normalizeInteger(column?.id, 0)) || []).length > 0;
+  if (hasChildren) {
+    return column?.name || '专题列表';
+  }
+  return parent?.name || '专题列表';
+}
+
+function buildTopicRelatedContentCards(profiles, templateContext) {
+  const refs = uniqueTopicRelatedContentRefs((Array.isArray(profiles) ? profiles : [profiles])
+    .flatMap((profile) => parseTopicRelatedContentRefs(profile?.related_content_json)));
+  const allColumns = [
+    ...(Array.isArray(templateContext.columns) ? templateContext.columns : []),
+    ...(Array.isArray(templateContext.managedColumnCategories) ? templateContext.managedColumnCategories : []),
+    ...(Array.isArray(templateContext.sectionCategories) ? templateContext.sectionCategories : [])
+  ];
+  const columnsById = new Map(allColumns.map((column) => [normalizeInteger(column.id, 0), column]));
+
+  return refs
+    .map((ref) => {
+      let item = null;
+      try {
+        item = getContentItemById(ref.model, ref.id, {
+          languageCode: templateContext.languageCode
+        });
+      } catch {
+        return null;
+      }
+      if (!item || normalizeInteger(item.is_visible, 1) === 0) {
+        return null;
+      }
+      const column = columnsById.get(normalizeInteger(item.column_id, 0)) || null;
+      if (!column) {
+        return null;
+      }
+
+      const columnPath = buildTopicContentColumnPath(column, templateContext);
+      const url = prefixSitePathForContext(buildContentDetailUrlFromColumn(item, column, columnPath), templateContext.site, {
+        allowApi: false,
+        allowAssets: false
+      });
+      const title = String(item.title || item.name || item.code || `#${item.id}`).trim();
+      return {
+        id: normalizeInteger(item.id, 0),
+        model: ref.model,
+        name: title,
+        title,
+        url,
+        href: url,
+        link: url,
+        summary: item.summary || item.description || '',
+        image: normalizeUploadedRelativePath(String(item.primary_image || item.image || '').trim()),
+        code: item.code || ''
+      };
+    })
+    .filter(Boolean);
+}
+
+function uniqueTopicRelatedContentRefs(refs) {
+  const seen = new Set();
+  return (Array.isArray(refs) ? refs : []).filter((ref) => {
+    const key = `${ref.model}:${ref.id}`;
+    if (!ref.model || !ref.id || seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function buildTopicContentColumnPath(column, templateContext) {
+  const columnId = normalizeInteger(column?.id, 0);
+  const managedColumnMap = new Map((templateContext.managedColumnCategories || []).map((item) => [normalizeInteger(item.id, 0), item]));
+  if (managedColumnMap.has(columnId)) {
+    return buildColumnSlugPath(column, managedColumnMap);
+  }
+  return null;
+}
+
+function parseTopicRelatedContentRefs(value) {
+  try {
+    const parsed = JSON.parse(String(value || '[]'));
+    if (!Array.isArray(parsed)) {
+      return [];
+    }
+    return parsed
+      .map((item) => ({
+        model: String(item?.model || '').trim(),
+        id: normalizeInteger(item?.id, 0)
+      }))
+      .filter((item) => item.model && item.id > 0);
+  } catch {
+    return [];
+  }
 }
 
 export function buildPageTreeColumnPages({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null, rootColumn = null, finalizeAssets = true } = {}) {

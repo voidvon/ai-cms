@@ -222,7 +222,7 @@ export interface Template {
   id: number;
   theme_id?: number | null;
   name: string;
-  type: 'home' | 'list' | 'content' | 'single' | 'not_found' | 'component';
+  type: 'home' | 'list' | 'content' | 'single' | 'not_found' | 'topic' | 'component';
   code: string;
   engine: 'tsx';
   tsx_source: string;
@@ -241,7 +241,7 @@ export interface TemplateBinding {
   theme_id?: number;
   target_type: 'site' | 'content_type' | 'column';
   target_id?: number | null;
-  template_type: 'home' | 'list' | 'content' | 'single';
+  template_type: 'home' | 'list' | 'content' | 'single' | 'not_found' | 'topic';
   template_id: number;
   template_name?: string;
   template_code?: string;

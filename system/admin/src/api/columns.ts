@@ -2,7 +2,7 @@ import apiClient from './client'
 import type { ApiResponse, Column } from '@/types'
 
 export const columnsApi = {
-  list: async (params?: { language?: string }) => {
+  list: async (params?: { language?: string; include_translations?: number | boolean }) => {
     const response = await apiClient.get<ApiResponse<Column[]>>('/columns', { params })
     return response.data
   },

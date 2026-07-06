@@ -9,6 +9,7 @@ import { languagesApi } from '@/api/languages'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ColumnTreeSelector } from '@/components/ColumnTreeSelector'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
@@ -22,7 +23,7 @@ import {
 } from '@/components/ui/pagination'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Tree, type TreeItemData } from '@/components/ui/tree'
+import { type TreeItemData } from '@/components/ui/tree'
 import { Ellipsis, ExternalLink, LayoutTemplate, Pencil, Plus, Trash2 } from 'lucide-react'
 import {
   AlertDialog,
@@ -44,10 +45,6 @@ import ManualColumnFormDialog from '@/components/ManualColumnFormDialog'
 import type { ManualColumnFormValue } from '@/components/ManualColumnFormDialog'
 
 const DEFAULT_TEMPLATE_VALUE = '__default__'
-
-interface ColumnTreeNode extends Column {
-  children: ColumnTreeNode[]
-}
 
 type DeleteTarget =
   | { modelCode: ManagedModelCode; id: number }
@@ -190,11 +187,6 @@ export default function ColumnsPage() {
   })
 
   const columns = columnsData?.data || []
-  const columnTree = useMemo(() => buildColumnTree(columns), [columns])
-  const columnTreeItems = useMemo<TreeItemData<Column>[]>(
-    () => columnTree.map(toTreeItem),
-    [columnTree]
-  )
   const selectedColumn = columns.find((column) => column.id === selectedColumnId)
     || columns.find((column) => column.column_semantics?.is_root)
     || columns[0]
@@ -668,12 +660,12 @@ export default function ColumnsPage() {
 
   const renderColumnTree = () => {
     return (
-      <Tree
-        items={columnTreeItems}
+      <ColumnTreeSelector
+        columns={columns}
         value={selectedColumn?.id}
-        defaultExpandedIds={columnTree.map((column) => column.id)}
-        onValueChange={handleSelectColumn}
+        onValueChange={(column) => handleSelectColumn({ id: column.id, data: column, label: column.name })}
         renderAction={renderColumnTreeAction}
+        getMetaText={(column) => <span>ID {column.id}</span>}
       />
     )
   }
@@ -1428,55 +1420,6 @@ function buildPaginationItems(currentPage: number, totalPages: number): Array<nu
   return items
 }
 
-function buildColumnTree(columns: Column[]) {
-  const visibleColumns = columns.filter((column) => shouldShowInColumnTree(column))
-  const nodes = new Map<number, ColumnTreeNode>()
-  const roots: ColumnTreeNode[] = []
-
-  for (const column of visibleColumns) {
-    nodes.set(column.id, { ...column, children: [] })
-  }
-
-  for (const node of nodes.values()) {
-    const parent = node.parent_id ? nodes.get(Number(node.parent_id)) : null
-    if (parent) {
-      parent.children.push(node)
-    } else {
-      roots.push(node)
-    }
-  }
-
-  sortColumnTree(roots)
-
-  return roots
-}
-
-function shouldShowInColumnTree(column: Column) {
-  const displayKind = getColumnDisplayKind(column)
-
-  if (displayKind === 'link' || displayKind === 'single') {
-    return true
-  }
-
-  return column.column_type === 'list'
-}
-
-function sortColumnTree(nodes: ColumnTreeNode[]) {
-  nodes.sort(compareColumnTreeNodes)
-  for (const node of nodes) {
-    sortColumnTree(node.children)
-  }
-}
-
-function compareColumnTreeNodes(a: ColumnTreeNode, b: ColumnTreeNode) {
-  const sortPriority = (a.sort_order || 0) - (b.sort_order || 0)
-  if (sortPriority !== 0) {
-    return sortPriority
-  }
-
-  return a.id - b.id
-}
-
 function getColumnKindLabel(column: Column) {
   return COLUMN_KIND_META[getColumnDisplayKind(column)].label
 }
@@ -1546,30 +1489,5 @@ function getColumnNodeTarget(column: Column): ColumnNodeTarget {
     name: column.name,
     targetType: 'column',
     renderDriver,
-  }
-}
-
-function toTreeItem(column: ColumnTreeNode): TreeItemData<Column> {
-  const displayKind = getColumnDisplayKind(column)
-
-  return {
-    id: column.id,
-    label: (
-      <div className="min-w-0 py-1">
-        <div className="flex items-center gap-2">
-          <span className="truncate font-medium">{column.name}</span>
-          {COLUMN_KIND_META[displayKind].showTreeBadge ? (
-            <Badge variant="outline" className="h-5 shrink-0 px-1.5 text-[10px]">
-              {COLUMN_KIND_META[displayKind].label}
-            </Badge>
-          ) : null}
-        </div>
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
-          <span>ID {column.id}</span>
-        </div>
-      </div>
-    ),
-    data: column,
-    children: column.children.map(toTreeItem),
   }
 }
