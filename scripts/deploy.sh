@@ -19,11 +19,15 @@ HEALTH_CHECK_URL="https://www.spiraxsteam.com"
 KEY_FILE="$(mktemp "${TMPDIR:-/tmp}/node-cms-deploy-key.XXXXXX")"
 KNOWN_HOSTS_FILE="$(mktemp "${TMPDIR:-/tmp}/node-cms-known-hosts.XXXXXX")"
 LOCAL_DB_ARCHIVE_FILE=""
+LOCAL_DB_SNAPSHOT_FILE=""
 
 cleanup() {
   rm -f "${KEY_FILE}" "${KNOWN_HOSTS_FILE}"
   if [ -n "${LOCAL_DB_ARCHIVE_FILE}" ]; then
     rm -f "${LOCAL_DB_ARCHIVE_FILE}"
+  fi
+  if [ -n "${LOCAL_DB_SNAPSHOT_FILE}" ]; then
+    rm -f "${LOCAL_DB_SNAPSHOT_FILE}"
   fi
 }
 trap cleanup EXIT
@@ -166,6 +170,20 @@ prompt_private_key() {
   read -r -p '私钥已读取，按回车继续...' _ < /dev/tty
 }
 
+create_local_sqlite_archive() {
+  local db_file="$1"
+  local archive_file="$2"
+
+  LOCAL_DB_SNAPSHOT_FILE="$(mktemp "${TMPDIR:-/tmp}/node-cms-site-sqlite-snapshot.XXXXXX")"
+
+  printf '[deploy] 正在创建 sqlite 一致性快照...\n'
+  sqlite3 "${db_file}" ".backup '${LOCAL_DB_SNAPSHOT_FILE}'"
+  sqlite3 "${LOCAL_DB_SNAPSHOT_FILE}" "PRAGMA quick_check;" | grep -qx 'ok'
+
+  printf '[deploy] 正在压缩 sqlite 快照...\n'
+  gzip -c "${LOCAL_DB_SNAPSHOT_FILE}" > "${archive_file}"
+}
+
 main() {
   parse_args "$@"
 
@@ -183,6 +201,7 @@ main() {
 
   if [ "${DEPLOY_UPLOAD_DB}" = "1" ]; then
     require_command gzip
+    require_command sqlite3
 
     if [ ! -f "${LOCAL_SQLITE_DB_PATH}" ]; then
       printf '未找到本地 sqlite 数据库：%s\n' "${LOCAL_SQLITE_DB_PATH}" >&2
@@ -190,8 +209,7 @@ main() {
     fi
 
     LOCAL_DB_ARCHIVE_FILE="$(mktemp "${TMPDIR:-/tmp}/node-cms-site-sqlite.XXXXXX.gz")"
-    printf '[deploy] 正在压缩本地 sqlite 数据库...\n'
-    gzip -c "${LOCAL_SQLITE_DB_PATH}" > "${LOCAL_DB_ARCHIVE_FILE}"
+    create_local_sqlite_archive "${LOCAL_SQLITE_DB_PATH}" "${LOCAL_DB_ARCHIVE_FILE}"
 
     if [ "${BUILD_STATIC_ON_DEPLOY}" != "1" ]; then
       printf '[deploy] 警告：已启用数据库上传，但未启用静态生成；远端 html/ 不会重新生成。\n'
@@ -351,7 +369,11 @@ restore_uploaded_sqlite_database() {
   local tmp_file
   tmp_file="${db_file}.upload.$$"
   gzip -dc "${archive_file}" > "${tmp_file}"
+  if command -v sqlite3 >/dev/null 2>&1; then
+    sqlite3 "${tmp_file}" "PRAGMA quick_check;" | grep -qx 'ok'
+  fi
   mv -f "${tmp_file}" "${db_file}"
+  rm -f "${db_file}-wal" "${db_file}-shm"
   rm -f "${archive_file}"
 
   SKIP_PRE_RESTART_SQLITE_BACKUP=1
