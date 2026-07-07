@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { languagesApi } from '@/api/languages'
 import { Button } from '@/components/ui/button'
@@ -61,6 +61,17 @@ export default function LanguagesPage() {
     },
   })
 
+  const languages = useMemo(() => {
+    return [...(data?.data || [])].sort((left, right) => {
+      const leftOrder = Number(left.sort_order || 0)
+      const rightOrder = Number(right.sort_order || 0)
+      if (leftOrder !== rightOrder) {
+        return leftOrder - rightOrder
+      }
+      return Number(left.id || 0) - Number(right.id || 0)
+    })
+  }, [data?.data])
+
   const handleAdd = () => {
     setEditingLanguage(undefined)
     setFormMode('create')
@@ -85,8 +96,6 @@ export default function LanguagesPage() {
   if (error) {
     return <div>加载失败: {(error as Error).message}</div>
   }
-
-  const languages = data?.data || []
 
   return (
     <div className="space-y-4">

@@ -21,8 +21,9 @@ export const DATABASE_PATH = process.env.DATABASE_PATH || path.join(DATA_DIR, 's
 export const PORT = Number.parseInt(process.env.PORT || '1231', 10);
 export const HOST = process.env.HOST || '127.0.0.1';
 export const UPLOAD_MAX_SIZE_KB = Number.parseInt(process.env.UPLOAD_MAX_SIZE_KB || '400', 10);
+export const IMAGE_UPLOAD_SOURCE_MAX_SIZE_KB = Number.parseInt(process.env.IMAGE_UPLOAD_SOURCE_MAX_SIZE_KB || '10240', 10);
 export const ATTACHMENT_UPLOAD_MAX_SIZE_KB = Number.parseInt(process.env.ATTACHMENT_UPLOAD_MAX_SIZE_KB || '10240', 10);
-export const UPLOAD_ALLOWED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif']);
+export const UPLOAD_ALLOWED_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.gif', '.webp']);
 export const ATTACHMENT_ALLOWED_EXTENSIONS = new Set([
   '.jpg',
   '.jpeg',

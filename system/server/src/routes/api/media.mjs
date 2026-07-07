@@ -73,7 +73,7 @@ export default async function mediaRoutes(app) {
 
     try {
       const buffer = await data.toBuffer();
-      const asset = uploadMediaAsset({
+      const asset = await uploadMediaAsset({
         buffer,
         originalFilename: data.filename,
         purpose,

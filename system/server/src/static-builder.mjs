@@ -1904,6 +1904,14 @@ function buildLanguageSwitcherData(templateContext) {
   const pagePath = normalizeLanguageSwitcherPagePath(currentPageUrl, currentPathPrefix);
   const items = listLanguages()
     .filter((language) => Number(language?.is_enabled || 0) === 1)
+    .sort((left, right) => {
+      const leftOrder = normalizeInteger(left?.sort_order, 0);
+      const rightOrder = normalizeInteger(right?.sort_order, 0);
+      if (leftOrder !== rightOrder) {
+        return leftOrder - rightOrder;
+      }
+      return normalizeInteger(left?.id, 0) - normalizeInteger(right?.id, 0);
+    })
     .map((language) => {
       const baseUrl = resolveLanguageSitePublicBaseUrl(
         language.code,
