@@ -36,6 +36,7 @@ const EMPTY_PROFILE: TopicProfilePayload = {
   intro_html: '',
   topic_keyword: '',
   related_content_json: '[]',
+  publish_status: 'draft',
   sort_order: 0,
 }
 const NO_TOPIC_TEMPLATE_VALUE = '__none__'
@@ -356,22 +357,29 @@ export default function TopicManagementPage() {
             <CardTitle className="text-base">专题栏目</CardTitle>
             <CardDescription>来自热门系列栏目树。</CardDescription>
           </CardHeader>
-          <CardContent className="min-h-0 flex-1 overflow-auto">
-            <ColumnTreeSelector
-              columns={topicColumns}
-              value={selectedColumnId ? Number.parseInt(selectedColumnId, 10) : undefined}
-              onValueChange={(column) => setSelectedColumnId(String(column.id))}
-              emptyText="未找到 `/topics/` 热门系列栏目树。"
-              className="min-h-0"
-              getBadgeVariant={(column) => (defaultProfilesByColumnId.has(column.id) ? 'default' : 'outline')}
-              getMetaText={(column) => (
-                <>
-                  <span>ID {column.id}</span>
-                  <span>{column.route_path || '-'}</span>
-                </>
-              )}
-            />
-          </CardContent>
+              <CardContent className="min-h-0 flex-1 overflow-auto">
+                <ColumnTreeSelector
+                  columns={topicColumns}
+                  value={selectedColumnId ? Number.parseInt(selectedColumnId, 10) : undefined}
+                  onValueChange={(column) => setSelectedColumnId(String(column.id))}
+                  emptyText="未找到 `/topics/` 热门系列栏目树。"
+                  className="min-h-0"
+                  getBadgeVariant={(column) => {
+                    const profile = defaultProfilesByColumnId.get(column.id)
+                    if (!profile) {
+                      return 'outline'
+                    }
+                    return profile.publish_status === 'published' ? 'default' : 'secondary'
+                  }}
+                  getMetaText={(column) => (
+                    <>
+                      <span>ID {column.id}</span>
+                      <span>{column.route_path || '-'}</span>
+                      <span>{resolveTopicStatusLabel(defaultProfilesByColumnId.get(column.id)?.publish_status)}</span>
+                    </>
+                  )}
+                />
+              </CardContent>
         </Card>
 
         <div className="flex min-h-0 flex-col">
@@ -423,6 +431,21 @@ export default function TopicManagementPage() {
                 return (
                   <TabsContent key={language.id} value={language.code} className="space-y-4">
                     <div className="grid gap-4 md:grid-cols-2">
+                      <div className="space-y-2">
+                        <Label>发布状态</Label>
+                        <Select
+                          value={draft.profile.publish_status || 'draft'}
+                          onValueChange={(value: 'draft' | 'published') => updateLanguageProfile(language.code, { publish_status: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="draft">草稿</SelectItem>
+                            <SelectItem value="published">已发布</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <div className="space-y-2">
                         <Label htmlFor={`topic_name_${language.code}`}>专题名称 {language.code === defaultLanguageCode ? '*' : ''}</Label>
                         <Input
@@ -599,6 +622,7 @@ function shouldSaveTopicProfileDraft(
     profile.seo_title.trim()
     || profile.intro_html.trim()
     || profile.topic_keyword.trim()
+    || profile.publish_status === 'published'
     || (includeRelatedContent && parseRelatedContentRefs(profile.related_content_json).length > 0)
     || Number(profile.sort_order || 0) !== 0
   )
@@ -820,8 +844,13 @@ function profileToForm(profile: TopicProfile | null, { ignoreFallback = false } 
     intro_html: profile.intro_html || '',
     topic_keyword: profile.topic_keyword || '',
     related_content_json: profile.related_content_json || '[]',
+    publish_status: profile.publish_status === 'published' ? 'published' : 'draft',
     sort_order: Number(profile.sort_order || 0),
   }
+}
+
+function resolveTopicStatusLabel(status?: string) {
+  return status === 'published' ? '已发布' : '草稿'
 }
 
 function parseRelatedContentRefs(value: string): RelatedContentRef[] {

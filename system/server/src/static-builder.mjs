@@ -727,7 +727,9 @@ function listStaticBuildTargetDefinitions({ columns = null } = {}) {
     );
   }
 
-  const sectionTargets = publicSections.sections.flatMap((section) => ([
+  const sectionTargets = publicSections.sections
+    .filter((section) => !isTopicSection(section))
+    .flatMap((section) => ([
     createStaticBuildTargetDefinition({
       group: '栏目页',
       label: `生成栏目列表: ${section.sectionLabel}`,
@@ -742,7 +744,7 @@ function listStaticBuildTargetDefinitions({ columns = null } = {}) {
       aliases: [`${section.dirName}-details`],
       execute: ({ outputRoot, languageCode, finalizeAssets }) => buildSectionContentPages({ outputRoot, languageCode, section, finalizeAssets })
     })
-  ]));
+    ]));
 
   return [...baseTargets, ...rootColumnTargets, ...sectionTargets];
 }
@@ -842,16 +844,28 @@ export function buildTopicColumnPage({ outputRoot = DEFAULT_OUTPUT_ROOT, columnI
   }
 
   const profile = getTopicProfileByColumnId(normalizedColumnId, { languageCode: templateContext.languageCode });
+  if (!profile) {
+    throw new Error('专题配置不存在');
+  }
+  if (String(profile.publish_status || '').trim() !== 'published') {
+    throw new Error('当前专题为草稿状态，发布后才能生成页面');
+  }
   const topicColumns = collectTopicColumns(templateContext.columns);
   const topicColumnIds = new Set(topicColumns.map((item) => normalizeInteger(item.id, 0)));
   if (!topicColumnIds.has(normalizedColumnId)) {
     throw new Error('当前栏目不在 /topics/ 专题栏目树内');
   }
   const topicProfiles = listTopicProfiles({ languageCode: templateContext.languageCode });
+  const publishedTopicColumnIds = new Set(
+    topicProfiles
+      .filter((item) => String(item.publish_status || '').trim() === 'published')
+      .map((item) => normalizeInteger(item.column_id, 0))
+      .filter((id) => id > 0)
+  );
   const topicProfilesByColumnId = new Map(topicProfiles.map((item) => [normalizeInteger(item.column_id, 0), item]));
   const topicChildrenByParent = groupBy(topicColumns, (item) => normalizeInteger(item.parent_id, 0));
   const descendantTopicIds = collectDescendantTopicColumnIds(topicChildrenByParent, normalizedColumnId);
-  const aggregateColumnIds = [normalizedColumnId, ...descendantTopicIds];
+  const aggregateColumnIds = [normalizedColumnId, ...descendantTopicIds.filter((id) => publishedTopicColumnIds.has(id))];
   const aggregateProfiles = aggregateColumnIds
     .map((id) => topicProfilesByColumnId.get(id) || null)
     .filter(Boolean);
@@ -865,6 +879,7 @@ export function buildTopicColumnPage({ outputRoot = DEFAULT_OUTPUT_ROOT, columnI
     column,
     parent,
     topicChildrenByParent,
+    publishedTopicColumnIds,
     templateContext
   });
   const columnPageContent = resolveDedicatedColumnPageContent(column, templateContext.languageCode);
@@ -957,7 +972,7 @@ function collectTopicColumns(columns) {
   const rows = Array.isArray(columns) ? columns : [];
   const root = rows.find((column) => (
     normalizeInteger(column.parent_id, 0) <= 0
-    && String(column.dir_name || '').trim() === 'topics'
+    && isTopicManagedColumn(column)
     && String(column.route_path || '').trim() === '/topics/'
   ));
   if (!root) {
@@ -977,6 +992,16 @@ function collectTopicColumns(columns) {
   });
 }
 
+function isTopicManagedColumn(column) {
+  const dirName = String(column?.dir_name || '').trim();
+  const routePath = String(column?.route_path || '').trim();
+  return dirName === 'topics' || routePath === '/topics/' || routePath.startsWith('/topics/');
+}
+
+function isTopicSection(section) {
+  return isTopicManagedColumn(section?.rootColumn) || String(section?.dirName || '').trim() === 'topics';
+}
+
 function collectDescendantTopicColumnIds(childrenByParent, columnId) {
   const output = [];
   const queue = [...(childrenByParent.get(normalizeInteger(columnId, 0)) || [])];
@@ -992,13 +1017,17 @@ function collectDescendantTopicColumnIds(childrenByParent, columnId) {
   return output;
 }
 
-function buildTopicNavigationItems({ column, parent, topicChildrenByParent, templateContext }) {
+function buildTopicNavigationItems({ column, parent, topicChildrenByParent, publishedTopicColumnIds, templateContext }) {
   const columnId = normalizeInteger(column?.id, 0);
   const directChildren = (topicChildrenByParent.get(columnId) || []).filter((item) => normalizeInteger(item.id, 0) !== columnId);
   const siblingItems = parent
     ? (topicChildrenByParent.get(normalizeInteger(parent.id, 0)) || [])
     : [column].filter(Boolean);
-  const sourceItems = directChildren.length > 0 ? directChildren : siblingItems;
+  const sourceItems = (directChildren.length > 0 ? directChildren : siblingItems)
+    .filter((item) => (
+      normalizeInteger(item.id, 0) === columnId
+      || publishedTopicColumnIds.has(normalizeInteger(item.id, 0))
+    ));
   return sourceItems.map((item) => {
     const url = prefixSitePathForContext(item.route_path || '/', templateContext.site, {
       allowApi: false,
@@ -1156,6 +1185,9 @@ export function buildSectionColumnListPages({
   section,
   finalizeAssets = true
 } = {}) {
+  if (isTopicSection(section)) {
+    return createBuildResult(`${section?.dirName || 'section'}-lists`, `${section?.sectionLabel || '栏目'}分类页`, 0, 0);
+  }
   return buildSectionCategoryPagesByDir({
     outputRoot,
     languageCode,
@@ -1174,6 +1206,9 @@ export function buildSectionContentPages({
   section,
   finalizeAssets = true
 } = {}) {
+  if (isTopicSection(section)) {
+    return createBuildResult(`${section?.dirName || 'section'}-details`, `${section?.sectionLabel || '栏目'}详情页`, 0, 0);
+  }
   return buildSectionDetailPagesByDir({
     outputRoot,
     idRange,
@@ -1192,6 +1227,9 @@ export function buildManagedColumnListPages({ outputRoot = DEFAULT_OUTPUT_ROOT, 
     : findManagedColumnRoot(templateContext.columns);
   if (!targetRootColumn) {
     throw new Error('缺少托管根栏目配置');
+  }
+  if (isTopicManagedColumn(targetRootColumn)) {
+    return createBuildResult(`column:${targetRootColumn.id}:list`, `${targetRootColumn?.name || '栏目'}列表页`, 0, 0);
   }
   const categories = templateContext.managedColumnCategories;
   const managedItems = listManagedColumnItems(targetRootColumn, { visibleOnly: false, limit: 10000, languageCode });
@@ -1212,7 +1250,7 @@ export function buildManagedColumnListPages({ outputRoot = DEFAULT_OUTPUT_ROOT, 
     rootColumn: targetRootColumn,
     columnNode: targetRootColumn,
     parent: null,
-    children: topLevelColumns,
+    children: topLevelColumns.filter((item) => !isTopicManagedColumn(item)),
     items: managedItems.slice().sort(compareBySortAndId),
     fileStem: 'index',
     columnMap,
@@ -1224,6 +1262,9 @@ export function buildManagedColumnListPages({ outputRoot = DEFAULT_OUTPUT_ROOT, 
     if (columnId === 0) {
       continue;
     }
+    if (isTopicManagedColumn(columnNode)) {
+      continue;
+    }
 
     const descendantColumnIds = getDescendantManagedColumnIds(childrenByParent, columnId);
     const items = descendantColumnIds
@@ -1231,7 +1272,7 @@ export function buildManagedColumnListPages({ outputRoot = DEFAULT_OUTPUT_ROOT, 
       .slice()
       .sort(compareBySortAndId);
     const parent = columnMap.get(normalizeInteger(columnNode.parent_id, 0));
-    const children = childrenByParent.get(columnId) || [];
+    const children = (childrenByParent.get(columnId) || []).filter((item) => !isTopicManagedColumn(item));
     filesWritten += writeManagedColumnPageSet({
       outputRoot,
       templateContext,
@@ -1257,6 +1298,9 @@ export function buildManagedColumnContentPages({ outputRoot = DEFAULT_OUTPUT_ROO
   const targetRootColumn = rootColumn
     ? templateContext.columns.find((item) => normalizeInteger(item.id, 0) === normalizeInteger(rootColumn.id, 0)) || null
     : findManagedColumnRoot(templateContext.columns);
+  if (targetRootColumn && isTopicManagedColumn(targetRootColumn)) {
+    return createBuildResult(`column:${targetRootColumn.id}:detail`, `${targetRootColumn?.name || '栏目'}内容页`, 0, 0);
+  }
   const managedItems = filterByIdRange(
     listManagedColumnItems(targetRootColumn, { visibleOnly: false, limit: 10000, languageCode }),
     idRange

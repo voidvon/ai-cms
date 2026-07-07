@@ -15,6 +15,7 @@ export interface TopicProfile {
   intro_html: string
   topic_keyword: string
   related_content_json: string
+  publish_status: 'draft' | 'published'
   sort_order: number
   created_at?: string
   updated_at?: string
@@ -30,6 +31,7 @@ export type TopicProfilePayload = Pick<
   | 'intro_html'
   | 'topic_keyword'
   | 'related_content_json'
+  | 'publish_status'
   | 'sort_order'
 >
 
@@ -47,6 +49,7 @@ interface TopicProfileApiRecord {
   intro_html: string
   topic_keyword: string
   related_content_json: string
+  publish_status: 'draft' | 'published'
   sort_order: number
   created_at?: string
   updated_at?: string
@@ -76,6 +79,7 @@ function toApiPayload(data: TopicProfilePayload) {
     intro_html: data.intro_html,
     topic_keyword: data.topic_keyword,
     related_content_json: data.related_content_json,
+    publish_status: data.publish_status,
     sort_order: data.sort_order,
   }
 }

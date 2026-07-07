@@ -3,6 +3,7 @@ import path from 'node:path';
 import { getSiteConfig } from './site.mjs';
 import { ensureColumnsSchema, listColumns } from './columns.mjs';
 import { listColumnNodesByRoot } from './column-nodes.mjs';
+import { listTopicProfiles } from './topic-profiles.mjs';
 import {
   buildSectionColumnPublicUrl,
   resolvePublicSectionContext
@@ -155,6 +156,8 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   const corporationLatestDateById = buildCorporationLatestDateMap(pageTreeColumns, generatedAt);
   const managedColumnMap = new Map(managedColumns.map((item) => [toInteger(item.id, 0), item]));
   const columnMap = new Map(columns.map((col) => [toInteger(col.id, 0), col]));
+  const topicColumnIds = collectTopicColumnIds(columns);
+  const publishedTopicColumnIds = collectPublishedTopicColumnIds({ columns, topicColumnIds, languageCode });
   const corporationIndexId = pageTreeColumns.find((item) => toInteger(item.parent_id, 0) === 0)?.id
     ?? pageTreeColumns[0]?.id
     ?? null;
@@ -163,11 +166,16 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
 
   for (const column of columns) {
     const routePath = String(column.route_path || '').trim();
+    const columnId = toInteger(column.id, 0);
     if (
       String(column.column_type || '') === 'single'
       && String(column.column_semantics?.render_driver || '') !== 'page_tree'
       && routePath
     ) {
+      addEntry(entries, siteUrl, normalizeRoutePathForPublic(routePath), column.updated_at || generatedAt, 'single_page');
+      continue;
+    }
+    if (routePath && publishedTopicColumnIds.has(columnId)) {
       addEntry(entries, siteUrl, normalizeRoutePathForPublic(routePath), column.updated_at || generatedAt, 'single_page');
     }
   }
@@ -183,6 +191,9 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   }
 
   for (const section of publicSections.sections) {
+    if (isTopicColumnPath(section?.rootColumn?.route_path) || String(section?.dirName || '').trim() === 'topics') {
+      continue;
+    }
     const rootColumnId = toInteger(section.rootColumnId, 0);
     const rootColumns = getSectionTopLevelCategories(sectionContent, section);
     const rootEntries = sectionContent.sectionEntriesByRootId.get(rootColumnId) || [];
@@ -205,7 +216,7 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   for (const item of sectionEntries) {
     const columnId = toInteger(item.column_id, 0);
     const section = publicSections.getSectionByColumnId(columnId);
-    if (section?.rootColumn) {
+    if (section?.rootColumn && !isTopicColumnPath(section?.rootColumn?.route_path) && String(section?.dirName || '').trim() !== 'topics') {
       addEntry(
         entries,
         siteUrl,
@@ -219,6 +230,9 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
   for (const columnNode of managedColumns) {
     const columnNodeId = toInteger(columnNode.id, 0);
     if (columnNodeId <= 0) {
+      continue;
+    }
+    if (topicColumnIds.has(columnNodeId) || isTopicColumnPath(columnNode?.route_path)) {
       continue;
     }
     const total = managedItemCountByColumn.get(columnNodeId) || 0;
@@ -235,7 +249,7 @@ function collectSitemapEntries({ siteUrl, generatedAt, languageCode = null }) {
     const columnNode = managedColumnMap.get(toInteger(managedItem.column_id, 0));
     const columnPath = columnNode ? buildColumnSlugPath(columnNode, managedColumnMap) : null;
     const column = columnMap.get(toInteger(managedItem.column_id, 0));
-    if (column) {
+    if (column && !isTopicColumnPath(column?.route_path) && !isTopicColumnPath(columnPath)) {
       addEntry(entries, siteUrl, buildContentDetailUrlFromColumn(managedItem, column, columnPath), managedItem.updated_at || generatedAt, 'managed_content_detail');
     }
   }
@@ -621,6 +635,37 @@ function cleanupExistingSitemapFiles(outputRoot) {
       fs.unlinkSync(path.resolve(outputRoot, entry.name));
     }
   }
+}
+
+function collectPublishedTopicColumnIds({ columns, topicColumnIds = collectTopicColumnIds(columns), languageCode = null }) {
+  if (!topicColumnIds.size) {
+    return new Set();
+  }
+  const profiles = listTopicProfiles({ languageCode });
+  return new Set(
+    profiles
+      .filter((profile) => (
+        topicColumnIds.has(toInteger(profile.column_id, 0))
+        && String(profile.publish_status || '').trim() === 'published'
+      ))
+      .map((profile) => toInteger(profile.column_id, 0))
+      .filter((id) => id > 0)
+  );
+}
+
+function collectTopicColumnIds(columns) {
+  const rows = Array.isArray(columns) ? columns : [];
+  return new Set(
+    rows
+      .filter((column) => isTopicColumnPath(column?.route_path))
+      .map((column) => toInteger(column.id, 0))
+      .filter((id) => id > 0)
+  );
+}
+
+function isTopicColumnPath(value) {
+  const routePath = String(value || '').trim();
+  return routePath === '/topics/' || routePath.startsWith('/topics/');
 }
 
 function toInteger(value, fallback = 0) {

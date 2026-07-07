@@ -17,6 +17,7 @@ export function ensureTopicProfilesSchema() {
       intro_html TEXT NOT NULL DEFAULT '',
       topic_keyword TEXT NOT NULL DEFAULT '',
       related_content_json TEXT NOT NULL DEFAULT '[]',
+      publish_status TEXT NOT NULL DEFAULT 'draft',
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -26,6 +27,12 @@ export function ensureTopicProfilesSchema() {
     CREATE INDEX IF NOT EXISTS idx_topic_profiles_column_id ON topic_profiles(column_id);
     CREATE INDEX IF NOT EXISTS idx_topic_profiles_language_id ON topic_profiles(language_id);
     CREATE INDEX IF NOT EXISTS idx_topic_profiles_sort ON topic_profiles(sort_order, id);
+  `);
+  addColumnIfMissing('topic_profiles', 'publish_status', "TEXT NOT NULL DEFAULT 'draft'");
+  getDb().exec(`
+    UPDATE topic_profiles
+    SET publish_status = 'draft'
+    WHERE publish_status IS NULL OR trim(publish_status) = '';
   `);
 
   schemaEnsured = true;
@@ -42,6 +49,7 @@ export function listTopicProfiles({ languageCode = null } = {}) {
       c.dir_name,
       c.route_path,
       c.column_type,
+      p.publish_status,
       ct.name AS column_name
     FROM topic_profiles p
     JOIN languages l ON l.id = p.language_id
@@ -68,6 +76,7 @@ export function getTopicProfileByColumnId(columnId, { languageCode = null } = {}
       c.dir_name,
       c.route_path,
       c.column_type,
+      p.publish_status,
       ct.name AS column_name
     FROM topic_profiles p
     JOIN languages l ON l.id = p.language_id
@@ -101,14 +110,16 @@ export function saveTopicProfile(columnId, input = {}, { languageCode = null } =
       intro_html,
       topic_keyword,
       related_content_json,
+      publish_status,
       sort_order,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(column_id, language_id) DO UPDATE SET
       seo_title = excluded.seo_title,
       intro_html = excluded.intro_html,
       topic_keyword = excluded.topic_keyword,
       related_content_json = excluded.related_content_json,
+      publish_status = excluded.publish_status,
       sort_order = excluded.sort_order,
       updated_at = CURRENT_TIMESTAMP
   `, [
@@ -118,6 +129,7 @@ export function saveTopicProfile(columnId, input = {}, { languageCode = null } =
     payload.intro_html,
     payload.topic_keyword,
     payload.related_content_json,
+    payload.publish_status,
     payload.sort_order
   ]);
 
@@ -151,6 +163,7 @@ function normalizeTopicProfileInput(input) {
     intro_html: normalizeHtmlText(input.intro_html),
     topic_keyword: normalizeText(input.topic_keyword),
     related_content_json: normalizeJsonText(input.related_content_json, '[]'),
+    publish_status: normalizePublishStatus(input.publish_status),
     sort_order: toInteger(input.sort_order, 0)
   };
 }
@@ -170,6 +183,7 @@ function mapTopicProfileRow(row) {
     intro_html: row.intro_html || '',
     topic_keyword: row.topic_keyword || '',
     related_content_json: row.related_content_json || '[]',
+    publish_status: normalizePublishStatus(row.publish_status),
     sort_order: toInteger(row.sort_order, 0),
     created_at: row.created_at || '',
     updated_at: row.updated_at || '',
@@ -252,7 +266,18 @@ function normalizeHtmlText(value) {
   return String(value ?? '').trim();
 }
 
+function normalizePublishStatus(value) {
+  return String(value || '').trim() === 'published' ? 'published' : 'draft';
+}
+
 function toInteger(value, fallback = 0) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
   return Number.isNaN(parsed) ? fallback : parsed;
+}
+
+function addColumnIfMissing(tableName, columnName, definition) {
+  const columns = getDb().prepare(`PRAGMA table_info(${tableName})`).all();
+  if (!columns.some((column) => column.name === columnName)) {
+    getDb().exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
 }
