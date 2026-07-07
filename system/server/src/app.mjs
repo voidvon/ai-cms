@@ -114,6 +114,7 @@ async function registerCommonHooks(app) {
     try {
       recordAccessLog({
         pagePath: request.raw?.url || request.url,
+        pageUrl: buildRequestPageUrl(request),
         clientIp: getClientIp(request),
         method: request.method,
         statusCode: reply.statusCode,
@@ -134,6 +135,33 @@ async function registerCommonHooks(app) {
     const { authHook } = await import('./middleware/auth.mjs');
     await authHook(request, reply);
   });
+}
+
+function buildRequestPageUrl(request) {
+  const rawUrl = String(request?.raw?.url || request?.url || '').trim();
+  if (!rawUrl) {
+    return '';
+  }
+
+  const host = normalizeForwardedHeaderValue(request?.headers?.['x-forwarded-host'])
+    || String(request?.headers?.host || '').trim();
+  if (!host) {
+    return rawUrl;
+  }
+
+  const protocol = String(request?.protocol || '').trim() || 'http';
+  return `${protocol}://${host}${rawUrl.startsWith('/') ? rawUrl : `/${rawUrl}`}`;
+}
+
+function normalizeForwardedHeaderValue(value) {
+  if (typeof value !== 'string') {
+    return '';
+  }
+
+  return value
+    .split(',')
+    .map((item) => item.trim())
+    .find(Boolean) || '';
 }
 
 async function registerCommonRoutes(app, { publicSite }) {

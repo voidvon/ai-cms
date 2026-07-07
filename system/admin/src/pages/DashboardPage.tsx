@@ -24,6 +24,8 @@ import { toast } from 'sonner'
 
 const PAGE_SIZE = 20
 const DEFAULT_USER_AGENT_KIND = 'non_bot'
+const DEFAULT_REFERER_MODE = 'all'
+const DEFAULT_STATUS_MODE = 'all'
 
 export default function DashboardPage() {
   const [topPagesOpen, setTopPagesOpen] = useState(false)
@@ -32,10 +34,14 @@ export default function DashboardPage() {
   const [pathInput, setPathInput] = useState('')
   const [ipInput, setIpInput] = useState('')
   const [userAgentKindInput, setUserAgentKindInput] = useState<'non_bot' | 'bot' | 'all'>(DEFAULT_USER_AGENT_KIND)
+  const [refererModeInput, setRefererModeInput] = useState<'all' | 'with_referer'>(DEFAULT_REFERER_MODE)
+  const [statusModeInput, setStatusModeInput] = useState<'all' | '2xx' | '3xx' | '4xx' | '404' | '5xx'>(DEFAULT_STATUS_MODE)
   const [filters, setFilters] = useState({
     path: '',
     ip: '',
     userAgentKind: DEFAULT_USER_AGENT_KIND as 'non_bot' | 'bot' | 'all',
+    refererMode: DEFAULT_REFERER_MODE as 'all' | 'with_referer',
+    statusMode: DEFAULT_STATUS_MODE as 'all' | '2xx' | '3xx' | '4xx' | '404' | '5xx',
   })
 
   const summaryQuery = useQuery({
@@ -44,13 +50,15 @@ export default function DashboardPage() {
   })
 
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['dashboard-access-logs', page, filters.path, filters.ip, filters.userAgentKind],
+    queryKey: ['dashboard-access-logs', page, filters.path, filters.ip, filters.userAgentKind, filters.refererMode, filters.statusMode],
     queryFn: () => adminApi.listAccessLogs({
       page,
       limit: PAGE_SIZE,
       path: filters.path || undefined,
       ip: filters.ip || undefined,
       userAgentKind: filters.userAgentKind,
+      refererMode: filters.refererMode,
+      statusMode: filters.statusMode,
     }),
   })
 
@@ -82,6 +90,8 @@ export default function DashboardPage() {
       path: pathInput.trim(),
       ip: ipInput.trim(),
       userAgentKind: userAgentKindInput,
+      refererMode: refererModeInput,
+      statusMode: statusModeInput,
     })
   }
 
@@ -95,7 +105,7 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-5">
         <Card>
           <CardHeader className="pb-2">
             <CardDescription>今日访问量</CardDescription>
@@ -112,6 +122,12 @@ export default function DashboardPage() {
           <CardHeader className="pb-2">
             <CardDescription>近 24 小时独立 IP（排除机器人）</CardDescription>
             <CardTitle>{metrics?.recent_unique_ips ?? 0}</CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardDescription>404 错误数</CardDescription>
+            <CardTitle>{metrics?.total_404_errors ?? 0}</CardTitle>
           </CardHeader>
         </Card>
         <Card>
@@ -143,11 +159,39 @@ export default function DashboardPage() {
               <SelectItem value="all">全部</SelectItem>
             </SelectContent>
           </Select>
+          <Select
+            value={refererModeInput}
+            onValueChange={(value: 'all' | 'with_referer') => setRefererModeInput(value)}
+          >
+            <SelectTrigger className="w-[140px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部来源</SelectItem>
+              <SelectItem value="with_referer">仅有来源</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={statusModeInput}
+            onValueChange={(value: 'all' | '2xx' | '3xx' | '4xx' | '404' | '5xx') => setStatusModeInput(value)}
+          >
+            <SelectTrigger className="w-[120px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">全部状态</SelectItem>
+              <SelectItem value="2xx">2xx</SelectItem>
+              <SelectItem value="3xx">3xx</SelectItem>
+              <SelectItem value="4xx">4xx</SelectItem>
+              <SelectItem value="404">404</SelectItem>
+              <SelectItem value="5xx">5xx</SelectItem>
+            </SelectContent>
+          </Select>
           <Input
             className="w-[260px]"
             value={pathInput}
             onChange={(event) => setPathInput(event.target.value)}
-            placeholder="按页面路径筛选，例如 /contact.html"
+            placeholder="按路径或完整 URL 筛选"
           />
           <Input
             className="w-[220px]"
@@ -170,7 +214,7 @@ export default function DashboardPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>页面</TableHead>
+                  <TableHead>页面 URL</TableHead>
                   <TableHead className="w-[160px] min-w-[160px]">IP</TableHead>
                   <TableHead className="w-[88px] min-w-[88px]">访问次数</TableHead>
                   <TableHead className="w-[220px] min-w-[220px] max-w-[220px]">客户端</TableHead>
@@ -188,7 +232,25 @@ export default function DashboardPage() {
                   </TableRow>
                 ) : items.map((item) => (
                   <TableRow key={item.id}>
-                    <TableCell className="font-medium">{item.page_path}</TableCell>
+                    <TableCell className="max-w-[360px] truncate font-medium">
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <button
+                            type="button"
+                            className="block w-full truncate text-left hover:underline"
+                            title={item.page_url || item.page_path}
+                          >
+                            {item.page_url || item.page_path}
+                          </button>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          align="start"
+                          className="w-[520px] max-w-[min(520px,var(--radix-popover-content-available-width))] break-all p-3 text-sm"
+                        >
+                          {item.page_url || item.page_path}
+                        </PopoverContent>
+                      </Popover>
+                    </TableCell>
                     <TableCell className="w-[160px] min-w-[160px] whitespace-nowrap">{item.client_ip}</TableCell>
                     <TableCell className="w-[88px] min-w-[88px]">{item.client_ip_visit_count}</TableCell>
                     <TableCell
@@ -292,12 +354,14 @@ export default function DashboardPage() {
                     <TableCell colSpan={4} className="text-center">暂无统计数据</TableCell>
                   </TableRow>
                 ) : topPages.map((item) => (
-                    <TableRow key={item.page_path}>
-                      <TableCell className="font-medium">{item.page_path}</TableCell>
+                    <TableRow key={item.page_url || item.page_path}>
+                      <TableCell className="max-w-[420px] truncate font-medium" title={item.page_url || item.page_path}>
+                        {item.page_url || item.page_path}
+                      </TableCell>
                       <TableCell>{item.visits}</TableCell>
                       <TableCell>{item.unique_ips}</TableCell>
                       <TableCell className="whitespace-nowrap">
-                      {formatRelativeTime(item.last_visited_at)}
+                        {formatRelativeTime(item.last_visited_at)}
                       </TableCell>
                     </TableRow>
                 ))}

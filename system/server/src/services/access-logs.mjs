@@ -30,6 +30,7 @@ export function ensureAccessLogsSchema() {
     CREATE TABLE IF NOT EXISTS access_logs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       page_path TEXT NOT NULL,
+      page_url TEXT NOT NULL DEFAULT '',
       client_ip TEXT NOT NULL,
       client_ip_visit_count INTEGER NOT NULL DEFAULT 0,
       method TEXT NOT NULL,
@@ -58,6 +59,7 @@ export function ensureAccessLogsSchema() {
 
   addColumnIfMissing('access_logs', 'client_ip_visit_count', 'INTEGER NOT NULL DEFAULT 0');
   addColumnIfMissing('access_logs', 'user_agent_kind', `TEXT NOT NULL DEFAULT 'other'`);
+  addColumnIfMissing('access_logs', 'page_url', `TEXT NOT NULL DEFAULT ''`);
 
   execute(`
     CREATE INDEX IF NOT EXISTS idx_access_logs_client_ip_visit_count
@@ -71,19 +73,21 @@ export function ensureAccessLogsSchema() {
 
   backfillAccessLogVisitCounts();
   backfillAccessLogUserAgentKinds();
+  backfillAccessLogPageUrls();
 }
 
 export function recordAccessLog(input = {}) {
   ensureAccessLogsSchema();
 
   const pagePath = normalizePagePath(input.pagePath);
+  const pageUrl = normalizePageUrl(input.pageUrl, pagePath);
   const clientIp = normalizeText(input.clientIp);
   const method = normalizeMethod(input.method);
   const statusCode = normalizeStatusCode(input.statusCode);
   const userAgent = normalizeText(input.userAgent);
   const userAgentSummary = summarizeUserAgent(userAgent);
 
-  if (!pagePath || !clientIp || !method || !Number.isInteger(statusCode)) {
+  if (!pagePath || !pageUrl || !clientIp || !method || !Number.isInteger(statusCode)) {
     return false;
   }
 
@@ -104,6 +108,7 @@ export function recordAccessLog(input = {}) {
     `
       INSERT INTO access_logs (
         page_path,
+        page_url,
         client_ip,
         client_ip_visit_count,
         method,
@@ -111,10 +116,11 @@ export function recordAccessLog(input = {}) {
         referer,
         user_agent,
         user_agent_kind
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       pagePath,
+      pageUrl,
       clientIp,
       nextVisitCount,
       method,
@@ -137,12 +143,14 @@ export function listAccessLogs(options = {}) {
   const pathKeyword = normalizeText(options.path);
   const ipKeyword = normalizeText(options.ip);
   const userAgentKind = normalizeAccessLogUserAgentKindFilter(options.userAgentKind);
+  const refererMode = normalizeAccessLogRefererFilter(options.refererMode);
+  const statusMode = normalizeAccessLogStatusFilter(options.statusMode);
   const where = [];
   const params = [];
 
   if (pathKeyword) {
-    where.push('l.page_path LIKE ?');
-    params.push(`%${pathKeyword}%`);
+    where.push('(l.page_path LIKE ? OR l.page_url LIKE ?)');
+    params.push(`%${pathKeyword}%`, `%${pathKeyword}%`);
   }
 
   if (ipKeyword) {
@@ -158,6 +166,22 @@ export function listAccessLogs(options = {}) {
     params.push('bot');
   }
 
+  if (refererMode === 'with_referer') {
+    where.push(`COALESCE(TRIM(l.referer), '') != ''`);
+  }
+
+  if (statusMode === '2xx') {
+    where.push('l.status_code >= 200 AND l.status_code < 300');
+  } else if (statusMode === '3xx') {
+    where.push('l.status_code >= 300 AND l.status_code < 400');
+  } else if (statusMode === '4xx') {
+    where.push('l.status_code >= 400 AND l.status_code < 500');
+  } else if (statusMode === '404') {
+    where.push('l.status_code = 404');
+  } else if (statusMode === '5xx') {
+    where.push('l.status_code >= 500 AND l.status_code < 600');
+  }
+
   const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
   const totalRow = queryAll(
     `SELECT COUNT(*) AS total FROM access_logs l ${whereClause}`,
@@ -169,6 +193,7 @@ export function listAccessLogs(options = {}) {
       SELECT
         l.id,
         l.page_path,
+        l.page_url,
         l.client_ip,
         l.client_ip_visit_count,
         l.method,
@@ -218,7 +243,10 @@ export function getAccessLogDashboardSummary() {
   );
 
   const totalPagesRow = queryAll(`
-    SELECT COUNT(DISTINCT page_path) AS total
+    SELECT COUNT(DISTINCT CASE
+      WHEN COALESCE(TRIM(page_url), '') != '' THEN page_url
+      ELSE page_path
+    END) AS total
     FROM access_logs
   `)[0] || { total: 0 };
 
@@ -228,14 +256,27 @@ export function getAccessLogDashboardSummary() {
     WHERE datetime(visited_at) >= datetime('now', '-24 hours')
   `)[0] || { total: 0 };
 
+  const totalNotFoundRow = queryAll(`
+    SELECT COUNT(*) AS total
+    FROM access_logs
+    WHERE status_code = 404
+  `)[0] || { total: 0 };
+
   const topPages = queryAll(`
     SELECT
+      CASE
+        WHEN COALESCE(TRIM(page_url), '') != '' THEN page_url
+        ELSE page_path
+      END AS page_url,
       page_path,
       COUNT(*) AS visits,
       COUNT(DISTINCT client_ip) AS unique_ips,
       MAX(visited_at) AS last_visited_at
     FROM access_logs
-    GROUP BY page_path
+    GROUP BY CASE
+      WHEN COALESCE(TRIM(page_url), '') != '' THEN page_url
+      ELSE page_path
+    END
     ORDER BY visits DESC, last_visited_at DESC
     LIMIT 10
   `);
@@ -245,10 +286,12 @@ export function getAccessLogDashboardSummary() {
       today_visits: Number(todayVisitsRow.total || 0),
       recent_unique_ips: recentUniqueIps.size,
       total_pages: Number(totalPagesRow.total || 0),
-      recent_visits: Number(recentVisitsRow.total || 0)
+      recent_visits: Number(recentVisitsRow.total || 0),
+      total_404_errors: Number(totalNotFoundRow.total || 0)
     },
     top_pages: topPages.map((item) => ({
       page_path: item.page_path,
+      page_url: normalizePageUrl(item.page_url, item.page_path),
       visits: Number(item.visits || 0),
       unique_ips: Number(item.unique_ips || 0),
       last_visited_at: item.last_visited_at || ''
@@ -340,6 +383,15 @@ function normalizePagePath(value) {
   return normalized.startsWith('/') ? normalized : `/${normalized}`;
 }
 
+function normalizePageUrl(value, fallbackPath = '') {
+  const normalized = String(value || '').trim();
+  if (normalized) {
+    return normalized;
+  }
+
+  return normalizePagePath(fallbackPath);
+}
+
 function normalizeText(value) {
   return String(value || '').trim();
 }
@@ -399,6 +451,31 @@ function normalizeAccessLogUserAgentKindFilter(value) {
   return 'non_bot';
 }
 
+function normalizeAccessLogRefererFilter(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  if (normalized === 'with_referer' || normalized === 'all') {
+    return normalized;
+  }
+
+  return 'all';
+}
+
+function normalizeAccessLogStatusFilter(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  if (
+    normalized === 'all'
+    || normalized === '2xx'
+    || normalized === '3xx'
+    || normalized === '4xx'
+    || normalized === '404'
+    || normalized === '5xx'
+  ) {
+    return normalized;
+  }
+
+  return 'all';
+}
+
 function normalizeStoredUserAgentKind(value) {
   const normalized = normalizeText(value).toLowerCase();
   if (normalized === 'browser' || normalized === 'bot' || normalized === 'other') {
@@ -416,6 +493,7 @@ function hydrateAccessLogRow(row = {}) {
   return {
     ...row,
     client_ip_visit_count: Number(row.client_ip_visit_count || 0),
+    page_url: normalizePageUrl(row.page_url, row.page_path),
     user_agent: userAgent,
     user_agent_kind: userAgentKind,
     user_agent_label: userAgentSummary.label
@@ -478,6 +556,14 @@ function backfillAccessLogUserAgentKinds() {
       [userAgentSummary.kind, row.id]
     );
   }
+}
+
+function backfillAccessLogPageUrls() {
+  execute(`
+    UPDATE access_logs
+    SET page_url = page_path
+    WHERE COALESCE(TRIM(page_url), '') = ''
+  `);
 }
 
 function summarizeUserAgent(userAgent) {

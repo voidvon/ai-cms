@@ -98,7 +98,9 @@ export default async function adminApiRoutes(app) {
       limit: request.query?.limit,
       path: request.query?.path,
       ip: request.query?.ip,
-      userAgentKind: request.query?.userAgentKind
+      userAgentKind: request.query?.userAgentKind,
+      refererMode: request.query?.refererMode,
+      statusMode: request.query?.statusMode
     });
 
     return { success: true, data: result };

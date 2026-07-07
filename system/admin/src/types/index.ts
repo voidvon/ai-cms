@@ -32,6 +32,7 @@ export interface AdminPermissionDefinition {
 export interface AccessLog {
   id: number;
   page_path: string;
+  page_url: string;
   client_ip: string;
   client_ip_visit_count: number;
   method: string;
@@ -51,6 +52,7 @@ export interface PaginationMeta {
 
 export interface AccessLogTopPage {
   page_path: string;
+  page_url: string;
   visits: number;
   unique_ips: number;
   last_visited_at: string;
@@ -62,6 +64,7 @@ export interface AccessLogSummary {
     recent_unique_ips: number;
     total_pages: number;
     recent_visits: number;
+    total_404_errors: number;
   };
   top_pages: AccessLogTopPage[];
 }

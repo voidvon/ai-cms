@@ -432,6 +432,15 @@ export default function TopicManagementPage() {
                   <TabsContent key={language.id} value={language.code} className="space-y-4">
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
+                        <Label htmlFor={`topic_name_${language.code}`}>专题名称 {language.code === defaultLanguageCode ? '*' : ''}</Label>
+                        <Input
+                          id={`topic_name_${language.code}`}
+                          value={draft.name}
+                          onChange={(event) => updateLanguageDraft(language.code, { name: event.target.value })}
+                          placeholder="请输入专题名称"
+                        />
+                      </div>
+                      <div className="space-y-2">
                         <Label>发布状态</Label>
                         <Select
                           value={draft.profile.publish_status || 'draft'}
@@ -445,15 +454,6 @@ export default function TopicManagementPage() {
                             <SelectItem value="published">已发布</SelectItem>
                           </SelectContent>
                         </Select>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor={`topic_name_${language.code}`}>专题名称 {language.code === defaultLanguageCode ? '*' : ''}</Label>
-                        <Input
-                          id={`topic_name_${language.code}`}
-                          value={draft.name}
-                          onChange={(event) => updateLanguageDraft(language.code, { name: event.target.value })}
-                          placeholder="请输入专题名称"
-                        />
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor={`seo_title_${language.code}`}>SEO Title</Label>
