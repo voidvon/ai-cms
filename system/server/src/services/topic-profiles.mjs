@@ -102,7 +102,6 @@ export function saveTopicProfile(columnId, input = {}, { languageCode = null } =
     throw new Error('栏目不存在');
   }
 
-  const language = resolveLanguage(languageCode);
   const payload = normalizeTopicProfileInput(input);
   execute(`
     INSERT INTO topic_profiles (
