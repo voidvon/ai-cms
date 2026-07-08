@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import {
   ATTACHMENT_ALLOWED_EXTENSIONS,
   ATTACHMENT_UPLOAD_MAX_SIZE_KB,
+  IMAGE_UPLOAD_SOURCE_MAX_SIZE_KB,
   MIME_TYPES,
   UPLOADS_FILES_ROOT,
   UPLOADS_IMAGES_ROOT,
@@ -11,6 +12,7 @@ import {
   UPLOAD_MAX_SIZE_KB,
 } from '../config.mjs';
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
+import { optimizeUploadedImage } from './image-optimizer.mjs';
 import { getSiteConfig } from './site.mjs';
 import { resolveRuntimeAssetUrl } from './uploads.mjs';
 
@@ -21,6 +23,7 @@ const PURPOSE_TARGETS = {
     bucket: 'images',
     root: UPLOADS_IMAGES_ROOT,
     allowedExtensions: UPLOAD_ALLOWED_EXTENSIONS,
+    sourceMaxSizeKb: IMAGE_UPLOAD_SOURCE_MAX_SIZE_KB,
     maxSizeKb: UPLOAD_MAX_SIZE_KB,
   },
   news_cover: {
@@ -29,6 +32,7 @@ const PURPOSE_TARGETS = {
     bucket: 'images',
     root: UPLOADS_IMAGES_ROOT,
     allowedExtensions: UPLOAD_ALLOWED_EXTENSIONS,
+    sourceMaxSizeKb: IMAGE_UPLOAD_SOURCE_MAX_SIZE_KB,
     maxSizeKb: UPLOAD_MAX_SIZE_KB,
   },
   richtext_image: {
@@ -37,6 +41,7 @@ const PURPOSE_TARGETS = {
     bucket: 'images',
     root: UPLOADS_IMAGES_ROOT,
     allowedExtensions: UPLOAD_ALLOWED_EXTENSIONS,
+    sourceMaxSizeKb: IMAGE_UPLOAD_SOURCE_MAX_SIZE_KB,
     maxSizeKb: UPLOAD_MAX_SIZE_KB,
   },
   column_image: {
@@ -45,6 +50,7 @@ const PURPOSE_TARGETS = {
     bucket: 'images',
     root: UPLOADS_IMAGES_ROOT,
     allowedExtensions: UPLOAD_ALLOWED_EXTENSIONS,
+    sourceMaxSizeKb: IMAGE_UPLOAD_SOURCE_MAX_SIZE_KB,
     maxSizeKb: UPLOAD_MAX_SIZE_KB,
   },
   document_stamp: {
@@ -53,6 +59,7 @@ const PURPOSE_TARGETS = {
     bucket: 'images',
     root: UPLOADS_IMAGES_ROOT,
     allowedExtensions: UPLOAD_ALLOWED_EXTENSIONS,
+    sourceMaxSizeKb: IMAGE_UPLOAD_SOURCE_MAX_SIZE_KB,
     maxSizeKb: UPLOAD_MAX_SIZE_KB,
   },
   attachment: {
@@ -61,6 +68,7 @@ const PURPOSE_TARGETS = {
     bucket: 'files',
     root: UPLOADS_FILES_ROOT,
     allowedExtensions: ATTACHMENT_ALLOWED_EXTENSIONS,
+    sourceMaxSizeKb: ATTACHMENT_UPLOAD_MAX_SIZE_KB,
     maxSizeKb: ATTACHMENT_UPLOAD_MAX_SIZE_KB,
   },
 };
@@ -94,7 +102,7 @@ export function ensureMediaAssetsSchema() {
   schemaEnsured = true;
 }
 
-export function uploadMediaAsset({ buffer, originalFilename, purpose }) {
+export async function uploadMediaAsset({ buffer, originalFilename, purpose }) {
   ensureMediaAssetsSchema();
 
   const normalizedPurpose = resolvePurpose(purpose);
@@ -104,17 +112,29 @@ export function uploadMediaAsset({ buffer, originalFilename, purpose }) {
     throw new Error('unsupported file type');
   }
 
+  const sourceMaxBytes = target.sourceMaxSizeKb * 1024;
   const maxBytes = target.maxSizeKb * 1024;
-  if (!buffer || buffer.length > maxBytes) {
+  if (!buffer || buffer.length > sourceMaxBytes) {
     throw new Error('uploaded file exceeds size limit');
   }
 
+  const stored = target.bucket === 'images'
+    ? await optimizeUploadedImage({ buffer, extension })
+    : {
+      buffer,
+      extension,
+      mimeType: MIME_TYPES.get(extension) || target.mimeFallback,
+    };
+  if (!stored.buffer || stored.buffer.length > maxBytes) {
+    throw new Error('uploaded file exceeds size limit after optimization');
+  }
+
   const monthSegment = getUploadMonthSegment();
-  const fileName = buildFileName(extension);
+  const fileName = buildFileName(stored.extension);
   const fsDir = path.join(target.root, monthSegment);
   fs.mkdirSync(fsDir, { recursive: true });
   const fsPath = path.join(fsDir, fileName);
-  fs.writeFileSync(fsPath, buffer);
+  fs.writeFileSync(fsPath, stored.buffer);
 
   const relativePath = `/uploads/${target.bucket}/${monthSegment}/${fileName}`;
   const result = execute(
@@ -135,9 +155,9 @@ export function uploadMediaAsset({ buffer, originalFilename, purpose }) {
       'local',
       normalizedPurpose,
       String(originalFilename || ''),
-      MIME_TYPES.get(extension) || target.mimeFallback,
-      extension,
-      buffer.length,
+      stored.mimeType || MIME_TYPES.get(stored.extension) || target.mimeFallback,
+      stored.extension,
+      stored.buffer.length,
       relativePath,
       fsPath,
     ],

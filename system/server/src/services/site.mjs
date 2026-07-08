@@ -665,7 +665,7 @@ function resolveLanguageSiteBaseUrl(languageCode, fallbackWebUrl = '') {
     if (host) {
       return host;
     }
-    return '';
+    return baseUrl;
   }
 
   if (!baseUrl) {
