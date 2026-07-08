@@ -95,6 +95,7 @@ export function saveTopicProfile(columnId, input = {}, { languageCode = null } =
   if (normalizedColumnId <= 0) {
     throw new Error('栏目 ID 无效');
   }
+  const language = resolveLanguage(languageCode);
 
   const column = queryOne('SELECT id FROM columns WHERE id = ?', [normalizedColumnId]);
   if (!column) {

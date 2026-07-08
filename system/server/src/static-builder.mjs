@@ -663,6 +663,12 @@ function listStaticBuildTargetDefinitions({ columns = null } = {}) {
       execute: ({ outputRoot, languageCode, finalizeAssets }) => buildManualSinglePageColumns({ outputRoot, languageCode, finalizeAssets })
     }),
     createStaticBuildTargetDefinition({
+      group: '栏目页',
+      label: '生成专题栏目',
+      value: 'topic-pages',
+      execute: ({ outputRoot, languageCode, finalizeAssets }) => buildPublishedTopicColumnPages({ outputRoot, languageCode, finalizeAssets })
+    }),
+    createStaticBuildTargetDefinition({
       group: '系统文件',
       label: '生成 robots.txt',
       value: 'robots',
@@ -823,6 +829,36 @@ export function buildManualSinglePageColumns({ outputRoot = DEFAULT_OUTPUT_ROOT,
     buildRegisteredTsxAssets(outputRoot);
   }
   return createBuildResult('column-pages', '单页栏目', items.length, filesWritten);
+}
+
+export function buildPublishedTopicColumnPages({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null, finalizeAssets = true } = {}) {
+  const templateContext = getLegacyTemplateContext(languageCode);
+  const publishedProfiles = listTopicProfiles({ languageCode: templateContext.languageCode })
+    .filter((profile) => String(profile.publish_status || '').trim() === 'published');
+  const topicColumns = collectTopicColumns(templateContext.columns);
+  const topicColumnIds = new Set(topicColumns.map((item) => normalizeInteger(item.id, 0)).filter((id) => id > 0));
+  let filesWritten = 0;
+  let recordsProcessed = 0;
+
+  for (const profile of publishedProfiles) {
+    const columnId = normalizeInteger(profile.column_id, 0);
+    if (!topicColumnIds.has(columnId)) {
+      continue;
+    }
+    const result = buildTopicColumnPage({
+      outputRoot,
+      columnId,
+      languageCode: templateContext.languageCode,
+      finalizeAssets: false
+    });
+    filesWritten += result.filesWritten;
+    recordsProcessed += result.recordsProcessed;
+  }
+
+  if (finalizeAssets) {
+    buildRegisteredTsxAssets(outputRoot);
+  }
+  return createBuildResult('topic-pages', '专题栏目', recordsProcessed, filesWritten);
 }
 
 export function buildTopicColumnPage({ outputRoot = DEFAULT_OUTPUT_ROOT, columnId, languageCode = null, finalizeAssets = true } = {}) {
