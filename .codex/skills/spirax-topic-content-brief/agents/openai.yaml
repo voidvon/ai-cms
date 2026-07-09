@@ -1,0 +1,4 @@
+interface:
+  display_name: "Spirax 专题内容简报"
+  short_description: "为任意 Spirax CMS 专题生成中文 SEO 内容简报、富文本草稿与内链方案。"
+  default_prompt: "请根据专题 ID、匹配的关键词 CSV、本地资料、官网参考和图片素材，生成一份以关键词和内链为核心的 Spirax CMS 专题 SEO 内容简报。"
