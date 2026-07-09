@@ -53,6 +53,7 @@ interface RichTextEditorProps {
   placeholder?: string
   uploadPurpose?: MediaPurpose
   className?: string
+  fillAvailableHeight?: boolean
   readOnly?: boolean
 }
 
@@ -146,6 +147,7 @@ export default function RichTextEditor({
   placeholder = '请输入内容',
   uploadPurpose = 'richtext_image',
   className = '',
+  fillAvailableHeight = false,
   readOnly = false,
 }: RichTextEditorProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -269,7 +271,7 @@ export default function RichTextEditor({
   }
 
   return (
-    <div className={cn('rich-text-editor', className)}>
+    <div className={cn('rich-text-editor', fillAvailableHeight && 'rich-text-editor-fill-height', className)}>
       <input
         ref={fileInputRef}
         type="file"
@@ -435,7 +437,7 @@ export default function RichTextEditor({
         </div>
       </div>
 
-      <EditorContent editor={editor} />
+      <EditorContent editor={editor} className="rich-text-editor-body" />
       {isUploading ? <div className="px-3 pb-3 text-xs text-muted-foreground">图片上传中，请稍候...</div> : null}
     </div>
   )

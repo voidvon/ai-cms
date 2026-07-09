@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ExternalLink, RefreshCw } from 'lucide-react'
 import { contentModelsApi, templateVariantsApi, templatesApi } from '@/api/advanced'
 import { columnsApi } from '@/api/columns'
 import { contentItemsApi } from '@/api/content-items'
@@ -16,6 +17,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { Column, ContentModel, ManagedContentItem, SectionContentItem, TemplateBinding } from '@/types'
 
@@ -44,6 +47,7 @@ const BASE_TAB_VALUE = 'base'
 
 export default function TopicManagementPage() {
   const queryClient = useQueryClient()
+  const isMobile = useIsMobile()
   const [selectedColumnId, setSelectedColumnId] = useState('')
   const [contentPickerOpen, setContentPickerOpen] = useState(false)
   const [contentPickerModelCode, setContentPickerModelCode] = useState('')
@@ -61,6 +65,7 @@ export default function TopicManagementPage() {
   const defaultLanguageCode = languages.find((item) => item.is_default === 1)?.code || languages[0]?.code || 'zh-CN'
   const selectedTab = activeTab || defaultLanguageCode
   const activeLanguageCode = selectedTab === BASE_TAB_VALUE ? defaultLanguageCode : selectedTab
+  const fillEditorHeight = !isMobile
 
   const { data: columnsData, isLoading: columnsLoading } = useQuery({
     queryKey: ['columns', defaultLanguageCode, 'topic-management'],
@@ -251,23 +256,13 @@ export default function TopicManagementPage() {
       toast.error(error.response?.data?.message || '保存失败')
     },
   })
-  const openTopicMutation = useMutation({
-    mutationFn: async ({ targetWindow }: { targetWindow: Window | null }) => {
+  const generateTopicMutation = useMutation({
+    mutationFn: async () => {
       await saveCurrentTopicConfig()
       if (!selectedColumn) {
         throw new Error('请先选择栏目')
       }
-      const response = await topicProfilesApi.generate(selectedColumn.id, { language: activeLanguageCode })
-      const url = response.data?.url
-      if (!url) {
-        throw new Error('专题页面生成成功，但未返回访问地址')
-      }
-      if (targetWindow && !targetWindow.closed) {
-        targetWindow.location.href = url
-      } else {
-        window.open(url, '_blank', 'noopener,noreferrer')
-      }
-      return response
+      return topicProfilesApi.generate(selectedColumn.id, { language: activeLanguageCode })
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['columns'] })
@@ -275,10 +270,7 @@ export default function TopicManagementPage() {
       queryClient.invalidateQueries({ queryKey: ['template-bindings'] })
       toast.success('专题页面已生成')
     },
-    onError: (error: any, variables) => {
-      if (variables?.targetWindow && !variables.targetWindow.closed) {
-        variables.targetWindow.close()
-      }
+    onError: (error: any) => {
       toast.error(error.response?.data?.message || error.message || '专题页面生成失败')
     },
   })
@@ -292,12 +284,24 @@ export default function TopicManagementPage() {
   }
 
   const handleOpenTopic = () => {
+    if (!selectedColumn) {
+      toast.error('请先选择栏目')
+      return
+    }
+    const url = buildTopicOpenUrl(selectedColumn, languages.find((language) => language.code === activeLanguageCode) || null)
+    if (!url) {
+      toast.error('当前专题栏目缺少访问路径')
+      return
+    }
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+
+  const handleGenerateTopic = () => {
     if (!selectedColumnId) {
       toast.error('请先选择栏目')
       return
     }
-    const targetWindow = window.open('about:blank', '_blank')
-    openTopicMutation.mutate({ targetWindow })
+    generateTopicMutation.mutate()
   }
 
   const updateRelatedContent = (refs: RelatedContentRef[]) => {
@@ -383,9 +387,13 @@ export default function TopicManagementPage() {
         </Card>
 
         <div className="flex min-h-0 flex-col">
-          <div className="min-h-0 flex-1 space-y-4 overflow-auto">
-            <Tabs value={selectedTab} onValueChange={setActiveTab} className="space-y-4">
-              <div>
+          <div className={cn('min-h-0 flex-1 overflow-auto', fillEditorHeight ? 'flex flex-col gap-4' : 'space-y-4')}>
+            <Tabs
+              value={selectedTab}
+              onValueChange={setActiveTab}
+              className={cn('space-y-4', fillEditorHeight && 'flex min-h-0 flex-1 flex-col')}
+            >
+              <div className="shrink-0">
                 <TabsList className="w-full justify-start">
                   <TabsTrigger value={BASE_TAB_VALUE}>基础数据</TabsTrigger>
                   {languages.map((language) => (
@@ -429,8 +437,12 @@ export default function TopicManagementPage() {
               {languages.map((language) => {
                 const draft = languageDrafts[language.code] || createEmptyLanguageDraft()
                 return (
-                  <TabsContent key={language.id} value={language.code} className="space-y-4">
-                    <div className="grid gap-4 md:grid-cols-2">
+                  <TabsContent
+                    key={language.id}
+                    value={language.code}
+                    className={cn('space-y-4', fillEditorHeight && 'min-h-0 flex-1 flex-col data-[state=active]:flex')}
+                  >
+                    <div className="grid shrink-0 gap-4 md:grid-cols-2">
                       <div className="space-y-2">
                         <Label htmlFor={`topic_name_${language.code}`}>专题名称 {language.code === defaultLanguageCode ? '*' : ''}</Label>
                         <Input
@@ -476,13 +488,15 @@ export default function TopicManagementPage() {
                       </div>
                     </div>
 
-                    <div className="space-y-2">
+                    <div className={cn('space-y-2', fillEditorHeight && 'flex min-h-0 flex-1 flex-col')}>
                       <Label>专题介绍</Label>
                       <RichTextEditor
                         value={draft.profile.intro_html}
                         onChange={(intro_html) => updateLanguageProfile(language.code, { intro_html })}
                         placeholder="请输入专题页面介绍，可用于围绕主要 SEO 关键词组织内容"
                         uploadPurpose="richtext_image"
+                        fillAvailableHeight={fillEditorHeight}
+                        className={fillEditorHeight ? 'min-h-0 flex-1' : undefined}
                       />
                     </div>
                   </TabsContent>
@@ -494,10 +508,22 @@ export default function TopicManagementPage() {
               <Button
                 type="button"
                 variant="outline"
-                onClick={handleOpenTopic}
-                disabled={!selectedColumnId || saveMutation.isPending || openTopicMutation.isPending}
+                size="icon"
+                onClick={handleGenerateTopic}
+                disabled={!selectedColumnId || saveMutation.isPending || generateTopicMutation.isPending}
+                aria-label="生成静态页面"
+                title="生成静态页面"
               >
-                {openTopicMutation.isPending ? '生成中...' : '打开'}
+                <RefreshCw className={generateTopicMutation.isPending ? 'animate-spin' : ''} />
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleOpenTopic}
+                disabled={!selectedColumnId}
+              >
+                <ExternalLink />
+                打开
               </Button>
               <Button onClick={handleSave} disabled={!selectedColumnId || saveMutation.isPending}>
                 {saveMutation.isPending ? '保存中...' : '保存专题配置'}
@@ -851,6 +877,35 @@ function profileToForm(profile: TopicProfile | null, { ignoreFallback = false } 
 
 function resolveTopicStatusLabel(status?: string) {
   return status === 'published' ? '已发布' : '草稿'
+}
+
+function buildTopicOpenUrl(column: Column, language: { site?: { path_prefix?: string | null } | null } | null) {
+  const routePath = normalizePublicUrl(column.route_path || '')
+  if (!routePath) {
+    return ''
+  }
+  return prefixLanguagePath(routePath, language?.site?.path_prefix || '/')
+}
+
+function prefixLanguagePath(value: string, pathPrefix: string) {
+  const normalizedPrefix = normalizePublicUrl(pathPrefix || '/').replace(/\/$/g, '') || '/'
+  if (normalizedPrefix === '/') {
+    return value
+  }
+  if (value === normalizedPrefix || value.startsWith(`${normalizedPrefix}/`)) {
+    return value
+  }
+  return value === '/' ? `${normalizedPrefix}/` : `${normalizedPrefix}${value}`
+}
+
+function normalizePublicUrl(value: string) {
+  const trimmed = String(value || '').trim()
+  if (!trimmed) {
+    return ''
+  }
+  const normalized = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+  const collapsed = normalized.replace(/\/{2,}/g, '/')
+  return collapsed.replace(/\/index\.html$/i, '/')
 }
 
 function parseRelatedContentRefs(value: string): RelatedContentRef[] {

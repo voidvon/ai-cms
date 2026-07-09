@@ -84,6 +84,10 @@
     @apply overflow-hidden rounded-md border border-input bg-background;
   }
 
+  .rich-text-editor-fill-height {
+    @apply flex h-full min-h-0 flex-col;
+  }
+
   .rich-text-editor-toolbar {
     @apply sticky top-0 z-10 flex flex-wrap items-center gap-1 border-b bg-muted/40 p-2;
   }
@@ -92,12 +96,26 @@
     @apply flex items-center gap-1 border-r border-border pr-1 last:border-r-0 last:pr-0;
   }
 
+  .rich-text-editor-body {
+    min-height: 0;
+  }
+
+  .rich-text-editor-fill-height .rich-text-editor-body {
+    flex: 1;
+    overflow: auto;
+  }
+
   .rich-text-editor-content {
     min-height: 260px;
     padding: 1rem 1.25rem 2rem;
     font-size: 14px;
     line-height: 1.7;
     outline: none;
+  }
+
+  .rich-text-editor-fill-height .rich-text-editor-content {
+    box-sizing: border-box;
+    min-height: 100%;
   }
 
   .rich-text-editor-content p.is-editor-empty:first-child::before {
