@@ -105,6 +105,33 @@
     overflow: auto;
   }
 
+  .rich-text-editor-source .cm-editor {
+    min-height: 360px;
+    font-size: 13px;
+  }
+
+  .rich-text-editor-source .cm-scroller {
+    overflow-x: hidden;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    line-height: 1.6;
+  }
+
+  .rich-text-editor-source .cm-content {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .rich-text-editor-source .cm-line {
+    max-width: 100%;
+  }
+
+  .rich-text-editor-fill-height .rich-text-editor-source,
+  .rich-text-editor-fill-height .rich-text-editor-source .cm-editor {
+    height: 100%;
+    min-height: 0;
+  }
+
   .rich-text-editor-content {
     min-height: 260px;
     padding: 1rem 1.25rem 2rem;
@@ -129,6 +156,25 @@
 
   .rich-text-editor-content p {
     margin: 0.65rem 0;
+  }
+
+  .rich-text-editor-content a {
+    color: #2563eb;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+  }
+
+  .rich-text-editor-content a:hover {
+    color: #1d4ed8;
+  }
+
+  .dark .rich-text-editor-content a {
+    color: #60a5fa;
+  }
+
+  .dark .rich-text-editor-content a:hover {
+    color: #93c5fd;
   }
 
   .rich-text-editor-content h1 {
@@ -214,6 +260,61 @@
     height: auto;
     margin: 0.8rem 0;
     border-radius: 0.375rem;
+  }
+
+  .rich-text-editor-content .tableWrapper {
+    margin: 0.9rem 0;
+    overflow-x: auto;
+  }
+
+  .rich-text-editor-content table {
+    width: 100%;
+    min-width: 520px;
+    border-collapse: collapse;
+    table-layout: fixed;
+  }
+
+  .rich-text-editor-content th,
+  .rich-text-editor-content td {
+    position: relative;
+    min-width: 80px;
+    border: 1px solid hsl(var(--border));
+    padding: 0.55rem 0.7rem;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .rich-text-editor-content th {
+    background: hsl(var(--muted));
+    font-weight: 600;
+  }
+
+  .rich-text-editor-content th p,
+  .rich-text-editor-content td p {
+    margin: 0;
+  }
+
+  .rich-text-editor-content .selectedCell::after {
+    position: absolute;
+    inset: 0;
+    z-index: 2;
+    pointer-events: none;
+    content: '';
+    background: hsl(var(--primary) / 0.12);
+  }
+
+  .rich-text-editor-content .column-resize-handle {
+    position: absolute;
+    top: 0;
+    right: -2px;
+    bottom: -2px;
+    width: 4px;
+    pointer-events: none;
+    background: hsl(var(--primary));
+  }
+
+  .rich-text-editor-content.resize-cursor {
+    cursor: col-resize;
   }
 
   .ai-conversation-tiptap .tiptap {

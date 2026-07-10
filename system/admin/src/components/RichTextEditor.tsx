@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
+import CodeMirror from '@uiw/react-codemirror'
+import { EditorView } from '@codemirror/view'
 import { EditorContent, useEditor } from '@tiptap/react'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
@@ -6,6 +8,7 @@ import Highlight from '@tiptap/extension-highlight'
 import Image from '@tiptap/extension-image'
 import { TextAlign } from '@tiptap/extension-text-align'
 import { TaskItem, TaskList } from '@tiptap/extension-list'
+import { TableKit } from '@tiptap/extension-table'
 import {
   AlignCenter,
   AlignJustify,
@@ -14,6 +17,8 @@ import {
   Bold,
   ChevronDown,
   Code,
+  CodeXml,
+  Columns3,
   Heading1,
   Heading2,
   Heading3,
@@ -29,10 +34,14 @@ import {
   Quote,
   Redo2,
   RemoveFormatting,
+  Rows3,
   Strikethrough,
+  Table2,
+  Trash2,
   Underline,
   Undo2,
 } from 'lucide-react'
+import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
 import { mediaApi, type MediaPurpose } from '@/api/media'
 import { Button } from '@/components/ui/button'
@@ -81,6 +90,8 @@ const highlightOptions = [
   { label: '蓝色', value: '#bfdbfe' },
   { label: '粉色', value: '#fbcfe8' },
 ]
+
+const sourceEditorExtensions = [EditorView.lineWrapping]
 
 function normalizeEditorHtml(value: string) {
   const trimmed = value.trim()
@@ -153,8 +164,11 @@ export default function RichTextEditor({
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const lastHtmlRef = useRef(normalizeEditorHtml(value))
   const onChangeRef = useRef(onChange)
+  const { resolvedTheme } = useTheme()
   const [linkUrl, setLinkUrl] = useState('')
   const [isUploading, setIsUploading] = useState(false)
+  const [isSourceMode, setIsSourceMode] = useState(false)
+  const [sourceHtml, setSourceHtml] = useState(lastHtmlRef.current)
 
   useEffect(() => {
     onChangeRef.current = onChange
@@ -176,12 +190,39 @@ export default function RichTextEditor({
       TextAlign.configure({ types: ['heading', 'paragraph'] }),
       TaskList,
       TaskItem.configure({ nested: true }),
+      TableKit.configure({
+        table: {
+          resizable: true,
+          allowTableNodeSelection: true,
+        },
+      }),
     ],
     content: lastHtmlRef.current,
     editorProps: {
       attributes: {
         class: 'rich-text-editor-content',
         'aria-label': '富文本内容编辑区',
+      },
+      handleDOMEvents: {
+        click: (_view, event) => {
+          if (event.button !== 0 || (!event.metaKey && !event.ctrlKey)) {
+            return false
+          }
+
+          const target = event.target
+          if (!(target instanceof Element)) {
+            return false
+          }
+
+          const link = target.closest<HTMLAnchorElement>('a[href]')
+          if (!link) {
+            return false
+          }
+
+          event.preventDefault()
+          window.open(link.href, '_blank', 'noopener,noreferrer')
+          return true
+        },
       },
     },
     onUpdate: ({ editor }) => {
@@ -213,12 +254,41 @@ export default function RichTextEditor({
       return
     }
 
+    setSourceHtml(normalizedValue)
     editor.commands.setContent(normalizedValue, { emitUpdate: false })
     lastHtmlRef.current = normalizedValue
     queueMicrotask(() => normalizeEditorAssetDisplay(editor.view.dom))
   }, [editor, value])
 
-  const disabled = readOnly || !editor
+  const disabled = readOnly || !editor || isSourceMode
+
+  const toggleSourceMode = () => {
+    if (!editor) {
+      return
+    }
+
+    if (!isSourceMode) {
+      const currentHtml = readEditorStorageHtml(editor)
+      setSourceHtml(currentHtml)
+      setIsSourceMode(true)
+      return
+    }
+
+    editor.commands.setContent(normalizeEditorHtml(sourceHtml), { emitUpdate: false })
+    const normalizedHtml = readEditorStorageHtml(editor)
+    setSourceHtml(normalizedHtml)
+    lastHtmlRef.current = normalizedHtml
+    onChangeRef.current(normalizedHtml)
+    setIsSourceMode(false)
+    queueMicrotask(() => normalizeEditorAssetDisplay(editor.view.dom))
+  }
+
+  const handleSourceChange = (nextHtml: string) => {
+    setSourceHtml(nextHtml)
+    const normalizedHtml = normalizeEditorHtml(nextHtml)
+    lastHtmlRef.current = normalizedHtml
+    onChangeRef.current(normalizedHtml)
+  }
 
   const setHeading = (level: 1 | 2 | 3) => {
     editor?.chain().focus().toggleHeading({ level }).run()
@@ -283,6 +353,17 @@ export default function RichTextEditor({
       />
 
       <div className="rich-text-editor-toolbar">
+        <div className="rich-text-editor-toolbar-group">
+          <ToolbarButton
+            active={isSourceMode}
+            disabled={!editor}
+            label={isSourceMode ? '返回富文本' : '查看源代码'}
+            onClick={toggleSourceMode}
+          >
+            <CodeXml />
+          </ToolbarButton>
+        </div>
+
         <div className="rich-text-editor-toolbar-group">
           <ToolbarButton disabled={disabled || !editor?.can().undo()} label="撤销" onClick={() => editor?.chain().focus().undo().run()}>
             <Undo2 />
@@ -431,13 +512,69 @@ export default function RichTextEditor({
           <ToolbarButton disabled={disabled || isUploading} label="插入图片" onClick={() => fileInputRef.current?.click()}>
             <ImagePlus />
           </ToolbarButton>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant={editor?.isActive('table') ? 'secondary' : 'ghost'}
+                size="icon-sm"
+                disabled={disabled}
+                aria-label="表格"
+                title="表格"
+              >
+                <Table2 />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem onClick={() => editor?.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()}>
+                <Table2 className="mr-2 size-4" /> 插入 3 x 3 表格
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!editor?.isActive('table')} onClick={() => editor?.chain().focus().addRowAfter().run()}>
+                <Rows3 className="mr-2 size-4" /> 在下方添加行
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!editor?.isActive('table')} onClick={() => editor?.chain().focus().deleteRow().run()}>
+                <Rows3 className="mr-2 size-4" /> 删除当前行
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!editor?.isActive('table')} onClick={() => editor?.chain().focus().addColumnAfter().run()}>
+                <Columns3 className="mr-2 size-4" /> 在右侧添加列
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!editor?.isActive('table')} onClick={() => editor?.chain().focus().deleteColumn().run()}>
+                <Columns3 className="mr-2 size-4" /> 删除当前列
+              </DropdownMenuItem>
+              <DropdownMenuItem disabled={!editor?.isActive('table')} onClick={() => editor?.chain().focus().deleteTable().run()}>
+                <Trash2 className="mr-2 size-4" /> 删除表格
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <ToolbarButton disabled={disabled} label="清除格式" onClick={() => editor?.chain().focus().unsetAllMarks().clearNodes().run()}>
             <RemoveFormatting />
           </ToolbarButton>
         </div>
       </div>
 
-      <EditorContent editor={editor} className="rich-text-editor-body" />
+      {isSourceMode ? (
+        <div className="rich-text-editor-body rich-text-editor-source">
+          <CodeMirror
+            value={sourceHtml}
+            height={fillAvailableHeight ? '100%' : '360px'}
+            theme={resolvedTheme === 'dark' ? 'dark' : 'light'}
+            basicSetup={{
+              lineNumbers: true,
+              foldGutter: true,
+              highlightActiveLine: true,
+              bracketMatching: true,
+              closeBrackets: !readOnly,
+              autocompletion: !readOnly,
+              searchKeymap: true,
+            }}
+            extensions={sourceEditorExtensions}
+            editable={!readOnly}
+            onChange={handleSourceChange}
+          />
+        </div>
+      ) : (
+        <EditorContent editor={editor} className="rich-text-editor-body" />
+      )}
       {isUploading ? <div className="px-3 pb-3 text-xs text-muted-foreground">图片上传中，请稍候...</div> : null}
     </div>
   )

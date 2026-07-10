@@ -24,6 +24,7 @@ node_modules/
 
 /data/site.sqlite*
 /data/*.bak
+/data/backups/*
 !/data/.gitkeep
 
 # 用户上传的文件
