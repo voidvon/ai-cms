@@ -15,7 +15,6 @@ const LEGACY_TEMPLATE_VARIANT_COLUMNS = [
   'news_detail',
   'service_sort1',
   'service_detail',
-  'msg_index',
   'contact',
   'legacy_extra',
 ];

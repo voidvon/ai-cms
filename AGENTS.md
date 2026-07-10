@@ -203,9 +203,8 @@
 
 ### Template / Column / Content / Site Changes
 - 运行一次静态生成
-- 抽查 `html/index.html`
-- 抽查 `html/contact.html`
-- 抽查 `html/msg.html`
+- 通过公开路由抽查首页 `/`
+- 抽查现行联系栏目 `/contact-us/`
 - 抽查一个产品详情页
 - 抽查一个新闻详情页
 - 抽查受影响栏目列表页

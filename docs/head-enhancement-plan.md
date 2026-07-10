@@ -254,11 +254,11 @@ function buildLegacyHomePageProps(templateContext) {
 生成后检查：
 ```bash
 # 查看首页头部
-curl -s http://localhost:3000/index.html | grep -A 50 "<head>"
+curl -s http://localhost:3000/ | grep -A 50 "<head>"
 
 # 或重新生成静态文件
 npm run build:site
-cat html/index.html | head -100
+curl -s http://localhost:3000/ | head -100
 ```
 
 ## 参考资料

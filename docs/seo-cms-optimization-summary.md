@@ -63,16 +63,14 @@
 
 目前已清理运行期旧入口兼容：
 
-- `/contact.html` 不再 301 到 `/contact-us/`
-- `/ajaxcode/msg` 不再 301 到 `/contact-us/`
+- 已移除联系页旧文件路径到 `/contact-us/` 的重定向
 - `/products` 不再自动 301 到 `/products/`
 - 正式栏目路径 `/products/` 保持可访问
 
 当前验证结果：
 
 ```text
-/contact.html 404
-/ajaxcode/msg 404
+联系页旧文件路径 404
 /products 404
 /products/ 200
 ```

@@ -1,0 +1,4 @@
+interface:
+  display_name: "CMS 产品新增"
+  short_description: "通过产品模型、栏目树和数据库模板新增产品详情。"
+  default_prompt: "Use $product-detail-add-product 在当前 CMS 中新增产品详情内容，接入正确栏目和多语言数据并完成静态构建验证。"

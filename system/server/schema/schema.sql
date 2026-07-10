@@ -179,7 +179,6 @@ CREATE TABLE IF NOT EXISTS template_variants (
   news_detail TEXT,
   service_sort1 TEXT,
   service_detail TEXT,
-  msg_index TEXT,
   contact TEXT,
   legacy_extra TEXT
 );

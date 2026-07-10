@@ -201,18 +201,6 @@
 - 办事处联系方式列表、添加、编辑、删除
 - 旧字段 `OfficeName`、`Address`、`Tel`、`Fax`、`Contact`、`Email`、`PostCode` 已映射到 SQLite
 
-### 留言模块
-
-已兼容前台旧提交入口：
-
-- `/ajaxcode/prodmsg.asp?action=add`
-- `/ajaxcode/msg.asp?action=msgadd`
-
-已兼容旧后台入口：
-
-- `/spck/cn/msg/Msg.asp`
-- `/spck/cn/msg/show.asp?id=...`
-- `/spck/cn/msg/chu.asp?id=...`
 - `/spck/cn/msg/Msg.asp?action=del`
 
 已完成能力：
@@ -353,9 +341,8 @@
 
 已接入 Node 静态生成：
 
-- 首页：`index.html`
-- 联系页：`contact.html`
-- 留言页：`msg.html`
+- 首页：公开路由 `/`
+- 联系页：`contact-us/index.html`
 - 公司栏目页：`about/index.html`、`about/about-*.html`
 - 新闻分类页：`news/index.html`、`news/*.html`
 - 服务分类页：`service/index.html`、`service/*.html`

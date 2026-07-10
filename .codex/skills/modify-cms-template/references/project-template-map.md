@@ -20,7 +20,7 @@ sqlite3 data/site.sqlite "select id,template_id,version_no,note,created_at from 
 
 实现要点：
 
-- 修改数据库首页模板 `templates.id=2`，不是改源码文件或 `html/index.html`。
+- 修改数据库首页模板 `templates.id=2`，不要直接修改生成后的首页产物。
 - 让 hero 总是渲染一个联系按钮。
 - 文案优先级：
   `site.template_data.ui.nav.contactLabel` -> `ui.text.contactUs` -> `联系我们`。
@@ -33,7 +33,7 @@ sqlite3 data/site.sqlite "select id,template_id,version_no,note,created_at from 
 
 ```bash
 npm --prefix system/server run build:static -- --language en --json
-rg -n "Contact us|/contact-us/" html/index.html
+curl -s http://localhost:3000/ | rg "Contact us|/contact-us/"
 ```
 
 ## 通用按钮高度案例
@@ -66,7 +66,7 @@ min-height: 40px;
 ```bash
 sqlite3 data/site.sqlite "select id,name,instr(css_source,'min-height: 38px'),instr(css_source,'min-height: 46px'),instr(css_source,'min-height: 54px'),instr(css_source,'min-height: 42px'),instr(css_source,'height: 40px'),instr(published_css_source,'height: 40px') from templates where id in (1,14);"
 npm --prefix system/server run build:static -- --language en --json
-rg -n "height:40px|min-height:40px|height: 40px|min-height: 40px" html/index.html html/assets/cms-templates
+rg -n "height:40px|min-height:40px|height: 40px|min-height: 40px" html/assets/cms-templates
 ```
 
 ## 静态生成排除非公开模型案例

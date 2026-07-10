@@ -110,7 +110,7 @@
 
 系统特殊页的处理方式改为：
 
-- 通过约定路径识别，例如 `/contact.html`
+- 通过约定路径识别，例如 `/contact-us/`
 - 或通过独立配置识别
 - 或通过模板绑定识别
 
@@ -241,7 +241,7 @@
   - `column_type = single`
   - `content_model_id = null`
   - `detail_rule = null`
-  - `route_path = /contact.html`
+  - `route_path = /contact-us/`
 
 - `product_root`
   - `column_type = list`
@@ -391,7 +391,7 @@
 
 ### 2. 特殊页面只保留“栏目 + 路径”语义
 
-新架构中“联系我们”只是一个 `single` 栏目，路径刚好是 `/contact.html`。
+新架构中“联系我们”只是一个 `single` 栏目，当前路径是 `/contact-us/`。
 
 不能再保留 `contact_page` 这种特殊栏目类型。
 

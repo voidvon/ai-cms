@@ -39,7 +39,7 @@
 2. `robots.txt` 与 `sitemap.xml` 也都指向英文正式站，而不是当前域名或当前语言站。
 3. `https://test.spiraxsteam.cn/` SSL 证书域名不匹配，`curl` 校验证书失败，属于严重技术信任问题。
 4. `html lang="en"`、页面正文英文、页脚语言显示 English，但 `hreflang` 又声明 `zh-CN` 替代版本，语言/站点定位混乱。
-5. 旧兼容入口 `/search` 与 `/ajaxcode/msg` 返回 `404`，不符合旧站兼容优先原则。
+5. 旧搜索入口 `/search` 返回 `404`，需要明确是否继续兼容。
 
 ### Top 5 Quick Wins
 
@@ -47,7 +47,7 @@
 2. 修正 `robots.txt` 和 `sitemap.xml` 输出，避免继续把抓取与索引信号导向英文站。
 3. 修复 `test.spiraxsteam.cn` HTTPS 证书。
 4. 如果这是中文站，统一 `html lang`、文案语言、结构化数据 `inLanguage` 与页脚语言显示。
-5. 恢复 `/search` 与 `/ajaxcode/msg` 的兼容落点或 301 跳转。
+5. 明确 `/search` 的兼容落点或跳转策略。
 
 ## Technical SEO
 
@@ -102,13 +102,12 @@
 #### 实测
 
 - `/search`：`404 Not Found`
-- `/ajaxcode/msg`：`404 Not Found`
 - `/admin/build`：`401 Unauthorized`
 
 #### 结论
 
 - `/admin/build` 至少存在路由保护，优于 `404`。
-- `/search` 和 `/ajaxcode/msg` 当前未兼容，不符合仓库对旧入口兼容的要求。
+- `/search` 当前未兼容，需要按现行产品范围决定是否恢复。
 
 ## Content Quality
 
@@ -219,7 +218,7 @@
 2. 修复 `robots.txt` / `sitemap.xml` 指向错误
 3. 修复 HTTPS 证书
 4. 明确当前站点到底是英文测试站还是中文站，并统一语言信号
-5. 恢复旧兼容入口 `/search`、`/ajaxcode/msg`
+5. 明确旧搜索入口 `/search` 的兼容策略
 
 ### High
 
@@ -522,7 +521,7 @@
 
 ### High
 
-1. 恢复 `/search`、`/ajaxcode/msg` 等旧兼容入口，或配置正确跳转。
+1. 明确 `/search` 旧入口是否恢复，或配置正确跳转。
 2. 修正 `/admin/` 到本地开发端口的跳转暴露。
 3. 修复 `llms.txt` 中 `.md` 链接，统一引用 HTML canonical URL。
 

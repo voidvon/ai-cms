@@ -1,6 +1,6 @@
 import { requireAuth } from '../../middleware/auth.mjs';
 import { CONTENT_ROOT } from '../../config.mjs';
-import { buildTopicColumnPage } from '../../static-builder.mjs';
+import { buildTopicColumnPage, resolveStaticBuildOutputRoot } from '../../static-builder.mjs';
 import {
   deleteTopicProfile,
   deleteTopicProfileForLanguage,
@@ -50,10 +50,14 @@ export default async function topicProfilesRoutes(app) {
   }, async (request, reply) => {
     try {
       const { language, lang } = request.query;
+      const languageCode = language ?? lang;
       const result = buildTopicColumnPage({
-        outputRoot: CONTENT_ROOT,
+        outputRoot: resolveStaticBuildOutputRoot({
+          outputRoot: CONTENT_ROOT,
+          languageCode
+        }),
         columnId: request.params.columnId,
-        languageCode: language ?? lang
+        languageCode
       });
       return { success: true, data: result, message: '专题页面已生成' };
     } catch (error) {

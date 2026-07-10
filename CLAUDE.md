@@ -254,13 +254,6 @@ Jobs:
 - `PUT /api/jobs/:id` - Update job (auth required)
 - `DELETE /api/jobs/:id` - Delete job (auth required)
 
-Messages:
-- `POST /api/messages` - Submit message (public)
-- `GET /api/messages` - List messages (auth required)
-- `GET /api/messages/:id` - Message details (auth required)
-- `PUT /api/messages/:id` - Update message (auth required)
-- `DELETE /api/messages/:id` - Delete message (auth required)
-
 Contacts:
 - `GET /api/contacts` - List contacts (public)
 - `GET /api/contacts/:id` - Contact details (public)
@@ -293,13 +286,11 @@ Backend Pages:
 
 Frontend Dynamic:
 - `GET /search?keyword=xxx` - Search page
-- `POST /ajaxcode/msg?action=add` - Submit message form
-- `POST /ajaxcode/prodmsg?action=add` - Submit product inquiry
 
 ### Static File Serving
 
 The server automatically serves public static files from root `html/`:
-- `/index.html`, `/contact.html`, `/msg.html` - Main pages
+- `/`, `/contact-us/` - Main public routes
 - `/product/`, `/products/`, `/news/`, `/service/`, `/valve/` - Generated content
 - `/images/`, `/css/`, `/js/`, `/upload/`, `/uploadfile/` - Static assets and uploads from `html/`
 - Case-insensitive path matching for legacy compatibility (e.g., `/Product/123.html` → `/product/123.html`)

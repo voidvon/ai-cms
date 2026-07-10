@@ -27,7 +27,6 @@
 - `products.mjs` - 产品 CRUD + 搜索
 - `news.mjs` - 新闻 CRUD
 - `jobs.mjs` - 招聘 CRUD
-- `messages.mjs` - 留言 CRUD
 - `contacts.mjs` - 联系人 CRUD
 - `uploads.mjs` - 文件上传
 - `admin.mjs` - 管理员 CRUD
@@ -39,8 +38,6 @@
 
 **前台动态路由** (`routes/legacy.mjs`)
 - GET /search - 搜索页面
-- POST /ajaxcode/msg - 留言提交
-- POST /ajaxcode/prodmsg - 产品咨询提交
 
 ### 3. 中间件系统
 创建 `middleware/auth.mjs`：
@@ -61,7 +58,6 @@
 - `services/products.mjs`
 - `services/news.mjs`
 - `services/jobs.mjs`
-- `services/messages.mjs`
 - `services/contacts.mjs`
 - `services/admins.mjs`
 - `services/sessions.mjs`
@@ -98,8 +94,6 @@
 - `/products/分类名/`
 - `/news/456.html`
 - `/search?keyword=xxx`
-- `/ajaxcode/msg?action=add`
-- `/ajaxcode/prodmsg?action=add`
 
 ### ⚠️ 已简化（后台管理）
 | 旧路径 | 新路径 | 说明 |

@@ -310,14 +310,6 @@ export default function ProductList({ items = [], component, Raw }) {
 | --- | --- | --- |
 | `contactTableHtml` | string | 联系方式表格 HTML |
 
-### 在线留言
-
-适用模板：`content_message`。
-
-| 字段 | 类型 | 说明 |
-| --- | --- | --- |
-| `messageSidebarProductsHtml` | string | 留言页侧栏推荐产品 HTML |
-
 ### 招聘详情
 
 适用模板：`content_job`。

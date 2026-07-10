@@ -231,7 +231,7 @@ function prefixRelativeHrefPaths(html, prefix) {
   });
 }
 
-const MANAGED_STATIC_ROOT_FILES = ['index.html', 'contact.html', 'sitemap.xml', 'robots.txt', 'llms.txt', 'llms-full.txt', 'index.md'];
+const MANAGED_STATIC_ROOT_FILES = ['index.html', 'sitemap.xml', 'robots.txt', 'llms.txt', 'llms-full.txt', 'index.md'];
 const LEGACY_MANAGED_STATIC_DIRS = ['about'];
 const SHARED_STATIC_DIRS = ['css'];
 const SHARED_STATIC_ROOT_FILES = ['logo.svg'];
@@ -919,7 +919,10 @@ export function buildTopicColumnPage({ outputRoot = DEFAULT_OUTPUT_ROOT, columnI
     templateContext
   });
   const columnPageContent = resolveDedicatedColumnPageContent(column, templateContext.languageCode);
-  const topicIntroHtml = normalizeLegacyBodyHtml(profile?.intro_html, templateContext.site, { fallbackAlt: column.name || profile?.column_name || 'Topics' }) || '';
+  const normalizedTopicIntroHtml = normalizeLegacyBodyHtml(profile?.intro_html, templateContext.site, { fallbackAlt: column.name || profile?.column_name || 'Topics' }) || '';
+  const topicIntroHtml = buildLegacyContentSectionNavigation(normalizedTopicIntroHtml, {
+    matchInPageLinksByHeadingNumber: true
+  }).html;
   const topicIntroText = extractRenderableContentBodySummary(profile?.intro_html) || '';
   const description = normalizeRenderableLegacyText(columnPageContent?.seo_description || columnPageContent?.summary || topicIntroText || profile?.topic_keyword || '');
   const title = column.name || profile?.column_name || 'Topics';
@@ -2531,6 +2534,19 @@ function buildLegacySiteColumns(columns, options = {}) {
       .concat(groupedNavRows)
       .sort(compareHeaderNavEntries);
 
+  const topicRootColumn = collectTopicColumns(rows)
+    .find((item) => normalizeInteger(item?.parent_id, 0) === 0) || null;
+  const topicNavRow = topicRootColumn
+    ? normalizedRows.find((item) => item.id === normalizeInteger(topicRootColumn.id, 0)) || null
+    : null;
+  if (topicNavRow && topicNavRow.showInNav !== 0 && !navRows.some((item) => item.id === topicNavRow.id)) {
+    const managedRootIndex = navRows.findIndex((item) => item.id === managedRootColumnId);
+    navRows.splice(managedRootIndex >= 0 ? managedRootIndex + 1 : navRows.length, 0, {
+      ...topicNavRow,
+      name: resolveColumnDisplayLabel(topicRootColumn, ['navLabel', 'menuLabel', 'shortLabel']) || topicRootColumn.name
+    });
+  }
+
   return navRows.map((item) => {
     let children = [];
 
@@ -2676,13 +2692,13 @@ function buildLegacyColumnUrl(column, rowsById = new Map(), site = null) {
 
 function buildLegacyContactPageProps(templateContext) {
   const uiText = getLegacyUiText(templateContext);
-  const contactColumn = templateContext.columns.find((item) => String(item.route_path || '') === '/contact.html') || null;
+  const contactColumn = templateContext.columns.find((item) => String(item.route_path || '') === '/contact-us/index.html') || null;
   const contactPage = contactColumn
     ? resolveDedicatedColumnPageContent(contactColumn, templateContext.languageCode)
     : null;
   const contactUrl = contactColumn
-    ? buildLegacyColumnUrl(contactColumn, templateContext.publicSections, templateContext.site) || prefixSitePathForContext('/contact.html', templateContext.site, { allowApi: false, allowAssets: false })
-    : prefixSitePathForContext('/contact.html', templateContext.site, { allowApi: false, allowAssets: false });
+    ? buildLegacyColumnUrl(contactColumn, templateContext.publicSections, templateContext.site) || prefixSitePathForContext('/contact-us/', templateContext.site, { allowApi: false, allowAssets: false })
+    : prefixSitePathForContext('/contact-us/', templateContext.site, { allowApi: false, allowAssets: false });
   const pageTitleBase = templateContext.site.company_name || templateContext.site.web_name || '';
   return {
     ...buildLegacyCommonProps(templateContext),
@@ -3939,12 +3955,13 @@ function normalizeManagedContentImages(managedItem) {
   return images.length > 0 ? images : [primaryImage].filter(Boolean);
 }
 
-function buildLegacyContentSectionNavigation(html) {
+function buildLegacyContentSectionNavigation(html, options = {}) {
   const rawHtml = String(html || '').trim();
   if (!rawHtml) {
     return { html: '', items: [] };
   }
 
+  const inPageLinks = collectLegacyInPageLinks(rawHtml);
   const usedIds = new Set();
   const items = [];
   let index = 0;
@@ -3955,7 +3972,9 @@ function buildLegacyContentSectionNavigation(html) {
     }
 
     const existingIdMatch = String(attributes || '').match(/\sid=(["'])([^"']+)\1/i);
-    let headingId = existingIdMatch?.[2] || createLegacyAnchorSlug(plainText, `section-${index + 1}`);
+    let headingId = existingIdMatch?.[2]
+      || resolveLegacyInPageHeadingId(plainText, inPageLinks, usedIds, options)
+      || createLegacyAnchorSlug(plainText, `section-${index + 1}`);
     while (usedIds.has(headingId)) {
       index += 1;
       headingId = `${headingId}-${index}`;
@@ -3977,9 +3996,76 @@ function buildLegacyContentSectionNavigation(html) {
   });
 
   return {
-    html: output,
+    html: normalizeLegacyInPageLinkAttributes(output),
     items: items.slice(0, 12)
   };
+}
+
+function collectLegacyInPageLinks(html) {
+  const links = [];
+  const anchorPattern = /<a\b([^>]*)>([\s\S]*?)<\/a>/gi;
+  let match;
+  while ((match = anchorPattern.exec(String(html || '')))) {
+    const hrefMatch = String(match[1] || '').match(/\bhref\s*=\s*(["'])#([^"']+)\1/i);
+    if (!hrefMatch) {
+      continue;
+    }
+    const id = decodeLegacyAnchorFragment(hrefMatch[2]);
+    const label = normalizeRenderableLegacyText(String(match[2] || '').replace(/<[^>]+>/g, ' '));
+    if (id && label) {
+      links.push({ id, matchText: normalizeLegacyAnchorMatchText(label) });
+    }
+  }
+  return links;
+}
+
+function resolveLegacyInPageHeadingId(headingText, links, usedIds, options = {}) {
+  const matchText = normalizeLegacyAnchorMatchText(headingText);
+  if (!matchText) {
+    return '';
+  }
+  const matched = links.find((link) => link.matchText === matchText && !usedIds.has(link.id));
+  if (matched) {
+    return matched.id;
+  }
+  if (options.matchInPageLinksByHeadingNumber) {
+    const headingNumber = Number.parseInt(String(headingText || '').match(/^\s*(\d+)\s*[.、:：-]/)?.[1] || '', 10);
+    const orderedMatch = Number.isInteger(headingNumber) ? links[headingNumber] : null;
+    if (orderedMatch && !usedIds.has(orderedMatch.id)) {
+      return orderedMatch.id;
+    }
+  }
+  return '';
+}
+
+function normalizeLegacyAnchorMatchText(value) {
+  return normalizeRenderableLegacyText(value)
+    .toLowerCase()
+    .replace(/^\s*\p{N}+\s*[.、:：-]\s*/u, '')
+    .replace(/[^\p{L}\p{N}]+/gu, '');
+}
+
+function decodeLegacyAnchorFragment(value) {
+  const normalized = String(value || '').trim().replace(/&amp;/gi, '&');
+  if (!normalized) {
+    return '';
+  }
+  try {
+    return decodeURIComponent(normalized);
+  } catch {
+    return normalized;
+  }
+}
+
+function normalizeLegacyInPageLinkAttributes(html) {
+  return String(html || '').replace(/<a\b[^>]*>/gi, (tag) => {
+    if (!/\bhref\s*=\s*(["'])#[^"']+\1/i.test(tag)) {
+      return tag;
+    }
+    return tag
+      .replace(/\s+target\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '')
+      .replace(/\s+rel\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+  });
 }
 
 function createLegacyAnchorSlug(value, fallback = 'section') {
@@ -4711,6 +4797,11 @@ function resolveStaticBuildLanguages(languageCode) {
     return matched ? [matched] : enabledLanguages.slice(0, 1);
   }
   return enabledLanguages.length > 0 ? enabledLanguages : [{ code: 'zh-CN', site: { output_dir: 'html' } }];
+}
+
+export function resolveStaticBuildOutputRoot({ outputRoot = DEFAULT_OUTPUT_ROOT, languageCode = null } = {}) {
+  const [language] = resolveStaticBuildLanguages(languageCode);
+  return resolveLanguageOutputRoot(outputRoot, language);
 }
 
 function collectProtectedLanguageOutputDirs(outputRoot) {
