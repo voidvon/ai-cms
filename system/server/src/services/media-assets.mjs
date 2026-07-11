@@ -6,6 +6,7 @@ import {
   ATTACHMENT_UPLOAD_MAX_SIZE_KB,
   IMAGE_UPLOAD_SOURCE_MAX_SIZE_KB,
   MIME_TYPES,
+  UPLOADS_PDFS_ROOT,
   UPLOADS_FILES_ROOT,
   UPLOADS_IMAGES_ROOT,
   UPLOAD_ALLOWED_EXTENSIONS,
@@ -13,6 +14,7 @@ import {
 } from '../config.mjs';
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { optimizeUploadedImage } from './image-optimizer.mjs';
+import { ensureLanguagesSchema, getLanguageById } from './languages.mjs';
 import { getSiteConfig } from './site.mjs';
 import { resolveRuntimeAssetUrl } from './uploads.mjs';
 
@@ -89,9 +91,19 @@ const PURPOSE_TARGETS = {
     sourceMaxSizeKb: ATTACHMENT_UPLOAD_MAX_SIZE_KB,
     maxSizeKb: ATTACHMENT_UPLOAD_MAX_SIZE_KB,
   },
+  pdf_document: {
+    purpose: 'pdf_document',
+    mimeFallback: 'application/pdf',
+    bucket: 'pdfs',
+    root: UPLOADS_PDFS_ROOT,
+    allowedExtensions: new Set(['.pdf']),
+    sourceMaxSizeKb: ATTACHMENT_UPLOAD_MAX_SIZE_KB,
+    maxSizeKb: ATTACHMENT_UPLOAD_MAX_SIZE_KB,
+  },
 };
 
 const CONVERTIBLE_IMAGE_EXTENSIONS = new Set(['.heic', '.heif']);
+const PDF_DOCUMENT_TYPES = new Set(['sales_brochure', 'installation_guide', 'technical_information']);
 
 let schemaEnsured = false;
 
@@ -99,6 +111,8 @@ export function ensureMediaAssetsSchema() {
   if (schemaEnsured) {
     return;
   }
+
+  ensureLanguagesSchema();
 
   getDb().exec(`
     CREATE TABLE IF NOT EXISTS media_assets (
@@ -111,6 +125,10 @@ export function ensureMediaAssetsSchema() {
       file_size INTEGER NOT NULL DEFAULT 0,
       relative_path TEXT NOT NULL UNIQUE,
       fs_path TEXT NOT NULL,
+      language_id INTEGER,
+      pdf_document_type TEXT,
+      pdf_title TEXT,
+      pdf_document_code TEXT,
       usage_references_json TEXT NOT NULL DEFAULT '[]',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
@@ -118,15 +136,23 @@ export function ensureMediaAssetsSchema() {
   `);
 
   addColumnIfMissing('media_assets', 'usage_references_json', `TEXT NOT NULL DEFAULT '[]'`);
+  addColumnIfMissing('media_assets', 'language_id', 'INTEGER');
+  addColumnIfMissing('media_assets', 'pdf_document_type', 'TEXT');
+  addColumnIfMissing('media_assets', 'pdf_title', 'TEXT');
+  addColumnIfMissing('media_assets', 'pdf_document_code', 'TEXT');
 
   schemaEnsured = true;
 }
 
-export async function uploadMediaAsset({ buffer, originalFilename, purpose }) {
+export async function uploadMediaAsset({ buffer, originalFilename, purpose, languageId, pdfDocumentType }) {
   ensureMediaAssetsSchema();
 
   const normalizedPurpose = resolvePurpose(purpose);
   const target = PURPOSE_TARGETS[normalizedPurpose];
+  const normalizedLanguageId = normalizeMediaAssetLanguageId(languageId);
+  const normalizedPdfDocumentType = normalizePdfDocumentType(pdfDocumentType);
+  const inferredPdfTitle = normalizedPurpose === 'pdf_document' ? inferPdfTitleFromFilename(originalFilename) : null;
+  const inferredPdfDocumentCode = normalizedPurpose === 'pdf_document' ? inferPdfDocumentCodeFromFilename(originalFilename) : null;
   const extension = path.extname(String(originalFilename || '')).toLowerCase();
   if (!target.allowedExtensions.has(extension)) {
     throw new Error('unsupported file type');
@@ -168,8 +194,12 @@ export async function uploadMediaAsset({ buffer, originalFilename, purpose }) {
         file_size,
         relative_path,
         fs_path,
+        language_id,
+        pdf_document_type,
+        pdf_title,
+        pdf_document_code,
         usage_references_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, '[]')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]')
     `,
     [
       'local',
@@ -180,6 +210,10 @@ export async function uploadMediaAsset({ buffer, originalFilename, purpose }) {
       stored.buffer.length,
       relativePath,
       fsPath,
+      normalizedPurpose === 'pdf_document' ? normalizedLanguageId : null,
+      normalizedPurpose === 'pdf_document' ? normalizedPdfDocumentType : null,
+      inferredPdfTitle,
+      inferredPdfDocumentCode,
     ],
   );
 
@@ -200,6 +234,20 @@ export function getMediaAssetById(id) {
         file_size,
         relative_path,
         fs_path,
+        language_id,
+        pdf_document_type,
+        pdf_title,
+        pdf_document_code,
+        (
+          SELECT code
+          FROM languages
+          WHERE languages.id = media_assets.language_id
+        ) AS language_code,
+        (
+          SELECT name
+          FROM languages
+          WHERE languages.id = media_assets.language_id
+        ) AS language_name,
         usage_references_json,
         created_at
       FROM media_assets
@@ -209,7 +257,7 @@ export function getMediaAssetById(id) {
   ), getSiteConfig());
 }
 
-export function listMediaAssets({ page = 1, limit = 50, purpose, usage } = {}) {
+export function listMediaAssets({ page = 1, limit = 50, purpose, usage, q, pdfSearch = false } = {}) {
   ensureMediaAssetsSchema();
 
   const safeLimit = Math.min(Math.max(Number.parseInt(String(limit), 10) || 50, 1), 200);
@@ -221,6 +269,29 @@ export function listMediaAssets({ page = 1, limit = 50, purpose, usage } = {}) {
   if (purpose && purpose !== 'all') {
     whereParts.push('purpose = ?');
     params.push(resolvePurpose(purpose));
+  }
+
+  const keyword = String(q || '').trim();
+  if (keyword) {
+    const keywordParam = `%${keyword}%`;
+    if (pdfSearch) {
+      whereParts.push(`(
+        original_name LIKE ?
+        OR pdf_title LIKE ?
+        OR pdf_document_code LIKE ?
+      )`);
+      params.push(keywordParam, keywordParam, keywordParam);
+    } else {
+      whereParts.push(`(
+        original_name LIKE ?
+        OR relative_path LIKE ?
+        OR mime_type LIKE ?
+        OR pdf_document_type LIKE ?
+        OR pdf_title LIKE ?
+        OR pdf_document_code LIKE ?
+      )`);
+      params.push(keywordParam, keywordParam, keywordParam, keywordParam, keywordParam, keywordParam);
+    }
   }
 
   const usageFilter = usage;
@@ -246,6 +317,20 @@ export function listMediaAssets({ page = 1, limit = 50, purpose, usage } = {}) {
         file_size,
         relative_path,
         fs_path,
+        language_id,
+        pdf_document_type,
+        pdf_title,
+        pdf_document_code,
+        (
+          SELECT code
+          FROM languages
+          WHERE languages.id = media_assets.language_id
+        ) AS language_code,
+        (
+          SELECT name
+          FROM languages
+          WHERE languages.id = media_assets.language_id
+        ) AS language_name,
         usage_references_json,
         created_at
       FROM media_assets
@@ -275,6 +360,60 @@ export function listMediaAssets({ page = 1, limit = 50, purpose, usage } = {}) {
       totalPages: Math.max(Math.ceil(total / safeLimit), 1),
     },
   };
+}
+
+export function updateMediaAssetLanguage(id, languageId) {
+  ensureMediaAssetsSchema();
+
+  const asset = getMediaAssetById(id);
+  if (!asset) {
+    const error = new Error('附件不存在');
+    error.statusCode = 404;
+    throw error;
+  }
+  if (asset.purpose !== 'pdf_document') {
+    const error = new Error('只有 PDF 文档可以设置语言');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  execute(
+    `
+      UPDATE media_assets
+      SET language_id = ?
+      WHERE id = ?
+    `,
+    [normalizeMediaAssetLanguageId(languageId), asset.id],
+  );
+
+  return getMediaAssetById(asset.id);
+}
+
+export function updateMediaAssetPdfDocumentType(id, pdfDocumentType) {
+  ensureMediaAssetsSchema();
+
+  const asset = getMediaAssetById(id);
+  if (!asset) {
+    const error = new Error('附件不存在');
+    error.statusCode = 404;
+    throw error;
+  }
+  if (asset.purpose !== 'pdf_document') {
+    const error = new Error('只有 PDF 文档可以设置文档类型');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  execute(
+    `
+      UPDATE media_assets
+      SET pdf_document_type = ?
+      WHERE id = ?
+    `,
+    [normalizePdfDocumentType(pdfDocumentType), asset.id],
+  );
+
+  return getMediaAssetById(asset.id);
 }
 
 export function deleteMediaAsset(id, { force = false } = {}) {
@@ -333,6 +472,10 @@ export function cleanupOrphanedMediaAssets({ purpose } = {}) {
         file_size,
         relative_path,
         fs_path,
+        language_id,
+        pdf_document_type,
+        pdf_title,
+        pdf_document_code,
         usage_references_json,
         created_at
       FROM media_assets
@@ -392,9 +535,59 @@ function decorateMediaAsset(item, siteConfig = null) {
     ...item,
     public_url: resolveRuntimeAssetUrl(item.relative_path, siteConfig),
     file_exists: fs.existsSync(item.fs_path),
+    language_id: item.language_id ? Number(item.language_id) : null,
+    language_code: item.language_code || null,
+    language_name: item.language_name || null,
+    pdf_document_type: item.pdf_document_type || null,
+    pdf_title: item.pdf_title || null,
+    pdf_document_code: item.pdf_document_code || null,
     usage_references: usageReferences,
     usage_count: usageReferences.length,
   };
+}
+
+function inferPdfDocumentCodeFromFilename(filename) {
+  const base = path.basename(String(filename || ''), path.extname(String(filename || ''))).toUpperCase();
+  const match = base.match(/\b(?:IM|TI|TIS|SB|SP|GP)-[A-Z0-9]+(?:-[A-Z0-9]+){1,4}\b/);
+  return match ? match[0] : null;
+}
+
+function inferPdfTitleFromFilename(filename) {
+  const base = path.basename(String(filename || ''), path.extname(String(filename || '')));
+  return base
+    .replace(/-[a-f0-9]{10}$/i, '')
+    .replace(/\b(?:im|ti|tis|sb|sp|gp)-[a-z0-9]+(?:-[a-z0-9]+){1,4}\b/ig, '')
+    .replace(/[-_]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim() || null;
+}
+
+function normalizePdfDocumentType(value) {
+  const documentType = String(value || '').trim();
+  if (!documentType) {
+    return null;
+  }
+  if (!PDF_DOCUMENT_TYPES.has(documentType)) {
+    const error = new Error('PDF 文档类型不存在');
+    error.statusCode = 400;
+    throw error;
+  }
+  return documentType;
+}
+
+function normalizeMediaAssetLanguageId(value) {
+  const id = Number.parseInt(String(value || ''), 10);
+  if (!Number.isFinite(id) || id <= 0) {
+    return null;
+  }
+
+  const language = getLanguageById(id);
+  if (!language) {
+    const error = new Error('语言不存在');
+    error.statusCode = 400;
+    throw error;
+  }
+  return language.id;
 }
 
 function refreshMediaAssetUsageReferences(asset) {

@@ -3,6 +3,8 @@ import {
   cleanupOrphanedMediaAssets,
   deleteMediaAsset,
   listMediaAssets,
+  updateMediaAssetLanguage,
+  updateMediaAssetPdfDocumentType,
   uploadMediaAsset,
 } from '../../services/media-assets.mjs';
 
@@ -10,12 +12,14 @@ export default async function mediaRoutes(app) {
   app.get('/media-assets', {
     onRequest: [requireAuth],
   }, async (request) => {
-    const { page, limit, purpose, usage } = request.query;
+    const { page, limit, purpose, usage, q, pdf_search } = request.query;
     const result = listMediaAssets({
       page: page ? Number.parseInt(page, 10) : undefined,
       limit: limit ? Number.parseInt(limit, 10) : undefined,
       purpose,
       usage,
+      q,
+      pdfSearch: String(pdf_search || '') === '1',
     });
 
     return { success: true, ...result };
@@ -61,10 +65,56 @@ export default async function mediaRoutes(app) {
     }
   });
 
+  app.patch('/media-assets/:id/language', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      const asset = updateMediaAssetLanguage(request.params.id, request.body?.language_id);
+      return {
+        success: true,
+        message: 'PDF 语言已更新',
+        data: asset,
+      };
+    } catch (error) {
+      if (error.statusCode === 404) {
+        return reply.notFound(error.message || '附件不存在');
+      }
+      if (error.statusCode === 400) {
+        return reply.badRequest(error.message || '语言更新失败');
+      }
+      app.log.error(error);
+      return reply.internalServerError(error.message || '语言更新失败');
+    }
+  });
+
+  app.patch('/media-assets/:id/pdf-document-type', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      const asset = updateMediaAssetPdfDocumentType(request.params.id, request.body?.pdf_document_type);
+      return {
+        success: true,
+        message: 'PDF 文档类型已更新',
+        data: asset,
+      };
+    } catch (error) {
+      if (error.statusCode === 404) {
+        return reply.notFound(error.message || '附件不存在');
+      }
+      if (error.statusCode === 400) {
+        return reply.badRequest(error.message || '文档类型更新失败');
+      }
+      app.log.error(error);
+      return reply.internalServerError(error.message || '文档类型更新失败');
+    }
+  });
+
   app.post('/media/upload', {
     onRequest: [requireAuth],
   }, async (request, reply) => {
     const purpose = request.query.purpose || 'attachment';
+    const languageId = request.query.language_id;
+    const pdfDocumentType = request.query.pdf_document_type;
     const data = await request.file();
 
     if (!data) {
@@ -77,6 +127,8 @@ export default async function mediaRoutes(app) {
         buffer,
         originalFilename: data.filename,
         purpose,
+        languageId,
+        pdfDocumentType,
       });
 
       return {

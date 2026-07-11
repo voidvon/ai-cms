@@ -442,6 +442,12 @@ export interface MediaAsset {
   public_url?: string;
   fs_path: string;
   file_exists?: boolean;
+  language_id?: number | null;
+  language_code?: string | null;
+  language_name?: string | null;
+  pdf_document_type?: string | null;
+  pdf_title?: string | null;
+  pdf_document_code?: string | null;
   usage_count?: number;
   usage_references?: MediaAssetUsageReference[];
   created_at?: string;

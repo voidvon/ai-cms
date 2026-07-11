@@ -36,6 +36,7 @@ function App() {
           <Route path="content-model-data" element={<ContentModelDataPage />} />
           <Route path="topics" element={<TopicManagementPage />} />
           <Route path="price-management" element={<PriceManagementPage />} />
+          <Route path="pdf-assets" element={<MediaAssetsPage mode="pdfs" />} />
           <Route path="media-assets" element={<MediaAssetsPage />} />
           <Route path="languages" element={<LanguagesPage />} />
           <Route path="template-variants" element={<Navigate to="/themes" replace />} />
