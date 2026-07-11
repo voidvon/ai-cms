@@ -6,6 +6,10 @@ import { getAiDataSourceStatus } from '../../services/ai/data-source-registry.mj
 import { searchAiMentions } from '../../services/ai/query-service.mjs';
 import { buildAiMentionContext } from '../../services/ai/mention-context.mjs';
 import { DEFAULT_MODEL } from '../../services/ai/runtime.mjs';
+import {
+  loadLatestGeneratedImageContext,
+  saveGeneratedImagesFromAgentResult,
+} from '../../services/ai/image-generation.mjs';
 import { executeContractTask } from '../../services/ai/skills/contract.mjs';
 import { fetchUrlForAi } from '../../services/ai/web-fetch.mjs';
 import {
@@ -395,6 +399,9 @@ export default async function aiRoutes(app) {
     return sendAssistantStreamingTextStream(reply, messages, async (writeDelta) => {
       try {
         const orchestrator = getAiOrchestrator();
+        const latestGeneratedImage = loadLatestGeneratedImageContext(conversationId, {
+          user: request.adminUser,
+        });
         const webPages = await fetchReferencedWebPages(messageText);
         const mentionContext = effectiveMentions.length > 0
           ? buildAiMentionContext({
@@ -416,6 +423,7 @@ export default async function aiRoutes(app) {
             mentions: effectiveMentions,
             mentionContext,
             webPages,
+            latestGeneratedImage,
           },
         });
 
@@ -444,27 +452,51 @@ export default async function aiRoutes(app) {
         }
 
         await streamed.result.completed;
+        const generatedImages = [
+          ...(latestGeneratedImage?.generated_images || []),
+          ...await saveGeneratedImagesFromAgentResult(streamed.result, {
+            prompt: messageText,
+          }),
+        ];
 
         if (!hasDelta) {
           const finalText = String(streamed.result.finalOutput || '').trim();
-          assistantText = finalText || '我已收到你的请求，但当前没有生成有效回复。';
-          writeDelta(finalText || '我已收到你的请求，但当前没有生成有效回复。');
+          const fallbackText = generatedImages.length > 0
+            ? '图片已生成'
+            : '我已收到你的请求，但当前没有生成有效回复。';
+          assistantText = finalText || fallbackText;
+          writeDelta(finalText || fallbackText);
         }
 
         const normalizedAssistantText = String(assistantText || '').trim();
         if (normalizedAssistantText) {
           appendAiConversationMessage(conversationId, {
             role: 'assistant',
-            content: { text: normalizedAssistantText },
+            content: {
+              text: normalizedAssistantText,
+              ...(generatedImages.length > 0 ? { images: generatedImages } : {}),
+            },
             metadata: {
               capability: streamed.capability,
-              toolNames: streamed.tool_names || [],
+              toolNames: [
+                ...(streamed.tool_names || []),
+                ...(generatedImages.length > 0 ? ['image_generation'] : []),
+              ],
             },
           }, { user: request.adminUser });
         }
       } catch (error) {
         console.error('AI chat error:', error);
-        writeDelta(formatAiError(error));
+        const errorText = formatAiError(error);
+        writeDelta(errorText);
+        appendAiConversationMessage(conversationId, {
+          role: 'assistant',
+          content: { text: errorText },
+          metadata: {
+            capability: capabilityKey || 'general_chat',
+            error: true,
+          },
+        }, { user: request.adminUser });
       }
     });
   });

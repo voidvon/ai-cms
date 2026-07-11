@@ -14,6 +14,7 @@ import type {
   AiChatCapabilityDefinition,
   AiConversationMessageRecord,
   AiConversationRecord,
+  AiGeneratedImage,
   AiMentionItem,
 } from '@/types'
 
@@ -44,7 +45,7 @@ function toShellMessages(messages: any[]): ChatWorkspaceShellMessage[] {
     role: message.role === 'assistant' ? 'assistant' : 'user',
     text: extractMessageText(message.parts) || String(message.text || message.content?.text || ''),
     parts: Array.isArray(message.parts) ? message.parts : [],
-    metadata: normalizeChatMessageMetadata(message.metadata),
+    metadata: normalizeChatMessageMetadata(message.metadata, message.content?.images),
   }))
 }
 
@@ -57,23 +58,27 @@ function extractMessageText(parts: any[] = []) {
 
 function getMessagesContentSignature(messages: any[] = []) {
   return messages
-    .map((message) => `${message.role}:${extractMessageText(message.parts) || String(message.text || message.content?.text || '')}`)
+    .map((message) => {
+      const text = extractMessageText(message.parts) || String(message.text || message.content?.text || '')
+      const images = Array.isArray(message.content?.images)
+        ? message.content.images.map((image: AiGeneratedImage) => image.relative_path).join(',')
+        : ''
+      return `${message.role}:${text}:${images}`
+    })
     .join('|')
 }
 
-function normalizeChatMessageMetadata(metadata: unknown) {
-  if (!metadata || typeof metadata !== 'object') {
-    return undefined
-  }
-
-  const value = metadata as {
+function normalizeChatMessageMetadata(metadata: unknown, contentImages?: unknown) {
+  const value = metadata && typeof metadata === 'object' ? metadata as {
     displayParts?: AiConversationDisplayPart[]
     mentions?: AiMentionItem[]
-  }
+  } : {}
+  const images = Array.isArray(contentImages) ? contentImages as AiGeneratedImage[] : []
 
   return {
     ...(Array.isArray(value.displayParts) ? { displayParts: value.displayParts } : {}),
     ...(Array.isArray(value.mentions) ? { mentions: value.mentions } : {}),
+    ...(images.length > 0 ? { images } : {}),
   }
 }
 
@@ -96,6 +101,7 @@ function toChatMessagesFromRecords(records: AiConversationMessageRecord[]) {
         id: String(message.id),
         role: message.role,
         parts: [{ type: 'text', text }],
+        content: message.content,
         ...(message.metadata ? { metadata: message.metadata } : {}),
       }
     })
@@ -407,7 +413,7 @@ export default function AiConversationPage() {
         messages={shellMessages}
         sidebarPosition="left"
         emptyTitle="开始新的 AI 对话"
-        emptyDescription="当前入口以栏目内容查询和价格查询两类工具为主。"
+        emptyDescription="可以直接对话，也可以描述你想生成的图片。"
         sidebar={sidebar}
         statusBadges={[
           { key: 'capability', label: `能力：${activeCapabilityLabel}` },
@@ -416,7 +422,7 @@ export default function AiConversationPage() {
         ].filter(Boolean) as Array<{ key: string; label: string; tone?: 'default' | 'outline' | 'secondary' }>}
         composer={(
           <AiConversationComposer
-            placeholder="问问AI，@ 搜索栏目或信息。"
+            placeholder="问问AI，或描述你想生成的图片。"
             availableTools={[]}
             selectedToolNames={[]}
             enableTools={false}

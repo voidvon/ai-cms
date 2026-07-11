@@ -1,4 +1,8 @@
 import { createAiAgent } from '../runtime.mjs';
+import {
+  createImageGenerationHostedTool,
+  createPreviousGeneratedImageEditTool,
+} from '../image-generation.mjs';
 import { capabilityRegistry } from '../core/capability-registry.mjs';
 
 /**
@@ -20,7 +24,8 @@ export const generalChatCapability = {
   },
 
   // 创建 Agent
-  createAgent: ({ tools, instructions }) => {
+  createAgent: ({ tools, instructions, latestGeneratedImage, message }) => {
+    const previousImageTool = createPreviousGeneratedImageEditTool(latestGeneratedImage, { prompt: message });
     return createAiAgent({
       name: 'General AI Assistant',
       instructions:
@@ -37,7 +42,11 @@ export const generalChatCapability = {
           '如果用户请求联系方式、分类列表、新闻文章或其他未接入工具的数据，要明确说明当前入口暂不支持。',
           '保持友好、专业的语气，给出简洁明了的回复。',
         ].join('\n'),
-      tools: tools || [],
+      tools: [
+        ...(tools || []),
+        ...(previousImageTool ? [previousImageTool] : []),
+        createImageGenerationHostedTool(),
+      ],
     });
   },
 
@@ -110,6 +119,14 @@ export const generalChatCapability = {
       }
     }
 
+    if (context.latestGeneratedImage?.asset_id) {
+      parts.push([
+        '会话中有一张可按需编辑的最近生成图片，但当前尚未把图片内容发送给模型。',
+        '请根据用户本轮意图自行判断：若用户要求修改、延续或重绘上一张图片，调用 edit_previous_generated_image；该工具会加载并编辑图片，不要再调用 image_generation 重复生成。',
+        '若用户在普通问答或要求生成一张无关的新图片，不要调用 edit_previous_generated_image。不要仅凭固定关键词判断，要结合本轮表达和对话语境。',
+      ].join('\n'));
+    }
+
     // 根据对话历史调整指令
     if (context.conversationHistory?.topics) {
       const topics = context.conversationHistory.topics;
@@ -122,6 +139,7 @@ export const generalChatCapability = {
     }
 
     parts.push('当用户提供公开网址并要求查看网页内容时，优先使用 fetch_url；不要声称已浏览未通过工具读取的网址。');
+    parts.push('当用户明确要求生成图片时，调用 image_generation 工具；普通问答不要调用该工具。');
     parts.push('当用户询问被 @信息 引用的内容详情时，不要只根据标题或摘要猜测；优先使用已提供的详情上下文。');
     parts.push('当用户要求修改内容时，只能在用户明确表达修改意图时调用写入工具；目标语言必须匹配数据库语言 code/name/native_name，无法确定语言或新标题时先追问。');
     parts.push('当前入口以栏目、内容、价格和公开网页读取为主，不提供联系方式等其他未接入工具。');

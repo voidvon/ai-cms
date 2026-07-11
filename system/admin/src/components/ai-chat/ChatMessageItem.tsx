@@ -6,6 +6,8 @@ import {
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning";
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
+import { Download } from "lucide-react";
+import { resolveAssetUrl } from "@/lib/assets";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import {
   Source,
@@ -21,7 +23,7 @@ import {
   ToolOutput,
 } from "@/components/ai-elements/tool";
 import { AnimatedMessageResponse } from "@/components/ai-chat/AnimatedMessageResponse";
-import type { AiMentionItem } from "@/types";
+import type { AiGeneratedImage, AiMentionItem } from "@/types";
 import type {
   DynamicToolUIPart,
   SourceDocumentUIPart,
@@ -44,6 +46,7 @@ export type ChatMessageMetadata = {
   displayParts?: AiConversationDisplayPart[];
   mentions?: AiMentionItem[];
   toolNames?: string[];
+  images?: AiGeneratedImage[];
 };
 
 export type ChatMessageItemProps = {
@@ -82,6 +85,7 @@ export function ChatMessageItem({
   const isReasoningStreaming = reasoningParts.some(
     (part) => part.state === "streaming"
   );
+  const images = Array.isArray(metadata?.images) ? metadata.images : [];
 
   return (
     <Message from={role}>
@@ -113,6 +117,30 @@ export function ChatMessageItem({
           <AnimatedMessageResponse animate={false} text={normalizedText} />
         )}
       </MessageContent>
+
+      {images.length > 0 ? (
+        <div className="grid w-full max-w-3xl grid-cols-1 gap-3 sm:grid-cols-2">
+          {images.map((image) => {
+            const src = resolveAssetUrl(image.relative_path, { publicUrl: image.public_url });
+            return (
+              <figure key={`${image.asset_id}:${image.relative_path}`} className="group relative overflow-hidden border bg-muted/20">
+                <a href={src} target="_blank" rel="noreferrer" title="打开原图">
+                  <img src={src} alt={image.alt || "AI 生成图片"} className="aspect-square w-full object-contain" />
+                </a>
+                <a
+                  href={src}
+                  download
+                  title="下载图片"
+                  aria-label="下载图片"
+                  className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-md bg-background/90 text-foreground opacity-0 shadow-sm transition hover:bg-background group-hover:opacity-100 focus:opacity-100"
+                >
+                  <Download className="h-4 w-4" />
+                </a>
+              </figure>
+            );
+          })}
+        </div>
+      ) : null}
 
       {isAssistant && reasoningText ? (
         <Reasoning defaultOpen={isReasoningStreaming} isStreaming={isReasoningStreaming}>

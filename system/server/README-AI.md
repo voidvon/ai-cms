@@ -16,6 +16,7 @@
 - `OPENAI_AI_MODEL`
 - `OPENAI_DEFAULT_MODEL`
 - `OPENAI_CONTRACT_MODEL`
+- `OPENAI_IMAGE_MODEL`（可选的 GPT Image 工具模型；未配置时由 Responses 自动选择）
 
 默认模型优先级：
 
@@ -27,6 +28,8 @@
 ## 当前状态
 
 - 统一入口：`AI 对话`
+- `/admin/ai` 的 Responses 对话会自动判断是否调用文生图工具；生成图片保存到媒体库
+- 生成图片后的后续请求先由 Responses 判断意图，仅在需要编辑时调用工具加载最近图片
 - 当前默认对话能力：`contract_copilot`
 - 任务能力：`contract_draft`、`price_query`、`knowledge_qa`、`export_pdf`
 - `export_pdf` 当前输出 HTML 占位文件到 `/uploads/pdfs/`

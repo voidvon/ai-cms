@@ -62,6 +62,15 @@ const PURPOSE_TARGETS = {
     sourceMaxSizeKb: IMAGE_UPLOAD_SOURCE_MAX_SIZE_KB,
     maxSizeKb: UPLOAD_MAX_SIZE_KB,
   },
+  ai_generated_image: {
+    purpose: 'ai_generated_image',
+    mimeFallback: 'image/png',
+    bucket: 'images',
+    root: UPLOADS_IMAGES_ROOT,
+    allowedExtensions: UPLOAD_ALLOWED_EXTENSIONS,
+    sourceMaxSizeKb: IMAGE_UPLOAD_SOURCE_MAX_SIZE_KB,
+    maxSizeKb: UPLOAD_MAX_SIZE_KB,
+  },
   attachment: {
     purpose: 'attachment',
     mimeFallback: 'application/octet-stream',

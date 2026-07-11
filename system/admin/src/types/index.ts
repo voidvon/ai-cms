@@ -646,6 +646,7 @@ export interface AiConversationMessageRecord {
   role: 'user' | 'assistant' | 'system' | 'tool';
   content: {
     text?: string;
+    images?: AiGeneratedImage[];
     [key: string]: unknown;
   };
   metadata: {
@@ -656,6 +657,14 @@ export interface AiConversationMessageRecord {
     [key: string]: unknown;
   };
   created_at: string;
+}
+
+export interface AiGeneratedImage {
+  asset_id: number;
+  relative_path: string;
+  public_url?: string;
+  mime_type?: string;
+  alt?: string;
 }
 
 export type AiConversationDisplayPart =

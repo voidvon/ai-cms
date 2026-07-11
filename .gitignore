@@ -2,6 +2,7 @@
 .codex/*
 !.codex/skills/
 !.codex/skills/**
+.DS_Store
 .codex/skills/ui-ux-pro-max/
 .seo-cache/
 __pycache__/
