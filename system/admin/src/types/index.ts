@@ -673,7 +673,7 @@ export type AiConversationDisplayPart =
   | { type: 'tool'; name: string; category?: string };
 
 export interface AiMentionItem {
-  type: 'column' | 'content';
+  type: 'column' | 'content' | 'topic';
   id: number;
   title: string;
   subtitle?: string;
@@ -682,6 +682,8 @@ export interface AiMentionItem {
   column_name?: string;
   code?: string;
   summary?: string;
+  language_code?: string;
+  topic_keyword?: string;
 }
 
 export interface AiTaskResult {

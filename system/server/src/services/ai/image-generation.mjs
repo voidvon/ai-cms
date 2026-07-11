@@ -67,6 +67,84 @@ export function createPreviousGeneratedImageEditTool(imageContext, { prompt } = 
   });
 }
 
+export function createUploadedImagesEditTool(uploadContext, { prompt } = {}) {
+  if (!Array.isArray(uploadContext?.images) || uploadContext.images.length === 0) {
+    return null;
+  }
+
+  return tool({
+    name: 'edit_uploaded_images',
+    description: '当用户要求根据本轮上传的一张或多张图片进行修改、组合、重绘或风格变换时调用。该工具会同时读取本轮全部上传图片；普通问答或生成无关新图片时不要调用。',
+    parameters: z.object({}),
+    strict: true,
+    async execute() {
+      const sourceImages = uploadContext.images
+        .map((image) => readGeneratedImageAsDataUrl(image.asset_id))
+        .filter(Boolean);
+      if (sourceImages.length === 0) {
+        return { type: 'text', text: '本轮上传的图片已不存在，无法进行编辑。' };
+      }
+
+      const response = await getOpenAIClient().responses.create({
+        model: DEFAULT_MODEL,
+        input: [{
+          role: 'user',
+          content: [
+            {
+              type: 'input_text',
+              text: `请使用本轮提供的 ${sourceImages.length} 张输入图片，按照用户要求进行编辑或组合，并尽量保留未被要求改变的内容：\n${normalizeText(prompt)}`,
+            },
+            ...sourceImages.map((imageUrl) => ({
+              type: 'input_image',
+              image_url: imageUrl,
+              detail: 'high',
+            })),
+          ],
+        }],
+        tools: [{ type: 'image_generation', action: 'edit' }],
+        tool_choice: { type: 'image_generation' },
+        store: false,
+      });
+      const imageOutput = response.output?.find((item) => item?.type === 'image_generation_call' && item.result);
+      if (!imageOutput?.result) {
+        return { type: 'text', text: '图片编辑服务没有返回新的图片。' };
+      }
+
+      const generatedImage = await saveGeneratedImageBase64(imageOutput.result, prompt);
+      uploadContext.generated_images.push(generatedImage);
+      return {
+        type: 'image',
+        image: `data:image/png;base64,${normalizeBase64Image(imageOutput.result)}`,
+        detail: 'high',
+      };
+    },
+  });
+}
+
+export function loadUploadedImageContext(inputImages) {
+  const images = [];
+  const seen = new Set();
+  for (const input of Array.isArray(inputImages) ? inputImages.slice(0, 8) : []) {
+    const assetId = Number.parseInt(String(input?.asset_id || input?.id || ''), 10);
+    if (!Number.isFinite(assetId) || assetId <= 0 || seen.has(assetId)) {
+      continue;
+    }
+    const asset = getMediaAssetById(assetId);
+    if (!asset?.file_exists || asset.purpose !== 'ai_input_image') {
+      continue;
+    }
+    seen.add(assetId);
+    images.push({
+      asset_id: asset.id,
+      relative_path: asset.relative_path,
+      public_url: asset.public_url,
+      mime_type: asset.mime_type,
+      alt: normalizeText(input?.alt) || normalizeText(asset.original_name) || '用户上传图片',
+    });
+  }
+  return images.length > 0 ? { images, generated_images: [] } : null;
+}
+
 export function loadLatestGeneratedImageContext(conversationId, { user } = {}) {
   const messages = listAiConversationMessages(conversationId, { user, limit: 20 })
     .filter((message) => message.role === 'user' || message.role === 'assistant');
@@ -98,10 +176,6 @@ function findLatestUsableImageMessage(messages) {
     if (Array.isArray(message.content?.images) && message.content.images.length > 0) {
       return message;
     }
-    if (message.metadata?.error === true) {
-      continue;
-    }
-    return null;
   }
   return null;
 }

@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Loader2, Pencil, RefreshCw, Trash2 } from 'lucide-react'
 import { contentModelsApi } from '@/api/advanced'
 import { columnsApi } from '@/api/columns'
 import { contentItemsApi } from '@/api/content-items'
+import { staticGenerationApi } from '@/api/static-generation'
 import { languagesApi } from '@/api/languages'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -145,11 +147,27 @@ export default function ContentModelDataPage({
     },
   })
 
+  const regenerateMutation = useMutation({
+    mutationFn: async ({ modelCode, id }: { modelCode: string; id: number }) => staticGenerationApi.regenerateContentItem(modelCode, id),
+    onSuccess: (result) => {
+      const languageCount = result.data?.languageCodes.length || 0
+      const skippedCount = result.data?.skippedLanguageCodes.length || 0
+      if (languageCount > 0) {
+        toast.success(`静态页面已刷新，共 ${languageCount} 个语言版本${skippedCount > 0 ? `，跳过 ${skippedCount} 个缺少翻译的语言` : ''}`)
+        return
+      }
+      toast.warning('当前信息没有可发布的语言版本，已清理旧静态页面')
+    },
+    onError: (error: any) => {
+      toast.error(error.response?.data?.message || error.message || '静态页面刷新失败')
+    },
+  })
+
   const items = itemsData?.items || []
   const pagination = itemsData?.pagination
   const titleFieldName = fieldMap.has('title') ? 'title' : 'name'
   const titleFieldLabel = getFieldLabel(fieldMap, titleFieldName, titleFieldName === 'title' ? '标题' : '名称')
-  const showCode = fieldMap.has('code')
+  const showCode = fieldMap.has('code') && selectedModel.code !== 'product'
   const showFeatured = fieldMap.has('is_featured_home')
   const showVisibility = fieldMap.has('is_visible')
   const showSortOrder = fieldMap.has('sort_order')
@@ -183,6 +201,10 @@ export default function ContentModelDataPage({
 
   const handleDelete = (item: ListedContentItem) => {
     setDeleteTarget(item)
+  }
+
+  const handleRegenerate = (item: ListedContentItem) => {
+    regenerateMutation.mutate({ modelCode: selectedModel.code, id: item.id })
   }
 
   const confirmDelete = () => {
@@ -307,8 +329,36 @@ export default function ContentModelDataPage({
                       {showSortOrder ? <TableCell>{Number(item.sort_order || 0)}</TableCell> : null}
                       {showCreatedAt ? <TableCell>{formatDate(resolveCreatedAt(item))}</TableCell> : null}
                       <TableCell className="text-right">
-                        <Button variant="ghost" size="sm" onClick={() => handleEdit(item)}>编辑</Button>
-                        <Button variant="destructiveGhost" size="sm" onClick={() => handleDelete(item)}>删除</Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => handleRegenerate(item)}
+                          disabled={regenerateMutation.isPending}
+                          title="重新生成所有语言的静态页面"
+                          aria-label="刷新静态页面"
+                        >
+                          {regenerateMutation.isPending && regenerateMutation.variables?.id === item.id
+                            ? <Loader2 className="animate-spin" />
+                            : <RefreshCw />}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => handleEdit(item)}
+                          title="编辑"
+                          aria-label="编辑"
+                        >
+                          <Pencil />
+                        </Button>
+                        <Button
+                          variant="destructiveGhost"
+                          size="icon-sm"
+                          onClick={() => handleDelete(item)}
+                          title="删除"
+                          aria-label="删除"
+                        >
+                          <Trash2 />
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))

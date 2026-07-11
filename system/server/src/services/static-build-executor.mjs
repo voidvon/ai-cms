@@ -69,6 +69,9 @@ function spawnStaticBuildProcess(options, state) {
   if (options.languageCode) {
     args.push(`--language=${options.languageCode}`);
   }
+  if (options.contentItemId) {
+    args.push(`--content-id=${options.contentItemId}`);
+  }
   if (options.outputRoot) {
     args.push(`--output-dir=${options.outputRoot}`);
   }
@@ -194,9 +197,15 @@ function normalizeBuildOptions(options) {
       ? options.sections.map((item) => String(item || '').trim()).filter(Boolean)
       : [],
     languageCode: normalizeOptionalString(options.languageCode),
+    contentItemId: normalizePositiveInteger(options.contentItemId),
     outputRoot: normalizeOptionalString(options.outputRoot),
     cleanExisting: options.cleanExisting === undefined ? true : Boolean(options.cleanExisting)
   };
+}
+
+function normalizePositiveInteger(value) {
+  const normalized = Number.parseInt(value, 10);
+  return Number.isInteger(normalized) && normalized > 0 ? normalized : null;
 }
 
 function normalizeOptionalString(value) {

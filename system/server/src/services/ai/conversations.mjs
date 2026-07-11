@@ -41,6 +41,13 @@ export function ensureAiConversationsSchema() {
 
     CREATE INDEX IF NOT EXISTS idx_ai_conversation_messages_conversation_created
       ON ai_conversation_messages(conversation_id, created_at ASC, id ASC);
+
+    DELETE FROM ai_conversation_messages
+    WHERE conversation_id IN (
+      SELECT id FROM ai_conversations WHERE deleted_at IS NOT NULL
+    );
+
+    DELETE FROM ai_conversations WHERE deleted_at IS NOT NULL;
   `);
 
   schemaEnsured = true;
@@ -209,14 +216,20 @@ export function deleteAiConversation(id, { user } = {}) {
     return false;
   }
 
-  execute(
-    `
-      UPDATE ai_conversations
-      SET deleted_at = ?, updated_at = ?
-      WHERE id = ? AND user_id = ?
-    `,
-    [new Date().toISOString(), new Date().toISOString(), existing.id, existing.user_id]
-  );
+  const db = getDb();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    db.prepare(
+      'DELETE FROM ai_conversation_messages WHERE conversation_id = ? AND user_id = ?'
+    ).run(existing.id, existing.user_id);
+    db.prepare(
+      'DELETE FROM ai_conversations WHERE id = ? AND user_id = ?'
+    ).run(existing.id, existing.user_id);
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
   return true;
 }
 
@@ -306,6 +319,20 @@ export function replaceAiConversationMessages(conversationId, messages = [], { u
   }
 
   return listAiConversationMessages(conversation.id, { user });
+}
+
+export function clearAiConversationMessages(conversationId, { user } = {}) {
+  ensureAiConversationsSchema();
+  const conversation = getAiConversationById(conversationId, { user });
+  if (!conversation) {
+    return false;
+  }
+
+  execute(
+    'DELETE FROM ai_conversation_messages WHERE conversation_id = ? AND user_id = ?',
+    [conversation.id, conversation.user_id]
+  );
+  return true;
 }
 
 function hydrateConversation(row) {

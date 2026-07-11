@@ -71,6 +71,15 @@ const PURPOSE_TARGETS = {
     sourceMaxSizeKb: IMAGE_UPLOAD_SOURCE_MAX_SIZE_KB,
     maxSizeKb: UPLOAD_MAX_SIZE_KB,
   },
+  ai_input_image: {
+    purpose: 'ai_input_image',
+    mimeFallback: 'image/png',
+    bucket: 'images',
+    root: UPLOADS_IMAGES_ROOT,
+    allowedExtensions: UPLOAD_ALLOWED_EXTENSIONS,
+    sourceMaxSizeKb: IMAGE_UPLOAD_SOURCE_MAX_SIZE_KB,
+    maxSizeKb: UPLOAD_MAX_SIZE_KB,
+  },
   attachment: {
     purpose: 'attachment',
     mimeFallback: 'application/octet-stream',
@@ -81,6 +90,8 @@ const PURPOSE_TARGETS = {
     maxSizeKb: ATTACHMENT_UPLOAD_MAX_SIZE_KB,
   },
 };
+
+const CONVERTIBLE_IMAGE_EXTENSIONS = new Set(['.heic', '.heif']);
 
 let schemaEnsured = false;
 
@@ -127,7 +138,7 @@ export async function uploadMediaAsset({ buffer, originalFilename, purpose }) {
     throw new Error('uploaded file exceeds size limit');
   }
 
-  const stored = target.bucket === 'images'
+  const stored = target.bucket === 'images' || CONVERTIBLE_IMAGE_EXTENSIONS.has(extension)
     ? await optimizeUploadedImage({ buffer, extension })
     : {
       buffer,
@@ -444,6 +455,7 @@ function findMediaAssetUsageReferences(asset) {
   const scanTargets = [
     { table: 'columns', label: '栏目', columns: ['name'], scanColumns: ['images'] },
     { table: 'document_stamps', label: '文档印章', columns: ['name'], scanColumns: ['image_path'] },
+    { table: 'ai_conversation_messages', label: 'AI 会话消息', columns: ['conversation_id'], scanColumns: ['content_json'] },
     { table: 'site_config', label: '站点配置', columns: [], scanColumns: null },
     { table: 'site_config_translations', label: '站点配置翻译', columns: [], scanColumns: null },
     { table: 'templates', label: '模板', columns: ['name', 'code'], scanColumns: ['tsx_source', 'css_source', 'published_tsx_source', 'published_css_source'] },

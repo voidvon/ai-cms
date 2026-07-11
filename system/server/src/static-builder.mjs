@@ -159,13 +159,16 @@ function resolveManagedColumnModelCode(rootColumn) {
   return modelCode;
 }
 
-function listManagedColumnItems(rootColumn, { languageCode = null, visibleOnly = false, limit = 10000, featured = false } = {}) {
-  return listContentItems(resolveManagedColumnModelCode(rootColumn), {
+function listManagedColumnItems(rootColumn, { languageCode = null, visibleOnly = false, limit = 10000, featured = false, includeLanguageFallback = false } = {}) {
+  const items = listContentItems(resolveManagedColumnModelCode(rootColumn), {
     featured,
     visibleOnly,
     limit,
     languageCode
   });
+  return includeLanguageFallback
+    ? items
+    : items.filter(isCurrentLanguageContentItem);
 }
 
 function resolveManagedColumnDisplayName(templateContextOrSite = null) {
@@ -197,13 +200,19 @@ function getManagedColumnRootOutputDir(rootColumn) {
   return String(getManagedColumnRootPath(rootColumn)).replace(/^\/+|\/+$/g, '');
 }
 
-function getSectionEntries(templateContext, section) {
+function getSectionEntries(templateContext, section, { includeLanguageFallback = false } = {}) {
   const rootColumnId = normalizeInteger(section?.rootColumnId, 0);
   if (rootColumnId <= 0) {
     return [];
   }
   const entries = templateContext.sectionEntriesByRootId?.get(rootColumnId) || [];
-  return entries.slice();
+  return includeLanguageFallback
+    ? entries.slice()
+    : entries.filter(isCurrentLanguageContentItem);
+}
+
+function isCurrentLanguageContentItem(item) {
+  return !Boolean(item?.is_language_fallback);
 }
 
 function buildSectionCategoryUrl(dirName, columnNode) {
@@ -440,7 +449,7 @@ function sanitizeRenderGroupPart(value) {
     .replace(/^-+|-+$/g, '');
 }
 
-export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cleanExisting = false, languageCode = null, onProgress = null } = {}) {
+export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cleanExisting = false, languageCode = null, contentItemId = null, onProgress = null } = {}) {
   const previousReporter = globalStaticBuildProgressReporter;
   const previousState = globalStaticBuildProgressState;
   globalStaticBuildProgressReporter = typeof onProgress === 'function' ? onProgress : null;
@@ -527,6 +536,7 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
         outputRoot: normalizedOutputRoot,
         languageCode: language.code,
         templateContext,
+        idRange: normalizeContentItemIdRange(contentItemId),
         finalizeAssets: false
       });
       const elapsedMs = Date.now() - startedAt;
@@ -723,9 +733,10 @@ function listStaticBuildTargetDefinitions({ columns = null } = {}) {
         group: '内容页',
         label: `生成内容页: ${rootColumn.name || '栏目'}`,
         value: `column:${rootColumn.id}:detail`,
-        execute: ({ outputRoot, languageCode, finalizeAssets }) => buildManagedColumnContentPages({
+        execute: ({ outputRoot, languageCode, idRange, finalizeAssets }) => buildManagedColumnContentPages({
           outputRoot,
           languageCode,
+          idRange,
           rootColumn,
           finalizeAssets
         })
@@ -748,7 +759,7 @@ function listStaticBuildTargetDefinitions({ columns = null } = {}) {
       label: `生成内容页: ${section.sectionLabel}`,
       value: `column:${section.rootColumnId}:detail`,
       aliases: [`${section.dirName}-details`],
-      execute: ({ outputRoot, languageCode, finalizeAssets }) => buildSectionContentPages({ outputRoot, languageCode, section, finalizeAssets })
+      execute: ({ outputRoot, languageCode, idRange, finalizeAssets }) => buildSectionContentPages({ outputRoot, languageCode, idRange, section, finalizeAssets })
     })
     ]));
 
@@ -1340,8 +1351,16 @@ export function buildManagedColumnContentPages({ outputRoot = DEFAULT_OUTPUT_ROO
   if (targetRootColumn && isTopicManagedColumn(targetRootColumn)) {
     return createBuildResult(`column:${targetRootColumn.id}:detail`, `${targetRootColumn?.name || '栏目'}内容页`, 0, 0);
   }
-  const managedItems = filterByIdRange(
-    listManagedColumnItems(targetRootColumn, { visibleOnly: false, limit: 10000, languageCode }),
+  const queriedManagedItems = listManagedColumnItems(targetRootColumn, {
+    visibleOnly: false,
+    limit: 10000,
+    languageCode,
+    includeLanguageFallback: true
+  });
+  const allManagedItems = queriedManagedItems.filter(isCurrentLanguageContentItem);
+  const managedItems = filterByIdRange(allManagedItems, idRange);
+  const fallbackManagedItems = filterByIdRange(
+    queriedManagedItems.filter((item) => !isCurrentLanguageContentItem(item)),
     idRange
   );
 
@@ -1350,7 +1369,7 @@ export function buildManagedColumnContentPages({ outputRoot = DEFAULT_OUTPUT_ROO
     templateContext.columns.map(col => [normalizeInteger(col.id, 0), col])
   );
 
-  const managedItemsByColumn = groupBy(managedItems, (item) => normalizeInteger(item.column_id, 0));
+  const managedItemsByColumn = groupBy(allManagedItems, (item) => normalizeInteger(item.column_id, 0));
   const columnMap = new Map(templateContext.managedColumnCategories.map((item) => [normalizeInteger(item.id, 0), item]));
   let filesWritten = 0;
   const renderGroup = buildColumnRenderGroup({
@@ -1358,6 +1377,15 @@ export function buildManagedColumnContentPages({ outputRoot = DEFAULT_OUTPUT_ROO
     pageKind: 'detail',
     fallbackKey: 'managed-column-detail'
   });
+
+  for (const fallbackItem of fallbackManagedItems) {
+    const columnNode = columnMap.get(normalizeInteger(fallbackItem.column_id, 0)) || null;
+    const columnSlugPath = columnNode ? buildColumnSlugPath(columnNode, columnMap) : null;
+    removeStaticOutputFile(
+      outputRoot,
+      buildContentDetailPathFromColumn(fallbackItem, columnNode, columnSlugPath)
+    );
+  }
 
   for (const managedItem of managedItems) {
     const siblingManagedItems = (managedItemsByColumn.get(normalizeInteger(managedItem.column_id, 0)) || []).filter((item) => item.id !== managedItem.id);
@@ -1593,11 +1621,16 @@ function buildSectionDetailPagesByDir({
     section.rootColumnId
   ));
   const columnMap = new Map(templateContext.sectionCategories.map((item) => [item.id, item]));
-  const allItems = getSectionEntries(templateContext, section)
+  const queriedItems = getSectionEntries(templateContext, section, { includeLanguageFallback: true })
     .filter((item) => allowedColumnIds.has(normalizeInteger(item.column_id, 0)))
     .slice()
     .sort((left, right) => left.id - right.id);
+  const allItems = queriedItems.filter(isCurrentLanguageContentItem);
   const items = filterByIdRange(allItems, idRange);
+  const fallbackItems = filterByIdRange(
+    queriedItems.filter((item) => !isCurrentLanguageContentItem(item)),
+    idRange
+  );
   const columnBuckets = groupBy(allItems, (item) => normalizeInteger(item.column_id, 0));
   let filesWritten = 0;
   const renderGroup = buildColumnRenderGroup({
@@ -1605,6 +1638,15 @@ function buildSectionDetailPagesByDir({
     pageKind: 'detail',
     fallbackKey: `${section?.dirName || 'section'}-detail`
   });
+
+  for (const fallbackItem of fallbackItems) {
+    const columnNode = columnMap.get(normalizeInteger(fallbackItem.column_id, 0));
+    const columnPath = buildRelativeCategoryPathFromRoutePath(columnNode?.route_path, `/${dirName}/`);
+    removeStaticOutputFile(
+      outputRoot,
+      buildContentDetailPathFromColumn(fallbackItem, columnNode, columnPath)
+    );
+  }
 
   for (const item of items) {
     const siblings = (columnBuckets.get(normalizeInteger(item.column_id, 0)) || []).slice().sort((left, right) => left.id - right.id);
@@ -2095,7 +2137,7 @@ function buildLegacyHomePageProps(templateContext) {
     ? listManagedColumnItems(templateContext.managedColumnRoot, {
       featured: true,
       visibleOnly: true,
-      limit: 8,
+      limit: 10000,
       languageCode: templateContext.languageCode
     })
     : [])
@@ -2156,8 +2198,8 @@ function buildLegacyHomePageProps(templateContext) {
     }),
     secondaryMenuItems: buildLegacyRootColumnMenuItems(templateContext.columns, templateContext),
     newsIndexHtml: buildLegacyIndexNews(templateContext.site),
-    featuredManagedItemsHtml: buildLegacyIndexFeaturedManagedItems(templateContext.site),
-    featuredManagedItemLinksHtml: buildLegacyIndexFeaturedManagedItemLinks(templateContext.site),
+    featuredManagedItemsHtml: buildLegacyIndexFeaturedManagedItems(templateContext),
+    featuredManagedItemLinksHtml: buildLegacyIndexFeaturedManagedItemLinks(templateContext),
     serviceIndexHtml: buildLegacyServiceIndex(templateContext.site),
     homeFeaturedManagedItems: featuredManagedItems,
     homeNewsItems,
@@ -4504,10 +4546,12 @@ function buildLegacyRelatedManagedItems(items, templateContext = null) {
   return html;
 }
 
-function buildLegacyIndexFeaturedManagedItems(site = null) {
-  const managedColumnRoot = findManagedColumnRoot(filterPublicSectionColumns(listColumns()));
+function buildLegacyIndexFeaturedManagedItems(templateContext = null) {
+  const site = templateContext?.site || null;
+  const languageCode = templateContext?.languageCode || null;
+  const managedColumnRoot = findManagedColumnRoot(filterPublicSectionColumns(listColumns({ languageCode })));
   const items = managedColumnRoot
-    ? listManagedColumnItems(managedColumnRoot, { featured: true, visibleOnly: true, limit: 8 }).slice(0, 8)
+    ? listManagedColumnItems(managedColumnRoot, { featured: true, visibleOnly: true, limit: 10000, languageCode }).slice(0, 8)
     : [];
 
   let html = '';
@@ -4520,10 +4564,12 @@ function buildLegacyIndexFeaturedManagedItems(site = null) {
   return html;
 }
 
-function buildLegacyIndexFeaturedManagedItemLinks(site = null) {
-  const managedColumnRoot = findManagedColumnRoot(filterPublicSectionColumns(listColumns()));
+function buildLegacyIndexFeaturedManagedItemLinks(templateContext = null) {
+  const site = templateContext?.site || null;
+  const languageCode = templateContext?.languageCode || null;
+  const managedColumnRoot = findManagedColumnRoot(filterPublicSectionColumns(listColumns({ languageCode })));
   const items = managedColumnRoot
-    ? listManagedColumnItems(managedColumnRoot, { featured: true, visibleOnly: true, limit: 32 })
+    ? listManagedColumnItems(managedColumnRoot, { featured: true, visibleOnly: true, limit: 10000, languageCode })
       .slice()
       .sort((left, right) => normalizeInteger(left.id, 0) - normalizeInteger(right.id, 0))
       .slice(0, 32)
@@ -4861,6 +4907,20 @@ function writeTextFile(outputRoot, relativePath, content, site = null) {
   });
 }
 
+function removeStaticOutputFile(outputRoot, relativePath) {
+  const filePath = path.resolve(outputRoot, relativePath);
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+    return false;
+  }
+  fs.unlinkSync(filePath);
+  reportStaticBuildProgress('file_removed', {
+    fileType: 'html',
+    relativePath: normalizeStaticBuildRelativePath(relativePath),
+    absolutePath: filePath
+  });
+  return true;
+}
+
 function syncStaticSupportAssets(sharedRoot, outputRoot) {
   const resolvedSharedRoot = path.resolve(sharedRoot);
   const resolvedOutputRoot = path.resolve(outputRoot);
@@ -5009,6 +5069,13 @@ function filterByIdRange(items, idRange) {
   const start = idRange.start == null ? Number.MIN_SAFE_INTEGER : normalizeInteger(idRange.start, Number.MIN_SAFE_INTEGER);
   const end = idRange.end == null ? Number.MAX_SAFE_INTEGER : normalizeInteger(idRange.end, Number.MAX_SAFE_INTEGER);
   return items.filter((item) => item.id >= start && item.id <= end);
+}
+
+function normalizeContentItemIdRange(contentItemId) {
+  const normalizedId = Number.parseInt(contentItemId, 10);
+  return Number.isInteger(normalizedId) && normalizedId > 0
+    ? { start: normalizedId, end: normalizedId }
+    : null;
 }
 
 function createBuildResult(key, label, recordsProcessed, filesWritten) {

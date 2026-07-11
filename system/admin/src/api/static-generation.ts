@@ -65,6 +65,16 @@ export interface DatabaseCheckpointResult {
   } | null
 }
 
+export interface ContentItemStaticBuildResult {
+  contentItemId: number
+  modelCode: string
+  section: string
+  languageCodes: string[]
+  skippedLanguageCodes: string[]
+  totalFiles: number
+  totalRecords: number
+}
+
 export interface StaticBuildStreamHandlers {
   onStarted?: (data: { section: string; normalizedSection: string; languageCode?: string | null }) => void
   onProgress?: (event: StaticBuildProgressEvent) => void
@@ -78,6 +88,15 @@ const staticGenerationClient = axios.create({
 })
 
 export const staticGenerationApi = {
+  async regenerateContentItem(modelCode: string, id: number) {
+    const response = await staticGenerationClient.post<{
+      success: boolean
+      data?: ContentItemStaticBuildResult
+      message?: string
+    }>(`/admin/build/content-items/${encodeURIComponent(modelCode)}/${id}`, {})
+    return response.data
+  },
+
   async listSections() {
     const response = await staticGenerationClient.get<{ success: boolean; data?: StaticSectionGroup[]; message?: string }>('/admin/build/sections')
     return response.data

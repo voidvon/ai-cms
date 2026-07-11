@@ -137,6 +137,47 @@ export function saveTopicProfile(columnId, input = {}, { languageCode = null } =
   return getTopicProfileByColumnId(normalizedColumnId, { languageCode });
 }
 
+export function updateTopicProfileFields(columnId, input = {}, { languageCode = null } = {}) {
+  ensureTopicProfilesSchema();
+  const normalizedColumnId = toInteger(columnId, 0);
+  if (normalizedColumnId <= 0) {
+    throw new Error('栏目 ID 无效');
+  }
+  const language = resolveLanguage(languageCode);
+  const column = queryOne('SELECT id FROM columns WHERE id = ?', [normalizedColumnId]);
+  if (!column) {
+    throw new Error('栏目不存在');
+  }
+
+  const existing = queryOne(`
+    SELECT seo_title, intro_html, topic_keyword, related_content_json, publish_status, sort_order
+    FROM topic_profiles
+    WHERE column_id = ? AND language_id = ?
+  `, [normalizedColumnId, language.id]);
+  const editableFields = ['seo_title', 'intro_html', 'topic_keyword', 'related_content_json', 'publish_status', 'sort_order'];
+  const changedFields = editableFields.filter((fieldName) => Object.prototype.hasOwnProperty.call(input, fieldName));
+  if (changedFields.length === 0) {
+    throw new Error('没有可更新的专题字段');
+  }
+
+  const payload = normalizeTopicProfileInput({
+    seo_title: existing?.seo_title || '',
+    intro_html: existing?.intro_html || '',
+    topic_keyword: existing?.topic_keyword || '',
+    related_content_json: existing?.related_content_json || '[]',
+    publish_status: existing?.publish_status || 'draft',
+    sort_order: existing?.sort_order || 0,
+    ...Object.fromEntries(changedFields.map((fieldName) => [fieldName, input[fieldName]])),
+  });
+
+  const profile = saveTopicProfile(normalizedColumnId, payload, { languageCode: language.code });
+  return {
+    profile,
+    created: !existing,
+    changed_fields: changedFields,
+  };
+}
+
 export function deleteTopicProfile(columnId) {
   ensureTopicProfilesSchema();
   const normalizedColumnId = toInteger(columnId, 0);

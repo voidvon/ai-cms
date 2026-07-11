@@ -4,16 +4,20 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import { mergeAttributes, Node } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
-import { ArrowUp, Hash, Square, Wrench, X } from 'lucide-react'
+import { ArrowUp, Hash, ImagePlus, Loader2, Square, Wrench, X } from 'lucide-react'
 import { aiApi } from '@/api/ai'
+import { mediaApi } from '@/api/media'
 import { Badge } from '@/components/ui/badge'
-import type { AiMentionItem, AiToolDefinition } from '@/types'
+import { resolveMediaAssetUrl } from '@/lib/assets'
+import { toast } from 'sonner'
+import type { AiGeneratedImage, AiMentionItem, AiToolDefinition, MediaAsset } from '@/types'
 
 type ComposerSubmitPayload = {
   text: string
   mentions: AiMentionItem[]
   toolNames: string[]
   displayParts: AiConversationDisplayPart[]
+  images: AiGeneratedImage[]
 }
 
 export type AiConversationDisplayPart =
@@ -72,16 +76,23 @@ const MENTION_CATEGORIES: MentionCategory[] = [
     label: '信息',
     description: '搜索内容模型中的信息数据',
   },
+  {
+    type: 'topic',
+    label: '专题',
+    description: '搜索已配置的专题栏目',
+  },
 ]
 
 const MENTION_LABEL_TO_TYPE: Record<string, AiMentionItem['type']> = {
   栏目: 'column',
   信息: 'content',
+  专题: 'topic',
 }
 
 const MENTION_TYPE_TO_LABEL: Record<AiMentionItem['type'], string> = {
   column: '栏目',
   content: '信息',
+  topic: '专题',
 }
 
 function uniqueTools(toolNames: string[]) {
@@ -327,7 +338,7 @@ function findActiveMentionTrigger(editor: NonNullable<ReturnType<typeof useEdito
   }
 
   const textBefore = buildTextOffsetMap($from.parent, $from.parentOffset)
-  const regex = /(?:^|\s)(@(栏目|信息)?\s?([^\s@/]*)?)$/
+  const regex = /(?:^|\s)(@(栏目|信息|专题)?\s?([^\s@/]*)?)$/
   const match = textBefore.match(regex)
   if (!match) {
     return null
@@ -371,6 +382,7 @@ export function AiConversationComposer({
   const activeMentionCategoryIndexRef = useRef(0)
   const activeMentionIndexRef = useRef(0)
   const isCoarsePointerInputRef = useRef(false)
+  const imageInputRef = useRef<HTMLInputElement | null>(null)
   const [plainText, setPlainText] = useState('')
   const [mentionItems, setMentionItems] = useState<AiMentionItem[]>([])
   const [isMentionLoading, setIsMentionLoading] = useState(false)
@@ -378,6 +390,8 @@ export function AiConversationComposer({
   const [activeCommandIndex, setActiveCommandIndex] = useState(0)
   const [activeMentionCategoryIndex, setActiveMentionCategoryIndex] = useState(0)
   const [activeMentionIndex, setActiveMentionIndex] = useState(0)
+  const [attachedImages, setAttachedImages] = useState<MediaAsset[]>([])
+  const [isUploadingImages, setIsUploadingImages] = useState(false)
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -663,7 +677,7 @@ export function AiConversationComposer({
     }
 
     const text = getPlainText(editor).trim()
-    if (!text || submitDisabled) {
+    if (!text || submitDisabled || isUploadingImages) {
       return
     }
 
@@ -672,12 +686,55 @@ export function AiConversationComposer({
       mentions: enableMentions ? getMentionTokens(editor, mentionCacheRef.current) : [],
       toolNames: enableTools ? getToolTokens(editor) : [],
       displayParts: getDisplayParts(editor, mentionCacheRef.current),
+      images: attachedImages.map((asset) => ({
+        asset_id: asset.id,
+        relative_path: asset.relative_path,
+        public_url: asset.public_url,
+        mime_type: asset.mime_type,
+        alt: asset.original_name || '用户上传图片',
+      })),
     })
 
     editor.commands.clearContent(true)
     editor.commands.focus('end')
     setPlainText('')
     setMentionItems([])
+    setAttachedImages([])
+  }
+
+  const handleImageSelection = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || [])
+    event.target.value = ''
+    if (files.length === 0) {
+      return
+    }
+    const availableSlots = Math.max(8 - attachedImages.length, 0)
+    const selectedFiles = files.slice(0, availableSlots)
+    if (selectedFiles.length === 0) {
+      toast.error('每条消息最多上传 8 张图片')
+      return
+    }
+
+    setIsUploadingImages(true)
+    const uploaded: MediaAsset[] = []
+    let failedCount = 0
+    for (const file of selectedFiles) {
+      try {
+        const response = await mediaApi.upload(file, 'ai_input_image')
+        if (response.data) {
+          uploaded.push(response.data)
+        }
+      } catch {
+        failedCount += 1
+      }
+    }
+    setAttachedImages((current) => [...current, ...uploaded].slice(0, 8))
+    setIsUploadingImages(false)
+    if (files.length > selectedFiles.length) {
+      toast.error('每条消息最多上传 8 张图片')
+    } else if (failedCount > 0) {
+      toast.error(`${failedCount} 张图片上传失败`)
+    }
   }
 
   const handleRemoveTool = (toolName: string) => {
@@ -790,10 +847,10 @@ export function AiConversationComposer({
                 <div className="min-w-0">
                   <div className="text-sm font-medium">{item.title}</div>
                   <div className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-                    {item.subtitle || item.summary || (item.type === 'column' ? '栏目' : '内容')}
+                    {item.subtitle || item.summary || MENTION_TYPE_TO_LABEL[item.type]}
                   </div>
                 </div>
-                <Badge variant="outline" className="ml-3 shrink-0">{item.type === 'column' ? '栏目' : '信息'}</Badge>
+                <Badge variant="outline" className="ml-3 shrink-0">{MENTION_TYPE_TO_LABEL[item.type]}</Badge>
               </button>
             )) : (
               <div className="px-3 py-2 text-sm text-muted-foreground">
@@ -805,7 +862,36 @@ export function AiConversationComposer({
       ) : null}
 
       <div className="overflow-hidden rounded-[32px] border bg-background shadow-sm transition focus-within:border-primary/40 focus-within:shadow-md">
+        {attachedImages.length > 0 ? (
+          <div className="grid grid-cols-4 gap-2 border-b px-4 py-3 sm:grid-cols-6">
+            {attachedImages.map((asset) => (
+              <div key={asset.id} className="group relative aspect-square overflow-hidden rounded-md border bg-muted/20">
+                <img src={resolveMediaAssetUrl(asset)} alt={asset.original_name || '上传图片'} className="h-full w-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setAttachedImages((current) => current.filter((item) => item.id !== asset.id))}
+                  className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-md bg-background/90 opacity-0 shadow-sm transition group-hover:opacity-100 focus:opacity-100"
+                  aria-label="移除图片"
+                  title="移除图片"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : null}
         <div className="relative">
+          <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageSelection} />
+          <button
+            type="button"
+            onClick={() => imageInputRef.current?.click()}
+            disabled={submitDisabled || isUploadingImages || attachedImages.length >= 8}
+            className="absolute left-3 top-1/2 z-10 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label="上传图片"
+            title="上传图片"
+          >
+            {isUploadingImages ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+          </button>
           <div className="ai-conversation-tiptap">
             <EditorContent editor={editor} />
           </div>
@@ -814,7 +900,7 @@ export function AiConversationComposer({
               type="button"
               onClick={isSubmitting ? onStop : handleSubmit}
               className="absolute right-3 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-foreground text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-              disabled={isSubmitting ? !onStop : submitDisabled || !hasContent}
+              disabled={isSubmitting ? !onStop : submitDisabled || isUploadingImages || !hasContent}
               aria-label={isSubmitting ? '停止生成' : '发送消息'}
             >
               {isSubmitting ? <Square className="h-4 w-4 fill-current" /> : <ArrowUp className="h-4 w-4" />}

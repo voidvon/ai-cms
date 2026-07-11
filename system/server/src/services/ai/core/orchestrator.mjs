@@ -1,6 +1,6 @@
 import { runAiAgent } from '../runtime.mjs';
 import { composeMiddlewares } from './middleware.mjs';
-import { appendAiConversationMessage, touchAiConversation } from '../conversations.mjs';
+import { appendAiConversationMessage, clearAiConversationMessages, touchAiConversation } from '../conversations.mjs';
 
 /**
  * AI 编排器 - 统一管理能力、工具、会话和中间件
@@ -128,19 +128,28 @@ export class AiOrchestrator {
 
     // 13. 持久化用户消息
     if (enhancedContext.user) {
+      const persistedMessage = String(enhancedContext.userMessageText || message).trim();
       touchAiConversation(conversationId, {
         user: enhancedContext.user,
-        title: message,
+        title: persistedMessage,
         capability: capability.key,
         selectedToolNames,
       });
       appendAiConversationMessage(conversationId, {
         role: 'user',
-        content: { text: message },
+        content: {
+          text: persistedMessage,
+          ...(enhancedContext.uploadedImageContext?.images?.length > 0
+            ? { images: enhancedContext.uploadedImageContext.images }
+            : {}),
+        },
         metadata: {
           capability: capability.key,
           toolNames: selectedToolNames,
           mentions: enhancedContext.mentions || [],
+          displayParts: Array.isArray(enhancedContext.displayParts)
+            ? enhancedContext.displayParts
+            : [],
         },
       }, { user: enhancedContext.user });
     }
@@ -194,8 +203,9 @@ export class AiOrchestrator {
   /**
    * 重置会话
    */
-  async resetConversation(conversationId) {
+  async resetConversation(conversationId, { user } = {}) {
     await this.sessionManager.clear(conversationId);
+    clearAiConversationMessages(conversationId, { user });
     return {
       cleared: true,
       conversation_id: conversationId,

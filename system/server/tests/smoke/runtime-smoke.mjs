@@ -5,9 +5,11 @@ import path from 'node:path';
 import { createApp } from '../../src/app.mjs';
 import { buildStaticSite } from '../../src/static-builder.mjs';
 import { listContentItems } from '../../src/services/content-items.mjs';
+import { formatAiUserError } from '../../src/services/ai/error-message.mjs';
 import { clearTsxTemplateCache } from '../../src/tsx-template-renderer.mjs';
 
 async function main() {
+  assertAiErrorMessagesAreSanitized();
   const outputRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'cms-runtime-smoke-'));
   clearTsxTemplateCache();
   buildStaticSite({
@@ -68,6 +70,31 @@ async function main() {
   } finally {
     await app.close();
   }
+}
+
+function assertAiErrorMessagesAreSanitized() {
+  assert.equal(
+    formatAiUserError(new Error('Connection error.')),
+    'AI 供应商连接失败，请稍后重试。若持续出现，请联系管理员检查供应商配置与网络。'
+  );
+  assert.equal(
+    formatAiUserError({ message: 'request failed for https://secret-provider.example', cause: { code: 'ECONNREFUSED' } }),
+    'AI 供应商连接失败，请稍后重试。若持续出现，请联系管理员检查供应商配置与网络。'
+  );
+  assert.equal(
+    formatAiUserError({ status: 502, message: '<html>upstream gateway details</html>' }),
+    'AI 供应商连接失败，请稍后重试。若持续出现，请联系管理员检查供应商服务状态。'
+  );
+  assert.equal(
+    formatAiUserError({ status: 401, message: 'Incorrect API key sk-sensitive' }),
+    'AI 供应商认证失败，请联系管理员检查供应商凭据。'
+  );
+  assert.equal(
+    formatAiUserError({ status: 429, message: 'rate limit exceeded' }),
+    'AI 供应商当前请求繁忙，请稍后重试。'
+  );
+  assert.equal(formatAiUserError(new Error('语言不存在：xx')), '语言不存在：xx');
+  assert.equal(formatAiUserError(new Error('raw provider stack and secret')), 'AI 服务请求失败，请稍后重试。');
 }
 
 function assertSecurityHeaders(headers) {

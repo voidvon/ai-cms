@@ -1,6 +1,7 @@
 import { getColumnById, listColumns } from '../columns.mjs';
 import { buildColumnTreeIndex, getDescendantColumnIds, isColumnUnderRoot } from '../column-tree.mjs';
 import { listContentItems, listContentItemsAdmin, searchContentItemsPaged } from '../content-items.mjs';
+import { listTopicProfiles } from '../topic-profiles.mjs';
 import { getDb } from '../../db.mjs';
 import { hasAiPermissions } from './core/permissions.mjs';
 
@@ -180,7 +181,7 @@ export function searchAiMentions({
   assertAiServicePermission(user, ['read:content']);
 
   const normalizedKeyword = String(keyword || '').trim().toLowerCase();
-  const normalizedType = ['column', 'content'].includes(String(type || '').trim())
+  const normalizedType = ['column', 'content', 'topic'].includes(String(type || '').trim())
     ? String(type || '').trim()
     : '';
   const safeLimit = Math.min(Math.max(Number(limit) || 8, 1), 20);
@@ -190,12 +191,13 @@ export function searchAiMentions({
       total: 0,
       columns_total: 0,
       content_total: 0,
+      topics_total: 0,
       items: [],
     };
   }
 
   const columns = listColumns({ includeTranslations: true });
-  const matchedColumns = normalizedType === 'content'
+  const matchedColumns = normalizedType === 'content' || normalizedType === 'topic'
     ? []
     : columns
       .map((column) => {
@@ -227,7 +229,7 @@ export function searchAiMentions({
       .filter(Boolean)
   ));
 
-  const matchedContentItems = normalizedType === 'column'
+  const matchedContentItems = normalizedType === 'column' || normalizedType === 'topic'
     ? []
     : modelCodes
       .flatMap((modelCode) => {
@@ -254,7 +256,34 @@ export function searchAiMentions({
       .sort(compareAiMentionItems)
       .slice(0, safeLimit);
 
-  const items = [...matchedContentItems, ...matchedColumns]
+  const matchedTopics = normalizedType === 'column' || normalizedType === 'content'
+    ? []
+    : listTopicProfiles()
+      .map((profile) => {
+        const score = scoreAiMentionTopic(profile, normalizedKeyword);
+        if (score <= 0) {
+          return null;
+        }
+
+        return {
+          type: 'topic',
+          id: Number(profile.column_id || 0),
+          title: String(profile.column_name || profile.seo_title || '').trim(),
+          subtitle: buildAiTopicSubtitle(profile),
+          column_id: Number(profile.column_id || 0),
+          column_name: String(profile.column_name || '').trim(),
+          summary: String(profile.seo_title || '').trim(),
+          route_path: String(profile.route_path || '').trim(),
+          language_code: String(profile.language_code || '').trim(),
+          topic_keyword: String(profile.topic_keyword || '').trim(),
+          score,
+        };
+      })
+      .filter((item) => item?.id > 0 && item.title)
+      .sort(compareAiMentionItems)
+      .slice(0, safeLimit);
+
+  const items = [...matchedContentItems, ...matchedColumns, ...matchedTopics]
     .sort(compareAiMentionItems)
     .slice(0, safeLimit);
 
@@ -262,6 +291,7 @@ export function searchAiMentions({
     total: items.length,
     columns_total: matchedColumns.length,
     content_total: matchedContentItems.length,
+    topics_total: matchedTopics.length,
     items,
   };
 }
@@ -444,6 +474,32 @@ function buildAiContentSubtitle(item, modelCode) {
     parts.push(`编号 ${String(item.code).trim()}`);
   }
   return parts.join(' · ');
+}
+
+function buildAiTopicSubtitle(profile) {
+  const keyword = String(profile.topic_keyword || '').trim();
+  return [
+    keyword ? `关键词 ${keyword.slice(0, 120)}${keyword.length > 120 ? '...' : ''}` : '',
+    String(profile.route_path || profile.dir_name || '').trim(),
+  ].filter(Boolean).join(' · ');
+}
+
+function scoreAiMentionTopic(profile, normalizedKeyword) {
+  return [
+    { value: profile.column_name, weight: 260 },
+    { value: profile.seo_title, weight: 180 },
+    { value: profile.topic_keyword, weight: 160 },
+    { value: stripAiSearchHtml(profile.intro_html), weight: 80 },
+    { value: profile.route_path, weight: 60 },
+    { value: profile.dir_name, weight: 50 },
+  ].reduce(
+    (score, field) => score + scoreAiMentionText(field.value, normalizedKeyword, field.weight),
+    0
+  );
+}
+
+function stripAiSearchHtml(value) {
+  return String(value || '').replace(/<[^>]*>/g, ' ');
 }
 
 function scoreAiMentionColumn(column, normalizedKeyword) {

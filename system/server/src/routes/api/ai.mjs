@@ -6,8 +6,10 @@ import { getAiDataSourceStatus } from '../../services/ai/data-source-registry.mj
 import { searchAiMentions } from '../../services/ai/query-service.mjs';
 import { buildAiMentionContext } from '../../services/ai/mention-context.mjs';
 import { DEFAULT_MODEL } from '../../services/ai/runtime.mjs';
+import { formatAiUserError } from '../../services/ai/error-message.mjs';
 import {
   loadLatestGeneratedImageContext,
+  loadUploadedImageContext,
   saveGeneratedImagesFromAgentResult,
 } from '../../services/ai/image-generation.mjs';
 import { executeContractTask } from '../../services/ai/skills/contract.mjs';
@@ -52,7 +54,7 @@ function createAssistantStreamingTextStream(originalMessages, executeTextStream)
         writer.write({
           type: 'text-delta',
           id: textPartId,
-          delta: formatAiError(error),
+          delta: formatAiUserError(error),
         });
       }
 
@@ -70,19 +72,6 @@ function sendAssistantStreamingTextStream(reply, originalMessages, executeTextSt
     stream: createAssistantStreamingTextStream(originalMessages, executeTextStream),
   });
   return reply;
-}
-
-function formatAiError(error) {
-  const message = String(error?.message || '').trim();
-  if (!message) {
-    return 'AI 服务暂时不可用，请稍后重试。';
-  }
-
-  if (message === 'Connection error.') {
-    return 'AI 服务连接失败。请检查 `OPENAI_BASE_URL`、`OPENAI_API_KEY`、模型名以及当前服务器到上游地址的网络连通性。';
-  }
-
-  return `AI 服务请求失败：${message}`;
 }
 
 const PUBLIC_URL_PATTERN = /https?:\/\/[^\s<>"'，。；、]+/gi;
@@ -178,6 +167,9 @@ export default async function aiRoutes(app) {
       reply.code(404);
       return { success: false, message: 'AI 会话不存在' };
     }
+    await getAiOrchestrator().resetConversation(request.params.id, {
+      user: request.adminUser,
+    });
     return { success: true, data: { deleted: true, id: request.params.id } };
   });
 
@@ -390,11 +382,44 @@ export default async function aiRoutes(app) {
         column_name: String(item?.column_name || '').trim(),
         code: String(item?.code || '').trim(),
         summary: String(item?.summary || '').trim(),
+        language_code: String(item?.language_code || '').trim(),
+        topic_keyword: String(item?.topic_keyword || '').trim(),
       })).filter((item) => item.type && item.id > 0 && item.title)
+      : [];
+    const displayParts = Array.isArray(body.displayParts)
+      ? body.displayParts.map((part) => {
+        if (part?.type === 'text') {
+          return { type: 'text', text: String(part.text || '') };
+        }
+        if (part?.type === 'mention') {
+          const mention = part.mention || {};
+          return {
+            type: 'mention',
+            mention: {
+              type: String(mention.type || '').trim(),
+              id: Number(mention.id || 0),
+              title: String(mention.title || '').trim(),
+            },
+          };
+        }
+        if (part?.type === 'tool') {
+          return {
+            type: 'tool',
+            name: String(part.name || '').trim(),
+            ...(part.category ? { category: String(part.category).trim() } : {}),
+          };
+        }
+        return null;
+      }).filter((part) => part && (
+        (part.type === 'text' && part.text)
+        || (part.type === 'mention' && part.mention.id > 0 && part.mention.title)
+        || (part.type === 'tool' && part.name)
+      ))
       : [];
     const effectiveMentions = mentions.length > 0
       ? mentions
       : getRecentAiConversationMentions(conversationId, request.adminUser);
+    const uploadedImageContext = loadUploadedImageContext(body.inputImages || body.input_images);
 
     return sendAssistantStreamingTextStream(reply, messages, async (writeDelta) => {
       try {
@@ -410,9 +435,12 @@ export default async function aiRoutes(app) {
           })
           : null;
 
+        const mentionPrompt = mentions.length > 0
+          ? `\n\n用户本轮明确引用的站内实体（即使原句中的 @名称在纯文本中缺失，也必须按这些实体理解）：${mentions.map((item) => `@${item.title} [${item.type}:${item.id}${item.model_code ? `, model=${item.model_code}` : ''}]`).join('、')}`
+          : '';
         const streamed = await orchestrator.chat({
           conversationId,
-          message: messageText,
+          message: `${messageText}${mentionPrompt}`,
           userId: request.adminUser?.id,
           user: request.adminUser || null,
           capabilityKey,
@@ -421,9 +449,12 @@ export default async function aiRoutes(app) {
           toolMode,
           additionalContext: {
             mentions: effectiveMentions,
+            displayParts,
+            userMessageText: messageText,
             mentionContext,
             webPages,
             latestGeneratedImage,
+            uploadedImageContext,
           },
         });
 
@@ -453,6 +484,7 @@ export default async function aiRoutes(app) {
 
         await streamed.result.completed;
         const generatedImages = [
+          ...(uploadedImageContext?.generated_images || []),
           ...(latestGeneratedImage?.generated_images || []),
           ...await saveGeneratedImagesFromAgentResult(streamed.result, {
             prompt: messageText,
@@ -487,7 +519,7 @@ export default async function aiRoutes(app) {
         }
       } catch (error) {
         console.error('AI chat error:', error);
-        const errorText = formatAiError(error);
+        const errorText = formatAiUserError(error);
         writeDelta(errorText);
         appendAiConversationMessage(conversationId, {
           role: 'assistant',
@@ -510,7 +542,9 @@ export default async function aiRoutes(app) {
 
     try {
       const orchestrator = getAiOrchestrator();
-      const result = await orchestrator.resetConversation(conversationId);
+      const result = await orchestrator.resetConversation(conversationId, {
+        user: request.adminUser,
+      });
 
       return {
         success: true,
@@ -544,6 +578,8 @@ function getRecentAiConversationMentions(conversationId, user) {
           column_name: String(item?.column_name || '').trim(),
           code: String(item?.code || '').trim(),
           summary: String(item?.summary || '').trim(),
+          language_code: String(item?.language_code || '').trim(),
+          topic_keyword: String(item?.topic_keyword || '').trim(),
         })).filter((item) => item.type && item.id > 0);
       }
     }

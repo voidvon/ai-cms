@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Chat, useChat } from '@ai-sdk/react'
 import { MessageSquarePlus, RefreshCw, Trash2 } from 'lucide-react'
-import { useOutletContext } from 'react-router-dom'
+import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { createAiChatTransport } from '@/api/ai-chat'
 import { aiApi } from '@/api/ai'
 import { AiConversationComposer, type AiConversationDisplayPart } from '@/components/ai-chat/AiConversationComposer'
@@ -40,13 +40,17 @@ function createConversationId() {
 }
 
 function toShellMessages(messages: any[]): ChatWorkspaceShellMessage[] {
-  return messages.map((message) => ({
-    id: String(message.id),
-    role: message.role === 'assistant' ? 'assistant' : 'user',
-    text: extractMessageText(message.parts) || String(message.text || message.content?.text || ''),
-    parts: Array.isArray(message.parts) ? message.parts : [],
-    metadata: normalizeChatMessageMetadata(message.metadata, message.content?.images),
-  }))
+  return messages.map((message) => {
+    const text = extractMessageText(message.parts) || String(message.text || message.content?.text || '')
+    return {
+      id: String(message.id),
+      role: message.role === 'assistant' ? 'assistant' : 'user',
+      text,
+      parts: Array.isArray(message.parts) ? message.parts : [],
+      metadata: normalizeChatMessageMetadata(message.metadata, message.content?.images, text),
+      error: Boolean(message.metadata?.error),
+    }
+  })
 }
 
 function extractMessageText(parts: any[] = []) {
@@ -68,16 +72,32 @@ function getMessagesContentSignature(messages: any[] = []) {
     .join('|')
 }
 
-function normalizeChatMessageMetadata(metadata: unknown, contentImages?: unknown) {
+function normalizeChatMessageMetadata(metadata: unknown, contentImages?: unknown, fallbackText = '') {
   const value = metadata && typeof metadata === 'object' ? metadata as {
     displayParts?: AiConversationDisplayPart[]
     mentions?: AiMentionItem[]
+    images?: AiGeneratedImage[]
   } : {}
-  const images = Array.isArray(contentImages) ? contentImages as AiGeneratedImage[] : []
+  const images = Array.isArray(contentImages)
+    ? contentImages as AiGeneratedImage[]
+    : Array.isArray(value.images) ? value.images : []
+  const mentions = Array.isArray(value.mentions) ? value.mentions : []
+  const displayParts = Array.isArray(value.displayParts) && value.displayParts.length > 0
+    ? value.displayParts
+    : mentions.length > 0
+      ? [
+        ...(fallbackText ? [{ type: 'text' as const, text: fallbackText }] : []),
+        { type: 'text' as const, text: fallbackText ? '\n引用：' : '引用：' },
+        ...mentions.flatMap((mention, index) => [
+          ...(index > 0 ? [{ type: 'text' as const, text: '、' }] : []),
+          { type: 'mention' as const, mention },
+        ]),
+      ]
+      : []
 
   return {
-    ...(Array.isArray(value.displayParts) ? { displayParts: value.displayParts } : {}),
-    ...(Array.isArray(value.mentions) ? { mentions: value.mentions } : {}),
+    ...(displayParts.length > 0 ? { displayParts } : {}),
+    ...(mentions.length > 0 ? { mentions } : {}),
     ...(images.length > 0 ? { images } : {}),
   }
 }
@@ -111,7 +131,20 @@ export default function AiConversationPage() {
   const { headerSlotElement, setDocumentTitle, setMainContentPadding } =
     useOutletContext<DashboardHeaderContext>()
   const queryClient = useQueryClient()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [activeConversationId, setActiveConversationId] = useState<string>('')
+  const conversationIdFromUrl = String(searchParams.get('conversation') || '').trim()
+
+  const activateConversation = useCallback((conversationId: string, { replace = false } = {}) => {
+    const normalizedId = String(conversationId || '').trim()
+    if (!normalizedId) {
+      return
+    }
+    setActiveConversationId(normalizedId)
+    const nextSearchParams = new URLSearchParams(searchParams)
+    nextSearchParams.set('conversation', normalizedId)
+    setSearchParams(nextSearchParams, { replace })
+  }, [searchParams, setSearchParams])
   const { data: capabilitiesResponse, isFetching: isCapabilitiesFetching, refetch } = useQuery({
     queryKey: ['ai-capabilities'],
     queryFn: () => aiApi.capabilities(),
@@ -145,13 +178,20 @@ export default function AiConversationPage() {
   }, [setDocumentTitle, setMainContentPadding])
 
   useEffect(() => {
-    if (activeConversationId || conversationsQuery.isLoading) {
+    if (conversationsQuery.isLoading) {
       return
     }
 
-    const firstConversation = conversationRecords[0]
+    if (activeConversationId && conversationRecords.some((item) => item.id === activeConversationId)) {
+      return
+    }
+
+    const restoredConversation = conversationIdFromUrl
+      ? conversationRecords.find((item) => item.id === conversationIdFromUrl)
+      : null
+    const firstConversation = restoredConversation || conversationRecords[0]
     if (firstConversation) {
-      setActiveConversationId(firstConversation.id)
+      activateConversation(firstConversation.id, { replace: true })
       return
     }
 
@@ -162,11 +202,21 @@ export default function AiConversationPage() {
       capability: defaultCapability,
     }).then((response) => {
       void queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
-      setActiveConversationId(response.data?.id || id)
+      activateConversation(response.data?.id || id, { replace: true })
     }).catch((error) => {
       toast.error(error?.message || '创建 AI 会话失败')
     })
-  }, [activeConversationId, conversationRecords, conversationsQuery.isLoading, defaultCapability, queryClient])
+  }, [activeConversationId, activateConversation, conversationIdFromUrl, conversationRecords, conversationsQuery.isLoading, defaultCapability, queryClient])
+
+  useEffect(() => {
+    if (
+      conversationIdFromUrl
+      && conversationIdFromUrl !== activeConversationId
+      && conversationRecords.some((item) => item.id === conversationIdFromUrl)
+    ) {
+      setActiveConversationId(conversationIdFromUrl)
+    }
+  }, [activeConversationId, conversationIdFromUrl, conversationRecords])
 
   const activeConversation = useMemo(() => {
     const record = conversationRecords.find((item) => item.id === activeConversationId)
@@ -281,7 +331,7 @@ export default function AiConversationPage() {
       capability: defaultCapability,
     })
     await queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
-    setActiveConversationId(id)
+    activateConversation(id)
     chat.stop()
     chat.setMessages([])
   }
@@ -298,7 +348,7 @@ export default function AiConversationPage() {
     if (conversationId === activeConversationId) {
       const remaining = conversationRecords.filter((item) => item.id !== conversationId)
       if (remaining[0]) {
-        setActiveConversationId(remaining[0].id)
+        activateConversation(remaining[0].id, { replace: true })
       } else {
         const id = createConversationId()
         await aiApi.createConversation({
@@ -307,7 +357,7 @@ export default function AiConversationPage() {
           capability: defaultCapability,
         })
         await queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
-        setActiveConversationId(id)
+        activateConversation(id, { replace: true })
       }
       chat.setMessages([])
     }
@@ -317,10 +367,12 @@ export default function AiConversationPage() {
     text,
     mentions,
     displayParts,
+    images,
   }: {
     text: string
     mentions: AiMentionItem[]
     displayParts: AiConversationDisplayPart[]
+    images: AiGeneratedImage[]
   }) => {
     await chat.sendMessage(
       {
@@ -328,12 +380,15 @@ export default function AiConversationPage() {
         metadata: {
           displayParts,
           mentions,
+          ...(images.length > 0 ? { images } : {}),
         },
       },
       {
         body: {
           capability: activeConversation?.capability || defaultCapability,
           ...(mentions.length > 0 ? { mentions } : {}),
+          ...(displayParts.length > 0 ? { displayParts } : {}),
+          ...(images.length > 0 ? { inputImages: images } : {}),
         },
       }
     )
@@ -370,7 +425,7 @@ export default function AiConversationPage() {
             >
               <button
                 type="button"
-                onClick={() => setActiveConversationId(conversation.id)}
+                onClick={() => activateConversation(conversation.id)}
                 className="block w-full pr-9 text-left"
               >
                   <div className="space-y-1">

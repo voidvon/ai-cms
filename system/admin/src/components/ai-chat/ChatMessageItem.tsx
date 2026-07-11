@@ -1,13 +1,16 @@
 "use client";
 
+import { useState } from "react";
+
 import {
   Reasoning,
   ReasoningContent,
   ReasoningTrigger,
 } from "@/components/ai-elements/reasoning";
 import { Message, MessageContent, MessageResponse } from "@/components/ai-elements/message";
-import { Download } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 import { resolveAssetUrl } from "@/lib/assets";
+import { toast } from "sonner";
 import { Shimmer } from "@/components/ai-elements/shimmer";
 import {
   Source,
@@ -86,6 +89,32 @@ export function ChatMessageItem({
     (part) => part.state === "streaming"
   );
   const images = Array.isArray(metadata?.images) ? metadata.images : [];
+  const [downloadingAssetId, setDownloadingAssetId] = useState<number | null>(null);
+
+  const handleDownloadImage = async (image: AiGeneratedImage) => {
+    const src = resolveAssetUrl(image.relative_path, { publicUrl: image.public_url });
+    if (!src || downloadingAssetId !== null) {
+      return;
+    }
+
+    setDownloadingAssetId(image.asset_id);
+    try {
+      const { blob, mimeType } = await fetchImageDownloadBlob(src, image.relative_path);
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = objectUrl;
+      anchor.download = buildImageDownloadName(image, mimeType);
+      anchor.style.display = "none";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+    } catch {
+      toast.error("图片下载失败，请稍后重试");
+    } finally {
+      setDownloadingAssetId(null);
+    }
+  };
 
   return (
     <Message from={role}>
@@ -127,15 +156,16 @@ export function ChatMessageItem({
                 <a href={src} target="_blank" rel="noreferrer" title="打开原图">
                   <img src={src} alt={image.alt || "AI 生成图片"} className="aspect-square w-full object-contain" />
                 </a>
-                <a
-                  href={src}
-                  download
+                <button
+                  type="button"
+                  onClick={() => void handleDownloadImage(image)}
+                  disabled={downloadingAssetId !== null}
                   title="下载图片"
                   aria-label="下载图片"
                   className="absolute right-2 top-2 flex h-9 w-9 items-center justify-center rounded-md bg-background/90 text-foreground opacity-0 shadow-sm transition hover:bg-background group-hover:opacity-100 focus:opacity-100"
                 >
-                  <Download className="h-4 w-4" />
-                </a>
+                  {downloadingAssetId === image.asset_id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                </button>
               </figure>
             );
           })}
@@ -193,6 +223,41 @@ export function ChatMessageItem({
         : null}
     </Message>
   );
+}
+
+async function fetchImageDownloadBlob(primaryUrl: string, relativePath: string) {
+  const fallbackUrl = String(relativePath || "").startsWith("/")
+    ? new URL(relativePath, window.location.origin).toString()
+    : "";
+  const candidates = Array.from(new Set([primaryUrl, fallbackUrl].filter(Boolean)));
+
+  for (const url of candidates) {
+    try {
+      const response = await fetch(url, { credentials: "include" });
+      if (response.ok) {
+        return {
+          blob: await response.blob(),
+          mimeType: response.headers.get("content-type"),
+        };
+      }
+    } catch {
+      // Try the same-origin compatibility URL when the asset host blocks CORS.
+    }
+  }
+
+  throw new Error("image download failed");
+}
+
+function buildImageDownloadName(image: AiGeneratedImage, responseMimeType?: string | null) {
+  const mimeType = String(image.mime_type || responseMimeType || "").split(";", 1)[0].toLowerCase();
+  const extension = mimeType === "image/jpeg"
+    ? "jpg"
+    : mimeType === "image/png"
+      ? "png"
+      : mimeType === "image/gif"
+        ? "gif"
+        : "webp";
+  return `ai-image-${image.asset_id}.${extension}`;
 }
 
 function ReadonlyMessageParts({

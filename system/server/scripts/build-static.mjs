@@ -18,6 +18,7 @@ const outputRoot = outputDirArg
     : CONTENT_ROOT;
 const languageCode = normalizeCliValue(cliArgs.language || cliArgs.lang);
 const section = normalizeCliValue(cliArgs.section);
+const contentItemId = normalizePositiveInteger(cliArgs['content-id']);
 const cleanExisting = normalizeBooleanCliValue(cliArgs['clean-existing'], true);
 const jsonOutput = normalizeBooleanCliValue(cliArgs.json, false);
 
@@ -29,6 +30,7 @@ const result = buildStaticSite({
   outputRoot,
   cleanExisting,
   languageCode,
+  contentItemId,
   sections: section ? [section] : undefined,
   onProgress: jsonOutput
     ? (event) => {
@@ -109,4 +111,9 @@ function normalizeBooleanCliValue(value, fallback) {
   }
 
   return fallback;
+}
+
+function normalizePositiveInteger(value) {
+  const normalized = Number.parseInt(value, 10);
+  return Number.isInteger(normalized) && normalized > 0 ? normalized : null;
 }

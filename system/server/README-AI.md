@@ -30,6 +30,8 @@
 - 统一入口：`AI 对话`
 - `/admin/ai` 的 Responses 对话会自动判断是否调用文生图工具；生成图片保存到媒体库
 - 生成图片后的后续请求先由 Responses 判断意图，仅在需要编辑时调用工具加载最近图片
+- 对话输入支持一次上传最多 8 张图片；Responses 判断需要编辑时才加载本轮全部附件并执行多图修改或组合
+- 对话输入支持 `@栏目`、`@信息`、`@专题`；专题可按数据库语言读取，并可字段级修改指定语言的 SEO 标题、关键词、富文本简介和发布状态
 - 当前默认对话能力：`contract_copilot`
 - 任务能力：`contract_draft`、`price_query`、`knowledge_qa`、`export_pdf`
 - `export_pdf` 当前输出 HTML 占位文件到 `/uploads/pdfs/`

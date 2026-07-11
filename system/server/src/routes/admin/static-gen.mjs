@@ -1,6 +1,7 @@
 import { requireAuth } from '../../middleware/auth.mjs';
 import { CONTENT_ROOT } from '../../config.mjs';
 import { checkpointDatabaseWal } from '../../services/database-maintenance.mjs';
+import { regenerateContentItemStaticPages } from '../../services/content-static-generation.mjs';
 import {
   getActiveStaticBuild,
   runStaticBuild,
@@ -13,6 +14,25 @@ import {
 } from '../../static-builder.mjs';
 
 export default async function staticGenRoutes(app) {
+  app.post('/build/content-items/:modelCode/:id', {
+    onRequest: [requireAuth]
+  }, async (request, reply) => {
+    try {
+      const data = await regenerateContentItemStaticPages(request.params.modelCode, request.params.id);
+      return {
+        success: true,
+        data,
+        message: `已生成 ${data.languageCodes.length} 个语言版本`
+      };
+    } catch (error) {
+      app.log.error(error);
+      return reply.code(error.statusCode || 500).send({
+        success: false,
+        message: error.message || '内容静态页生成失败'
+      });
+    }
+  });
+
   app.get('/build/sections', {
     onRequest: [requireAuth]
   }, async (request, reply) => {

@@ -3,6 +3,8 @@ import { buildColumnSlugPath, buildContentDetailUrlFromColumn } from '../column-
 import { getContentItemById, updateContentItem } from '../content-items.mjs';
 import { getContentModelByCode } from '../content-models.mjs';
 import { getDefaultLanguage, listLanguages } from '../languages.mjs';
+import { getTopicProfileByColumnId, updateTopicProfileFields } from '../topic-profiles.mjs';
+import { getMediaAssetById } from '../media-assets.mjs';
 import { assertAiServicePermission } from './query-service.mjs';
 
 const TEXT_FIELD_LIMITS = {
@@ -24,10 +26,14 @@ export function buildAiMentionContext({
   const contentMentions = normalizedMentions
     .filter((item) => String(item?.type || '') === 'content')
     .slice(0, Math.min(Math.max(Number(maxItems) || 5, 1), 10));
+  const topicMentions = normalizedMentions
+    .filter((item) => String(item?.type || '') === 'topic')
+    .slice(0, Math.min(Math.max(Number(maxItems) || 5, 1), 10));
 
-  if (!contentMentions.length) {
+  if (!contentMentions.length && !topicMentions.length) {
     return {
       content_items: [],
+      topic_profiles: [],
     };
   }
 
@@ -44,6 +50,123 @@ export function buildAiMentionContext({
         languageCode: resolvedLanguageCode,
       }))
       .filter(Boolean),
+    topic_profiles: topicMentions
+      .map((mention) => buildAiMentionTopicContext({
+        mention,
+        languageCode: resolvedLanguageCode,
+      }))
+      .filter(Boolean),
+  };
+}
+
+function buildAiMentionTopicContext({ mention, languageCode }) {
+  const columnId = Number.parseInt(String(mention?.column_id || mention?.id || ''), 10);
+  if (!Number.isFinite(columnId) || columnId <= 0) {
+    return null;
+  }
+
+  const profile = getTopicProfileByColumnId(columnId, { languageCode });
+  if (!profile) {
+    return null;
+  }
+
+  let relatedContent = [];
+  try {
+    const parsed = JSON.parse(String(profile.related_content_json || '[]'));
+    relatedContent = Array.isArray(parsed) ? parsed.slice(0, 50) : [];
+  } catch {
+    relatedContent = [];
+  }
+
+  return {
+    type: 'topic',
+    id: profile.id,
+    column: {
+      id: profile.column_id,
+      name: profile.column_name,
+      route_path: profile.route_path || '',
+      dir_name: profile.dir_name || '',
+      column_type: profile.column_type || '',
+    },
+    language: {
+      requested_code: profile.requested_language_code || languageCode || null,
+      resolved_code: profile.current_language_code || profile.language_code || null,
+      fallback_code: profile.fallback_language_code || null,
+      is_fallback: Boolean(profile.is_language_fallback),
+    },
+    seo_title: String(profile.seo_title || '').slice(0, 300),
+    topic_keyword: String(profile.topic_keyword || '').slice(0, 1200),
+    intro_html: String(profile.intro_html || '').slice(0, 8000),
+    related_content: relatedContent,
+    publish_status: profile.publish_status || 'draft',
+  };
+}
+
+export function getAiTopicProfileTranslationContext({
+  user,
+  columnId,
+  languageCode,
+} = {}) {
+  assertAiServicePermission(user, ['read:content']);
+  const safeColumnId = Number.parseInt(String(columnId || ''), 10);
+  const resolvedLanguageCode = resolveAiLanguageCode(languageCode);
+  if (!Number.isFinite(safeColumnId) || safeColumnId <= 0) {
+    const error = new Error('缺少专题栏目 ID');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const context = buildAiMentionTopicContext({
+    mention: { type: 'topic', id: safeColumnId, column_id: safeColumnId },
+    languageCode: resolvedLanguageCode,
+  });
+  if (!context) {
+    const error = new Error('专题配置不存在');
+    error.statusCode = 404;
+    throw error;
+  }
+  return context;
+}
+
+export function updateAiTopicProfileTranslation({
+  user,
+  columnId,
+  languageCode,
+  changes = {},
+} = {}) {
+  assertAiServicePermission(user, ['write:content']);
+  const safeColumnId = Number.parseInt(String(columnId || ''), 10);
+  const resolvedLanguageCode = resolveAiLanguageCode(languageCode);
+  if (!Number.isFinite(safeColumnId) || safeColumnId <= 0) {
+    const error = new Error('缺少专题栏目 ID');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const normalizedChanges = Object.fromEntries(
+    ['seo_title', 'topic_keyword', 'intro_html', 'publish_status']
+      .filter((fieldName) => changes[fieldName] !== undefined)
+      .map((fieldName) => [fieldName, changes[fieldName]])
+  );
+  if (Object.keys(normalizedChanges).length === 0) {
+    const error = new Error('至少需要提供一个要修改的专题字段');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const result = updateTopicProfileFields(safeColumnId, normalizedChanges, {
+    languageCode: resolvedLanguageCode,
+  });
+  return {
+    updated: true,
+    created_language_profile: result.created,
+    changed_fields: result.changed_fields,
+    column_id: safeColumnId,
+    language_code: resolvedLanguageCode,
+    profile: buildAiMentionTopicContext({
+      mention: { type: 'topic', id: safeColumnId, column_id: safeColumnId },
+      languageCode: resolvedLanguageCode,
+    }),
   };
 }
 
@@ -166,6 +289,79 @@ export function updateAiContentItemTranslationTitle({
       languageCode: resolvedLanguageCode,
     }) || updated,
   };
+}
+
+export function setAiContentItemImage({
+  user,
+  modelCode,
+  id,
+  assetId,
+  replaceGallery = false,
+  setAsPrimary = true,
+} = {}) {
+  assertAiServicePermission(user, ['write:content']);
+
+  const normalizedModelCode = String(modelCode || '').trim();
+  const safeId = Number.parseInt(String(id || ''), 10);
+  const safeAssetId = Number.parseInt(String(assetId || ''), 10);
+  if (!normalizedModelCode || !Number.isFinite(safeId) || safeId <= 0) {
+    throw new Error('缺少有效的内容项');
+  }
+  if (!Number.isFinite(safeAssetId) || safeAssetId <= 0) {
+    throw new Error('缺少有效的图片');
+  }
+
+  const asset = getMediaAssetById(safeAssetId);
+  if (!asset?.file_exists || !String(asset.relative_path || '').startsWith('/uploads/images/')) {
+    throw new Error('指定图片不存在或不是可用图片');
+  }
+
+  const item = getContentItemById(normalizedModelCode, safeId, {
+    includeTranslations: true,
+    includeTranslationStatuses: true,
+  });
+  if (!item) {
+    throw new Error('内容不存在');
+  }
+
+  const currentImages = normalizeMentionImageList(item.images);
+  const nextImages = replaceGallery
+    ? [asset.relative_path]
+    : [
+      ...currentImages.filter((image) => image !== asset.relative_path),
+      asset.relative_path,
+    ];
+  const updated = updateContentItem(normalizedModelCode, safeId, {
+    base: {
+      column_id: item.column_id,
+      images: nextImages,
+      ...(setAsPrimary ? { primary_image: asset.relative_path } : {}),
+    },
+  });
+
+  return {
+    updated: true,
+    model_code: normalizedModelCode,
+    id: safeId,
+    image: asset.relative_path,
+    images: nextImages,
+    primary_image: setAsPrimary ? asset.relative_path : String(item.primary_image || nextImages[0] || ''),
+    item: buildAiMentionContentItemContext({
+      mention: { type: 'content', id: safeId, model_code: normalizedModelCode },
+    }) || updated,
+  };
+}
+
+function normalizeMentionImageList(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item || '').trim()).filter(Boolean);
+  }
+  try {
+    const parsed = JSON.parse(String(value || '[]'));
+    return Array.isArray(parsed) ? parsed.map((item) => String(item || '').trim()).filter(Boolean) : [];
+  } catch {
+    return [];
+  }
 }
 
 function buildAiMentionContentItemContext({ mention, languageCode }) {
