@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { ExternalLink, FileText, GripVertical, Plus, Search, Trash2, Upload } from 'lucide-react'
+import { ArrowDown, ArrowUp, ExternalLink, FileText, Plus, Search, Trash2, Upload } from 'lucide-react'
 import { mediaApi } from '@/api/media'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -111,10 +111,10 @@ export default function AttachmentsField({
                 <a href={resolveAssetUrl(path)} target="_blank" rel="noreferrer"><ExternalLink className="size-4" /></a>
               </Button>
               <Button type="button" size="icon-sm" variant="ghost" onClick={() => moveItem(index, -1)} disabled={disabled || index === 0} title="上移">
-                <GripVertical className="size-4 rotate-180" />
+                <ArrowUp className="size-4" />
               </Button>
               <Button type="button" size="icon-sm" variant="ghost" onClick={() => moveItem(index, 1)} disabled={disabled || index === normalizedValue.length - 1} title="下移">
-                <GripVertical className="size-4" />
+                <ArrowDown className="size-4" />
               </Button>
               <Button type="button" size="icon-sm" variant="destructiveGhost" onClick={() => removeItem(index)} disabled={disabled} title="移除">
                 <Trash2 className="size-4" />

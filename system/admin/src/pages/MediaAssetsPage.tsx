@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -71,7 +71,7 @@ type MediaAssetsPageProps = {
 
 const PAGE_CONFIG = {
   attachments: {
-    title: '附件管理',
+    title: '附件',
     description: '上传附件、直接获取 URL，并查看本地媒体资产使用位置。',
     uploadTitle: '直接上传附件',
     uploadDescription: '支持图片、PDF、Office、压缩包、音视频等常见文件，上传后可直接复制 URL。',
@@ -83,8 +83,6 @@ const PAGE_CONFIG = {
     emptyLabel: '暂无资源',
     deleteTitle: '确认删除附件',
     deleteDescription: '删除后会移除附件记录和本地文件。提交删除时会重新检查使用位置，如果仍被内容、栏目或模板引用，将不会删除。',
-    cleanupButton: '清理未使用资源',
-    cleanupSuccessPrefix: '已清理',
     uploadSuccess: '附件上传成功',
     uploadError: '附件上传失败',
     deleteSuccess: '附件已删除',
@@ -92,7 +90,7 @@ const PAGE_CONFIG = {
     showPurposeFilter: true,
   },
   pdfs: {
-    title: 'PDF 管理',
+    title: 'PDF',
     description: '集中管理总站引用和用户查询用的 PDF 文档，可上传、下载、复制 URL 和删除。',
     uploadTitle: '上传 PDF 文档',
     uploadDescription: '仅支持 PDF 文件，上传后会进入 /uploads/pdfs/，可用于站内引用和用户下载查询。',
@@ -104,8 +102,6 @@ const PAGE_CONFIG = {
     emptyLabel: '暂无 PDF 文档',
     deleteTitle: '确认删除 PDF',
     deleteDescription: '删除后会移除 PDF 记录和本地文件。提交删除时会重新检查使用位置，如果仍被内容、栏目或模板引用，将不会删除。',
-    cleanupButton: '清理未使用 PDF',
-    cleanupSuccessPrefix: '已清理',
     uploadSuccess: 'PDF 上传成功',
     uploadError: 'PDF 上传失败',
     deleteSuccess: 'PDF 已删除',
@@ -162,20 +158,6 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
     const defaultLanguage = enabledLanguages.find((language) => Number(language.is_default || 0) === 1) || enabledLanguages[0]
     setSelectedPdfLanguageId(String(defaultLanguage.id))
   }, [mode, selectedPdfLanguageId, enabledLanguages])
-
-  const cleanupMutation = useMutation({
-    mutationFn: () => mediaApi.cleanupOrphaned(effectivePurpose),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['media-assets'] })
-      const deletedRows = response.data?.deletedRows || 0
-      const deletedFiles = response.data?.deletedFiles || 0
-      toast.success(`${config.cleanupSuccessPrefix} ${deletedRows} 条未使用资源，删除 ${deletedFiles} 个文件`)
-      setPage(1)
-    },
-    onError: (mutationError: any) => {
-      toast.error(mutationError.response?.data?.message || '清理失败')
-    },
-  })
 
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => mediaApi.upload(file, config.uploadPurpose, {
@@ -286,43 +268,15 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
 
   return (
     <div className="h-full min-h-0">
-      <Card className={isCompactPdfPage ? 'flex h-full min-h-0 flex-col overflow-hidden border-0 bg-transparent shadow-none' : 'flex h-full min-h-0 flex-col overflow-hidden'}>
-        <CardHeader className={isCompactPdfPage ? 'space-y-0 p-0 pb-3' : 'space-y-3 p-4'}>
-          {!isCompactPdfPage ? (
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div>
-                <CardTitle>{config.title}</CardTitle>
-                <CardDescription className="mt-1">{config.description}</CardDescription>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button type="button" size="sm" onClick={() => setUploadDialogOpen(true)}>
-                  <FileUp className="size-4" />
-                  {config.uploadButton}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => cleanupMutation.mutate()}
-                  disabled={cleanupMutation.isPending}
-                >
-                  {cleanupMutation.isPending ? '清理中...' : config.cleanupButton}
-                </Button>
-              </div>
-            </div>
-          ) : null}
-
-          <div className="flex flex-wrap items-end gap-2">
-            {isCompactPdfPage ? (
-              <div className="flex flex-wrap gap-2 pb-0">
-                <Button type="button" size="sm" onClick={() => setUploadDialogOpen(true)}>
-                  <FileUp className="size-4" />
-                  {config.uploadButton}
-                </Button>
-              </div>
-            ) : null}
+      <Card className="flex h-full min-h-0 flex-col overflow-hidden border-0 bg-transparent shadow-none">
+        <CardHeader className="space-y-0 p-0 pb-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" size="sm" className="h-8" onClick={() => setUploadDialogOpen(true)}>
+              <FileUp className="size-4" />
+              {config.uploadButton}
+            </Button>
             {config.showPurposeFilter ? (
-              <div className="w-44 space-y-1">
-                <Label className="text-xs">资源类型</Label>
+              <div className="w-44">
                 <Select
                   value={purpose}
                   onValueChange={(value) => {
@@ -344,8 +298,7 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
               </div>
             ) : null}
 
-            <div className="w-44 space-y-1">
-              {!isCompactPdfPage ? <Label className="text-xs">使用位置</Label> : null}
+            <div className="w-44">
               <Select
                 value={usage}
                 onValueChange={(value) => {
@@ -366,8 +319,7 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
               </Select>
             </div>
 
-            <form className="min-w-64 flex-1 space-y-1" onSubmit={handleSearchSubmit}>
-              {!isCompactPdfPage ? <Label className="text-xs">查询</Label> : null}
+            <form className="min-w-64 flex-1" onSubmit={handleSearchSubmit}>
               <div className="flex gap-2">
                 <Input
                   className="h-8"
@@ -381,12 +333,12 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
               </div>
             </form>
 
-            <div className="pb-2 text-sm text-muted-foreground">
+            <div className="text-sm text-muted-foreground">
               共 {pagination?.total || 0} 条
             </div>
           </div>
         </CardHeader>
-        <CardContent className={isCompactPdfPage ? 'flex min-h-0 flex-1 flex-col space-y-3 p-0' : 'flex min-h-0 flex-1 flex-col space-y-3 p-4 pt-0'}>
+        <CardContent className="flex min-h-0 flex-1 flex-col space-y-3 p-0">
 
           <div className="min-h-0 flex-1 overflow-auto rounded border">
             <Table>

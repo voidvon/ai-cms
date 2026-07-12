@@ -91,8 +91,8 @@ export default function DashboardLayout() {
     { path: '/content-model-data', label: '信息管理', icon: FileText },
     { path: '/topics', label: '专题管理', icon: FileText },
     { path: '/columns', label: '栏目管理', icon: Folder },
-    { path: '/pdf-assets', label: 'PDF 管理', icon: FileText },
-    { path: '/media-assets', label: '附件管理', icon: Image },
+    { path: '/pdf-assets', label: 'PDF', icon: FileText },
+    { path: '/media-assets', label: '附件', icon: Image },
   ] satisfies MenuItem[]
 
   const menuGroups = [

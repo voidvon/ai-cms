@@ -8,8 +8,7 @@ import { staticGenerationApi } from '@/api/static-generation'
 import { languagesApi } from '@/api/languages'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { Label } from '@/components/ui/label'
+import { Card, CardContent } from '@/components/ui/card'
 import {
   Pagination,
   PaginationContent,
@@ -42,16 +41,12 @@ const PAGE_LIMIT = 20
 
 interface ContentModelDataPageProps {
   initialModelCode?: string
-  pageTitle?: string
-  pageDescription?: string
   lockModelSelection?: boolean
   createButtonLabel?: string
 }
 
 export default function ContentModelDataPage({
   initialModelCode = '',
-  pageTitle = '信息',
-  pageDescription = '统一管理内容模型下的信息，默认进入第一个模型，可在上方切换。',
   lockModelSelection = false,
   createButtonLabel = '新增内容',
 }: ContentModelDataPageProps) {
@@ -228,24 +223,12 @@ export default function ContentModelDataPage({
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <CardTitle>{pageTitle}</CardTitle>
-              <CardDescription>{pageDescription}</CardDescription>
-            </div>
+      <div className="space-y-4">
+          <div className={lockModelSelection ? 'grid items-center gap-4 lg:grid-cols-[auto_minmax(0,260px)_minmax(0,1fr)]' : 'grid items-center gap-4 lg:grid-cols-[auto_minmax(0,260px)_minmax(0,260px)_minmax(0,1fr)]'}>
             <Button onClick={handleCreate}>{createButtonLabel}</Button>
-          </div>
-        </CardHeader>
-      </Card>
 
-      <Card>
-        <CardContent className="space-y-4 pt-6">
-          <div className={lockModelSelection ? 'grid gap-4 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)]' : 'grid gap-4 lg:grid-cols-[minmax(0,260px)_minmax(0,260px)_minmax(0,1fr)]'}>
             {!lockModelSelection ? (
-              <div className="space-y-2">
-                <Label>内容模型</Label>
+              <div>
                 <Select value={selectedModel.code} onValueChange={handleSelectModel}>
                   <SelectTrigger>
                     <SelectValue />
@@ -261,8 +244,7 @@ export default function ContentModelDataPage({
               </div>
             ) : null}
 
-            <div className="space-y-2">
-              <Label>所属栏目</Label>
+            <div>
               <Select value={selectedColumnId} onValueChange={handleSelectColumn}>
                 <SelectTrigger>
                   <SelectValue />
@@ -278,7 +260,7 @@ export default function ContentModelDataPage({
               </Select>
             </div>
 
-            <div className="flex flex-wrap items-end justify-start gap-2 lg:justify-end">
+            <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
               <Badge variant="outline">{selectedModel.code}</Badge>
               <Badge variant="outline">{selectedModel.fields.length} 字段</Badge>
               <Badge variant="outline">{modelColumns.length} 栏目</Badge>
@@ -430,8 +412,7 @@ export default function ContentModelDataPage({
               ) : null}
             </div>
           ) : null}
-        </CardContent>
-      </Card>
+      </div>
 
       <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>
         <AlertDialogContent>

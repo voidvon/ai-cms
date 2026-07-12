@@ -295,17 +295,11 @@ export default function ContentItemFormDialog({
       <DialogContent className="w-[80vw] max-w-[80vw] max-h-[80vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{mode === 'create' ? meta.createTitle : meta.editTitle}</DialogTitle>
-          <DialogDescription>
-            {mode === 'create' ? meta.createDescription : meta.editDescription}
-          </DialogDescription>
+          {mode === 'create' ? <DialogDescription>{meta.createDescription}</DialogDescription> : null}
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
-          <Tabs value={activeLanguage} onValueChange={setActiveLanguage} className="rounded border p-4">
-            <div className="space-y-3">
-              <div>
-                <div className="font-medium">内容信息</div>
-                <div className="text-sm text-muted-foreground">基础信息与多语言内容分栏编辑。</div>
-              </div>
+          <Tabs value={activeLanguage} onValueChange={setActiveLanguage}>
+            <div>
               <TabsList className="w-full justify-start">
                 <TabsTrigger value="base">基础信息</TabsTrigger>
                 {languages.map((language) => (
@@ -831,7 +825,6 @@ function getModelMeta(capabilities: FormModelCapabilities) {
     createTitle: '添加内容',
     editTitle: '编辑内容',
     createDescription: '填写内容信息',
-    editDescription: '修改内容信息',
     languageDescription: capabilities.languageDescription,
     translationNameField: capabilities.translationNameField,
     translationNameLabel: capabilities.translationNameLabel,
