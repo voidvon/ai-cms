@@ -16,7 +16,7 @@ import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { optimizeUploadedImage } from './image-optimizer.mjs';
 import { ensureLanguagesSchema, getLanguageById } from './languages.mjs';
 import { getSiteConfig } from './site.mjs';
-import { resolveRuntimeAssetUrl } from './uploads.mjs';
+import { resolveRuntimeAssetUrl, resolveUploadedFilePath } from './uploads.mjs';
 
 const PURPOSE_TARGETS = {
   product_cover: {
@@ -236,7 +236,8 @@ export async function replaceMediaAssetFile(id, { buffer, originalFilename }) {
     error.statusCode = 404;
     throw error;
   }
-  if (asset.storage_driver !== 'local' || !asset.fs_path) {
+  const resolvedFsPath = resolveMediaAssetFsPath(asset);
+  if (asset.storage_driver !== 'local' || !resolvedFsPath) {
     const error = new Error('当前资源不支持本地文件替换');
     error.statusCode = 400;
     throw error;
@@ -279,12 +280,12 @@ export async function replaceMediaAssetFile(id, { buffer, originalFilename }) {
     throw error;
   }
 
-  const fsDir = path.dirname(asset.fs_path);
+  const fsDir = path.dirname(resolvedFsPath);
   fs.mkdirSync(fsDir, { recursive: true });
-  const temporaryPath = path.join(fsDir, `.${path.basename(asset.fs_path)}.${randomBytes(6).toString('hex')}.tmp`);
+  const temporaryPath = path.join(fsDir, `.${path.basename(resolvedFsPath)}.${randomBytes(6).toString('hex')}.tmp`);
   try {
     fs.writeFileSync(temporaryPath, stored.buffer);
-    fs.renameSync(temporaryPath, asset.fs_path);
+    fs.renameSync(temporaryPath, resolvedFsPath);
   } finally {
     if (fs.existsSync(temporaryPath)) {
       fs.unlinkSync(temporaryPath);
@@ -294,13 +295,14 @@ export async function replaceMediaAssetFile(id, { buffer, originalFilename }) {
   execute(
     `
       UPDATE media_assets
-      SET original_name = ?, mime_type = ?, file_size = ?, pdf_title = ?, pdf_document_code = ?
+      SET original_name = ?, mime_type = ?, file_size = ?, fs_path = ?, pdf_title = ?, pdf_document_code = ?
       WHERE id = ?
     `,
     [
       String(originalFilename || ''),
       stored.mimeType || MIME_TYPES.get(stored.extension) || target.mimeFallback,
       stored.buffer.length,
+      resolvedFsPath,
       asset.purpose === 'pdf_document' ? inferPdfTitleFromFilename(originalFilename) : asset.pdf_title,
       asset.purpose === 'pdf_document' ? inferPdfDocumentCodeFromFilename(originalFilename) : asset.pdf_document_code,
       asset.id,
@@ -531,8 +533,9 @@ export function deleteMediaAsset(id, { force = false } = {}) {
   }
 
   let deletedFile = false;
-  if (isLocalMediaAsset(asset) && asset.fs_path && fs.existsSync(asset.fs_path)) {
-    fs.unlinkSync(asset.fs_path);
+  const fsPath = resolveMediaAssetFsPath(asset);
+  if (isLocalMediaAsset(asset) && fsPath && fs.existsSync(fsPath)) {
+    fs.unlinkSync(fsPath);
     deletedFile = true;
   }
 
@@ -590,8 +593,9 @@ export function cleanupOrphanedMediaAssets({ purpose } = {}) {
       continue;
     }
 
-    if (isLocalMediaAsset(item) && item.fs_path && fs.existsSync(item.fs_path)) {
-      fs.unlinkSync(item.fs_path);
+    const fsPath = resolveMediaAssetFsPath(item);
+    if (isLocalMediaAsset(item) && fsPath && fs.existsSync(fsPath)) {
+      fs.unlinkSync(fsPath);
       deletedFiles += 1;
     }
     execute('DELETE FROM media_assets WHERE id = ?', [item.id]);
@@ -628,11 +632,13 @@ function decorateMediaAsset(item, siteConfig = null) {
   const usageReferences = parseUsageReferencesJson(item.usage_references_json);
   const isOriginalUrl = isOriginalPdfAsset(item);
   const isLocalFile = isLocalMediaAsset(item);
+  const fsPath = isLocalFile ? resolveMediaAssetFsPath(item) : null;
 
   return {
     ...item,
+    fs_path: isLocalFile ? fsPath : item.fs_path,
     public_url: resolveMediaAssetPublicUrl(item, siteConfig),
-    file_exists: isLocalFile ? fs.existsSync(item.fs_path) : isOriginalUrl,
+    file_exists: isLocalFile ? Boolean(fsPath && fs.existsSync(fsPath)) : isOriginalUrl,
     is_local_file: isLocalFile,
     is_original_url: isOriginalUrl,
     language_id: item.language_id ? Number(item.language_id) : null,
@@ -666,6 +672,13 @@ function resolveMediaAssetPublicUrl(item, siteConfig = null) {
 
 function isLocalMediaAsset(item) {
   return String(item?.storage_driver || 'local') === 'local';
+}
+
+function resolveMediaAssetFsPath(item) {
+  if (!isLocalMediaAsset(item)) {
+    return null;
+  }
+  return resolveUploadedFilePath(item?.relative_path);
 }
 
 function isOriginalPdfAsset(item) {
