@@ -5,6 +5,7 @@ import { ensureContentModelStorageSchema, getContentTableName, getTranslationTab
 import { getDefaultLanguage, listLanguages } from './languages.mjs';
 import { normalizeUploadedRelativePath } from './uploads.mjs';
 import { normalizeTemplateDataAssetsDeep } from './template-data-assets.mjs';
+import { assertStructuredContentHtmlPreserved } from './structured-content-html.mjs';
 
 const EMPTY_IMAGE_LIST = '[]';
 const SYSTEM_FIELD_NAMES = new Set([
@@ -503,6 +504,7 @@ export function updateContentEntry(modelCode, id, input) {
   }
 
   const payload = normalizeContentEntryInput(modelCode, input, { existingEntry: existing });
+  assertStructuredTranslationHtmlPreserved(existing.translations, payload.translations);
   const tableName = getContentTableName(modelCode);
   const translationTableName = getTranslationTableName(modelCode);
   const { mainFields } = getModelFieldNames(modelCode);
@@ -782,6 +784,20 @@ function normalizeContentEntryInput(modelCode, input, { existingEntry = null } =
     },
     translations
   };
+}
+
+function assertStructuredTranslationHtmlPreserved(existingTranslations = {}, nextTranslations = {}) {
+  for (const [languageCode, existingTranslation] of Object.entries(existingTranslations || {})) {
+    const nextTranslation = nextTranslations?.[languageCode];
+    if (!nextTranslation) {
+      continue;
+    }
+    assertStructuredContentHtmlPreserved(
+      existingTranslation?.content_html,
+      nextTranslation?.content_html,
+      { languageCode }
+    );
+  }
 }
 
 function normalizeTranslations(translations, {

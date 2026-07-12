@@ -55,6 +55,7 @@ import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
 import { resolveAssetUrl } from '@/lib/assets'
+import { PdfDocumentKit, sanitizePdfDocumentEditorHtml } from '@/components/editor/PdfDocumentKit'
 
 interface RichTextEditorProps {
   value: string
@@ -130,7 +131,7 @@ function readEditorStorageHtml(editor: NonNullable<ReturnType<typeof useEditor>>
     }
   })
 
-  const html = normalizeEditorHtml(editor.getHTML())
+  const html = normalizeEditorHtml(sanitizePdfDocumentEditorHtml(editor.getHTML()))
 
   restoredImages.forEach(({ image, displaySrc, storedSrc }) => {
     image.setAttribute('src', displaySrc)
@@ -171,7 +172,7 @@ export default function RichTextEditor({
   const { resolvedTheme } = useTheme()
   const [linkUrl, setLinkUrl] = useState('')
   const [isUploading, setIsUploading] = useState(false)
-  const [isSourceMode, setIsSourceMode] = useState(() => isStructuredPdfDocument(lastHtmlRef.current))
+  const [isSourceMode, setIsSourceMode] = useState(false)
   const [sourceHtml, setSourceHtml] = useState(lastHtmlRef.current)
   const structuredPdfDocument = isStructuredPdfDocument(sourceHtml)
 
@@ -197,10 +198,11 @@ export default function RichTextEditor({
       TaskItem.configure({ nested: true }),
       TableKit.configure({
         table: {
-          resizable: true,
+          resizable: !isStructuredPdfDocument(lastHtmlRef.current),
           allowTableNodeSelection: true,
         },
       }),
+      PdfDocumentKit,
     ],
     content: lastHtmlRef.current,
     editorProps: {
@@ -233,6 +235,7 @@ export default function RichTextEditor({
     onUpdate: ({ editor }) => {
       const nextHtml = readEditorStorageHtml(editor)
       lastHtmlRef.current = nextHtml
+      setSourceHtml(nextHtml)
       onChangeRef.current(nextHtml)
       queueMicrotask(() => normalizeEditorAssetDisplay(editor.view.dom))
     },
@@ -260,15 +263,13 @@ export default function RichTextEditor({
     }
 
     setSourceHtml(normalizedValue)
-    if (isStructuredPdfDocument(normalizedValue)) {
-      setIsSourceMode(true)
-    }
     editor.commands.setContent(normalizedValue, { emitUpdate: false })
     lastHtmlRef.current = normalizedValue
     queueMicrotask(() => normalizeEditorAssetDisplay(editor.view.dom))
   }, [editor, value])
 
   const disabled = readOnly || !editor || isSourceMode
+  const styleControlsDisabled = disabled || structuredPdfDocument
 
   const toggleSourceMode = () => {
     if (!editor) {
@@ -279,11 +280,6 @@ export default function RichTextEditor({
       const currentHtml = readEditorStorageHtml(editor)
       setSourceHtml(currentHtml)
       setIsSourceMode(true)
-      return
-    }
-
-    if (structuredPdfDocument) {
-      toast.info('PDF 文档包含专用布局结构，仅支持源码编辑')
       return
     }
 
@@ -369,8 +365,8 @@ export default function RichTextEditor({
         <div className="rich-text-editor-toolbar-group">
           <ToolbarButton
             active={isSourceMode}
-            disabled={!editor || (isSourceMode && structuredPdfDocument)}
-            label={structuredPdfDocument ? 'PDF 文档源码模式' : isSourceMode ? '返回富文本' : '查看源代码'}
+            disabled={!editor}
+            label={isSourceMode ? '返回富文本' : structuredPdfDocument ? '查看 PDF 文档源码' : '查看源代码'}
             onClick={toggleSourceMode}
           >
             <CodeXml />
@@ -442,13 +438,13 @@ export default function RichTextEditor({
         <div className="rich-text-editor-toolbar-group">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button type="button" variant="ghost" size="icon-sm" disabled={disabled} aria-label="文字颜色" title="文字颜色">
+              <Button type="button" variant="ghost" size="icon-sm" disabled={styleControlsDisabled} aria-label="文字颜色" title="文字颜色">
                 <Palette />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               {colorOptions.map((option) => (
-                <DropdownMenuItem key={option.label} onClick={() => option.value ? editor?.chain().focus().setColor(option.value).run() : editor?.chain().focus().unsetColor().run()}>
+                <DropdownMenuItem disabled={styleControlsDisabled} key={option.label} onClick={() => option.value ? editor?.chain().focus().setColor(option.value).run() : editor?.chain().focus().unsetColor().run()}>
                   <span className="mr-2 size-3 rounded-full border" style={{ backgroundColor: option.value || 'transparent' }} />
                   {option.label}
                 </DropdownMenuItem>
@@ -458,13 +454,13 @@ export default function RichTextEditor({
 
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button type="button" variant="ghost" size="icon-sm" disabled={disabled} aria-label="高亮" title="高亮">
+              <Button type="button" variant="ghost" size="icon-sm" disabled={styleControlsDisabled} aria-label="高亮" title="高亮">
                 <Highlighter />
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start">
               {highlightOptions.map((option) => (
-                <DropdownMenuItem key={option.label} onClick={() => option.value ? editor?.chain().focus().toggleHighlight({ color: option.value }).run() : editor?.chain().focus().unsetHighlight().run()}>
+                <DropdownMenuItem disabled={styleControlsDisabled} key={option.label} onClick={() => option.value ? editor?.chain().focus().toggleHighlight({ color: option.value }).run() : editor?.chain().focus().unsetHighlight().run()}>
                   <span className="mr-2 size-3 rounded-full border" style={{ backgroundColor: option.value || 'transparent' }} />
                   {option.label}
                 </DropdownMenuItem>
@@ -501,16 +497,16 @@ export default function RichTextEditor({
         </div>
 
         <div className="rich-text-editor-toolbar-group">
-          <ToolbarButton active={editor?.isActive({ textAlign: 'left' })} disabled={disabled} label="左对齐" onClick={() => editor?.chain().focus().setTextAlign('left').run()}>
+          <ToolbarButton active={editor?.isActive({ textAlign: 'left' })} disabled={styleControlsDisabled} label="左对齐" onClick={() => editor?.chain().focus().setTextAlign('left').run()}>
             <AlignLeft />
           </ToolbarButton>
-          <ToolbarButton active={editor?.isActive({ textAlign: 'center' })} disabled={disabled} label="居中" onClick={() => editor?.chain().focus().setTextAlign('center').run()}>
+          <ToolbarButton active={editor?.isActive({ textAlign: 'center' })} disabled={styleControlsDisabled} label="居中" onClick={() => editor?.chain().focus().setTextAlign('center').run()}>
             <AlignCenter />
           </ToolbarButton>
-          <ToolbarButton active={editor?.isActive({ textAlign: 'right' })} disabled={disabled} label="右对齐" onClick={() => editor?.chain().focus().setTextAlign('right').run()}>
+          <ToolbarButton active={editor?.isActive({ textAlign: 'right' })} disabled={styleControlsDisabled} label="右对齐" onClick={() => editor?.chain().focus().setTextAlign('right').run()}>
             <AlignRight />
           </ToolbarButton>
-          <ToolbarButton active={editor?.isActive({ textAlign: 'justify' })} disabled={disabled} label="两端对齐" onClick={() => editor?.chain().focus().setTextAlign('justify').run()}>
+          <ToolbarButton active={editor?.isActive({ textAlign: 'justify' })} disabled={styleControlsDisabled} label="两端对齐" onClick={() => editor?.chain().focus().setTextAlign('justify').run()}>
             <AlignJustify />
           </ToolbarButton>
         </div>
