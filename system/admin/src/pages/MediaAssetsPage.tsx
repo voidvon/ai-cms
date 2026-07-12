@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Copy, Download, Eye, FileUp, Search, Trash2 } from 'lucide-react'
+import { Copy, Download, ExternalLink, Eye, FileUp, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { languagesApi } from '@/api/languages'
 import { mediaApi } from '@/api/media'
@@ -127,6 +127,9 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
   const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null)
   const [usageAsset, setUsageAsset] = useState<MediaAsset | null>(null)
+  const [replaceTarget, setReplaceTarget] = useState<MediaAsset | null>(null)
+  const [selectedReplacementFile, setSelectedReplacementFile] = useState<File | null>(null)
+  const [downloadingAssetId, setDownloadingAssetId] = useState<number | null>(null)
   const [deleteTarget, setDeleteTarget] = useState<MediaAsset | null>(null)
   const effectivePurpose = config.fixedPurpose || purpose
   const showLanguageColumn = mode === 'pdfs'
@@ -162,7 +165,7 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
 
   const cleanupMutation = useMutation({
     mutationFn: () => mediaApi.cleanupOrphaned(effectivePurpose),
-    onSuccess: (response) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['media-assets'] })
       const deletedRows = response.data?.deletedRows || 0
       const deletedFiles = response.data?.deletedFiles || 0
@@ -209,6 +212,19 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
     },
   })
 
+  const replaceMutation = useMutation({
+    mutationFn: async ({ asset, file }: { asset: MediaAsset; file: File }) => mediaApi.replace(asset.id, file),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['media-assets'] })
+      setReplaceTarget(null)
+      setSelectedReplacementFile(null)
+      toast.success('资源替换成功，原 URL 保持不变')
+    },
+    onError: (mutationError: any) => {
+      toast.error(mutationError.response?.data?.message || mutationError.message || '资源替换失败')
+    },
+  })
+
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     event.target.value = ''
@@ -235,6 +251,25 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
       toast.success(successMessage)
     } catch {
       toast.error('复制失败，请手动复制')
+    }
+  }
+
+  const downloadAsset = async (asset: MediaAsset) => {
+    setDownloadingAssetId(asset.id)
+    try {
+      const blob = await mediaApi.download(asset.id)
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = objectUrl
+      link.download = asset.original_name || `media-${asset.id}${asset.file_ext || ''}`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(objectUrl)
+    } catch (downloadError: any) {
+      toast.error(downloadError.response?.data?.message || downloadError.message || '下载失败')
+    } finally {
+      setDownloadingAssetId(null)
     }
   }
 
@@ -365,7 +400,7 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
                   <TableHead>大小</TableHead>
                   {showLanguageColumn ? <TableHead>语言</TableHead> : null}
                   <TableHead>使用位置</TableHead>
-                  <TableHead>本地文件</TableHead>
+                  <TableHead>来源</TableHead>
                   <TableHead>创建时间</TableHead>
                   <TableHead className="text-right">操作</TableHead>
                 </TableRow>
@@ -447,22 +482,52 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
                         )}
                       </TableCell>
                       <TableCell>
-                        <Badge variant={item.file_exists ? 'outline' : 'destructive'}>
-                          {item.file_exists ? '存在' : '缺失'}
-                        </Badge>
+                        {renderAssetSourceBadge(item)}
                       </TableCell>
                       <TableCell>{formatRelativeTime(item.created_at)}</TableCell>
                       <TableCell className="text-right">
                         <Button
+                          asChild
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label={`打开 ${item.original_name || item.relative_path}`}
+                          title="打开 URL"
+                        >
+                          <a href={getMediaAssetPublicUrl(item)} target="_blank" rel="noreferrer">
+                            <ExternalLink className="size-4" />
+                          </a>
+                        </Button>
+                        <Button
                           type="button"
                           variant="ghost"
                           size="icon-sm"
-                          asChild
-                          aria-label={`下载 ${item.original_name || item.relative_path}`}
+                          onClick={() => copyText(getMediaAssetPublicUrl(item), '已复制完整 URL')}
+                          aria-label={`复制 ${item.original_name || item.relative_path} 的完整 URL`}
+                          title="复制 URL"
                         >
-                          <a href={getMediaAssetPublicUrl(item)} download={item.original_name || undefined}>
-                            <Download className="size-4" />
-                          </a>
+                          <Copy className="size-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          disabled={!isLocalMediaAsset(item)}
+                          onClick={() => setReplaceTarget(item)}
+                          aria-label={`替换 ${item.original_name || item.relative_path}`}
+                          title={isLocalMediaAsset(item) ? '替换资源' : '原 URL 索引不支持本地替换'}
+                        >
+                          <RefreshCw className="size-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          disabled={downloadingAssetId === item.id || !isLocalMediaAsset(item)}
+                          onClick={() => downloadAsset(item)}
+                          aria-label={`下载 ${item.original_name || item.relative_path}`}
+                          title={isLocalMediaAsset(item) ? '下载文件' : '原 URL 索引请直接打开 URL'}
+                        >
+                          <Download className="size-4" />
                         </Button>
                         <Button
                           type="button"
@@ -634,6 +699,74 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
         </DialogContent>
       </Dialog>
 
+      <Dialog
+        open={Boolean(replaceTarget)}
+        onOpenChange={(open) => {
+          if (!open && !replaceMutation.isPending) {
+            setReplaceTarget(null)
+            setSelectedReplacementFile(null)
+          }
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>替换资源</DialogTitle>
+            <DialogDescription>
+              上传新文件后将覆盖原文件，资源 ID、URL 和已有引用保持不变。新文件必须为 {replaceTarget?.file_ext || '相同'} 扩展名。
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="rounded border bg-muted/20 p-3 text-sm text-muted-foreground">
+              {replaceTarget?.original_name || replaceTarget?.relative_path || '-'}
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="media-replacement-file">新文件</Label>
+              <Input
+                id="media-replacement-file"
+                type="file"
+                accept={replaceTarget?.file_ext || undefined}
+                disabled={replaceMutation.isPending}
+                onChange={(event) => {
+                  const file = event.target.files?.[0]
+                  event.target.value = ''
+                  setSelectedReplacementFile(file || null)
+                }}
+              />
+              {selectedReplacementFile ? (
+                <div className="text-xs text-muted-foreground">
+                  {selectedReplacementFile.name}，{formatFileSize(selectedReplacementFile.size)}
+                </div>
+              ) : null}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={replaceMutation.isPending}
+              onClick={() => {
+                setReplaceTarget(null)
+                setSelectedReplacementFile(null)
+              }}
+            >
+              取消
+            </Button>
+            <Button
+              type="button"
+              disabled={replaceMutation.isPending || !selectedReplacementFile}
+              onClick={() => {
+                if (replaceTarget && selectedReplacementFile) {
+                  replaceMutation.mutate({ asset: replaceTarget, file: selectedReplacementFile })
+                }
+              }}
+            >
+              <RefreshCw className="size-4" />
+              {replaceMutation.isPending ? '替换中...' : '确认替换'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={Boolean(usageAsset)} onOpenChange={(open) => !open && setUsageAsset(null)}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
@@ -717,6 +850,21 @@ function formatPurpose(purpose: string) {
 
 function getMediaAssetPublicUrl(item?: MediaAsset | null) {
   return resolveMediaAssetUrl(item) || new URL('/', window.location.origin).toString()
+}
+
+function isLocalMediaAsset(item?: MediaAsset | null) {
+  return item?.is_local_file ?? item?.storage_driver === 'local'
+}
+
+function renderAssetSourceBadge(item: MediaAsset) {
+  if (item.is_original_url) {
+    return <Badge variant="outline">原 URL</Badge>
+  }
+  return (
+    <Badge variant={item.file_exists ? 'outline' : 'destructive'}>
+      {item.file_exists ? '存在' : '缺失'}
+    </Badge>
+  )
 }
 
 function formatLanguageLabel(language: Language) {

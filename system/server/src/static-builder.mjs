@@ -66,6 +66,7 @@ let globalColumnSlugMap = new Map();
 let globalManagedColumnMap = new Map(); // 托管内容栏目映射
 let globalColumnMap = new Map(); // 栏目映射
 const imageDimensionCache = new Map();
+let productPdfAssetCache = null;
 let globalStaticBuildProgressReporter = null;
 let globalStaticBuildProgressState = {
   languageCode: null,
@@ -3131,6 +3132,15 @@ function buildLegacyManagedColumnDetailPageProps({ templateContext, rootColumn =
   const contentImages = normalizeManagedContentImages(managedItem);
   const columnPageData = normalizeLegacyColumnPageData(columnNode?.template_data, templateContext.site);
   let managedContentPageData = normalizeLegacyColumnPageData(managedItem?.template_data, templateContext.site);
+  const attachmentDownloads = buildProductAttachmentDownloads({
+    entryId: managedItem.id,
+    languageCode: templateContext.languageCode,
+    site: templateContext.site
+  });
+  managedContentPageData = {
+    ...(managedContentPageData || {}),
+    downloads: attachmentDownloads
+  };
   const sharedSpecOptions = buildSharedSpecOptions(managedItem?.spec_options);
 
   if (sharedSpecOptions.length > 0) {
@@ -3212,6 +3222,91 @@ function buildLegacyManagedColumnDetailPageProps({ templateContext, rootColumn =
     themeColorMetas: generateThemeColorMetas(),
     hreflangLinks: buildHreflangLinks(templateContext.site, { url: managedContentUrl })
   };
+}
+
+function buildProductAttachmentDownloads({ entryId, languageCode, site }) {
+  const requestedLanguageCode = String(languageCode || '').trim();
+  let attachmentPaths = loadProductAttachmentPaths(entryId, requestedLanguageCode);
+  if (attachmentPaths.length === 0 && requestedLanguageCode.toLowerCase() !== 'en') {
+    attachmentPaths = loadProductAttachmentPaths(entryId, 'en');
+  }
+  if (attachmentPaths.length === 0) return [];
+
+  const assetByPath = getProductPdfAssetMap();
+  const isZh = requestedLanguageCode.toLowerCase() === 'zh-cn';
+  const groupLabels = isZh
+    ? {
+        technical_information: '技术资料',
+        installation_guide: '安装与维护',
+        sales_brochure: '产品手册',
+        attachment: '其他文档'
+      }
+    : {
+        technical_information: 'Technical documentation',
+        installation_guide: 'Installation and maintenance',
+        sales_brochure: 'Sales brochures',
+        attachment: 'Other documents'
+      };
+  const groupedEntries = new Map();
+
+  for (const relativePath of attachmentPaths) {
+    const asset = assetByPath.get(relativePath);
+    if (!asset) continue;
+    const groupType = String(asset.pdf_document_type || 'attachment').trim() || 'attachment';
+    if (!groupedEntries.has(groupType)) groupedEntries.set(groupType, []);
+    groupedEntries.get(groupType).push({
+      name: String(asset.pdf_title || asset.original_name || relativePath).trim(),
+      reference: String(asset.pdf_document_code || '').trim() || '-',
+      language: String(asset.language_name || asset.language_code || '').trim() || 'Default',
+      href: resolvePublicAssetUrl(relativePath, site)
+    });
+  }
+
+  const groupOrder = ['technical_information', 'installation_guide', 'sales_brochure', 'attachment'];
+  return groupOrder
+    .filter((groupType) => groupedEntries.has(groupType))
+    .map((groupType) => ({
+      title: groupLabels[groupType],
+      entries: groupedEntries.get(groupType)
+    }));
+}
+
+function loadProductAttachmentPaths(entryId, languageCode) {
+  const row = queryAll(
+    `SELECT t.attachments_json
+     FROM content_product_translations t
+     JOIN languages l ON l.id = t.language_id
+     WHERE t.entry_id = ? AND lower(l.code) = lower(?)
+     LIMIT 1`,
+    [normalizeInteger(entryId, 0), String(languageCode || '').trim()]
+  )[0];
+  if (!row?.attachments_json) return [];
+  try {
+    const parsed = JSON.parse(row.attachments_json);
+    return Array.isArray(parsed)
+      ? Array.from(new Set(parsed.map((item) => String(item || '').trim()).filter(Boolean)))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function getProductPdfAssetMap() {
+  if (productPdfAssetCache) return productPdfAssetCache;
+  productPdfAssetCache = new Map(queryAll(
+    `SELECT
+       m.relative_path,
+       m.original_name,
+       m.pdf_document_type,
+       m.pdf_title,
+       m.pdf_document_code,
+       l.code AS language_code,
+       l.name AS language_name
+     FROM media_assets m
+     LEFT JOIN languages l ON l.id = m.language_id
+     WHERE m.purpose = 'pdf_document'`
+  ).map((asset) => [String(asset.relative_path), asset]));
+  return productPdfAssetCache;
 }
 
 function buildLegacySectionContentListPageProps({

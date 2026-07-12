@@ -1211,6 +1211,10 @@ function normalizeDynamicFieldValue(value, field) {
     return toBooleanInt(value, 0);
   }
 
+  if (fieldType === 'attachments') {
+    return JSON.stringify(normalizeAttachmentPaths(value));
+  }
+
   return value == null ? '' : String(value);
 }
 
@@ -1237,5 +1241,27 @@ function readDynamicFieldValue(value, field) {
     return toBooleanInt(value, 0);
   }
 
+  if (fieldType === 'attachments') {
+    return normalizeAttachmentPaths(value);
+  }
+
   return value ?? '';
+}
+
+function normalizeAttachmentPaths(value) {
+  let source = value;
+  if (typeof source === 'string') {
+    const normalized = source.trim();
+    if (!normalized) return [];
+    try {
+      source = JSON.parse(normalized);
+    } catch {
+      source = [normalized];
+    }
+  }
+
+  if (!Array.isArray(source)) return [];
+  return Array.from(new Set(source
+    .map((item) => String(item || '').trim())
+    .filter(Boolean)));
 }

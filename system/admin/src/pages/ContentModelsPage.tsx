@@ -283,5 +283,6 @@ function formatFieldType(type: string) {
   if (type === 'boolean') return '开关'
   if (type === 'datetime') return '时间'
   if (type === 'number') return '数字'
+  if (type === 'attachments') return '附件'
   return type
 }

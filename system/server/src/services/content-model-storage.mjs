@@ -61,7 +61,7 @@ function getConfiguredFieldDefinition(field) {
   if (normalizedType === 'number' || normalizedType === 'boolean') {
     return 'NUMERIC';
   }
-  if (normalizedType === 'image' || normalizedType === 'images' || normalizedType === 'richtext' || normalizedType === 'textarea' || normalizedType === 'datetime') {
+  if (normalizedType === 'image' || normalizedType === 'images' || normalizedType === 'attachments' || normalizedType === 'richtext' || normalizedType === 'textarea' || normalizedType === 'datetime') {
     return 'TEXT';
   }
   return 'TEXT';

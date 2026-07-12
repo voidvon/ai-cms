@@ -17,6 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ImageUploadField from '@/components/ImageUploadField'
 import ImagesUploadField from '@/components/ImagesUploadField'
+import AttachmentsField from '@/components/AttachmentsField'
 import RichTextEditor from '@/components/RichTextEditor'
 import { buildColumnTreeOptions } from '@/lib/column-options'
 import { getFieldLabel, isFieldEditable, mapFieldsByName } from '@/lib/content-model-fields'
@@ -148,6 +149,13 @@ export default function ContentItemFormDialog({
     () => (contentModel?.fields || []).filter((field) => (
       !SYSTEM_FIELD_NAMES.has(field.field_name)
       && Number(field.is_translatable || 0) === 0
+    )),
+    [contentModel?.fields],
+  )
+  const dynamicTranslationFields = useMemo(
+    () => (contentModel?.fields || []).filter((field) => (
+      !SYSTEM_FIELD_NAMES.has(field.field_name)
+      && Number(field.is_translatable || 0) === 1
     )),
     [contentModel?.fields],
   )
@@ -424,6 +432,19 @@ export default function ContentItemFormDialog({
                         )
                       }
 
+                      if (field.field_type === 'attachments') {
+                        return (
+                          <div key={field.field_name} className="space-y-2 md:col-span-2">
+                            <Label>{fieldLabel}</Label>
+                            <AttachmentsField
+                              value={Array.isArray(value) ? value as string[] : []}
+                              disabled={!isFieldEditable(fieldMap, field.field_name)}
+                              onChange={(attachments) => setBaseData({ ...baseData, [field.field_name]: attachments })}
+                            />
+                          </div>
+                        )
+                      }
+
                       return (
                         <div key={field.field_name} className="space-y-2">
                           <Label htmlFor={field.field_name}>{fieldLabel}</Label>
@@ -688,6 +709,71 @@ export default function ContentItemFormDialog({
                         placeholder="请输入详细内容"
                         uploadPurpose="richtext_image"
                       />
+                    </div>
+                  ) : null}
+                  {dynamicTranslationFields.length ? (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {dynamicTranslationFields.map((field) => {
+                        const fieldLabel = getFieldLabel(fieldMap, field.field_name, field.field_name)
+                        const value = (translation as Record<string, unknown>)[field.field_name]
+                        const inputId = `${field.field_name}_${language.code}`
+                        const commonProps = {
+                          disabled: !isFieldEditable(fieldMap, field.field_name),
+                        }
+
+                        if (field.field_type === 'textarea' || field.field_type === 'richtext') {
+                          return (
+                            <div key={field.field_name} className="space-y-2 md:col-span-2">
+                              <Label htmlFor={inputId}>{fieldLabel}</Label>
+                              <Textarea
+                                id={inputId}
+                                value={String(value || '')}
+                                {...commonProps}
+                                onChange={(event) => {
+                                  setActiveLanguage(language.code)
+                                  updateTranslation({ [field.field_name]: event.target.value } as Partial<ContentItemTranslation>)
+                                }}
+                                rows={4}
+                                placeholder={`请输入${fieldLabel}`}
+                              />
+                            </div>
+                          )
+                        }
+
+                        if (field.field_type === 'attachments') {
+                          return (
+                            <div key={field.field_name} className="space-y-2 md:col-span-2">
+                              <Label>{fieldLabel}</Label>
+                              <AttachmentsField
+                                value={Array.isArray(value) ? value as string[] : []}
+                                languageId={language.id}
+                                disabled={!isFieldEditable(fieldMap, field.field_name)}
+                                onChange={(attachments) => {
+                                  setActiveLanguage(language.code)
+                                  updateTranslation({ [field.field_name]: attachments } as Partial<ContentItemTranslation>)
+                                }}
+                              />
+                            </div>
+                          )
+                        }
+
+                        return (
+                          <div key={field.field_name} className="space-y-2">
+                            <Label htmlFor={inputId}>{fieldLabel}</Label>
+                            <Input
+                              id={inputId}
+                              type={field.field_type === 'number' ? 'number' : 'text'}
+                              value={value === null || value === undefined ? '' : String(value)}
+                              {...commonProps}
+                              onChange={(event) => {
+                                setActiveLanguage(language.code)
+                                updateTranslation({ [field.field_name]: event.target.value } as Partial<ContentItemTranslation>)
+                              }}
+                              placeholder={`请输入${fieldLabel}`}
+                            />
+                          </div>
+                        )
+                      })}
                     </div>
                   ) : null}
                   {isFormFieldAvailable(fieldMap, 'seo_title') ? (

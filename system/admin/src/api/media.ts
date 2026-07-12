@@ -30,11 +30,33 @@ export const mediaApi = {
     return response.data
   },
 
-  list: async (params: { page?: number; limit?: number; purpose?: string; usage?: string; q?: string; pdf_search?: 1 }) => {
+  list: async (params: { page?: number; limit?: number; purpose?: string; usage?: string; q?: string; pdf_search?: 1; language_id?: number }) => {
     const response = await apiClient.get<ApiResponse<MediaAsset[]> & { items: MediaAsset[]; pagination: PaginationInfo }>(
       '/media-assets',
       { params },
     )
+    return response.data
+  },
+
+  replace: async (id: number, file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+    const response = await apiClient.put<ApiResponse<MediaAsset>>(
+      `/media-assets/${id}/file`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      },
+    )
+    return response.data
+  },
+
+  download: async (id: number) => {
+    const response = await apiClient.get<Blob>(`/media-assets/${id}/download`, {
+      responseType: 'blob',
+    })
     return response.data
   },
 

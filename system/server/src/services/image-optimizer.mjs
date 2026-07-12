@@ -12,7 +12,7 @@ const PASSTHROUGH_EXTENSIONS = new Set(['.gif']);
 const CONVERT_ONLY_EXTENSIONS = new Set(['.heic', '.heif']);
 const MIN_BYTES_SAVED_FOR_REENCODE = 512;
 
-export async function optimizeUploadedImage({ buffer, extension }) {
+export async function optimizeUploadedImage({ buffer, extension, preserveExtension = false }) {
   const normalizedExtension = normalizeExtension(extension);
   if (!Buffer.isBuffer(buffer) || buffer.length === 0 || PASSTHROUGH_EXTENSIONS.has(normalizedExtension)) {
     return buildOriginalResult(buffer, normalizedExtension);
@@ -29,6 +29,11 @@ export async function optimizeUploadedImage({ buffer, extension }) {
   const metadata = await image.metadata();
   const hasAlpha = Boolean(metadata.hasAlpha);
   const candidates = [buildOriginalResult(sourceBuffer, sourceExtension)];
+
+  if (preserveExtension && !mustConvert) {
+    await appendPreservedFormatCandidate(candidates, image, normalizedExtension, hasAlpha);
+    return selectBestCandidate(candidates, false);
+  }
 
   await appendCandidate(candidates, 'webp', async () => image.clone().webp({
     quality: hasAlpha ? 78 : 80,
@@ -50,6 +55,36 @@ export async function optimizeUploadedImage({ buffer, extension }) {
     effort: 10,
   }).toBuffer());
 
+  return selectBestCandidate(candidates, mustConvert);
+}
+
+async function appendPreservedFormatCandidate(candidates, image, extension, hasAlpha) {
+  if (extension === '.jpg' || extension === '.jpeg') {
+    await appendCandidate(candidates, extension.slice(1), async () => image.clone().jpeg({
+      quality: 84,
+      mozjpeg: true,
+    }).toBuffer(), extension);
+    return;
+  }
+  if (extension === '.png') {
+    await appendCandidate(candidates, 'png', async () => image.clone().png({
+      palette: true,
+      quality: hasAlpha ? 88 : 85,
+      compressionLevel: 9,
+      effort: 10,
+    }).toBuffer());
+    return;
+  }
+  if (extension === '.webp') {
+    await appendCandidate(candidates, 'webp', async () => image.clone().webp({
+      quality: hasAlpha ? 82 : 84,
+      effort: 6,
+      smartSubsample: true,
+    }).toBuffer());
+  }
+}
+
+function selectBestCandidate(candidates, mustConvert) {
   candidates.sort((left, right) => left.buffer.length - right.buffer.length);
   const best = candidates[0];
   if (mustConvert) {
@@ -59,7 +94,6 @@ export async function optimizeUploadedImage({ buffer, extension }) {
   if (best !== original && original.buffer.length - best.buffer.length < MIN_BYTES_SAVED_FOR_REENCODE) {
     return original;
   }
-
   return best;
 }
 
@@ -91,13 +125,13 @@ function buildOriginalResult(buffer, extension) {
   };
 }
 
-async function appendCandidate(candidates, format, buildBuffer) {
+async function appendCandidate(candidates, format, buildBuffer, preservedExtension = null) {
   try {
     const buffer = await buildBuffer();
     if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
       return;
     }
-    const extension = format === 'jpg' ? '.jpg' : `.${format}`;
+    const extension = preservedExtension || (format === 'jpg' ? '.jpg' : `.${format}`);
     candidates.push({
       buffer,
       extension,

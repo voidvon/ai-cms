@@ -103,6 +103,7 @@ const PURPOSE_TARGETS = {
 };
 
 const CONVERTIBLE_IMAGE_EXTENSIONS = new Set(['.heic', '.heif']);
+const COMPRESSIBLE_ATTACHMENT_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif']);
 const PDF_DOCUMENT_TYPES = new Set(['sales_brochure', 'installation_guide', 'technical_information']);
 
 let schemaEnsured = false;
@@ -164,8 +165,14 @@ export async function uploadMediaAsset({ buffer, originalFilename, purpose, lang
     throw new Error('uploaded file exceeds size limit');
   }
 
-  const stored = target.bucket === 'images' || CONVERTIBLE_IMAGE_EXTENSIONS.has(extension)
-    ? await optimizeUploadedImage({ buffer, extension })
+  const shouldOptimizeImage = target.bucket === 'images'
+    || (normalizedPurpose === 'attachment' && COMPRESSIBLE_ATTACHMENT_IMAGE_EXTENSIONS.has(extension));
+  const stored = shouldOptimizeImage
+    ? await optimizeUploadedImage({
+      buffer,
+      extension,
+      preserveExtension: normalizedPurpose === 'attachment' && !CONVERTIBLE_IMAGE_EXTENSIONS.has(extension),
+    })
     : {
       buffer,
       extension,
@@ -220,6 +227,89 @@ export async function uploadMediaAsset({ buffer, originalFilename, purpose, lang
   return getMediaAssetById(result.lastInsertRowid);
 }
 
+export async function replaceMediaAssetFile(id, { buffer, originalFilename }) {
+  ensureMediaAssetsSchema();
+
+  const asset = getMediaAssetById(id);
+  if (!asset) {
+    const error = new Error('附件不存在');
+    error.statusCode = 404;
+    throw error;
+  }
+  if (asset.storage_driver !== 'local' || !asset.fs_path) {
+    const error = new Error('当前资源不支持本地文件替换');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const target = PURPOSE_TARGETS[resolvePurpose(asset.purpose)];
+  const extension = path.extname(String(originalFilename || '')).toLowerCase();
+  if (!target.allowedExtensions.has(extension)) {
+    const error = new Error('unsupported file type');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (!buffer || buffer.length > target.sourceMaxSizeKb * 1024) {
+    const error = new Error('uploaded file exceeds size limit');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const shouldOptimizeImage = target.bucket === 'images'
+    || (asset.purpose === 'attachment' && COMPRESSIBLE_ATTACHMENT_IMAGE_EXTENSIONS.has(extension));
+  const stored = shouldOptimizeImage
+    ? await optimizeUploadedImage({
+      buffer,
+      extension,
+      preserveExtension: asset.purpose === 'attachment' && !CONVERTIBLE_IMAGE_EXTENSIONS.has(extension),
+    })
+    : {
+      buffer,
+      extension,
+      mimeType: MIME_TYPES.get(extension) || target.mimeFallback,
+    };
+  if (!stored.buffer || stored.buffer.length > target.maxSizeKb * 1024) {
+    const error = new Error('uploaded file exceeds size limit after optimization');
+    error.statusCode = 400;
+    throw error;
+  }
+  if (stored.extension !== asset.file_ext) {
+    const error = new Error(`替换文件必须保持原扩展名 ${asset.file_ext}`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const fsDir = path.dirname(asset.fs_path);
+  fs.mkdirSync(fsDir, { recursive: true });
+  const temporaryPath = path.join(fsDir, `.${path.basename(asset.fs_path)}.${randomBytes(6).toString('hex')}.tmp`);
+  try {
+    fs.writeFileSync(temporaryPath, stored.buffer);
+    fs.renameSync(temporaryPath, asset.fs_path);
+  } finally {
+    if (fs.existsSync(temporaryPath)) {
+      fs.unlinkSync(temporaryPath);
+    }
+  }
+
+  execute(
+    `
+      UPDATE media_assets
+      SET original_name = ?, mime_type = ?, file_size = ?, pdf_title = ?, pdf_document_code = ?
+      WHERE id = ?
+    `,
+    [
+      String(originalFilename || ''),
+      stored.mimeType || MIME_TYPES.get(stored.extension) || target.mimeFallback,
+      stored.buffer.length,
+      asset.purpose === 'pdf_document' ? inferPdfTitleFromFilename(originalFilename) : asset.pdf_title,
+      asset.purpose === 'pdf_document' ? inferPdfDocumentCodeFromFilename(originalFilename) : asset.pdf_document_code,
+      asset.id,
+    ],
+  );
+
+  return getMediaAssetById(asset.id);
+}
+
 export function getMediaAssetById(id) {
   ensureMediaAssetsSchema();
   return decorateMediaAsset(queryOne(
@@ -257,7 +347,7 @@ export function getMediaAssetById(id) {
   ), getSiteConfig());
 }
 
-export function listMediaAssets({ page = 1, limit = 50, purpose, usage, q, pdfSearch = false } = {}) {
+export function listMediaAssets({ page = 1, limit = 50, purpose, usage, q, pdfSearch = false, languageId } = {}) {
   ensureMediaAssetsSchema();
 
   const safeLimit = Math.min(Math.max(Number.parseInt(String(limit), 10) || 50, 1), 200);
@@ -269,6 +359,12 @@ export function listMediaAssets({ page = 1, limit = 50, purpose, usage, q, pdfSe
   if (purpose && purpose !== 'all') {
     whereParts.push('purpose = ?');
     params.push(resolvePurpose(purpose));
+  }
+
+  const safeLanguageId = Number.parseInt(String(languageId || ''), 10);
+  if (Number.isInteger(safeLanguageId) && safeLanguageId > 0) {
+    whereParts.push('language_id = ?');
+    params.push(safeLanguageId);
   }
 
   const keyword = String(q || '').trim();
@@ -435,7 +531,7 @@ export function deleteMediaAsset(id, { force = false } = {}) {
   }
 
   let deletedFile = false;
-  if (asset.fs_path && fs.existsSync(asset.fs_path)) {
+  if (isLocalMediaAsset(asset) && asset.fs_path && fs.existsSync(asset.fs_path)) {
     fs.unlinkSync(asset.fs_path);
     deletedFile = true;
   }
@@ -494,7 +590,7 @@ export function cleanupOrphanedMediaAssets({ purpose } = {}) {
       continue;
     }
 
-    if (item.fs_path && fs.existsSync(item.fs_path)) {
+    if (isLocalMediaAsset(item) && item.fs_path && fs.existsSync(item.fs_path)) {
       fs.unlinkSync(item.fs_path);
       deletedFiles += 1;
     }
@@ -530,11 +626,15 @@ function decorateMediaAsset(item, siteConfig = null) {
   }
 
   const usageReferences = parseUsageReferencesJson(item.usage_references_json);
+  const isOriginalUrl = isOriginalPdfAsset(item);
+  const isLocalFile = isLocalMediaAsset(item);
 
   return {
     ...item,
-    public_url: resolveRuntimeAssetUrl(item.relative_path, siteConfig),
-    file_exists: fs.existsSync(item.fs_path),
+    public_url: resolveMediaAssetPublicUrl(item, siteConfig),
+    file_exists: isLocalFile ? fs.existsSync(item.fs_path) : isOriginalUrl,
+    is_local_file: isLocalFile,
+    is_original_url: isOriginalUrl,
     language_id: item.language_id ? Number(item.language_id) : null,
     language_code: item.language_code || null,
     language_name: item.language_name || null,
@@ -544,6 +644,38 @@ function decorateMediaAsset(item, siteConfig = null) {
     usage_references: usageReferences,
     usage_count: usageReferences.length,
   };
+}
+
+function resolveMediaAssetPublicUrl(item, siteConfig = null) {
+  const relativePath = String(item?.relative_path || '').trim();
+  if (!relativePath) {
+    return '';
+  }
+  if (/^(?:https?:)?\/\//i.test(relativePath)) {
+    return relativePath;
+  }
+  if (/^\/uploads\/(?:images|skin|pdfs|files)\//i.test(relativePath)) {
+    return resolveRuntimeAssetUrl(relativePath, siteConfig);
+  }
+  if (isOriginalPdfAsset(item) && relativePath.startsWith('/')) {
+    const baseUrl = String(siteConfig?.assets_public_base_url || siteConfig?.web_url || '').trim().replace(/\/+$/g, '');
+    return baseUrl ? `${baseUrl}${relativePath}` : relativePath;
+  }
+  return relativePath;
+}
+
+function isLocalMediaAsset(item) {
+  return String(item?.storage_driver || 'local') === 'local';
+}
+
+function isOriginalPdfAsset(item) {
+  const relativePath = String(item?.relative_path || '').trim();
+  return String(item?.purpose || '') === 'pdf_document'
+    && String(item?.storage_driver || '') === 'remote'
+    && (
+      /^(?:https?:)?\/\//i.test(relativePath)
+      || relativePath.startsWith('/')
+    );
 }
 
 function inferPdfDocumentCodeFromFilename(filename) {

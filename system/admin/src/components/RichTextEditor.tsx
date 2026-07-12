@@ -98,6 +98,10 @@ function normalizeEditorHtml(value: string) {
   return trimmed === '<p></p>' || trimmed === '<p><br></p>' ? '' : trimmed
 }
 
+function isStructuredPdfDocument(value: string) {
+  return /\bclass\s*=\s*["'][^"']*\bpdf-document(?:\s|--|["'])/i.test(value)
+}
+
 function normalizeEditorAssetDisplay(root: HTMLElement | null) {
   if (!root) {
     return
@@ -167,8 +171,9 @@ export default function RichTextEditor({
   const { resolvedTheme } = useTheme()
   const [linkUrl, setLinkUrl] = useState('')
   const [isUploading, setIsUploading] = useState(false)
-  const [isSourceMode, setIsSourceMode] = useState(false)
+  const [isSourceMode, setIsSourceMode] = useState(() => isStructuredPdfDocument(lastHtmlRef.current))
   const [sourceHtml, setSourceHtml] = useState(lastHtmlRef.current)
+  const structuredPdfDocument = isStructuredPdfDocument(sourceHtml)
 
   useEffect(() => {
     onChangeRef.current = onChange
@@ -255,6 +260,9 @@ export default function RichTextEditor({
     }
 
     setSourceHtml(normalizedValue)
+    if (isStructuredPdfDocument(normalizedValue)) {
+      setIsSourceMode(true)
+    }
     editor.commands.setContent(normalizedValue, { emitUpdate: false })
     lastHtmlRef.current = normalizedValue
     queueMicrotask(() => normalizeEditorAssetDisplay(editor.view.dom))
@@ -271,6 +279,11 @@ export default function RichTextEditor({
       const currentHtml = readEditorStorageHtml(editor)
       setSourceHtml(currentHtml)
       setIsSourceMode(true)
+      return
+    }
+
+    if (structuredPdfDocument) {
+      toast.info('PDF 文档包含专用布局结构，仅支持源码编辑')
       return
     }
 
@@ -356,8 +369,8 @@ export default function RichTextEditor({
         <div className="rich-text-editor-toolbar-group">
           <ToolbarButton
             active={isSourceMode}
-            disabled={!editor}
-            label={isSourceMode ? '返回富文本' : '查看源代码'}
+            disabled={!editor || (isSourceMode && structuredPdfDocument)}
+            label={structuredPdfDocument ? 'PDF 文档源码模式' : isSourceMode ? '返回富文本' : '查看源代码'}
             onClick={toggleSourceMode}
           >
             <CodeXml />

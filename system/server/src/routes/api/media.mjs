@@ -1,8 +1,11 @@
+import fs from 'node:fs';
 import { requireAuth } from '../../middleware/auth.mjs';
 import {
   cleanupOrphanedMediaAssets,
   deleteMediaAsset,
+  getMediaAssetById,
   listMediaAssets,
+  replaceMediaAssetFile,
   updateMediaAssetLanguage,
   updateMediaAssetPdfDocumentType,
   uploadMediaAsset,
@@ -12,7 +15,7 @@ export default async function mediaRoutes(app) {
   app.get('/media-assets', {
     onRequest: [requireAuth],
   }, async (request) => {
-    const { page, limit, purpose, usage, q, pdf_search } = request.query;
+    const { page, limit, purpose, usage, q, pdf_search, language_id } = request.query;
     const result = listMediaAssets({
       page: page ? Number.parseInt(page, 10) : undefined,
       limit: limit ? Number.parseInt(limit, 10) : undefined,
@@ -20,6 +23,7 @@ export default async function mediaRoutes(app) {
       usage,
       q,
       pdfSearch: String(pdf_search || '') === '1',
+      languageId: language_id ? Number.parseInt(language_id, 10) : undefined,
     });
 
     return { success: true, ...result };
@@ -62,6 +66,55 @@ export default async function mediaRoutes(app) {
       }
       app.log.error(error);
       return reply.internalServerError(error.message || '删除失败');
+    }
+  });
+
+  app.get('/media-assets/:id/download', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    const asset = getMediaAssetById(request.params.id);
+    if (!asset) {
+      return reply.notFound('附件不存在');
+    }
+    if (asset.storage_driver !== 'local' || !asset.fs_path || !fs.existsSync(asset.fs_path)) {
+      return reply.notFound('附件文件不存在');
+    }
+
+    const downloadName = String(asset.original_name || `media-${asset.id}${asset.file_ext || ''}`)
+      .replace(/[\r\n]/g, '');
+    reply.header('Content-Type', asset.mime_type || 'application/octet-stream');
+    reply.header('Content-Length', String(asset.file_size || fs.statSync(asset.fs_path).size));
+    reply.header('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(downloadName)}`);
+    return reply.send(fs.createReadStream(asset.fs_path));
+  });
+
+  app.put('/media-assets/:id/file', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    const data = await request.file();
+    if (!data) {
+      return reply.badRequest('未上传文件');
+    }
+
+    try {
+      const asset = await replaceMediaAssetFile(request.params.id, {
+        buffer: await data.toBuffer(),
+        originalFilename: data.filename,
+      });
+      return {
+        success: true,
+        message: '资源已替换',
+        data: asset,
+      };
+    } catch (error) {
+      if (error.statusCode === 404) {
+        return reply.notFound(error.message || '附件不存在');
+      }
+      if (error.statusCode === 400) {
+        return reply.badRequest(error.message || '资源替换失败');
+      }
+      app.log.error(error);
+      return reply.internalServerError(error.message || '资源替换失败');
     }
   });
 

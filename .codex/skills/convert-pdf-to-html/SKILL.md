@@ -50,6 +50,7 @@ description: 将 PDF 文档高保真转换为可编辑、可访问、响应式�
 ```
 
 - 技术资料、产品数据表优先使用 `pdf-document--technical`；安装维修指南使用 `pdf-document--manual`。
+- 安装维修指南的 `intro-grid` 中，`.contents` 目录区的 `h2` 必须固定为“安装维修指南”，不得使用“内容”“目录”或 PDF 原文中的其它标题替代。
 - 所有文档统一使用 `document-main`、`document-header`、`document-code`、`document-brand`、`document-issue`、`title-band`、`document-section`、`document-footer` 这组框架类；技术资料需要表达原 PDF 页分组时使用 `document-page`。
 - 所有正文表格统一使用 `document-table`；需要表达布局密度或表格语义时增加可复用的修饰类，不得另用 `thin`、`compact` 等文档类型私有类代替基础类。
 - `document-header` 和 `title-band` 必须位于 `document-main` 的起始内容区并保持先后顺序；`document-page` 可按原文分页包裹它们和正文区块。各文档类型的视觉差异只能通过 `pdf-document--technical`、`pdf-document--manual` 修饰类在共享 CSS 中表达。

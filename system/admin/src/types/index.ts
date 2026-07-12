@@ -149,6 +149,8 @@ export interface ManagedContentTranslation {
   seo_title?: string;
   seo_description?: string;
   publish_status: PublishStatus;
+  dynamic_fields?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export interface SectionContentItem {
@@ -295,7 +297,7 @@ export interface ContentModelField {
   config_id?: number | null;
   field_name: string;
   field_label: string;
-  field_type: 'text' | 'richtext' | 'image' | 'boolean' | 'datetime' | 'number' | string;
+  field_type: 'text' | 'richtext' | 'image' | 'attachments' | 'boolean' | 'datetime' | 'number' | string;
   db_type?: string;
   is_required: number;
   is_primary: number;
@@ -442,6 +444,8 @@ export interface MediaAsset {
   public_url?: string;
   fs_path: string;
   file_exists?: boolean;
+  is_local_file?: boolean;
+  is_original_url?: boolean;
   language_id?: number | null;
   language_code?: string | null;
   language_name?: string | null;
