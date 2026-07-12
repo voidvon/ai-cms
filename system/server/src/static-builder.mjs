@@ -5418,11 +5418,50 @@ function finalizeSiteHtmlOutput(html, siteConfig = null) {
   });
 
   const pathPrefix = normalizeLanguageSitePathPrefix(siteConfig?.language_site_path_prefix);
-  if (pathPrefix === '/') {
-    return output;
+  if (pathPrefix !== '/') {
+    output = prefixSiteInternalRootPaths(output, pathPrefix);
   }
 
-  return prefixSiteInternalRootPaths(output, pathPrefix);
+  return minifyHtmlInterTagWhitespace(output);
+}
+
+const HTML_INLINE_ELEMENTS = new Set([
+  'a', 'abbr', 'b', 'bdi', 'bdo', 'br', 'button', 'cite', 'code', 'data', 'del',
+  'dfn', 'em', 'i', 'img', 'input', 'ins', 'kbd', 'label', 'mark', 'meter',
+  'output', 'picture', 'progress', 'q', 'ruby', 's', 'samp', 'select', 'small',
+  'span', 'strong', 'sub', 'sup', 'svg', 'time', 'u', 'var', 'wbr'
+]);
+
+function minifyHtmlInterTagWhitespace(value) {
+  const html = String(value || '');
+  if (!html || !/>\s+</.test(html)) {
+    return html;
+  }
+
+  const protectedBlocks = [];
+  const protectedHtml = html.replace(
+    /<(pre|textarea|script|style)\b[^>]*>[\s\S]*?<\/\1>/gi,
+    (block) => {
+      const token = `<html-protected-block data-index="${protectedBlocks.length}"></html-protected-block>`;
+      protectedBlocks.push(block);
+      return token;
+    }
+  );
+
+  const minified = protectedHtml.replace(
+    /(<\/?([a-z][a-z0-9:-]*)\b[^>]*>)\s+(?=<\/?([a-z][a-z0-9:-]*)\b[^>]*>)/gi,
+    (_match, leftTag, leftName, rightName) => {
+      const separator = HTML_INLINE_ELEMENTS.has(String(leftName || '').toLowerCase())
+        && HTML_INLINE_ELEMENTS.has(String(rightName || '').toLowerCase())
+        ? ' '
+        : '';
+      return `${leftTag}${separator}`;
+    }
+  );
+
+  return minified.replace(/<html-protected-block data-index="(\d+)"><\/html-protected-block>/g, (_match, index) => {
+    return protectedBlocks[Number(index)] || '';
+  });
 }
 
 function normalizeHtmlImageLoading(value) {

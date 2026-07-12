@@ -107,6 +107,15 @@ function assertSecurityHeaders(headers) {
 
 function assertGeneratedJsonLdIsValid(outputRoot) {
   const indexHtml = fs.readFileSync(path.join(outputRoot, 'index.html'), 'utf8');
+  const whitespaceInsensitiveHtml = indexHtml.replace(
+    /<(pre|textarea|script|style)\b[^>]*>[\s\S]*?<\/\1>/gi,
+    ''
+  );
+  assert.equal(
+    />\s*\n\s*</.test(whitespaceInsensitiveHtml),
+    false,
+    '生成 HTML 不应保留普通标签之间的排版换行。'
+  );
   const match = indexHtml.match(/<script\s+type="application\/ld\+json">([\s\S]*?)<\/script>/i);
   assert.ok(match, '生成首页缺少 application/ld+json。');
   assert.equal(match[1].includes('&quot;'), false, 'JSON-LD 不应输出 HTML 实体转义的双引号。');

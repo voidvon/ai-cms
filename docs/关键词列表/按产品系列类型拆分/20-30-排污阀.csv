@@ -1,31 +1,31 @@
-﻿Keyword,Intent,Volume,KD,CPC,类型,备注
-bcv1 spirax sarco,,0,,0.00,,
-spirax sarco blowdown valve,,20,,0,category,
-blowdown valve spirax sarco,,0,,0.00,,
-spirax sarco automatic blowdown valve,,0,,0,,
-spirax sarco boiler blowdown valves,,0,,0.00,,
-spirax sarco continuous blowdown valve,,0,,0.00,,
-purga de fondo spirax sarco,,0,,0.00,,
-purga de fondo spirax sarco bva,,0,,0.00,,
-purga de fondo spirax sarco si2,,0,,0.00,,
-purga de sales spirax sarco,,0,,0.00,,
-purga de superficie spirax sarco,,0,,0.00,,
-spirax sarco bottom blowdown,,0,,0.00,,
-spirax sarco continuous blowdown,,0,,0.00,,
-bbv43 spirax sarco,,0,,0.00,,
-spirax sarco bdv1,,0,,0.00,,
-purgas de calderas spirax sarco,,0,,0.00,,
-spirax sarco boiler blowdown,,0,,0,,
-spirax sarco boiler blowdown calculation,,0,,0.00,,
-abv 40 spirax sarco,,0,,0,,
-abv spirax sarco,,0,,0.00,,
-purga automatica spirax sarco,,0,,0.00,,
-purga continua spirax sarco,,0,,0.00,,
-purga de vapor spirax sarco,,0,,0.00,,
-spirax sarco descargas,,0,,0.00,,
-spirax sarco zawory odmulajace,,0,,0.00,,
-bcv spirax sarco,,0,,0.00,,
-spirax sarco bcv,,0,,0.00,,
-kbv 20 spirax sarco,,0,,0.00,,
-spirax sarco dfg 300,,0,,0.00,,
-spirax sarco bdv 980,,0,,0.00,product,Official search result: BDV blowdown/depressurisation valves; treated as BDV series query with numeric noise (batch-54)
+﻿Keyword,Intent,Volume,KD,CPC,类型,备注,内链
+bcv1 spirax sarco,,0,,0.00,,,
+spirax sarco blowdown valve,,20,,0,category,,/topics/blowdown-valves/
+blowdown valve spirax sarco,,0,,0.00,,,/topics/blowdown-valves/
+spirax sarco automatic blowdown valve,,0,,0,,,/topics/blowdown-valves/
+spirax sarco boiler blowdown valves,,0,,0.00,,,/topics/blowdown-valves/
+spirax sarco continuous blowdown valve,,0,,0.00,,,/topics/blowdown-valves/
+purga de fondo spirax sarco,,0,,0.00,,,/topics/blowdown-valves/
+purga de fondo spirax sarco bva,,0,,0.00,,,/topics/blowdown-valves/
+purga de fondo spirax sarco si2,,0,,0.00,,,
+purga de sales spirax sarco,,0,,0.00,,,/topics/blowdown-valves/
+purga de superficie spirax sarco,,0,,0.00,,,/topics/blowdown-valves/
+spirax sarco bottom blowdown,,0,,0.00,,,/topics/blowdown-valves/
+spirax sarco continuous blowdown,,0,,0.00,,,/topics/blowdown-valves/
+bbv43 spirax sarco,,0,,0.00,,,
+spirax sarco bdv1,,0,,0.00,,,
+purgas de calderas spirax sarco,,0,,0.00,,,/topics/blowdown-valves/
+spirax sarco boiler blowdown,,0,,0,,,/topics/blowdown-valves/
+spirax sarco boiler blowdown calculation,,0,,0.00,,,/topics/blowdown-valves/
+abv 40 spirax sarco,,0,,0,,,/topics/blowdown-valves/
+abv spirax sarco,,0,,0.00,,,/topics/blowdown-valves/
+purga automatica spirax sarco,,0,,0.00,,,/topics/blowdown-valves/
+purga continua spirax sarco,,0,,0.00,,,/topics/blowdown-valves/
+purga de vapor spirax sarco,,0,,0.00,,,/topics/blowdown-valves/
+spirax sarco descargas,,0,,0.00,,,/topics/blowdown-valves/
+spirax sarco zawory odmulajace,,0,,0.00,,,/topics/blowdown-valves/
+bcv spirax sarco,,0,,0.00,,,/topics/blowdown-valves/
+spirax sarco bcv,,0,,0.00,,,/topics/blowdown-valves/
+kbv 20 spirax sarco,,0,,0.00,,,/topics/blowdown-valves/
+spirax sarco dfg 300,,0,,0.00,,,/topics/blowdown-valves/
+spirax sarco bdv 980,,0,,0.00,product,Official search result: BDV blowdown/depressurisation valves; treated as BDV series query with numeric noise (batch-54),

@@ -1,8 +1,8 @@
-﻿Keyword,Intent,Volume,KD,CPC,类型,备注
-bdv 60 spirax sarco bim,,0,,0.00,,
-spirax sarco blowdown vessel,,20,,0,category,
-blowdown vessel spirax sarco,,10,,0.00,,
-blowdown tank spirax sarco,,0,,0,,
-spirax sarco blowdown expansion and cooling unit,,0,,0.00,,
-tanque de purgas spirax sarco,,0,,0.00,,
-spirax sarco purga,,0,,0.00,product,Official search top results: Tanques de Purga / blowdown tanks; existing tanque de purgas terms are split to blowdown vessels/tanks (batch-67)
+﻿Keyword,Intent,Volume,KD,CPC,类型,备注,内链
+bdv 60 spirax sarco bim,,0,,0.00,,,/products/boiler-controls-and-systems/blowdown-vessels/
+spirax sarco blowdown vessel,,20,,0,category,,/products/boiler-controls-and-systems/blowdown-vessels/
+blowdown vessel spirax sarco,,10,,0.00,,,/products/boiler-controls-and-systems/blowdown-vessels/
+blowdown tank spirax sarco,,0,,0,,,/products/boiler-controls-and-systems/blowdown-vessels/
+spirax sarco blowdown expansion and cooling unit,,0,,0.00,,,/products/boiler-controls-and-systems/blowdown-vessels/
+tanque de purgas spirax sarco,,0,,0.00,,,/products/boiler-controls-and-systems/blowdown-vessels/
+spirax sarco purga,,0,,0.00,product,Official search top results: Tanques de Purga / blowdown tanks; existing tanque de purgas terms are split to blowdown vessels/tanks (batch-67),

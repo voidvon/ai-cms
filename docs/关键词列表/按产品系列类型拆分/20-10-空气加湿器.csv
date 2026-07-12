@@ -1,11 +1,11 @@
-﻿Keyword,Intent,Volume,KD,CPC,类型,备注
-spirax sarco typ20,,0,,0.00,,
-spirax sarco typ20 model 2,,0,,0.00,,
-spirax sarco steam humidifier,,10,,0,category,斯派莎克 蒸汽加湿器
-spirax sarco commercial steam humidifier,,0,,0,,
-spirax sarco humidifiers,,20,,0,category,斯派莎克加湿器
-humidificadores spirax sarco,,0,,0.00,,
-spirax sarco type 20,,0,,0.00,,
-lanzas spirax sarco,,0,,0.00,product,Official search result: Type 20/40 direct steam injection humidifier lances (batch-53)
-spirax sarco type 20 for clean steam,,0,,0.00,product,Official search result: Type 20 and Type 40 Direct Steam Injection (SI) Steam Injection Humidifiers (batch-69)
-spirax sarco type 40,,0,,0.00,product,Official search result from Type 20/40 family: Type 20 and Type 40 Direct Steam Injection Humidifiers (batch-69)
+﻿Keyword,Intent,Volume,KD,CPC,类型,备注,内链
+spirax sarco typ20,,0,,0.00,,,
+spirax sarco typ20 model 2,,0,,0.00,,,
+spirax sarco steam humidifier,,10,,0,category,斯派莎克 蒸汽加湿器,/topics/air-humidifiers/
+spirax sarco commercial steam humidifier,,0,,0,,,/topics/air-humidifiers/
+spirax sarco humidifiers,,20,,0,category,斯派莎克加湿器,/topics/air-humidifiers/
+humidificadores spirax sarco,,0,,0.00,,,/topics/air-humidifiers/
+spirax sarco type 20,,0,,0.00,,,/topics/air-humidifiers/
+lanzas spirax sarco,,0,,0.00,product,Official search result: Type 20/40 direct steam injection humidifier lances (batch-53),
+spirax sarco type 20 for clean steam,,0,,0.00,product,Official search result: Type 20 and Type 40 Direct Steam Injection (SI) Steam Injection Humidifiers (batch-69),
+spirax sarco type 40,,0,,0.00,product,Official search result from Type 20/40 family: Type 20 and Type 40 Direct Steam Injection Humidifiers (batch-69),

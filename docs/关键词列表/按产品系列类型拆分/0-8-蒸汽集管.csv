@@ -1,9 +1,9 @@
-﻿Keyword,Intent,Volume,KD,CPC,类型,备注
-colector de vapor spirax sarco,,0,,0.00,,
-coletor de vapor spirax sarco,,0,,0.00,,
-manifold industrial spirax sarco,,0,,0.00,,
-spirax sarco collecteur,,0,,0.00,,
-spirax sarco manifold,,0,,0.00,,
-spirax sarco manifold de 6 bar,,0,,0.00,,
-spirax sarco steam manifolds,,0,,0.00,,
-calector de vapor spirax sarco,,0,,0.00,,
+﻿Keyword,Intent,Volume,KD,CPC,类型,备注,内链
+colector de vapor spirax sarco,,0,,0.00,,,/topics/steam-headers/
+coletor de vapor spirax sarco,,0,,0.00,,,/topics/steam-headers/
+manifold industrial spirax sarco,,0,,0.00,,,/topics/steam-headers/
+spirax sarco collecteur,,0,,0.00,,,/topics/steam-headers/
+spirax sarco manifold,,0,,0.00,,,/topics/steam-headers/
+spirax sarco manifold de 6 bar,,0,,0.00,,,/topics/steam-headers/
+spirax sarco steam manifolds,,0,,0.00,,,/topics/steam-headers/
+calector de vapor spirax sarco,,0,,0.00,,,/topics/steam-headers/

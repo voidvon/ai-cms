@@ -1,15 +1,15 @@
-﻿Keyword,Intent,Volume,KD,CPC,类型,备注
-spirax sarco in40m,,10,,0.00,,
-buses d'injection in15 in25m et in40m spirax sarco,,0,,0.00,,
-ebay spirax sarco steam injection in 15 dn,,0,,0.00,,
-new spirax sarco in15 dn,,0,,0.00,,
-new spirax sarco steam injecion in15 dn,,0,,0.00,,
-new spirax sarco steam injection in 15 dn,,0,,0.00,,
-tabla de inyeccion de vapor in40m spirax sarcos,,0,,0.00,,
-spirax sarco steam injector,,20,,0.00,category,斯派莎克 蒸汽喷射器
-steam injector spirax sarco,,20,,0.00,category,蒸汽喷射器 斯派莎克
-spirax sarco in25,,0,,0.00,,
-injetor de vapor spirax sarco,,0,,0.00,,
-inyector de vapor spirax sarco,,0,,0.00,,
-inyector de vapor spirax sarco in 25,,0,,0.00,,
-spirax sarco inyector de vapor,,0,,0.00,,
+﻿Keyword,Intent,Volume,KD,CPC,类型,备注,内链
+spirax sarco in40m,,10,,0.00,,,
+buses d'injection in15 in25m et in40m spirax sarco,,0,,0.00,,,
+ebay spirax sarco steam injection in 15 dn,,0,,0.00,,,/topics/injectors/
+new spirax sarco in15 dn,,0,,0.00,,,
+new spirax sarco steam injecion in15 dn,,0,,0.00,,,
+new spirax sarco steam injection in 15 dn,,0,,0.00,,,/topics/injectors/
+tabla de inyeccion de vapor in40m spirax sarcos,,0,,0.00,,,
+spirax sarco steam injector,,20,,0.00,category,斯派莎克 蒸汽喷射器,/topics/injectors/
+steam injector spirax sarco,,20,,0.00,category,蒸汽喷射器 斯派莎克,/topics/injectors/
+spirax sarco in25,,0,,0.00,,,
+injetor de vapor spirax sarco,,0,,0.00,,,/topics/injectors/
+inyector de vapor spirax sarco,,0,,0.00,,,/topics/injectors/
+inyector de vapor spirax sarco in 25,,0,,0.00,,,/topics/injectors/
+spirax sarco inyector de vapor,,0,,0.00,,,/topics/injectors/

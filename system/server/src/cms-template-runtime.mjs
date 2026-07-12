@@ -258,9 +258,9 @@ export function createCmsTemplateRuntime({
     })}-->`;
 
     if (/<\/head>/i.test(html)) {
-      return html.replace(/<\/head>/i, `${linkHtml}\n</head>`);
+      return html.replace(/<\/head>/i, `${linkHtml}</head>`);
     }
-    return `${linkHtml}\n${html}`;
+    return `${linkHtml}${html}`;
   }
 
   function injectInlineScriptAssetPlaceholders(html) {
@@ -859,7 +859,7 @@ function minifyScriptAssetJs(jsText, assetCode) {
 function replaceStyleRuntimePlaceholders(outputRoot, bundlePlan, templateClientAssetDir) {
   for (const filePath of listHtmlFiles(outputRoot)) {
     const source = fs.readFileSync(filePath, 'utf8');
-    const next = source.replace(/<!--cms-tsx-styles:([\s\S]*?)-->/g, (_, encodedPayload) => {
+    const next = source.replace(/\s*<!--cms-tsx-styles:([\s\S]*?)-->\s*/g, (_, encodedPayload) => {
       const payload = decodeRuntimePlaceholder(encodedPayload);
       if (!payload?.renderGroupKey) {
         return '';
@@ -872,7 +872,7 @@ function replaceStyleRuntimePlaceholders(outputRoot, bundlePlan, templateClientA
         return `<link rel="stylesheet" href="/${templateClientAssetDir}/${fileName}">`;
       });
 
-      return runtimeParts.join('\n');
+      return runtimeParts.join('');
     });
 
     if (next !== source) {

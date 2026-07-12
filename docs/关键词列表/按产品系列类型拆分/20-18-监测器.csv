@@ -1,19 +1,19 @@
-﻿Keyword,Intent,Volume,KD,CPC,类型,备注
-r16c spirax sarco,,0,,0.00,,
-spirax sarco r16c,,0,,0.00,,
-spirax sarco up100,,20,,0,product,
-spirax sarco staps isa100 wireless,,0,,0.00,,
-spirax sarco staps wireless,,0,,0.00,,
-spirax sarco straps isa100 wireless,,0,,0.00,,
-staps spirax sarco,,0,,0.00,,
-ccd spirax sarco,,0,,0.00,,
-condensate contamination detection system spirax sarco,,0,,0,,
-analisador vazamento spirax sarco,,0,,0.00,,
-analizador de condensados spirax sarco,,0,,0.00,,
-como es su funcionamiento del contador de ciclos spirax sarco,,0,,0.00,,
-contador de ciclos spirax sarco,,0,,0.00,,
-digital cycle counter spirax sarco,,0,,0,,
-spirax sarco clean steam parameters monitoring,,0,,0.00,,
-spirax sarco digital cycle counter,,0,,0,,
-analizador de oxigeno spirax sarco,,0,,0.00,,
-spirax sarco sensor of oxygen,,0,,0.00,,
+﻿Keyword,Intent,Volume,KD,CPC,类型,备注,内链
+r16c spirax sarco,,0,,0.00,,,
+spirax sarco r16c,,0,,0.00,,,
+spirax sarco up100,,20,,0,product,,
+spirax sarco staps isa100 wireless,,0,,0.00,,,
+spirax sarco staps wireless,,0,,0.00,,,/topics/monitors/
+spirax sarco straps isa100 wireless,,0,,0.00,,,
+staps spirax sarco,,0,,0.00,,,/topics/monitors/
+ccd spirax sarco,,0,,0.00,,,/topics/monitors/
+condensate contamination detection system spirax sarco,,0,,0,,,/topics/monitors/
+analisador vazamento spirax sarco,,0,,0.00,,,/topics/monitors/
+analizador de condensados spirax sarco,,0,,0.00,,,/topics/monitors/
+como es su funcionamiento del contador de ciclos spirax sarco,,0,,0.00,,,/topics/monitors/
+contador de ciclos spirax sarco,,0,,0.00,,,/topics/monitors/
+digital cycle counter spirax sarco,,0,,0,,,/topics/monitors/
+spirax sarco clean steam parameters monitoring,,0,,0.00,,,/topics/monitors/
+spirax sarco digital cycle counter,,0,,0,,,/topics/monitors/
+analizador de oxigeno spirax sarco,,0,,0.00,,,/topics/monitors/
+spirax sarco sensor of oxygen,,0,,0.00,,,/topics/monitors/

@@ -1,25 +1,25 @@
-﻿Keyword,Intent,Volume,KD,CPC,类型,备注
-lp30 spirax sarco,,20,,0.00,,
-spirax sarco lp20,,20,,0.00,category,斯派莎克 LP20
-spirax sarco lp30,,20,,0.00,category,斯派莎克 LP30
-lp20 spirax sarco,,10,,0.00,,
-lp 20 spirax sarco,,0,,0.00,,
-lp 30 spirax sarco,,0,,0.00,,
-spirax sarco lp20 capacitance probe,,0,,0.00,,
-spirax sarco lp20 level probe,,0,,0.00,,
-spirax sarco lp30 4024700,,0,,0.00,,
-spirax sarco lp30 probe,,0,,0.00,,
-spirax sarco lp31,,0,,0.00,,
-spirax sarco modelo lp 31,,0,,0.00,,
-spirax sarco modelo lp31,,0,,0.00,,
-spirax sarco lp40,,20,,0.00,,
-lp21 spirax sarco,,10,,0.00,,
-spirax sarco lp21,,0,,0.00,,
-spirax sarco level probe,,0,,0.00,,
-camara sensor spirax sarco,,0,,0.00,,
-camara sensora s11 spirax sarco,,0,,0.00,,
-camara sensora spirax sarco,,0,,0.00,,
-camara sensora st-141 spirax sarco,,0,,0.00,,
-lp40 spirax sarco,,0,,0.00,,
-radar de onda guiada spirax sarco,,0,,0.00,,
-spirax sarco sensor chamber,,0,,0.00,,
+﻿Keyword,Intent,Volume,KD,CPC,类型,备注,内链
+lp30 spirax sarco,,20,,0.00,,,/products/boiler-controls-and-systems/level-controls/lp30-boiler-level-controller/
+spirax sarco lp20,,20,,0.00,category,斯派莎克 LP20,/topics/level-sensors/
+spirax sarco lp30,,20,,0.00,category,斯派莎克 LP30,/products/boiler-controls-and-systems/level-controls/lp30-boiler-level-controller/
+lp20 spirax sarco,,10,,0.00,,,
+lp 20 spirax sarco,,0,,0.00,,,/topics/level-sensors/
+lp 30 spirax sarco,,0,,0.00,,,/products/boiler-controls-and-systems/level-controls/lp30-boiler-level-controller/
+spirax sarco lp20 capacitance probe,,0,,0.00,,,
+spirax sarco lp20 level probe,,0,,0.00,,,
+spirax sarco lp30 4024700,,0,,0.00,,,/products/boiler-controls-and-systems/level-controls/lp30-boiler-level-controller/
+spirax sarco lp30 probe,,0,,0.00,,,/products/boiler-controls-and-systems/level-controls/lp30-boiler-level-controller/
+spirax sarco lp31,,0,,0.00,,,
+spirax sarco modelo lp 31,,0,,0.00,,,/topics/level-sensors/
+spirax sarco modelo lp31,,0,,0.00,,,
+spirax sarco lp40,,20,,0.00,,,
+lp21 spirax sarco,,10,,0.00,,,
+spirax sarco lp21,,0,,0.00,,,
+spirax sarco level probe,,0,,0.00,,,/topics/level-sensors/
+camara sensor spirax sarco,,0,,0.00,,,/topics/level-sensors/
+camara sensora s11 spirax sarco,,0,,0.00,,,
+camara sensora spirax sarco,,0,,0.00,,,/topics/level-sensors/
+camara sensora st-141 spirax sarco,,0,,0.00,,,
+lp40 spirax sarco,,0,,0.00,,,
+radar de onda guiada spirax sarco,,0,,0.00,,,/topics/level-sensors/
+spirax sarco sensor chamber,,0,,0.00,,,/topics/level-sensors/
