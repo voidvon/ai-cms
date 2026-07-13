@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { getSelectedTemplateVariant, listSelectedThemePublishedComponents, listThemeVariantTemplates } from './services/template-variants.mjs';
+import { getSelectedTemplateVariant, listThemeVariantTemplates } from './services/template-variants.mjs';
 import { resolvePublishedTemplate } from './services/templates.mjs';
 import { compileBrowserCompatibleCss, compileBrowserCompatibleJs } from './template-browser-compat.mjs';
 import { createTsxTemplateElement, renderTsxTemplate } from './tsx-template-renderer.mjs';
@@ -18,12 +18,13 @@ export function createCmsTemplateRuntime({
   const renderGroupStyleUsage = new Map();
   const entryTemplateDependencyUsage = new Map();
   const registeredScriptAssets = new Map();
+  const resolvedPublishedTemplateCache = new Map();
   let publishedTemplateMapCache = null;
 
   function renderCmsSitePage(pageName, props, templateContext, options = {}) {
     const templateCode = options.fallbackCode || templateByPage[pageName];
     const templateType = options.templateType || templateTypeByPage[pageName];
-    const template = templateCode && templateType ? resolvePublishedTemplate({
+    const template = templateCode && templateType ? resolveRuntimePublishedTemplate({
       templateType,
       targets: options.targets || [],
       fallbackCode: templateCode,
@@ -224,6 +225,9 @@ export function createCmsTemplateRuntime({
   }
 
   function appendLink(lines, attributes = {}) {
+    if (!String(attributes?.href || '').trim()) {
+      return;
+    }
     const rendered = renderAttributes(attributes);
     if (!rendered) {
       return;
@@ -336,7 +340,10 @@ export function createCmsTemplateRuntime({
   function buildCmsComponentMap(templateContext) {
     const components = new Map();
 
-    for (const item of listSelectedThemePublishedComponents()) {
+    for (const item of getPublishedTemplateMap().values()) {
+      if (item.type !== 'component') {
+        continue;
+      }
       components.set(String(item.code || '').toLowerCase(), {
         code: item.code || '',
         engine: item.engine || 'tsx',
@@ -442,6 +449,7 @@ export function createCmsTemplateRuntime({
   }
 
   function cleanupTemplateClientBundles(outputRoot) {
+    clearTemplateLookupCaches();
     const dirPath = path.resolve(outputRoot, templateClientAssetDir);
     if (fs.existsSync(dirPath) && fs.statSync(dirPath).isDirectory()) {
       fs.rmSync(dirPath, { recursive: true, force: true });
@@ -449,8 +457,12 @@ export function createCmsTemplateRuntime({
   }
 
   function buildRegisteredTsxAssets(outputRoot) {
-    buildRegisteredTsxStyleAssets(outputRoot);
-    buildRegisteredTsxScriptAssets(outputRoot);
+    try {
+      buildRegisteredTsxStyleAssets(outputRoot);
+      buildRegisteredTsxScriptAssets(outputRoot);
+    } finally {
+      clearTemplateLookupCaches();
+    }
   }
 
   function buildRegisteredTsxStyleAssets(outputRoot) {
@@ -473,7 +485,6 @@ export function createCmsTemplateRuntime({
       registeredStyleTemplates.clear();
       renderGroupStyleUsage.clear();
       entryTemplateDependencyUsage.clear();
-      publishedTemplateMapCache = null;
     }
   }
 
@@ -566,6 +577,29 @@ export function createCmsTemplateRuntime({
 
     publishedTemplateMapCache = nextMap;
     return publishedTemplateMapCache;
+  }
+
+  function resolveRuntimePublishedTemplate(input) {
+    const cacheKey = JSON.stringify({
+      templateType: String(input?.templateType || ''),
+      targets: (input?.targets || []).map((item) => [
+        String(item?.target_type || ''),
+        item?.target_id ?? null
+      ]),
+      fallbackCode: String(input?.fallbackCode || ''),
+      fallbackCodes: (input?.fallbackCodes || []).map((item) => String(item || ''))
+    });
+    if (resolvedPublishedTemplateCache.has(cacheKey)) {
+      return resolvedPublishedTemplateCache.get(cacheKey);
+    }
+    const template = resolvePublishedTemplate(input);
+    resolvedPublishedTemplateCache.set(cacheKey, template);
+    return template;
+  }
+
+  function clearTemplateLookupCaches() {
+    resolvedPublishedTemplateCache.clear();
+    publishedTemplateMapCache = null;
   }
 
   function resolveRenderGroup(input, context = {}) {

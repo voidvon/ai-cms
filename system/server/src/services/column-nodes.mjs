@@ -63,6 +63,10 @@ function getModelColumnConfig(model) {
 
 function getRootColumnNodeContext(rootColumnId, languageCode = null) {
   const rootColumn = getColumnById(rootColumnId, { languageCode, includeTranslations: true });
+  return buildRootColumnNodeContext(rootColumn);
+}
+
+function buildRootColumnNodeContext(rootColumn) {
   if (!rootColumn) {
     throw new Error('栏目不存在');
   }
@@ -208,8 +212,17 @@ export function listColumnNodes(model, { languageCode = null } = {}) {
 
 export function listColumnNodesByRoot(rootColumnId, { languageCode = null } = {}) {
   ensureColumnsSchema();
-  const rootContext = getRootColumnNodeContext(rootColumnId, languageCode);
-  return listColumns({ languageCode, includeTranslations: true })
+  return mapColumnNodesByRoot(
+    listColumns({ languageCode, includeTranslations: true }),
+    rootColumnId
+  );
+}
+
+export function mapColumnNodesByRoot(columns, rootColumnId) {
+  const rows = Array.isArray(columns) ? columns : [];
+  const rootColumn = rows.find((item) => toInteger(item?.id, 0) === toInteger(rootColumnId, 0));
+  const rootContext = buildRootColumnNodeContext(rootColumn);
+  return rows
     .filter((item) => isColumnInRootCategoryTree(item, rootContext))
     .map((item) => mapColumnToNode(item, rootContext.rootColumn));
 }

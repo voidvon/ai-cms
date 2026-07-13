@@ -1,5 +1,5 @@
 import { listContentEntriesPaged } from './content-entries.mjs';
-import { listColumnNodesByRoot } from './column-nodes.mjs';
+import { mapColumnNodesByRoot } from './column-nodes.mjs';
 import { listColumns } from './columns.mjs';
 import { resolvePublicSectionContext } from './public-sections.mjs';
 
@@ -28,7 +28,7 @@ export function buildSectionContentContext({
       continue;
     }
 
-    const categories = listColumnNodesByRoot(rootColumnId, { languageCode }).slice();
+    const categories = mapColumnNodesByRoot(resolvedColumns, rootColumnId);
     const entries = listSectionEntries(section, {
       languageCode,
       limit,

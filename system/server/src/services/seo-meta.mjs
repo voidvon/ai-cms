@@ -297,14 +297,32 @@ export function buildJsonLdSectionEntry(entry, site, options = {}) {
   };
 }
 
-export function generateFaviconLinks() {
-  return [
-    { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
-    { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32x32.png' },
-    { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/favicon-16x16.png' },
-    { rel: 'mask-icon', href: '/safari-pinned-tab.svg', color: '#002d72' },
-    { rel: 'shortcut icon', href: '/favicon.ico' }
-  ];
+export function generateFaviconLinks(site = null) {
+  const seoConfig = site?.template_data?.seo || {};
+  const configuredLinks = Array.isArray(seoConfig.faviconLinks)
+    ? seoConfig.faviconLinks
+    : Array.isArray(seoConfig.favicon_links)
+      ? seoConfig.favicon_links
+      : [];
+  const links = configuredLinks
+    .filter((item) => item && typeof item === 'object' && String(item.href || '').trim())
+    .map((item) => ({
+      rel: String(item.rel || 'icon').trim() || 'icon',
+      ...(String(item.type || '').trim() ? { type: String(item.type).trim() } : {}),
+      ...(String(item.sizes || '').trim() ? { sizes: String(item.sizes).trim() } : {}),
+      href: String(item.href).trim(),
+      ...(String(item.color || '').trim() ? { color: String(item.color).trim() } : {})
+    }));
+  if (links.length > 0) {
+    return links;
+  }
+
+  const configuredFavicon = String(seoConfig.favicon || seoConfig.faviconUrl || seoConfig.favicon_url || '').trim();
+  return [{
+    rel: 'icon',
+    type: configuredFavicon && !configuredFavicon.toLowerCase().endsWith('.svg') ? undefined : 'image/svg+xml',
+    href: configuredFavicon || '/logo.svg'
+  }];
 }
 
 export function generateThemeColorMetas() {

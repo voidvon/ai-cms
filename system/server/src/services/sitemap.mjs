@@ -67,7 +67,8 @@ export function buildSitemap({ outputRoot, generatedAt = new Date().toISOString(
     };
   }
 
-  const urls = collectSitemapEntries({ siteUrl, generatedAt, languageCode });
+  const urls = collectSitemapEntries({ siteUrl, generatedAt, languageCode })
+    .filter((entry) => staticOutputExists(outputRoot, entry.loc, siteUrl));
   const chunks = chunkEntries(urls, SITEMAP_CHUNK_SIZE);
   const sitemapFiles = [];
 
@@ -94,6 +95,35 @@ export function buildSitemap({ outputRoot, generatedAt = new Date().toISOString(
     recordsProcessed: urls.length,
     filesWritten: sitemapFiles.length + 1
   };
+}
+
+function staticOutputExists(outputRoot, absoluteUrl, siteUrl) {
+  const location = String(absoluteUrl || '').trim();
+  const normalizedSiteUrl = String(siteUrl || '').trim().replace(/\/+$/, '');
+  if (!location || !normalizedSiteUrl || !location.startsWith(normalizedSiteUrl)) {
+    return false;
+  }
+
+  let publicPath = location.slice(normalizedSiteUrl.length).split(/[?#]/, 1)[0] || '/';
+  try {
+    publicPath = decodeURIComponent(publicPath);
+  } catch {
+    return false;
+  }
+  const relativePath = publicPath === '/'
+    ? 'index.html'
+    : publicPath.endsWith('/')
+      ? `${publicPath.replace(/^\/+/, '')}index.html`
+      : publicPath.replace(/^\/+/, '');
+  const filePath = path.resolve(outputRoot, relativePath);
+  const relativeToRoot = path.relative(path.resolve(outputRoot), filePath);
+  return Boolean(
+    relativeToRoot
+    && !relativeToRoot.startsWith('..')
+    && !path.isAbsolute(relativeToRoot)
+    && fs.existsSync(filePath)
+    && fs.statSync(filePath).isFile()
+  );
 }
 
 export function getSitemapDiagnostics({ generatedAt = new Date().toISOString(), languageCode = null } = {}) {

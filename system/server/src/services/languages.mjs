@@ -6,6 +6,7 @@ const SITE_MODE_STANDALONE = 'standalone';
 const SITE_MODE_VALUES = new Set([SITE_MODE_SUBDIR, SITE_MODE_STANDALONE]);
 
 let schemaEnsured = false;
+let cachedLanguages = null;
 
 export function ensureLanguagesSchema() {
   if (schemaEnsured) {
@@ -59,7 +60,11 @@ export function ensureLanguagesSchema() {
 
 export function listLanguages() {
   ensureLanguagesSchema();
-  return queryAll(
+  if (cachedLanguages) {
+    return cachedLanguages;
+  }
+
+  cachedLanguages = queryAll(
     `
       SELECT
         l.id,
@@ -84,6 +89,7 @@ export function listLanguages() {
       ORDER BY l.is_default DESC, l.sort_order ASC, l.id ASC
     `
   ).map(mapLanguageRow);
+  return cachedLanguages;
 }
 
 export function getLanguageById(id) {
@@ -198,6 +204,7 @@ export function createLanguage(input) {
   );
 
   upsertLanguageSite(result.lastInsertRowid, payload.site, now);
+  invalidateLanguagesCache();
   return getLanguageById(result.lastInsertRowid);
 }
 
@@ -254,6 +261,7 @@ export function updateLanguage(id, input) {
   );
 
   upsertLanguageSite(id, payload.site, now);
+  invalidateLanguagesCache();
   return getLanguageById(id);
 }
 
@@ -268,6 +276,7 @@ export function deleteLanguage(id) {
   }
 
   execute('DELETE FROM languages WHERE id = ?', [id]);
+  invalidateLanguagesCache();
   return existing;
 }
 
@@ -324,6 +333,11 @@ function ensureDefaultLanguage() {
     `,
     [result.lastInsertRowid, null, '/', 'html', SITE_MODE_SUBDIR, null, null, now, now]
   );
+  invalidateLanguagesCache();
+}
+
+function invalidateLanguagesCache() {
+  cachedLanguages = null;
 }
 
 function upsertLanguageSite(languageId, site, now = new Date().toISOString()) {

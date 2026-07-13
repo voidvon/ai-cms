@@ -24,7 +24,8 @@ export function normalizeLegacyAssetText(value, siteConfig = null, options = {})
     return input;
   }
 
-  return input.replace(
+  const normalizedInput = normalizeMalformedUploadsText(input);
+  return normalizedInput.replace(
     /https?:\/\/[^/\s"'<>]+\/uploads\/(?:images|skin|pdfs|files)\/[^\s"'<>)]*|\/uploads\/(?:images|skin|pdfs|files)\/[^\s"'<>)]*/gi,
     (matched) => resolvePublicAssetUrl(matched, siteConfig, options)
   );
@@ -115,7 +116,7 @@ function isInsideUploadsRoot(filePath, uploadsRoot) {
 }
 
 function normalizeSupportedUploadPath(relativePath) {
-  const normalized = String(relativePath || '').trim().replaceAll('\\', '/');
+  const normalized = normalizeMalformedUploadsText(String(relativePath || '').trim().replaceAll('\\', '/'));
   if (!normalized) {
     return '';
   }
@@ -130,6 +131,12 @@ function normalizeSupportedUploadPath(relativePath) {
   }
 
   return canonicalizeUploadsPath(normalized);
+}
+
+function normalizeMalformedUploadsText(value) {
+  return String(value || '')
+    .replace(/\/uploads(?=https?:\/\/)/gi, '')
+    .replace(/\/uploads(?:\/uploads)+\/(?=(?:images|skin|pdfs|files)\/)/gi, '/uploads/');
 }
 
 function canonicalizeUploadsPath(normalized) {
