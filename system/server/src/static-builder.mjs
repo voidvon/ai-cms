@@ -244,7 +244,13 @@ function prefixRelativeHrefPaths(html, prefix) {
 const MANAGED_STATIC_ROOT_FILES = ['index.html', 'sitemap.xml', 'robots.txt', 'llms.txt', 'llms-full.txt', 'index.md'];
 const LEGACY_MANAGED_STATIC_DIRS = ['about'];
 const SHARED_STATIC_DIRS = ['css'];
-const SHARED_STATIC_ROOT_FILES = ['logo.svg'];
+const SHARED_STATIC_ROOT_FILES = [
+  'logo.svg',
+  'favicon.ico',
+  'favicon-16x16.png',
+  'favicon-32x32.png',
+  'apple-touch-icon.png'
+];
 const OBSOLETE_SHARED_STATIC_DIRS = ['js', 'JS', 'images', 'skin', 'img', 'Images', 'Skin', 'uploads'];
 const STATIC_BUILD_GROUP_ORDER = ['网站页面', '栏目页', '内容页', '系统文件'];
 const TEMPLATE_CLIENT_ASSET_DIR = path.join('assets', 'cms-templates');

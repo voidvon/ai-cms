@@ -1,6 +1,7 @@
 import { listLanguages } from './languages.mjs';
 import { resolveLanguageSitePublicBaseUrl } from './site.mjs';
-import { normalizeUploadedRelativePath } from './uploads.mjs';
+import { normalizeUploadedRelativePath, resolvePublicAssetUrl } from './uploads.mjs';
+import { parseSiteIconManifest } from './site-icons.mjs';
 
 /**
  * SEO元数据服务
@@ -317,12 +318,29 @@ export function generateFaviconLinks(site = null) {
     return links;
   }
 
+  const siteIconManifest = parseSiteIconManifest(site?.favicon_manifest_json);
+  if (siteIconManifest) {
+    return siteIconManifest.links.map((item) => ({
+      ...item,
+      href: resolvePublicAssetUrl(item.href, site) || item.href
+    }));
+  }
+
   const configuredFavicon = String(seoConfig.favicon || seoConfig.faviconUrl || seoConfig.favicon_url || '').trim();
-  return [{
-    rel: 'icon',
-    type: configuredFavicon && !configuredFavicon.toLowerCase().endsWith('.svg') ? undefined : 'image/svg+xml',
-    href: configuredFavicon || '/logo.svg'
-  }];
+  if (configuredFavicon) {
+    return [{
+      rel: 'icon',
+      type: configuredFavicon.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : undefined,
+      href: configuredFavicon
+    }];
+  }
+
+  return [
+    { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
+    { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/favicon-32x32.png' },
+    { rel: 'icon', type: 'image/png', sizes: '16x16', href: '/favicon-16x16.png' },
+    { rel: 'shortcut icon', type: 'image/x-icon', href: '/favicon.ico' }
+  ];
 }
 
 export function generateThemeColorMetas() {

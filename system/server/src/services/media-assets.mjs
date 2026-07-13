@@ -55,6 +55,15 @@ const PURPOSE_TARGETS = {
     sourceMaxSizeKb: IMAGE_UPLOAD_SOURCE_MAX_SIZE_KB,
     maxSizeKb: UPLOAD_MAX_SIZE_KB,
   },
+  site_icon: {
+    purpose: 'site_icon',
+    mimeFallback: 'image/png',
+    bucket: 'images',
+    root: UPLOADS_IMAGES_ROOT,
+    allowedExtensions: UPLOAD_ALLOWED_EXTENSIONS,
+    sourceMaxSizeKb: IMAGE_UPLOAD_SOURCE_MAX_SIZE_KB,
+    maxSizeKb: UPLOAD_MAX_SIZE_KB,
+  },
   document_stamp: {
     purpose: 'document_stamp',
     mimeFallback: 'image/png',

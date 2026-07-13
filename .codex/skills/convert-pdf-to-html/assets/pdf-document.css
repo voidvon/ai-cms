@@ -61,7 +61,8 @@
 
 .pdf-document .figure img {
   display: block;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   height: auto;
 }
 
@@ -354,8 +355,6 @@
       display: grid;
       place-items: center;
     }
-
-    .pdf-document--manual .intro-figure img { width: min(190px, 50%); }
 
     .pdf-document--manual .document-section {
       padding: 24px 32px 30px;

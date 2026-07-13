@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import apiClient from '@/api/client'
 import { languagesApi } from '@/api/languages'
+import ImageUploadField from '@/components/ImageUploadField'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -22,6 +23,7 @@ type SiteConfigBaseForm = {
   assets_bind_host: string
   assets_port: string
   assets_public_base_url: string
+  favicon_source_path: string
 }
 
 export default function SiteConfigPage() {
@@ -71,6 +73,7 @@ export default function SiteConfigPage() {
       assets_bind_host: source.assets_bind_host || '',
       assets_port: source.assets_port ? String(source.assets_port) : '',
       assets_public_base_url: source.assets_public_base_url || '',
+      favicon_source_path: source.favicon_source_path || '',
     })
     setTranslations(buildInitialTranslations(source, defaultLanguageCode, availableLanguageCodes))
     setActiveLanguage(source.requested_language_code || source.current_language_code || defaultLanguageCode)
@@ -206,6 +209,25 @@ export default function SiteConfigPage() {
                     placeholder="请输入ICP备案号"
                   />
                 </div>
+              </div>
+            </div>
+
+            <div className="rounded border p-4 space-y-4">
+              <div>
+                <div className="font-medium">站点图标</div>
+                <div className="text-sm text-muted-foreground">
+                  上传至少 180x180 像素的正方形图片。保存配置时会自动生成浏览器和 Apple 设备所需的 PNG 与 ICO 图标。
+                </div>
+              </div>
+              <div className="max-w-xl space-y-2">
+                <Label htmlFor="favicon_source_path">图标源图</Label>
+                <ImageUploadField
+                  id="favicon_source_path"
+                  value={baseData.favicon_source_path}
+                  onChange={(faviconSourcePath) => setBaseData({ ...baseData, favicon_source_path: faviconSourcePath })}
+                  purpose="site_icon"
+                  placeholder="上传站点图标源图"
+                />
               </div>
             </div>
 
@@ -410,6 +432,7 @@ function createEmptyBaseData(): SiteConfigBaseForm {
     assets_bind_host: '',
     assets_port: '',
     assets_public_base_url: '',
+    favicon_source_path: '',
   }
 }
 

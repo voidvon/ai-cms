@@ -23,7 +23,7 @@ export default async function siteConfigRoutes(app) {
     onRequest: [requireAuth]
   }, async (request, reply) => {
     try {
-      const updated = updateSiteConfig(request.body);
+      const updated = await updateSiteConfig(request.body);
       await app.assetsListenerManager?.sync?.();
       return { success: true, data: updated };
     } catch (error) {

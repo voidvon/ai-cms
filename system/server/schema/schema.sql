@@ -137,6 +137,8 @@ CREATE TABLE IF NOT EXISTS site_config (
   web_mobile TEXT,
   web_copyright TEXT,
   web_author TEXT,
+  favicon_source_path TEXT,
+  favicon_manifest_json TEXT,
   legacy_extra TEXT
 );
 

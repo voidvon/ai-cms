@@ -100,7 +100,7 @@ for (const row of languages) {
   };
 }
 
-updateSiteConfig({
+await updateSiteConfig({
   ...current,
   translations
 });

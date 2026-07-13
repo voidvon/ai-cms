@@ -1,7 +1,7 @@
 import apiClient from './client'
 import type { ApiResponse, MediaAsset, PaginationInfo } from '@/types'
 
-export type MediaPurpose = 'product_cover' | 'news_cover' | 'richtext_image' | 'column_image' | 'document_stamp' | 'ai_generated_image' | 'ai_input_image' | 'attachment' | 'pdf_document'
+export type MediaPurpose = 'product_cover' | 'news_cover' | 'richtext_image' | 'column_image' | 'site_icon' | 'document_stamp' | 'ai_generated_image' | 'ai_input_image' | 'attachment' | 'pdf_document'
 
 export type PdfDocumentType = 'sales_brochure' | 'installation_guide' | 'technical_information'
 
