@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TVA 饱和蒸汽流量计产品参数与安装要点 — IM-P337-51</title>
+  <link rel="stylesheet" href="../../.codex/skills/convert-pdf-to-html/assets/pdf-document.css">
+</head>
+<body class="pdf-document-host">
+  <section class="pdf-document pdf-document--manual">
+    <div class="pdf-document__body">
+      <main class="document-main">
+        <header class="document-header">
+          <p class="document-code">IM-P337-51</p>
+          <div class="document-brand">Spirax Sarco</div>
+          <p class="document-issue">EMM Issue 6<br>2024</p>
+        </header>
+
+        <div class="title-band">
+          <h1>TVA 饱和蒸汽流量计产品参数与安装要点</h1>
+          <p class="subtitle">面向产品选型与安装准备的精简介绍</p>
+        </div>
+
+        <section class="intro-grid">
+          <nav class="contents" aria-label="页面目录">
+            <h2>安装维修指南</h2>
+            <ol>
+              <li><a href="#overview">产品概述</a></li>
+              <li><a href="#specifications">技术参数</a></li>
+              <li><a href="#limits">压力与温度限制</a></li>
+              <li><a href="#materials">材料与尺寸</a></li>
+              <li><a href="#installation">安装要点</a></li>
+              <li><a href="#electrical">电气连接</a></li>
+              <li><a href="#commissioning">调试与通信</a></li>
+              <li><a href="#maintenance">运行与维护</a></li>
+            </ol>
+          </nav>
+          <figure class="intro-figure">
+            <img src="assets/tva-dimensions.png" alt="TVA 饱和蒸汽流量计外形和尺寸代号示意图">
+          </figure>
+        </section>
+
+        <section class="document-section" id="overview">
+          <h2>1. 产品概述</h2>
+          <p class="lead">Spirax Sarco TVA 流量计用于测量饱和蒸汽的质量流量并累计总流量。仪表采用一体化设计，无需另外配置差压变送器或压力传感器即可计算饱和蒸汽质量流量。</p>
+          <div class="section-grid">
+            <div>
+              <h3>主要特点</h3>
+              <ul>
+                <li>采用活动锥体受力测量原理，并对质量流量进行密度补偿。</li>
+                <li>提供瞬时流量、累计流量、功率、压力和温度显示。</li>
+                <li>环路供电，提供 4–20 mA 质量流量输出和脉冲输出。</li>
+                <li>量程比最高可达 50:1。</li>
+                <li>支持 EIA 232C 通信、ASCII 协议及 Modbus/RTU 子集。</li>
+              </ul>
+            </div>
+            <div>
+              <h3>口径与管道连接</h3>
+              <p>说明书列出的公称口径为 DN50、DN80、DN100、DN150 和 DN200，采用对夹式结构，可安装在以下法兰之间：</p>
+              <ul>
+                <li>EN 1092 PN16、PN25 和 PN40</li>
+                <li>BS 10 Table H</li>
+                <li>ASME B16.5 Class 150 和 Class 300</li>
+              </ul>
+              <p class="note"><strong>规格核对：</strong>Issue 6 的尺寸、重量和部分压降数据只列出了 DN50、DN80、DN100。DN150、DN200 的详细尺寸与选型数据应在发布前通过对应技术数据表确认，不应由本页推算。</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="document-section" id="specifications">
+          <h2>2. 技术参数</h2>
+          <table class="document-table">
+            <tbody>
+              <tr><th scope="row">适用介质</th><td>饱和蒸汽</td></tr>
+              <tr><th scope="row">防护等级</th><td>正确安装电缆密封套时为 IP65</td></tr>
+              <tr><th scope="row">电源</th><td>环路供电，标称 24 VDC；允许工作范围 9–28 VDC</td></tr>
+              <tr><th scope="row">模拟输出</th><td>4–20 mA，与质量流量成比例</td></tr>
+              <tr><th scope="row">脉冲输出</th><td>Vmax 28 VDC；Rmin 10 kΩ；Von 最大 0.7 V</td></tr>
+              <tr><th scope="row">通信端口</th><td>EIA 232C，连接距离最大 15 m</td></tr>
+              <tr><th scope="row">系统不确定度</th><td>最大额定流量的 10%–100% 范围内为读数的 ±2%；2%–10% 范围内为 ±0.2% FSD</td></tr>
+              <tr><th scope="row">量程比</th><td>最高 50:1</td></tr>
+              <tr><th scope="row">电气接口</th><td>M20 × 1.5</td></tr>
+              <tr><th scope="row">电子单元环境温度</th><td>最高 55°C</td></tr>
+              <tr><th scope="row">电子单元环境湿度</th><td>最高 90% RH，无冷凝</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="document-section" id="limits">
+          <h2>3. 压力与温度限制</h2>
+          <div class="section-grid">
+            <figure class="figure chart-figure">
+              <img src="assets/pressure-temperature-curve.png" alt="TVA 饱和蒸汽流量计压力温度限制曲线">
+              <figcaption>饱和蒸汽压力—温度曲线。灰色区域受软件限制，不允许使用。</figcaption>
+            </figure>
+            <table class="document-table">
+              <tbody>
+                <tr><th scope="row">最大允许压力 PMA</th><td>饱和蒸汽在 239°C 时为 32 bar g；其他情况受法兰额定值限制</td></tr>
+                <tr><th scope="row">最大允许温度 TMA</th><td>239°C</td></tr>
+                <tr><th scope="row">最低允许温度</th><td>0°C，不得结冰</td></tr>
+                <tr><th scope="row">水平流动最大工作压力 PMO</th><td>32 bar g</td></tr>
+                <tr><th scope="row">垂直流动最大工作压力 PMO</th><td>7 bar g</td></tr>
+                <tr><th scope="row">最低工作压力</th><td>0.6 bar g</td></tr>
+                <tr><th scope="row">最高工作温度 TMO</th><td>239°C</td></tr>
+                <tr><th scope="row">冷态水压试验压力</th><td>52 bar g</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <h3>最大额定流量下的名义压降</h3>
+          <table class="document-table">
+            <thead>
+              <tr><th>口径</th><th>名义压降</th></tr>
+            </thead>
+            <tbody>
+              <tr><th scope="row">DN50</th><td>750 mbar（300 in wg）</td></tr>
+              <tr><th scope="row">DN80、DN100</th><td>500 mbar（200 in wg）</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="document-section" id="materials">
+          <h2>4. 材料与尺寸</h2>
+          <div class="section-grid">
+            <div>
+              <h3>主要材料</h3>
+              <table class="document-table">
+                <thead>
+                  <tr><th>部件</th><th>材料</th></tr>
+                </thead>
+                <tbody>
+                  <tr><th scope="row">流量计本体</th><td>不锈钢 1.4408 CF8M</td></tr>
+                  <tr><th scope="row">内部零件</th><td>431 S29 / S303 / S304 / S316</td></tr>
+                  <tr><th scope="row">弹簧</th><td>Inconel X750 或同等材料</td></tr>
+                  <tr><th scope="row">流量计杆</th><td>不锈钢 431 S29</td></tr>
+                  <tr><th scope="row">电子单元外壳</th><td>铝合金 LM25</td></tr>
+                </tbody>
+              </table>
+            </div>
+            <figure class="figure model-figure">
+              <img src="assets/tva-dimensions.png" alt="TVA 流量计 A、B、C、D、E 尺寸代号">
+              <figcaption>尺寸代号示意，具体数值见下表。</figcaption>
+            </figure>
+          </div>
+          <h3>外形尺寸与重量</h3>
+          <table class="document-table">
+            <thead>
+              <tr><th>口径</th><th>A</th><th>B</th><th>C</th><th>D</th><th>E</th><th>重量</th></tr>
+            </thead>
+            <tbody>
+              <tr><th scope="row">DN50</th><td>35 mm</td><td>103 mm</td><td>322 mm</td><td>160 mm</td><td>65 mm</td><td>2.67 kg</td></tr>
+              <tr><th scope="row">DN80</th><td>45 mm</td><td>138 mm</td><td>334 mm</td><td>160 mm</td><td>65 mm</td><td>4.38 kg</td></tr>
+              <tr><th scope="row">DN100</th><td>60 mm</td><td>162 mm</td><td>344 mm</td><td>215 mm</td><td>65 mm</td><td>7.28 kg</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="document-section" id="installation">
+          <h2>5. 安装要点</h2>
+          <p class="note"><strong>安全提示：</strong>TVA 仅用于饱和蒸汽。安装、调试和维护必须由具备资质的人员按照完整说明书及现场适用规范执行。以下内容用于产品选型和安装准备，不能替代 IM-P337-51 EMM Issue 6 完整安装维护说明。</p>
+
+          <h3>典型系统布置</h3>
+          <p>蒸汽系统应遵循良好的蒸汽工程实践。典型布置包括汽水分离器、过滤器、疏水阀组、隔离阀和旁通管路；旁通管路便于在维护、校准或重新调零时隔离流量计。</p>
+          <figure class="figure install-figure">
+            <img src="assets/typical-installation.png" alt="TVA 饱和蒸汽流量计典型安装系统，包括汽水分离器、过滤器、疏水阀组和旁通阀">
+            <figcaption>典型安装布置。工程设计应根据现场工况和适用规范确认。</figcaption>
+          </figure>
+
+          <h3>安装方向与压力限制</h3>
+          <ul>
+            <li>压力低于或等于 7 bar g 时，可按说明书允许的方向安装。</li>
+            <li>压力高于 7 bar g 时，必须安装在水平管道上，并使电子单元位于流量计本体下方。</li>
+            <li>电子单元相对垂直向下位置偏转达到或超过 45°时，最大工作压力必须限制为 7 bar g。</li>
+            <li>仪表只允许单向流动，应按本体上的流向箭头安装，不适用于双向流。</li>
+          </ul>
+          <figure class="figure install-figure">
+            <img src="assets/installation-orientations.png" alt="TVA 流量计垂直流和水平流安装方向及 7 bar g、32 bar g 压力限制">
+            <figcaption>垂直流和非向下安装受 7 bar g 限制；电子单元垂直向下的水平安装最高可达 32 bar g。</figcaption>
+          </figure>
+
+          <h3>环境与保温</h3>
+          <div class="section-grid">
+            <div>
+              <ul>
+                <li>安装位置应尽量减少热量、振动、冲击和电气干扰。</li>
+                <li>应为布线、拆卸电子外壳端盖和观察显示屏留出足够空间。</li>
+                <li>不得对 TVA 流量计本体或相邻法兰进行保温，否则可能导致电子单元过热、性能下降或损坏。</li>
+                <li>不得安装在可能遭受强风雨或结冰的室外环境。</li>
+              </ul>
+            </div>
+            <figure class="figure detail-figure">
+              <img src="assets/pipeline-insulation.png" alt="TVA 流量计及相邻法兰不得保温的安装示意">
+              <figcaption>管道可以保温，但流量计及其相邻法兰必须外露。</figcaption>
+            </figure>
+          </div>
+
+          <h3>前后直管段</h3>
+          <p>直管段长度以管道内径 D 为单位。管道内壁应平滑，优先使用无缝管，并避免侵入内径的焊缝。</p>
+          <div class="section-grid">
+            <figure class="figure install-figure">
+              <img src="assets/straight-pipe-6d-3d.png" alt="TVA 流量计正常安装所需上游 6D 和下游 3D 直管段">
+              <figcaption>单个 90°弯头等常规条件：上游至少 6D，下游至少 3D。</figcaption>
+            </figure>
+            <figure class="figure install-figure">
+              <img src="assets/straight-pipe-12d-3d.png" alt="两平面弯头、减压阀或部分开启阀后所需上游 12D 和下游 3D 直管段">
+              <figcaption>上游存在两个不同平面的直角弯头、减压阀或部分开启阀：上游至少 12D，下游至少 3D。</figcaption>
+            </figure>
+          </div>
+          <figure class="figure install-figure">
+            <img src="assets/straight-pipe-25d-3d.png" alt="快速动作减压阀或安全阀附近所需上游 25D 和下游 3D 直管段">
+            <figcaption>快速动作减压阀或安全阀附近：流量计上游至少 25D，下游至少 3D；应尽量远离安全阀。</figcaption>
+          </figure>
+
+          <h3>对中与垫片</h3>
+          <p>流量计必须与管道中心同轴。推荐使用内径与管道相同的螺栓环垫片，避免垫片伸入管道造成测量误差；仪表自带对中凸耳，用于配合管道内径定位。</p>
+          <figure class="figure install-figure">
+            <img src="assets/gasket-alignment.png" alt="TVA 流量计对中凸耳以及垫片正确、错误安装对比">
+            <figcaption>垫片不得伸入流道，管道和仪表必须保持同轴。</figcaption>
+          </figure>
+        </section>
+
+        <section class="document-section" id="electrical">
+          <h2>6. 电气连接</h2>
+          <div class="section-grid">
+            <div>
+              <ul>
+                <li>仪表采用环路供电，标称电源为 24 VDC；实际允许范围为 9–28 VDC，并受总回路电阻影响。</li>
+                <li>4–20 mA 回路和脉冲输出建议使用屏蔽双绞线，每芯截面积 0.5 mm²。</li>
+                <li>一般情况下，仪表与电源之间的最大电缆长度为 300 m；实际长度取决于网络设备数量、总电阻和电缆电容。</li>
+                <li>推荐使用适用于 M20 × 1.5、符合 EN 50262 / IP68 的电缆密封套。</li>
+                <li>流量计必须可靠接地；接地导线截面积至少为 1.5 mm²，并应确保低电阻连接。</li>
+              </ul>
+              <p class="note"><strong>调试后：</strong>完成调试后应从电子外壳内取出硅胶干燥剂，并确认密封和接地符合现场规范。</p>
+            </div>
+            <figure class="figure install-figure">
+              <img src="assets/loop-wiring.png" alt="TVA 流量计脉冲端子、4 至 20 mA 环路、M750 显示器和 EIA 232 通信口接线图">
+              <figcaption>典型环路和脉冲输出接线。实际接线前应核对完整说明书及设备端子标识。</figcaption>
+            </figure>
+          </div>
+        </section>
+
+        <section class="document-section" id="commissioning">
+          <h2>7. 调试与通信概要</h2>
+          <div class="section-grid">
+            <div>
+              <h3>调试功能</h3>
+              <ul>
+                <li>出厂默认使用公制单位。</li>
+                <li>显示屏可查看累计流量、瞬时流量、功率、压力和温度。</li>
+                <li>可设置蒸汽干度、单位、安装方向、大气压力补偿、4–20 mA 量程、脉冲输出和报警动作。</li>
+                <li>仪表应在管线上、确认无流量的条件下完成调零；具体温度条件和操作步骤必须遵循完整说明书。</li>
+                <li>调试完成后，应测试报警和相关保护装置是否正常工作。</li>
+              </ul>
+            </div>
+            <div>
+              <h3>通信能力</h3>
+              <table class="document-table">
+                <tbody>
+                  <tr><th scope="row">物理接口</th><td>EIA 232C（RJ11）</td></tr>
+                  <tr><th scope="row">协议</th><td>ASCII；Modbus/RTU 子集</td></tr>
+                  <tr><th scope="row">波特率</th><td>1200 或 9600</td></tr>
+                  <tr><th scope="row">连接距离</th><td>最大 15 m，且应位于同一建筑或区域</td></tr>
+                  <tr><th scope="row">Modbus 功能</th><td>支持读取保持寄存器，功能码 03</td></tr>
+                </tbody>
+              </table>
+              <p>产品详情不展开 ASCII 指令、Modbus 报文结构、寄存器地址和报警位字段；系统集成时应以完整说明书第 4.11–4.13 节为准。</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="document-section" id="maintenance">
+          <h2>8. 运行与维护</h2>
+          <div class="section-grid">
+            <div>
+              <h3>工作原理</h3>
+              <p>TVA 通过检测瞬时流量作用在活动锥体上的应变，将信号转换为经过密度补偿的质量流量，并通过单回路供电的 4–20 mA 输出和脉冲输出传送。该结构可满足过程应用所需的高量程比和测量精度。</p>
+            </div>
+            <div>
+              <h3>维护周期</h3>
+              <ul>
+                <li>至少每年使用调零菜单对仪表进行一次调零，以补偿电子单元的长期漂移。</li>
+                <li>重新校准周期取决于工况和应用，典型周期为 2–5 年。</li>
+                <li>更换显示及电子单元时应切断电源，并执行静电放电防护程序。</li>
+                <li>订购替换显示及电子组件时必须提供流量计序列号。</li>
+              </ul>
+            </div>
+          </div>
+          <p class="note"><strong>完整资料：</strong>故障诊断、电子组件更换步骤、菜单操作、报警信息、通信寄存器和设置记录表未在本产品介绍中展开。安装、调试或检修前，请查阅 Spirax Sarco《TVA Flowmeter for Saturated Steam Service — Installation and Maintenance Instructions》，文档编号 IM-P337-51，EMM Issue 6。</p>
+        </section>
+
+        <footer class="document-footer">
+          <p>本页为产品介绍用途的中文精简整理，不替代制造商正式安装维护说明。</p>
+          <p>Source: IM-P337-51 EMM Issue 6 · © 2024 Spirax-Sarco Limited</p>
+        </footer>
+      </main>
+    </div>
+  </section>
+</body>
+</html>
