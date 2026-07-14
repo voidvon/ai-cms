@@ -1,0 +1,4 @@
+interface:
+  display_name: "重绘产品图片"
+  short_description: "生成无新增文案的16:10网站产品预览图及保真编辑提示词"
+  default_prompt: "使用 $redraw-product-images 根据真实产品图片生成保真编辑提示词，并转换为无新增文案的 16:10 网站产品预览图。"
