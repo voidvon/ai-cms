@@ -1,4 +1,5 @@
 import { normalizeText } from './shared.mjs';
+import { getAiRuntimeConfig } from './runtime.mjs';
 import {
   CONTRACT_COPILOT_CAPABILITY,
   buildContractConversationAgent,
@@ -11,9 +12,10 @@ const TASK_CAPABILITIES = listContractTasks();
 const DEFAULT_CHAT_CAPABILITY = CONTRACT_COPILOT_CAPABILITY.key;
 
 export function getAiCapabilities() {
+  const runtimeConfig = getAiRuntimeConfig();
   return {
     provider: 'openai_agents_js',
-    status: normalizeText(process.env.OPENAI_API_KEY) ? 'partial_ready' : 'stub',
+    status: runtimeConfig?.api_key ? 'partial_ready' : 'stub',
     default_chat_capability: DEFAULT_CHAT_CAPABILITY,
     chat_capabilities: CHAT_CAPABILITIES,
     task_capabilities: TASK_CAPABILITIES,

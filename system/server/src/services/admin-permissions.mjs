@@ -11,7 +11,8 @@ export const ADMIN_PERMISSION_DEFINITIONS = [
   { flag: '10', label: '管理员', description: '管理管理员账号、用户组与访问记录' },
   { flag: '11', label: '批量替换', description: '执行批量文本替换类工具操作' },
   { flag: '12', label: 'Sitemap 诊断', description: '查看和执行 Sitemap 诊断' },
-  { flag: '13', label: 'LLMS 诊断', description: '查看和执行 LLMS 诊断' }
+  { flag: '13', label: 'LLMS 诊断', description: '查看和执行 LLMS 诊断' },
+  { flag: '14', label: 'AI 模型', description: '管理 AI 模型、接口凭据和默认模型' }
 ];
 
 const VALID_PERMISSION_FLAGS = new Set(ADMIN_PERMISSION_DEFINITIONS.map((item) => item.flag));

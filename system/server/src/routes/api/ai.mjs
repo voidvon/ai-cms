@@ -5,7 +5,7 @@ import { capabilityRegistry, toolRegistry } from '../../services/ai/core/index.m
 import { getAiDataSourceStatus } from '../../services/ai/data-source-registry.mjs';
 import { searchAiMentions } from '../../services/ai/query-service.mjs';
 import { buildAiMentionContext } from '../../services/ai/mention-context.mjs';
-import { DEFAULT_MODEL } from '../../services/ai/runtime.mjs';
+import { getAiRuntimeConfig } from '../../services/ai/runtime.mjs';
 import { formatAiUserError } from '../../services/ai/error-message.mjs';
 import {
   loadLatestGeneratedImageContext,
@@ -200,6 +200,7 @@ export default async function aiRoutes(app) {
         userId: request.adminUser?.id,
         user: request.adminUser,
       });
+      const runtimeConfig = getAiRuntimeConfig();
 
       return {
         success: true,
@@ -208,7 +209,10 @@ export default async function aiRoutes(app) {
           status: 'ready',
           default_chat_capability: 'general_chat',
           capabilities,
-          model: DEFAULT_MODEL,
+          model: runtimeConfig.model,
+          reasoning_effort: runtimeConfig.reasoning_effort,
+          model_config_id: runtimeConfig.id,
+          model_config_name: runtimeConfig.name,
         },
       };
     } catch (error) {

@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { UPLOADS_PDFS_ROOT } from '../../../config.mjs';
 import { normalizeText, extractJsonString, normalizeChecklist, safeParseJson } from '../shared.mjs';
-import { createAiAgent, DEFAULT_MODEL, runAiAgent } from '../runtime.mjs';
+import { createAiAgent, getAiRuntimeConfig, runAiAgent } from '../runtime.mjs';
 import { createContractClauseTool } from '../tools/contract-clause-picker.mjs';
 import { createPriceLookupTool, estimateUnitPrice } from '../tools/price-lookup.mjs';
 
@@ -162,7 +162,7 @@ async function draftContractTask(payload = {}) {
       payload: {
         request: normalizedPayload,
         draft: parsed,
-        model: DEFAULT_MODEL,
+        model: getAiRuntimeConfig().model,
       },
     },
   };

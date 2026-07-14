@@ -2,39 +2,42 @@ import OpenAI from 'openai';
 import { Agent, run, setDefaultOpenAIClient } from '@openai/agents';
 import { setDefaultModelProvider } from '@openai/agents-core';
 import { OpenAIProvider } from '@openai/agents-openai';
-import { normalizeText } from './shared.mjs';
+import { getDefaultAiModelRuntimeConfig } from '../ai-models.mjs';
 
-export const DEFAULT_MODEL =
-  normalizeText(process.env.OPENAI_AI_MODEL) ||
-  normalizeText(process.env.OPENAI_DEFAULT_MODEL) ||
-  normalizeText(process.env.OPENAI_CONTRACT_MODEL) ||
-  'gpt-5';
-
-const OPENAI_BASE_URL = normalizeText(process.env.OPENAI_BASE_URL);
-const OPENAI_API_KEY = normalizeText(process.env.OPENAI_API_KEY);
 let openaiClient = null;
 let openaiProvider = null;
 let normalizedOpenAIProvider = null;
-
-if (OPENAI_API_KEY) {
-  initializeOpenAIRuntime();
-}
+let runtimeConfigSignature = '';
 
 export function assertAiConfig() {
-  if (!OPENAI_API_KEY) {
-    const error = new Error('缺少 OPENAI_API_KEY，无法调用 OpenAI Agents SDK');
+  const config = getAiRuntimeConfig();
+  if (!config?.api_key) {
+    const error = new Error('尚未配置可用的默认 AI 模型，请先到后台“模型管理”完成配置');
     error.statusCode = 400;
     throw error;
   }
+  return config;
+}
+
+export function getAiRuntimeConfig() {
+  return getDefaultAiModelRuntimeConfig();
 }
 
 export function createAiAgent(config) {
+  const runtimeConfig = assertAiConfig();
+  const modelSettings = config?.modelSettings || {};
+  const reasoning = modelSettings.reasoning || {};
+
   return new Agent({
-    model: DEFAULT_MODEL,
+    model: runtimeConfig.model,
     ...config,
     modelSettings: {
       store: false,
-      ...(config?.modelSettings || {}),
+      ...modelSettings,
+      reasoning: {
+        effort: runtimeConfig.reasoning_effort,
+        ...reasoning,
+      },
     },
   });
 }
@@ -48,28 +51,25 @@ export function runAiAgent(agent, input, options) {
 }
 
 export function getOpenAIClient() {
-  assertAiConfig();
-  if (!openaiClient) {
-    initializeOpenAIRuntime();
+  const config = assertAiConfig();
+  if (!openaiClient || runtimeConfigSignature !== buildRuntimeConfigSignature(config)) {
+    initializeOpenAIRuntime(config);
   }
   return openaiClient;
 }
 
 export function getOpenAIModelProvider() {
-  assertAiConfig();
-  if (!openaiProvider) {
-    getOpenAIClient();
-  }
+  getOpenAIClient();
   if (!normalizedOpenAIProvider) {
     normalizedOpenAIProvider = createFlyapiResponsesCompatibilityProvider(openaiProvider);
   }
   return normalizedOpenAIProvider;
 }
 
-function initializeOpenAIRuntime() {
+function initializeOpenAIRuntime(config) {
   openaiClient = new OpenAI({
-    apiKey: OPENAI_API_KEY || 'missing-key',
-    ...(OPENAI_BASE_URL ? { baseURL: OPENAI_BASE_URL } : {}),
+    apiKey: config.api_key,
+    ...(config.base_url ? { baseURL: config.base_url } : {}),
   });
   setDefaultOpenAIClient(openaiClient);
 
@@ -82,7 +82,12 @@ function initializeOpenAIRuntime() {
   });
 
   normalizedOpenAIProvider = createFlyapiResponsesCompatibilityProvider(openaiProvider);
+  runtimeConfigSignature = buildRuntimeConfigSignature(config);
   setDefaultModelProvider(normalizedOpenAIProvider);
+}
+
+function buildRuntimeConfigSignature(config) {
+  return [config.id, config.updated_at, config.base_url, config.api_key, config.model].join('|');
 }
 
 function createFlyapiResponsesCompatibilityProvider(provider) {

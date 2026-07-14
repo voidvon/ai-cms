@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Chat, useChat } from '@ai-sdk/react'
@@ -133,6 +133,10 @@ export default function AiConversationPage() {
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
   const [activeConversationId, setActiveConversationId] = useState<string>('')
+  const [draftConversationId, setDraftConversationId] = useState(createConversationId)
+  const [isDraftConversation, setIsDraftConversation] = useState(false)
+  const [isCreatingConversation, setIsCreatingConversation] = useState(false)
+  const isCreatingConversationRef = useRef(false)
   const conversationIdFromUrl = String(searchParams.get('conversation') || '').trim()
 
   const activateConversation = useCallback((conversationId: string, { replace = false } = {}) => {
@@ -140,11 +144,23 @@ export default function AiConversationPage() {
     if (!normalizedId) {
       return
     }
+    setIsDraftConversation(false)
     setActiveConversationId(normalizedId)
-    const nextSearchParams = new URLSearchParams(searchParams)
-    nextSearchParams.set('conversation', normalizedId)
-    setSearchParams(nextSearchParams, { replace })
-  }, [searchParams, setSearchParams])
+    setSearchParams((currentSearchParams) => {
+      const nextSearchParams = new URLSearchParams(currentSearchParams)
+      nextSearchParams.set('conversation', normalizedId)
+      return nextSearchParams
+    }, { replace })
+  }, [setSearchParams])
+
+  const clearActiveConversation = useCallback(({ replace = false } = {}) => {
+    setActiveConversationId('')
+    setSearchParams((currentSearchParams) => {
+      const nextSearchParams = new URLSearchParams(currentSearchParams)
+      nextSearchParams.delete('conversation')
+      return nextSearchParams
+    }, { replace })
+  }, [setSearchParams])
   const { data: capabilitiesResponse, isFetching: isCapabilitiesFetching, refetch } = useQuery({
     queryKey: ['ai-capabilities'],
     queryFn: () => aiApi.capabilities(),
@@ -182,6 +198,10 @@ export default function AiConversationPage() {
       return
     }
 
+    if (isDraftConversation && !conversationIdFromUrl) {
+      return
+    }
+
     if (activeConversationId && conversationRecords.some((item) => item.id === activeConversationId)) {
       return
     }
@@ -195,18 +215,11 @@ export default function AiConversationPage() {
       return
     }
 
-    const id = createConversationId()
-    aiApi.createConversation({
-      id,
-      title: '新对话',
-      capability: defaultCapability,
-    }).then((response) => {
-      void queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
-      activateConversation(response.data?.id || id, { replace: true })
-    }).catch((error) => {
-      toast.error(error?.message || '创建 AI 会话失败')
-    })
-  }, [activeConversationId, activateConversation, conversationIdFromUrl, conversationRecords, conversationsQuery.isLoading, defaultCapability, queryClient])
+    if (activeConversationId || conversationIdFromUrl) {
+      clearActiveConversation({ replace: true })
+    }
+    setIsDraftConversation(true)
+  }, [activeConversationId, activateConversation, clearActiveConversation, conversationIdFromUrl, conversationRecords, conversationsQuery.isLoading, isDraftConversation])
 
   useEffect(() => {
     if (
@@ -224,9 +237,9 @@ export default function AiConversationPage() {
   }, [activeConversationId, conversationRecords])
 
   const messagesQuery = useQuery({
-    queryKey: ['ai-conversation-messages', activeConversationId],
-    queryFn: () => aiApi.listConversationMessages(activeConversationId, 100),
-    enabled: Boolean(activeConversationId),
+    queryKey: ['ai-conversation-messages', activeConversation?.id || ''],
+    queryFn: () => aiApi.listConversationMessages(activeConversation?.id || '', 100),
+    enabled: Boolean(activeConversation?.id),
     refetchOnWindowFocus: false,
   })
 
@@ -249,27 +262,26 @@ export default function AiConversationPage() {
     })
   }, [activeConversation?.capability, defaultCapability])
 
+  const chatConversationId = activeConversation?.id || draftConversationId
+
   const initialChatMessages = useMemo(() => {
     return persistedChatMessages
   }, [persistedChatMessages])
 
   const chatInstance = useMemo(() => {
     return new Chat({
-      id: activeConversation?.id,
+      id: chatConversationId,
       transport,
       messages: initialChatMessages as any[],
       onError: (error) => {
         toast.error(error.message || 'AI 对话失败')
       },
-      onFinish: ({ messages }) => {
-        if (!activeConversation?.id) {
-          return
-        }
+      onFinish: () => {
         void queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
-        void queryClient.invalidateQueries({ queryKey: ['ai-conversation-messages', activeConversation.id] })
+        void queryClient.invalidateQueries({ queryKey: ['ai-conversation-messages', chatConversationId] })
       },
     })
-  }, [activeConversation?.id])
+  }, [chatConversationId])
 
   const chat = useChat({
     chat: chatInstance,
@@ -324,43 +336,35 @@ export default function AiConversationPage() {
   }
 
   const handleCreateConversation = async () => {
-    const id = createConversationId()
-    await aiApi.createConversation({
-      id,
-      title: '新对话',
-      capability: defaultCapability,
-    })
-    await queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
-    activateConversation(id)
-    chat.stop()
+    await chat.stop()
     chat.setMessages([])
+    setDraftConversationId(createConversationId())
+    setIsDraftConversation(true)
+    clearActiveConversation()
   }
 
   const handleDeleteConversation = async (conversationId: string) => {
     try {
       await aiApi.deleteConversation(conversationId)
-      await aiApi.resetChat(conversationId)
-    } catch {
-      // ignore reset failures after server-side delete
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '删除 AI 会话失败')
+      return
     }
-    await queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
-    await queryClient.invalidateQueries({ queryKey: ['ai-conversation-messages', conversationId] })
+
+    queryClient.removeQueries({ queryKey: ['ai-conversation-messages', conversationId], exact: true })
     if (conversationId === activeConversationId) {
+      await chat.stop()
+      chat.setMessages([])
       const remaining = conversationRecords.filter((item) => item.id !== conversationId)
       if (remaining[0]) {
         activateConversation(remaining[0].id, { replace: true })
       } else {
-        const id = createConversationId()
-        await aiApi.createConversation({
-          id,
-          title: '新对话',
-          capability: defaultCapability,
-        })
-        await queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
-        activateConversation(id, { replace: true })
+        setDraftConversationId(createConversationId())
+        setIsDraftConversation(true)
+        clearActiveConversation({ replace: true })
       }
-      chat.setMessages([])
     }
+    await queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
   }
 
   const handleComposerSubmit = async ({
@@ -374,6 +378,30 @@ export default function AiConversationPage() {
     displayParts: AiConversationDisplayPart[]
     images: AiGeneratedImage[]
   }) => {
+    if (!activeConversation?.id) {
+      if (isCreatingConversationRef.current) {
+        return
+      }
+
+      isCreatingConversationRef.current = true
+      setIsCreatingConversation(true)
+      try {
+        await aiApi.createConversation({
+          id: draftConversationId,
+          title: '新对话',
+          capability: defaultCapability,
+        })
+        await queryClient.invalidateQueries({ queryKey: ['ai-conversations'] })
+        activateConversation(draftConversationId, { replace: true })
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : '创建 AI 会话失败')
+        return
+      } finally {
+        isCreatingConversationRef.current = false
+        setIsCreatingConversation(false)
+      }
+    }
+
     await chat.sendMessage(
       {
         text,
@@ -473,7 +501,16 @@ export default function AiConversationPage() {
         statusBadges={[
           { key: 'capability', label: `能力：${activeCapabilityLabel}` },
           { key: 'tool-mode', label: 'Agent 自动工具', tone: 'secondary' },
-          capabilitiesResponse?.data?.model ? { key: 'model', label: `模型：${capabilitiesResponse.data.model}`, tone: 'secondary' } : null,
+          capabilitiesResponse?.data?.model ? {
+            key: 'model',
+            label: `模型：${capabilitiesResponse.data.model_config_name || capabilitiesResponse.data.model}`,
+            tone: 'secondary',
+          } : null,
+          capabilitiesResponse?.data?.reasoning_effort ? {
+            key: 'reasoning-effort',
+            label: `思考：${formatReasoningEffort(capabilitiesResponse.data.reasoning_effort)}`,
+            tone: 'secondary',
+          } : null,
         ].filter(Boolean) as Array<{ key: string; label: string; tone?: 'default' | 'outline' | 'secondary' }>}
         composer={(
           <AiConversationComposer
@@ -481,8 +518,8 @@ export default function AiConversationPage() {
             availableTools={[]}
             selectedToolNames={[]}
             enableTools={false}
-            submitDisabled={chat.status === 'submitted' || chat.status === 'streaming'}
-            submitStatus={chat.status === 'submitted' || chat.status === 'streaming' ? 'submitted' : 'ready'}
+            submitDisabled={isCreatingConversation || chat.status === 'submitted' || chat.status === 'streaming'}
+            submitStatus={isCreatingConversation || chat.status === 'submitted' || chat.status === 'streaming' ? 'submitted' : 'ready'}
             onStop={() => chat.stop()}
             onToolSelectionChange={() => {}}
             onSubmit={handleComposerSubmit}
@@ -491,6 +528,14 @@ export default function AiConversationPage() {
       />
     </>
   )
+}
+
+function formatReasoningEffort(value: 'low' | 'medium' | 'high') {
+  return {
+    low: '低',
+    medium: '中',
+    high: '高',
+  }[value]
 }
 
 function formatConversationTime(value?: string) {

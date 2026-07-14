@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { authApi } from '@/api/auth'
 import {
   Bot,
+  Cpu,
   ChevronDown,
   Folder,
   FileText,
@@ -126,6 +127,7 @@ export default function DashboardLayout() {
       label: '系统',
       icon: Shield,
       items: [
+        { path: '/ai-models', label: '模型管理', icon: Cpu },
         { path: '/admins', label: '管理员', icon: Shield },
         { path: '/admin-login-logs', label: '登录日志', icon: ListChecks },
       ]

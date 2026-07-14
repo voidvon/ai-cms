@@ -1,7 +1,11 @@
 import { appendDocumentDraftMessages, getDocumentDraftById, updateDocumentDraft } from '../document-drafts.mjs';
 import { upsertDocumentCompanyFromParty } from '../document-companies.mjs';
 import { documentChatResponseSchema, normalizeDocumentDraftPayload, summarizeDocumentMissingFields } from '../document-draft-patch.mjs';
-import { assertAiConfig, DEFAULT_MODEL, getOpenAIClient } from './runtime.mjs';
+import {
+  assertAiConfig,
+  getAiRuntimeConfig,
+  getOpenAIClient,
+} from './runtime.mjs';
 import { normalizeText } from './shared.mjs';
 import { zodResponseFormat } from 'openai/helpers/zod';
 import { assertAiServicePermission } from './query-service.mjs';
@@ -96,9 +100,11 @@ export async function sendDocumentDraftMessage({ draftId, message, user }) {
 }
 
 async function runStructuredDocumentCompletion({ draft, message }) {
+  const runtimeConfig = getAiRuntimeConfig();
   const client = getOpenAIClient();
   const completion = await client.chat.completions.parse({
-    model: DEFAULT_MODEL,
+    model: runtimeConfig.model,
+    reasoning_effort: runtimeConfig.reasoning_effort,
     messages: buildDocumentChatMessages(draft, message),
     response_format: zodResponseFormat(documentChatResponseSchema, 'document_chat_response'),
   });

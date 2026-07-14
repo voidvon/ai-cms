@@ -15,12 +15,14 @@ import { applySecurityHeaders } from './services/security-headers.mjs';
 import { createSiteListenerManager } from './site-listener-manager.mjs';
 import { withPortConflictDetails } from './utils/port-diagnostics.mjs';
 import { initializeAiService } from './services/ai/initialize.mjs';
+import { ensureAiModelsSchema } from './services/ai-models.mjs';
 
 const require = createRequire(import.meta.url);
 
 getDb();
 ensureAdminGroupSchema();
 ensureAccessLogsSchema();
+ensureAiModelsSchema();
 
 // 初始化 AI 服务
 try {
@@ -180,6 +182,7 @@ async function registerCommonRoutes(app, { publicSite }) {
     await app.register(import('./routes/api/admin.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/bulk-replace.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/ai.mjs'), { prefix: '/api' });
+    await app.register(import('./routes/api/ai-models.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/document-workspaces.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/document-agent.mjs'), { prefix: '/api' });
     await app.register(import('./routes/admin/static-gen.mjs'), { prefix: '/admin' });

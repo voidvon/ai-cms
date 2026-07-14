@@ -625,6 +625,31 @@ export interface AiCapabilities {
     files: string;
   };
   model?: string;
+  reasoning_effort?: 'low' | 'medium' | 'high';
+  model_config_id?: number;
+  model_config_name?: string;
+}
+
+export interface AiModelConfig {
+  id: number;
+  name: string;
+  provider: 'openai_compatible';
+  base_url: string;
+  model: string;
+  image_model: string;
+  reasoning_effort: 'low' | 'medium' | 'high';
+  is_enabled: number;
+  is_default: number;
+  has_api_key: boolean;
+  masked_api_key: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface AiModelConnectionTest {
+  ok: boolean;
+  model: string;
+  duration_ms: number;
 }
 
 export interface AiToolDefinition {

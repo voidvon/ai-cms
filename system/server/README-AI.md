@@ -6,24 +6,20 @@
 - 服务：`system/server/src/services/ai/`
 - 后台页面：`system/admin/src/pages/AiChatPage.tsx`
 
-## 必需环境变量
+## 模型配置
 
-- `OPENAI_API_KEY`
+AI 模型配置以数据库表 `ai_models` 为真源，通过后台“系统 -> 模型管理”维护，不再从环境变量读取。
 
-## 可选环境变量
+每条配置包含：
 
-- `OPENAI_BASE_URL`
-- `OPENAI_AI_MODEL`
-- `OPENAI_DEFAULT_MODEL`
-- `OPENAI_CONTRACT_MODEL`
-- `OPENAI_IMAGE_MODEL`（可选的 GPT Image 工具模型；未配置时由 Responses 自动选择）
+- OpenAI 兼容接口 Base URL
+- API Key
+- 文本模型
+- 可选图片模型
+- 思考程度：`low`、`medium`、`high`
+- 启用状态与默认模型状态
 
-默认模型优先级：
-
-1. `OPENAI_AI_MODEL`
-2. `OPENAI_DEFAULT_MODEL`
-3. `OPENAI_CONTRACT_MODEL`
-4. `gpt-5`
+运行时只使用已启用的默认模型。修改默认模型或接口配置后无需重启服务，下一次 AI 请求会自动使用最新配置。
 
 ## 当前状态
 

@@ -10,7 +10,7 @@ for (const relativePath of envFiles) {
   loadEnvFile(path.join(projectRoot, relativePath));
 }
 
-if (process.env.OPENAI_BASE_URL && !process.env.OPENAI_AGENTS_DISABLE_TRACING) {
+if (!process.env.OPENAI_AGENTS_DISABLE_TRACING) {
   process.env.OPENAI_AGENTS_DISABLE_TRACING = '1';
 }
 

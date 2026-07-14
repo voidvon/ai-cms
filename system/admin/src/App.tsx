@@ -5,6 +5,7 @@ import AdminLoginLogsPage from '@/pages/AdminLoginLogsPage'
 import AdminsPage from '@/pages/AdminsPage'
 import AiChatPage from '@/pages/AiChatPage'
 import AiConversationPage from '@/pages/AiConversationPage'
+import AiModelsPage from '@/pages/AiModelsPage'
 import BulkReplacePage from '@/pages/BulkReplacePage'
 import ColumnsPage from '@/pages/ColumnsPage'
 import ContentModelDataPage from '@/pages/ContentModelDataPage'
@@ -47,6 +48,7 @@ function App() {
           <Route path="bulk-replace" element={<BulkReplacePage />} />
           <Route path="ai" element={<AiConversationPage />} />
           <Route path="ai-docs" element={<AiChatPage />} />
+          <Route path="ai-models" element={<AiModelsPage />} />
           <Route path="ai-assistant" element={<Navigate to="/ai" replace />} />
           <Route path="sitemap-diagnostics" element={<SitemapDiagnosticsPage />} />
           <Route path="llms-diagnostics" element={<LlmsDiagnosticsPage />} />

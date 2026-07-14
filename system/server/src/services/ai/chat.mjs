@@ -1,7 +1,7 @@
 import { MemorySession } from '@openai/agents';
 import { buildConversationAgentForCapability } from './capabilities.mjs';
 import { extractJsonString, normalizeText } from './shared.mjs';
-import { assertAiConfig, DEFAULT_MODEL, runAiAgent } from './runtime.mjs';
+import { assertAiConfig, getAiRuntimeConfig, runAiAgent } from './runtime.mjs';
 
 const conversationSessions = new Map();
 
@@ -40,7 +40,7 @@ export async function streamAiChat({ conversationId, capability, message }) {
   return {
     conversation_id: resolvedConversationId,
     capability: resolvedCapability.key,
-    model: DEFAULT_MODEL,
+    model: getAiRuntimeConfig().model,
     result,
     getFinalText() {
       return extractJsonString(result?.finalOutput) || '';

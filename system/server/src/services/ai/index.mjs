@@ -20,9 +20,9 @@ export {
 
 // Runtime (保持向后兼容)
 export {
-  DEFAULT_MODEL,
   assertAiConfig,
   createAiAgent,
+  getAiRuntimeConfig,
   runAiAgent,
   getOpenAIClient,
   getOpenAIModelProvider,

@@ -1,5 +1,5 @@
 import { MemorySession, assistant, user } from '@openai/agents';
-import { assertAiConfig, DEFAULT_MODEL, runAiAgent } from '../ai/runtime.mjs';
+import { assertAiConfig, getAiRuntimeConfig, runAiAgent } from '../ai/runtime.mjs';
 import { buildDocumentAgentContext } from './context.mjs';
 import { createDocumentWorkspaceAgent } from './agent.mjs';
 import {
@@ -30,7 +30,7 @@ export async function startDocumentAgentRun({ draftId, message, user = null }) {
   const runRecord = createDocumentRun({
     conversationId: conversation.id,
     draftId,
-    model: DEFAULT_MODEL,
+    model: getAiRuntimeConfig().model,
     userMessageId: userMessage.id,
   });
 

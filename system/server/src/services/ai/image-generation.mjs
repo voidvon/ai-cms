@@ -5,14 +5,13 @@ import { z } from 'zod';
 import { uploadMediaAsset } from '../media-assets.mjs';
 import { getMediaAssetById } from '../media-assets.mjs';
 import { listAiConversationMessages } from './conversations.mjs';
-import { DEFAULT_MODEL, getOpenAIClient } from './runtime.mjs';
+import { getAiRuntimeConfig, getOpenAIClient } from './runtime.mjs';
 import { normalizeText } from './shared.mjs';
 
-const IMAGE_TOOL_MODEL = normalizeText(process.env.OPENAI_IMAGE_MODEL);
-
 export function createImageGenerationHostedTool() {
+  const imageModel = normalizeText(getAiRuntimeConfig()?.image_model);
   return imageGenerationTool({
-    ...(IMAGE_TOOL_MODEL ? { model: IMAGE_TOOL_MODEL } : {}),
+    ...(imageModel ? { model: imageModel } : {}),
   });
 }
 
@@ -30,13 +29,14 @@ export function createPreviousGeneratedImageEditTool(imageContext, { prompt } = 
     parameters: z.object({}),
     strict: true,
     async execute() {
+      const runtimeConfig = getAiRuntimeConfig();
       const sourceImage = readGeneratedImageAsDataUrl(imageContext.asset_id);
       if (!sourceImage) {
         return { type: 'text', text: '上一张生成图片已不存在，无法继续编辑。' };
       }
 
       const response = await getOpenAIClient().responses.create({
-        model: DEFAULT_MODEL,
+        model: runtimeConfig.model,
         input: [{
           role: 'user',
           content: [
@@ -78,6 +78,7 @@ export function createUploadedImagesEditTool(uploadContext, { prompt } = {}) {
     parameters: z.object({}),
     strict: true,
     async execute() {
+      const runtimeConfig = getAiRuntimeConfig();
       const sourceImages = uploadContext.images
         .map((image) => readGeneratedImageAsDataUrl(image.asset_id))
         .filter(Boolean);
@@ -86,7 +87,7 @@ export function createUploadedImagesEditTool(uploadContext, { prompt } = {}) {
       }
 
       const response = await getOpenAIClient().responses.create({
-        model: DEFAULT_MODEL,
+        model: runtimeConfig.model,
         input: [{
           role: 'user',
           content: [
