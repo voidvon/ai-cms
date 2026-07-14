@@ -4,9 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { contentModelsApi, templateVariantsApi, templatesApi } from '@/api/advanced'
 import { columnNodesApi } from '@/api/column-nodes'
 import { columnsApi } from '@/api/columns'
-import { contentItemsApi } from '@/api/content-items'
 import { languagesApi } from '@/api/languages'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ColumnTreeSelector } from '@/components/ColumnTreeSelector'
@@ -14,17 +12,9 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-} from '@/components/ui/pagination'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { type TreeItemData } from '@/components/ui/tree'
-import { Ellipsis, ExternalLink, LayoutTemplate, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Ellipsis, Plus, Trash2 } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -35,42 +25,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { formatDate } from '@/lib/datetime'
 import { toast } from 'sonner'
-import type { Column, ColumnNode, ContentModel, ManagedContentItem, SectionContentItem, Template, TemplateBinding } from '@/types'
-import ColumnTemplateBindingDialog from '@/components/ColumnTemplateBindingDialog'
+import type { Column, ColumnNode, Template, TemplateBinding } from '@/types'
 import ColumnNodeFormDialog from '@/components/ColumnNodeFormDialog'
-import ContentItemFormDialog from '@/components/ContentItemFormDialog'
 import ManualColumnFormDialog from '@/components/ManualColumnFormDialog'
 import type { ManualColumnFormValue } from '@/components/ManualColumnFormDialog'
 
 const DEFAULT_TEMPLATE_VALUE = '__default__'
 
-type DeleteTarget =
-  | { modelCode: ManagedModelCode; id: number }
-  | null
-
-const MANAGED_MODEL_META = {
-  product: {
-    code: 'product',
-    isSectionContent: false,
-  },
-  news: {
-    code: 'news',
-    isSectionContent: true,
-  },
-} as const
-
-type ManagedModelCode = keyof typeof MANAGED_MODEL_META
-type ListedContentItem = ManagedContentItem | SectionContentItem
-
-type EditingNodeTarget =
-  | { rootColumnId: number; id: number }
-  | null
-
-type EditingColumnTarget =
-  | Column
-  | null
+const INVALIDATED_CONTENT_MODELS = ['product', 'news'] as const
 
 type ColumnNodeTarget = {
   id: number
@@ -92,43 +55,25 @@ interface RootColumnNodeForm {
 }
 
 type ManualColumnKind = 'link' | 'single'
-type ColumnDisplayKind = 'node' | ManualColumnKind
-
-const COLUMN_KIND_META: Record<ColumnDisplayKind, { label: string; createLabel: string; showTreeBadge: boolean }> = {
+const COLUMN_KIND_META: Record<'node' | ManualColumnKind, { createLabel: string }> = {
   node: {
-    label: '栏目',
     createLabel: '新增栏目',
-    showTreeBadge: false,
   },
   link: {
-    label: '链接',
     createLabel: '新增链接',
-    showTreeBadge: true,
   },
   single: {
-    label: '单页',
     createLabel: '新增单页',
-    showTreeBadge: true,
   },
 }
 
 export default function ColumnsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const selectedColumnId = Number.parseInt(searchParams.get('columnId') || '0', 10) || 0
-  const [page, setPage] = useState(1)
-  const limit = 50
   const queryClient = useQueryClient()
 
-  const [contentItemFormOpen, setContentItemFormOpen] = useState(false)
-  const [editingContentItem, setEditingContentItem] = useState<ListedContentItem | undefined>()
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [deleteTarget, setDeleteTarget] = useState<DeleteTarget>(null)
   const [nodeFormOpen, setNodeFormOpen] = useState(false)
-  const [nodeFormMode, setNodeFormMode] = useState<'create' | 'edit'>('edit')
-  const [editingNodeTarget, setEditingNodeTarget] = useState<EditingNodeTarget>(null)
-  const [editingColumnTarget, setEditingColumnTarget] = useState<EditingColumnTarget>(null)
   const [creatingNodeTarget, setCreatingNodeTarget] = useState<ColumnNodeTarget>(null)
-  const [bindingNodeTarget, setBindingNodeTarget] = useState<ColumnNodeTarget>(null)
   const [nodeDeleteDialogOpen, setNodeDeleteDialogOpen] = useState(false)
   const [deletingNodeTarget, setDeletingNodeTarget] = useState<ColumnNodeTarget>(null)
   const [rootNodeDialogOpen, setRootNodeDialogOpen] = useState(false)
@@ -142,9 +87,7 @@ export default function ColumnsPage() {
     contentTemplateId: DEFAULT_TEMPLATE_VALUE,
   })
   const [manualColumnDialogOpen, setManualColumnDialogOpen] = useState(false)
-  const [manualColumnDialogMode, setManualColumnDialogMode] = useState<'create' | 'edit'>('create')
   const [manualColumnDialogKind, setManualColumnDialogKind] = useState<ManualColumnKind>('link')
-  const [editingManualColumn, setEditingManualColumn] = useState<Column | null>(null)
   const [manualColumnDeleteDialogOpen, setManualColumnDeleteDialogOpen] = useState(false)
   const [deletingManualColumn, setDeletingManualColumn] = useState<Column | null>(null)
 
@@ -163,22 +106,16 @@ export default function ColumnsPage() {
   })
   const selectedThemeId = selectedThemeData?.data?.id
 
-  const { data: editingNodeData } = useQuery({
-    queryKey: ['column-nodes', editingNodeTarget?.rootColumnId, 'detail', editingNodeTarget?.id],
-    queryFn: () => columnNodesApi.get(editingNodeTarget!.rootColumnId, editingNodeTarget!.id),
-    enabled: nodeFormOpen && nodeFormMode === 'edit' && Boolean(editingNodeTarget?.rootColumnId) && Boolean(editingNodeTarget?.id),
-  })
-
   const { data: templatesData } = useQuery({
     queryKey: ['templates', selectedThemeId ?? 0],
     queryFn: () => templatesApi.list(undefined, selectedThemeId),
-    enabled: (rootNodeDialogOpen || manualColumnDialogOpen || Boolean(bindingNodeTarget)) && Boolean(selectedThemeId),
+    enabled: Boolean(selectedThemeId),
   })
 
   const { data: bindingsData } = useQuery({
     queryKey: ['template-bindings', selectedThemeId ?? 0],
     queryFn: () => templatesApi.listBindings(selectedThemeId),
-    enabled: (manualColumnDialogOpen || Boolean(bindingNodeTarget)) && Boolean(selectedThemeId),
+    enabled: Boolean(selectedThemeId),
   })
   const { data: contentModelsData } = useQuery({
     queryKey: ['content-models'],
@@ -192,56 +129,17 @@ export default function ColumnsPage() {
     || columns[0]
     || null
 
-  const selectedColumnType = selectedColumn?.column_type || ''
-  const selectedModelCode = selectedColumn?.model_code || ''
-  const selectedRenderDriver = String(selectedColumn?.column_semantics?.render_driver || '')
-  const activeManagedModelCode = selectedColumnType === 'list' && selectedModelCode in MANAGED_MODEL_META
-    ? selectedModelCode as ManagedModelCode
-    : null
-  const isManualLinkColumn = selectedColumnType === 'link'
-  const isManualSingleColumn = selectedColumnType === 'single' && selectedRenderDriver !== 'page_tree'
-  const isManualColumn = isManualLinkColumn || isManualSingleColumn
-  const nodeFormRootColumnId = editingNodeTarget?.rootColumnId || creatingNodeTarget?.rootColumnId || 0
+  const nodeFormRootColumnId = creatingNodeTarget?.rootColumnId || 0
   const nodeFormRootColumn = nodeFormRootColumnId
     ? columns.find((item) => item.id === nodeFormRootColumnId) || null
     : null
-
-  const activeContentModelCode = activeManagedModelCode
-
-  const { data: contentItemsData, isLoading: contentItemsLoading } = useQuery({
-    queryKey: ['content-items', activeContentModelCode, 'columns', selectedColumn?.id || 0, page, limit],
-    queryFn: () => contentItemsApi.list<ManagedContentItem>(activeContentModelCode!, {
-      page,
-      limit,
-      column_id: activeContentModelCode ? (selectedColumn?.id || undefined) : undefined,
-      include_descendants: activeContentModelCode ? 1 : undefined,
-      language: defaultLanguageCode,
-    }),
-    enabled: Boolean(activeContentModelCode),
-    staleTime: 0,
-  })
-
-  const deleteContentItemMutation = useMutation({
-    mutationFn: ({ modelCode, id }: { modelCode: ManagedModelCode; id: number }) => contentItemsApi.delete(modelCode, id),
-    onSuccess: () => {
-      Object.keys(MANAGED_MODEL_META).forEach((modelCode) => {
-        queryClient.invalidateQueries({ queryKey: ['content-items', modelCode] })
-      })
-      toast.success('删除成功')
-      setDeleteDialogOpen(false)
-      setDeleteTarget(null)
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || '删除失败')
-    },
-  })
 
   const deleteNodeMutation = useMutation({
     mutationFn: ({ rootColumnId, id }: { rootColumnId: number; id: number }) => columnNodesApi.delete(rootColumnId, id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['column-nodes'] })
       queryClient.invalidateQueries({ queryKey: ['columns'] })
-      Object.keys(MANAGED_MODEL_META).forEach((modelCode) => {
+      INVALIDATED_CONTENT_MODELS.forEach((modelCode) => {
         queryClient.invalidateQueries({ queryKey: ['content-items', modelCode] })
       })
       queryClient.invalidateQueries({ queryKey: ['template-bindings'] })
@@ -333,7 +231,6 @@ export default function ColumnsPage() {
       queryClient.invalidateQueries({ queryKey: ['template-bindings'] })
       toast.success('栏目已创建')
       setManualColumnDialogOpen(false)
-      setEditingManualColumn(null)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || error.message || '创建失败')
@@ -358,8 +255,6 @@ export default function ColumnsPage() {
       queryClient.invalidateQueries({ queryKey: ['columns'] })
       queryClient.invalidateQueries({ queryKey: ['template-bindings'] })
       toast.success('栏目已更新')
-      setManualColumnDialogOpen(false)
-      setEditingManualColumn(null)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || error.message || '更新失败')
@@ -393,9 +288,6 @@ export default function ColumnsPage() {
       queryClient.invalidateQueries({ queryKey: ['columns'] })
       queryClient.invalidateQueries({ queryKey: ['template-bindings'] })
       toast.success('栏目已更新')
-      setManualColumnDialogOpen(false)
-      setEditingManualColumn(null)
-      setEditingColumnTarget(null)
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || error.message || '更新失败')
@@ -419,22 +311,13 @@ export default function ColumnsPage() {
     },
   })
 
-  const activeContentItems = contentItemsData?.items || []
-  const activePagination = contentItemsData?.pagination
-  const activeLoading = contentItemsLoading
-  const pageTitle = selectedColumn?.name || '栏目'
   const templates = templatesData?.data || []
   const bindings = bindingsData?.data || []
   const contentModels = contentModelsData?.data || []
   const listTemplates = templates.filter((template: Template) => template.type === 'list')
   const contentTemplates = templates.filter((template: Template) => template.type === 'content')
   const singleTemplates = templates.filter((template: Template) => template.type === 'single')
-  const selectedNodeBindings = selectedColumn
-    ? bindings.filter((binding) => binding.target_type === 'column' && binding.target_id === selectedColumn.id)
-    : []
-
   const handleSelectColumn = (column: TreeItemData<Column>) => {
-    setPage(1)
     setSearchParams({ columnId: String(column.id) })
   }
 
@@ -444,9 +327,7 @@ export default function ColumnsPage() {
       return
     }
 
-    setNodeFormMode('create')
     setCreatingNodeTarget(target)
-    setEditingNodeTarget(null)
     setNodeFormOpen(true)
   }
 
@@ -471,11 +352,6 @@ export default function ColumnsPage() {
 
   const handleManualColumnDialogOpenChange = (open: boolean) => {
     setManualColumnDialogOpen(open)
-    if (!open) {
-      setEditingManualColumn(null)
-      setEditingColumnTarget(null)
-      setManualColumnDialogMode('create')
-    }
   }
 
   const handleCreateRootNode = (event: React.FormEvent) => {
@@ -492,54 +368,17 @@ export default function ColumnsPage() {
   }
 
   const handleCreateManualColumn = (kind: ManualColumnKind) => {
-    setManualColumnDialogMode('create')
     setManualColumnDialogKind(kind)
-    setEditingManualColumn(null)
     setManualColumnDialogOpen(true)
   }
 
   const handleSubmitManualColumn = (value: ManualColumnFormValue, templateIds: { listTemplateId: string; contentTemplateId: string; singleTemplateId: string }) => {
-    if (editingColumnTarget) {
-      updateColumnMutation.mutate({ id: editingColumnTarget.id, value, templateIds })
-      return
-    }
-    if (manualColumnDialogMode === 'edit' && editingManualColumn) {
-      updateManualColumnMutation.mutate({ id: editingManualColumn.id, value, templateIds })
-      return
-    }
     createManualColumnMutation.mutate({ value, templateIds })
-  }
-
-  const handleEditManualColumn = (column: Column) => {
-    setManualColumnDialogMode('edit')
-    setManualColumnDialogKind(column.column_type === 'single' ? 'single' : 'link')
-    setEditingManualColumn(column)
-    setManualColumnDialogOpen(true)
   }
 
   const handleDeleteManualColumn = (column: Column) => {
     setDeletingManualColumn(column)
     setManualColumnDeleteDialogOpen(true)
-  }
-
-  const handleEditColumnNode = (column: Column) => {
-    const target = getColumnNodeTarget(column)
-    if (!target) {
-      return
-    }
-
-    setNodeFormMode('edit')
-    setCreatingNodeTarget(null)
-    setEditingColumnTarget(null)
-    setEditingNodeTarget({ rootColumnId: target.rootColumnId, id: target.id })
-    setNodeFormOpen(true)
-  }
-
-  const handleTemplateBinding = (column: Column) => {
-    const target = getColumnNodeTarget(column)
-    if (target) {
-      setBindingNodeTarget(target)
-    }
   }
 
   const handleDeleteColumnNode = (column: Column) => {
@@ -553,10 +392,9 @@ export default function ColumnsPage() {
   const handleNodeFormOpenChange = (open: boolean) => {
     setNodeFormOpen(open)
     if (!open) {
-      setEditingNodeTarget(null)
       setCreatingNodeTarget(null)
       queryClient.invalidateQueries({ queryKey: ['columns'] })
-      Object.keys(MANAGED_MODEL_META).forEach((modelCode) => {
+      INVALIDATED_CONTENT_MODELS.forEach((modelCode) => {
         queryClient.invalidateQueries({ queryKey: ['content-items', modelCode] })
       })
       queryClient.invalidateQueries({ queryKey: ['column-nodes'] })
@@ -609,29 +447,6 @@ export default function ColumnsPage() {
             </DropdownMenuItem>
           ) : null}
 
-          {nodeTarget && canEditManualColumn ? <DropdownMenuSeparator /> : null}
-
-          {canEditManualColumn ? (
-            <DropdownMenuItem onSelect={() => handleEditManualColumn(column)}>
-              <Pencil className="size-4" />
-              编辑栏目
-            </DropdownMenuItem>
-          ) : null}
-
-          {nodeTarget ? (
-            <DropdownMenuItem onSelect={() => handleEditColumnNode(column)}>
-              <Pencil className="size-4" />
-              编辑栏目
-            </DropdownMenuItem>
-          ) : null}
-
-          {nodeTarget ? (
-            <DropdownMenuItem onSelect={() => handleTemplateBinding(column)}>
-              <LayoutTemplate className="size-4" />
-              模板绑定
-            </DropdownMenuItem>
-          ) : null}
-
           {(canEditManualColumn || nodeTarget) ? <DropdownMenuSeparator /> : null}
 
           {canEditManualColumn ? (
@@ -670,31 +485,7 @@ export default function ColumnsPage() {
     )
   }
 
-  const handleAdd = () => {
-    if (activeContentModelCode) {
-      setEditingContentItem(undefined)
-      setContentItemFormOpen(true)
-    }
-  }
-
-  const handleEditContentItem = (contentItem: ListedContentItem) => {
-    setEditingContentItem(contentItem)
-    setContentItemFormOpen(true)
-  }
-
-  const handleDelete = (target: DeleteTarget) => {
-    setDeleteTarget(target)
-    setDeleteDialogOpen(true)
-  }
-
-  const confirmDelete = () => {
-    if (!deleteTarget) {
-      return
-    }
-    deleteContentItemMutation.mutate(deleteTarget)
-  }
-
-  const selectedEditingColumnId = editingColumnTarget?.id || editingManualColumn?.id || 0
+  const selectedEditingColumnId = selectedColumn?.id || 0
   const selectedManualListBinding = useMemo(() =>
     selectedEditingColumnId
       ? bindings.find((binding) => (
@@ -732,7 +523,7 @@ export default function ColumnsPage() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <CardTitle>栏目</CardTitle>
-              <CardDescription>选择左侧栏目后查看对应内容</CardDescription>
+              <CardDescription>选择左侧栏目后编辑栏目配置</CardDescription>
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -766,134 +557,49 @@ export default function ColumnsPage() {
         </CardContent>
       </Card>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <div className="flex items-start justify-between gap-3">
-          <CardTitle>{pageTitle}</CardTitle>
-          <div className="flex items-center gap-2">
-            {isManualColumn && selectedColumn ? (
-              <>
-                <Button variant="outline" onClick={() => handleEditManualColumn(selectedColumn)}>
-                  编辑栏目
-                </Button>
-                <Button variant="destructiveGhost" onClick={() => handleDeleteManualColumn(selectedColumn)}>
-                  删除栏目
-                </Button>
-              </>
-            ) : null}
-            {activeManagedModelCode && (
-              <Button onClick={handleAdd}>
-                新增内容
-              </Button>
-            )}
+      <div className="min-h-0 overflow-y-auto pr-1">
+        {!selectedColumn ? (
+          <div className="flex min-h-64 items-center justify-center rounded border p-8 text-center text-muted-foreground">
+            请选择左侧栏目
           </div>
-        </div>
-        <div className="mt-4 min-h-0 flex flex-1 flex-col">
-          {selectedColumn && !isManualColumn ? (
-            <ColumnNodeDetailPanel
-              column={selectedColumn}
-              bindings={selectedNodeBindings}
-              contentModels={contentModels}
-              selectedThemeId={selectedThemeId}
-            />
-          ) : null}
-          {isManualColumn ? (
-            <div className="min-h-0 flex-1">
-              <ManualColumnPanel column={selectedColumn} onEdit={handleEditManualColumn} onDelete={handleDeleteManualColumn} />
-            </div>
-          ) : selectedRenderDriver === 'page_tree' ? (
-            <div className="min-h-0 flex-1">
-              <PageTreeColumnPanel column={selectedColumn} />
-            </div>
-          ) : activeLoading ? (
-            <div className="flex min-h-0 flex-1 items-center justify-center rounded border p-8 text-center text-muted-foreground">加载中...</div>
-          ) : (
-            <>
-              <ContentItemsTable
-                modelCode={activeContentModelCode}
-                items={activeContentItems}
-                columns={columns}
-                onEdit={handleEditContentItem}
-                onDelete={(id) => activeContentModelCode && handleDelete({ modelCode: activeContentModelCode, id })}
-              />
-            </>
-          )}
-
-          {activePagination && (
-            <div className="mt-4 flex items-center justify-between">
-              <div className="text-sm text-muted-foreground">
-                共 {activePagination.total || 0} 条 · 第 {activePagination.page} / {activePagination.totalPages} 页
-              </div>
-              {activePagination.totalPages > 1 && (
-                <Pagination className="mx-0 w-auto justify-end">
-                  <PaginationContent>
-                    <PaginationItem>
-                      <PaginationLink
-                        href="#"
-                        size="default"
-                        className={activePagination.page === 1 ? 'pointer-events-none opacity-50' : ''}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          if (activePagination.page > 1) {
-                            setPage(activePagination.page - 1)
-                          }
-                        }}
-                      >
-                        上一页
-                      </PaginationLink>
-                    </PaginationItem>
-                    {buildPaginationItems(activePagination.page, activePagination.totalPages).map((item, index) => (
-                      item === 'ellipsis' ? (
-                        <PaginationItem key={`ellipsis-${index}`}>
-                          <PaginationEllipsis />
-                        </PaginationItem>
-                      ) : (
-                        <PaginationItem key={item}>
-                          <PaginationLink
-                            href="#"
-                            isActive={item === activePagination.page}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              setPage(item)
-                            }}
-                          >
-                            {item}
-                          </PaginationLink>
-                        </PaginationItem>
-                      )
-                    ))}
-                    <PaginationItem>
-                      <PaginationLink
-                        href="#"
-                        size="default"
-                        className={activePagination.page === activePagination.totalPages ? 'pointer-events-none opacity-50' : ''}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          if (activePagination.page < activePagination.totalPages) {
-                            setPage(activePagination.page + 1)
-                          }
-                        }}
-                      >
-                        下一页
-                      </PaginationLink>
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
-              )}
-            </div>
-          )}
-        </div>
+        ) : getColumnNodeTarget(selectedColumn) ? (
+          <ColumnNodeFormDialog
+            key={`column-node-panel-${selectedColumn.id}`}
+            open
+            onOpenChange={() => undefined}
+            presentation="panel"
+            rootColumn={columns.find((item) => item.id === getColumnNodeTarget(selectedColumn)?.rootColumnId) || selectedColumn}
+            node={selectedColumn as unknown as ColumnNode}
+            mode="edit"
+          />
+        ) : (
+          <ManualColumnFormDialog
+            key={`column-panel-${selectedColumn.id}`}
+            open
+            onOpenChange={() => undefined}
+            presentation="panel"
+            mode="edit"
+            column={selectedColumn}
+            initialKind={selectedColumn.column_type === 'single' ? 'single' : 'link'}
+            columns={columns}
+            contentModels={contentModels}
+            listTemplates={listTemplates}
+            contentTemplates={contentTemplates}
+            singleTemplates={singleTemplates}
+            initialListTemplateId={selectedManualListBinding?.template_id ? String(selectedManualListBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
+            initialContentTemplateId={selectedManualContentBinding?.template_id ? String(selectedManualContentBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
+            initialSingleTemplateId={selectedManualSingleBinding?.template_id ? String(selectedManualSingleBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
+            submitting={updateManualColumnMutation.isPending || updateColumnMutation.isPending}
+            onSubmit={(value, templateIds) => {
+              if (isEditableManualColumn(selectedColumn)) {
+                updateManualColumnMutation.mutate({ id: selectedColumn.id, value, templateIds })
+                return
+              }
+              updateColumnMutation.mutate({ id: selectedColumn.id, value, templateIds })
+            }}
+          />
+        )}
       </div>
-
-      {contentItemFormOpen && activeContentModelCode ? (
-        <ContentItemFormDialog
-          open={contentItemFormOpen}
-          onOpenChange={setContentItemFormOpen}
-          item={editingContentItem}
-          mode={editingContentItem ? 'edit' : 'create'}
-          modelCode={activeContentModelCode}
-          defaultColumnId={selectedColumn?.id || undefined}
-        />
-      ) : null}
 
       <Dialog open={rootNodeDialogOpen} onOpenChange={handleRootNodeDialogOpenChange}>
         <DialogContent className="max-w-xl">
@@ -1012,10 +718,8 @@ export default function ColumnsPage() {
         <ManualColumnFormDialog
           open={manualColumnDialogOpen}
           onOpenChange={handleManualColumnDialogOpenChange}
-          mode={manualColumnDialogMode}
-          column={editingColumnTarget || editingManualColumn}
+          mode="create"
           initialKind={manualColumnDialogKind}
-          forceBasicOnly={Boolean(editingColumnTarget)}
           columns={columns}
           contentModels={contentModels}
           listTemplates={listTemplates}
@@ -1024,7 +728,7 @@ export default function ColumnsPage() {
           initialListTemplateId={selectedManualListBinding?.template_id ? String(selectedManualListBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
           initialContentTemplateId={selectedManualContentBinding?.template_id ? String(selectedManualContentBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
           initialSingleTemplateId={selectedManualSingleBinding?.template_id ? String(selectedManualSingleBinding.template_id) : DEFAULT_TEMPLATE_VALUE}
-          submitting={createManualColumnMutation.isPending || updateManualColumnMutation.isPending || updateColumnMutation.isPending}
+          submitting={createManualColumnMutation.isPending}
           onSubmit={handleSubmitManualColumn}
         />
       ) : null}
@@ -1034,41 +738,10 @@ export default function ColumnsPage() {
           open={nodeFormOpen}
           onOpenChange={handleNodeFormOpenChange}
           rootColumn={nodeFormRootColumn}
-          node={nodeFormMode === 'edit' ? editingNodeData?.data as ColumnNode | undefined : undefined}
-          currentParentId={nodeFormMode === 'create' ? creatingNodeTarget?.id || 0 : 0}
-          mode={nodeFormMode}
+          currentParentId={creatingNodeTarget?.id || 0}
+          mode="create"
         />
       ) : null}
-
-      {bindingNodeTarget ? (
-        <ColumnTemplateBindingDialog
-          open={Boolean(bindingNodeTarget)}
-          onOpenChange={(open) => {
-            if (!open) {
-              setBindingNodeTarget(null)
-            }
-          }}
-          targetType={bindingNodeTarget.targetType}
-          targetId={bindingNodeTarget.id}
-          targetName={bindingNodeTarget.name}
-          templateTypes={bindingNodeTarget.renderDriver === 'page_tree' ? ['single'] : ['list', 'content']}
-        />
-      ) : null}
-
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>确认删除</AlertDialogTitle>
-            <AlertDialogDescription>
-              此操作无法撤销。确定要删除这条内容吗？
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={confirmDelete}>确定</AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       <AlertDialog open={nodeDeleteDialogOpen} onOpenChange={setNodeDeleteDialogOpen}>
         <AlertDialogContent>
@@ -1111,327 +784,6 @@ export default function ColumnsPage() {
       </AlertDialog>
     </div>
   )
-}
-
-function ContentItemsTable({
-  modelCode,
-  items,
-  columns,
-  onEdit,
-  onDelete,
-}: {
-  modelCode: ManagedModelCode | null
-  items: ListedContentItem[]
-  columns: Column[]
-  onEdit: (item: ListedContentItem) => void
-  onDelete: (id: number) => void
-}) {
-  const isSectionContent = modelCode ? MANAGED_MODEL_META[modelCode].isSectionContent : false
-
-  return (
-    <Table containerClassName="min-h-0 flex-1 rounded border">
-      <TableHeader>
-        <TableRow>
-          <TableHead>ID</TableHead>
-          <TableHead>标题</TableHead>
-          {!isSectionContent ? <TableHead>编号</TableHead> : null}
-          <TableHead>分类</TableHead>
-          <TableHead>多语言</TableHead>
-          <TableHead>推荐</TableHead>
-          {isSectionContent ? <TableHead>创建时间</TableHead> : <TableHead>状态</TableHead>}
-          <TableHead className="text-right">操作</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {items.length === 0 ? (
-          <TableRow>
-            <TableCell colSpan={isSectionContent ? 7 : 8} className="text-center">暂无内容</TableCell>
-          </TableRow>
-        ) : (
-          items.map((item) => (
-            <TableRow key={item.id}>
-              <TableCell>{item.id}</TableCell>
-              <TableCell className="group/title font-medium">
-                <div className="flex items-center gap-1">
-                  <span>{resolveContentItemTitle(item)}</span>
-                  {!isSectionContent ? (
-                    <a
-                      href={buildManagedContentPreviewHref(item as ManagedContentItem, columns)}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="inline-flex size-4 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none group-hover/title:opacity-100"
-                      aria-label={`新窗口打开 ${resolveContentItemTitle(item)} 详情页`}
-                      title="打开详情页"
-                    >
-                      <ExternalLink className="size-3.5" />
-                    </a>
-                  ) : null}
-                </div>
-              </TableCell>
-              {!isSectionContent ? <TableCell>{(item as ManagedContentItem).code || '-'}</TableCell> : null}
-              <TableCell>{item.column_name || item.column_id || '-'}</TableCell>
-              <TableCell>
-                <div className="flex flex-wrap gap-1">
-                  {(item.translation_statuses || []).length === 0 ? (
-                    <Badge variant="outline">默认语言</Badge>
-                  ) : (
-                    item.translation_statuses?.map((status) => (
-                      <Badge
-                        key={`${item.id}-${status.language_code}`}
-                        variant={status.publish_status === 'published' ? 'default' : 'outline'}
-                      >
-                        {status.language_code}
-                      </Badge>
-                    ))
-                  )}
-                </div>
-              </TableCell>
-              <TableCell>{Number(item.is_featured_home || (item as SectionContentItem).is_featured || 0) === 1 ? <Badge>是</Badge> : <Badge variant="outline">否</Badge>}</TableCell>
-              {isSectionContent ? (
-                <TableCell>{formatDate((item as SectionContentItem).created_at)}</TableCell>
-              ) : (
-                <TableCell>{(item as ManagedContentItem).is_visible === 1 ? <Badge>显示</Badge> : <Badge variant="secondary">隐藏</Badge>}</TableCell>
-              )}
-              <TableCell className="text-right">
-                <Button variant="ghost" size="sm" onClick={() => onEdit(item)}>编辑</Button>
-                <Button variant="destructiveGhost" size="sm" onClick={() => onDelete(item.id)}>删除</Button>
-              </TableCell>
-            </TableRow>
-          ))
-        )}
-      </TableBody>
-    </Table>
-  )
-}
-
-function resolveContentItemTitle(item: ListedContentItem) {
-  return 'title' in item ? item.title : item.name
-}
-
-function buildManagedContentPreviewHref(item: ManagedContentItem, columns: Column[]) {
-  const contentId = Number(item.id) || 0
-  const column = columns.find((entry) => entry.id === item.column_id) || null
-  const routePath = ensureTrailingSlash(column?.route_path || '/products/')
-  const detailRule = String(column?.detail_rule || '').trim()
-  const customUrl = String(item.custom_url || '').trim()
-
-  if (customUrl) {
-    return resolveRelativePublicUrl(customUrl, routePath)
-  }
-  if (detailRule === '{id}.html') {
-    return `${routePath}${contentId}.html`
-  }
-  if (detailRule === '{id}/index.html') {
-    return `${routePath}${contentId}/`
-  }
-  if (detailRule === 'detail/{id}.html') {
-    return `${routePath}detail/${contentId}.html`
-  }
-  if (detailRule && !detailRule.includes('{')) {
-    return resolveRelativePublicUrl(detailRule, routePath)
-  }
-  return `${routePath}detail/${contentId}.html`
-}
-
-function ensureTrailingSlash(value: string) {
-  const normalized = String(value || '').trim()
-  if (!normalized) {
-    return '/'
-  }
-  return normalized.endsWith('/') ? normalized : `${normalized}/`
-}
-
-function resolveRelativePublicUrl(value: string, parentPath: string) {
-  const normalizedValue = String(value || '').trim()
-  if (!normalizedValue) {
-    return parentPath
-  }
-  if (normalizedValue.startsWith('/')) {
-    return normalizePublicUrl(normalizedValue)
-  }
-  return normalizePublicUrl(`${ensureTrailingSlash(parentPath)}${normalizedValue}`)
-}
-
-function normalizePublicUrl(value: string) {
-  const normalized = value.startsWith('/') ? value : `/${value}`
-  const collapsed = normalized.replace(/\/{2,}/g, '/')
-  return collapsed.replace(/\/index\.html$/i, '/')
-}
-
-function PageTreeColumnPanel({ column }: { column: Column | null }) {
-  if (!column) {
-    return <div className="flex h-full items-center justify-center rounded border p-8 text-center text-muted-foreground">请选择左侧栏目</div>
-  }
-
-  return (
-    <div className="flex h-full items-center justify-center rounded border p-8 text-center text-sm text-muted-foreground">
-      该栏目树使用单页模式，不包含列表内容。
-    </div>
-  )
-}
-
-function ManualColumnPanel({
-  column,
-  onEdit,
-  onDelete,
-}: {
-  column: Column | null
-  onEdit: (column: Column) => void
-  onDelete: (column: Column) => void
-}) {
-  if (!column) {
-    return <div className="flex h-full items-center justify-center rounded border p-8 text-center text-muted-foreground">请选择左侧栏目</div>
-  }
-
-  const isSingle = column.column_type === 'single'
-  return (
-    <div className="flex h-full flex-col rounded border">
-      <div className="border-b px-5 py-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm text-muted-foreground">{isSingle ? '单页栏目' : '链接栏目'}</div>
-            <div className="mt-1 text-lg font-medium">{column.name}</div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => onEdit(column)}>编辑栏目</Button>
-            <Button variant="destructiveGhost" size="sm" onClick={() => onDelete(column)}>删除栏目</Button>
-          </div>
-        </div>
-      </div>
-      <div className="space-y-4 px-5 py-4 text-sm">
-        {isSingle ? (
-          <>
-            <div>
-              <div className="text-muted-foreground">栏目目录名</div>
-              <div className="mt-1 break-all font-medium">{column.dir_name || '-'}</div>
-            </div>
-            <div>
-              <div className="text-muted-foreground">访问路径</div>
-              <div className="mt-1 break-all font-medium">{column.route_path || '-'}</div>
-            </div>
-            <div>
-              <div className="text-muted-foreground">页面内容</div>
-              <div className="mt-1 rounded border bg-muted/20 p-3 whitespace-pre-wrap break-words">
-                {column.content_html || '暂无内容'}
-              </div>
-            </div>
-          </>
-        ) : (
-          <>
-            <div>
-              <div className="text-muted-foreground">跳转地址</div>
-              <div className="mt-1 break-all font-medium">{column.custom_url || '-'}</div>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-function ColumnNodeDetailPanel({
-  column,
-  bindings,
-  contentModels,
-  selectedThemeId,
-}: {
-  column: Column
-  bindings: TemplateBinding[]
-  contentModels: ContentModel[]
-  selectedThemeId?: number
-}) {
-  const target = getColumnNodeTarget(column)
-  const listBinding = bindings.find((item) => item.template_type === 'list')
-  const contentBinding = bindings.find((item) => item.template_type === 'content')
-  const singleBinding = bindings.find((item) => item.template_type === 'single')
-  const detailText = column.column_type === 'single'
-    ? (column.route_path || '-')
-    : column.column_type === 'link'
-      ? (column.custom_url || '-')
-      : `栏目ID ${column.id || '-'}`
-  const seoSummary = column.seo_description?.trim() || '-'
-  const boundModel = contentModels.find((item) => item.id === column.content_model_id)
-  const modelBindingText = boundModel
-    ? `${boundModel.name} (#${boundModel.id})`
-    : (column.content_model_id ? `#${column.content_model_id}` : '未绑定')
-
-  return (
-    <Card className="mb-4">
-      <CardContent className="grid gap-4 px-5 py-4 md:grid-cols-2 xl:grid-cols-4">
-        <div className="space-y-1 text-sm">
-          <div className="text-muted-foreground">基本信息</div>
-          <div className="font-medium">{column.name}</div>
-          <div>ID {column.id}</div>
-          <div>类型：{getColumnKindLabel(column)}</div>
-          <div>排序：{column.sort_order}</div>
-          <div>父级：{column.parent_id || '顶级'}</div>
-        </div>
-        <div className="space-y-1 text-sm">
-          <div className="text-muted-foreground">路径与来源</div>
-          <div className="break-all">{detailText}</div>
-          <div>栏目形态：{column.column_type || '-'}</div>
-          <div>模型绑定：{modelBindingText}</div>
-          {target ? <div>栏目ID：{target.id}</div> : null}
-        </div>
-        <div className="space-y-1 text-sm">
-          <div className="text-muted-foreground">SEO</div>
-          <div className="line-clamp-3 break-words">{seoSummary}</div>
-          <div>语言：{column.current_language_code || '-'}</div>
-        </div>
-        <div className="space-y-1 text-sm">
-          <div className="text-muted-foreground">模板绑定</div>
-          <div>主题：{selectedThemeId ? `#${selectedThemeId}` : '未选择'}</div>
-          {column.column_type === 'single'
-            ? <div>单页模板：{singleBinding?.template_name || singleBinding?.template_code || '未绑定'}</div>
-            : (
-              <>
-                <div>列表模板：{listBinding?.template_name || listBinding?.template_code || '未绑定'}</div>
-                <div>内容模板：{contentBinding?.template_name || contentBinding?.template_code || '未绑定'}</div>
-              </>
-            )}
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-function buildPaginationItems(currentPage: number, totalPages: number): Array<number | 'ellipsis'> {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1)
-  }
-
-  const items: Array<number | 'ellipsis'> = [1]
-  const start = Math.max(2, currentPage - 1)
-  const end = Math.min(totalPages - 1, currentPage + 1)
-
-  if (start > 2) {
-    items.push('ellipsis')
-  }
-
-  for (let page = start; page <= end; page += 1) {
-    items.push(page)
-  }
-
-  if (end < totalPages - 1) {
-    items.push('ellipsis')
-  }
-
-  items.push(totalPages)
-  return items
-}
-
-function getColumnKindLabel(column: Column) {
-  return COLUMN_KIND_META[getColumnDisplayKind(column)].label
-}
-
-function getColumnDisplayKind(column: Column): ColumnDisplayKind {
-  if (column.column_type === 'single') {
-    return 'single'
-  }
-  if (column.column_type === 'link') {
-    return 'link'
-  }
-  return 'node'
 }
 
 async function saveRequiredTemplateBinding(

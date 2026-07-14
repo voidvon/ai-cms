@@ -30,6 +30,7 @@ export interface ManualColumnFormValue {
 interface ManualColumnFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  presentation?: 'dialog' | 'panel'
   mode: 'create' | 'edit'
   column?: Column | null
   initialKind?: 'link' | 'single'
@@ -47,6 +48,7 @@ interface ManualColumnFormDialogProps {
 }
 
 const DEFAULT_TEMPLATE_VALUE = '__default__'
+const BASE_TAB_VALUE = '__base__'
 const MODEL_DETAIL_RULE_OPTIONS = {
   news: [
     { value: 'detail/{id}.html', label: 'detail/{id}.html' },
@@ -61,6 +63,7 @@ const MODEL_DETAIL_RULE_OPTIONS = {
 export default function ManualColumnFormDialog({
   open,
   onOpenChange,
+  presentation = 'dialog',
   mode,
   column,
   initialKind = 'link',
@@ -76,7 +79,7 @@ export default function ManualColumnFormDialog({
   submitting,
   onSubmit
 }: ManualColumnFormDialogProps) {
-  const [activeLanguage, setActiveLanguage] = useState('zh-CN')
+  const [activeLanguage, setActiveLanguage] = useState(BASE_TAB_VALUE)
   const [baseData, setBaseData] = useState<ManualColumnFormValue['base']>({
     parent_id: 0,
     column_type: initialKind,
@@ -128,10 +131,7 @@ export default function ManualColumnFormDialog({
         const nextTranslations = buildInitialTranslations(column, defaultLanguageCode, availableLanguageCodes)
         return JSON.stringify(previous) === JSON.stringify(nextTranslations) ? previous : nextTranslations
       })
-      setActiveLanguage((previous) => {
-        const nextLanguage = column.requested_language_code || column.current_language_code || defaultLanguageCode
-        return previous === nextLanguage ? previous : nextLanguage
-      })
+      setActiveLanguage(BASE_TAB_VALUE)
       setListTemplateId((previous) => previous === (initialListTemplateId || DEFAULT_TEMPLATE_VALUE) ? previous : (initialListTemplateId || DEFAULT_TEMPLATE_VALUE))
       setContentTemplateId((previous) => previous === (initialContentTemplateId || DEFAULT_TEMPLATE_VALUE) ? previous : (initialContentTemplateId || DEFAULT_TEMPLATE_VALUE))
       setSingleTemplateId((previous) => previous === (initialSingleTemplateId || DEFAULT_TEMPLATE_VALUE) ? previous : (initialSingleTemplateId || DEFAULT_TEMPLATE_VALUE))
@@ -156,7 +156,7 @@ export default function ManualColumnFormDialog({
       }
       return JSON.stringify(previous) === JSON.stringify(nextTranslations) ? previous : nextTranslations
     })
-    setActiveLanguage((previous) => previous === defaultLanguageCode ? previous : defaultLanguageCode)
+    setActiveLanguage(BASE_TAB_VALUE)
     setListTemplateId((previous) => previous === DEFAULT_TEMPLATE_VALUE ? previous : DEFAULT_TEMPLATE_VALUE)
     setContentTemplateId((previous) => previous === DEFAULT_TEMPLATE_VALUE ? previous : DEFAULT_TEMPLATE_VALUE)
     setSingleTemplateId((previous) => previous === DEFAULT_TEMPLATE_VALUE ? previous : DEFAULT_TEMPLATE_VALUE)
@@ -247,23 +247,12 @@ export default function ManualColumnFormDialog({
     }
   }
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{mode === 'create' ? '新增栏目' : '编辑栏目'}</DialogTitle>
-          <DialogDescription>
-            {mode === 'create' ? '可创建链接栏目或单页栏目。' : '修改当前栏目的展示与页面信息。'}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Tabs value={activeLanguage} onValueChange={setActiveLanguage} className="rounded border p-4">
-            <div className="space-y-3">
-              <div>
-                <div className="font-medium">语言内容</div>
-                <div className="text-sm text-muted-foreground">栏目名称与单页文案按语言维护，切换标签后编辑对应语言内容。</div>
-              </div>
+  const form = (
+    <form onSubmit={handleSubmit} className="space-y-4">
+          <Tabs value={activeLanguage} onValueChange={setActiveLanguage} className="space-y-4">
+            <div>
               <TabsList className="w-full justify-start">
+                <TabsTrigger value={BASE_TAB_VALUE}>基础数据</TabsTrigger>
                 {languages.map((language) => (
                   <TabsTrigger key={language.id} value={language.code}>
                     {language.name}
@@ -359,13 +348,8 @@ export default function ManualColumnFormDialog({
                 ) : null}
               </TabsContent>
             ))}
-          </Tabs>
-
-          <div className="rounded border p-4 space-y-4">
-            <div>
-              <div className="font-medium">基础字段</div>
-              <div className="text-sm text-muted-foreground">这些字段不区分语言，所有语言共用同一份数据。</div>
-            </div>
+          <TabsContent value={BASE_TAB_VALUE} className="mt-4">
+          <div className="space-y-4">
             <div className="grid gap-4 md:grid-cols-2">
               {!basicOnly ? (
               <div className="space-y-2">
@@ -563,16 +547,36 @@ export default function ManualColumnFormDialog({
               </div>
             ) : null}
           </div>
+          </TabsContent>
+          </Tabs>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              取消
-            </Button>
+            {presentation === 'dialog' ? (
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                取消
+              </Button>
+            ) : null}
             <Button type="submit" disabled={submitting}>
-              {submitting ? '保存中...' : '确定'}
+              {submitting ? '保存中...' : mode === 'create' ? '确定' : '保存栏目配置'}
             </Button>
           </DialogFooter>
-        </form>
+    </form>
+  )
+
+  if (presentation === 'panel') {
+    return form
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{mode === 'create' ? '新增栏目' : '编辑栏目'}</DialogTitle>
+          <DialogDescription>
+            {mode === 'create' ? '可创建链接栏目或单页栏目。' : '修改当前栏目的展示与页面信息。'}
+          </DialogDescription>
+        </DialogHeader>
+        {form}
       </DialogContent>
     </Dialog>
   )

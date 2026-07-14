@@ -15,11 +15,14 @@ import { toast } from 'sonner'
 import type { Column, ColumnNode, ColumnNodeTranslation, TemplateBinding } from '@/types'
 
 const DEFAULT_TEMPLATE_VALUE = '__default__'
+const BASE_TAB_VALUE = '__base__'
+const SINGLE_CONTENT_TAB_VALUE = '__content__'
 const INVALIDATED_CONTENT_MODELS = ['product', 'news'] as const
 
 interface ColumnNodeFormDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
+  presentation?: 'dialog' | 'panel'
   rootColumn: Column | null
   node?: ColumnNode
   currentParentId?: number
@@ -63,6 +66,7 @@ const FORM_META_BY_DRIVER: Record<string, {
 export default function ColumnNodeFormDialog({
   open,
   onOpenChange,
+  presentation = 'dialog',
   rootColumn,
   node,
   currentParentId = 0,
@@ -73,7 +77,7 @@ export default function ColumnNodeFormDialog({
   const meta = FORM_META_BY_DRIVER[renderDriver] || FORM_META_BY_DRIVER.section
   const isSinglePageTree = renderDriver === 'page_tree'
   const queryClient = useQueryClient()
-  const [activeLanguage, setActiveLanguage] = useState('zh-CN')
+  const [activeLanguage, setActiveLanguage] = useState(BASE_TAB_VALUE)
   const [baseData, setBaseData] = useState({
     parent_id: currentParentId,
     dir_name: '',
@@ -143,9 +147,9 @@ export default function ColumnNodeFormDialog({
         setSingleName(source.name || '')
       } else {
         setTranslations(buildInitialTranslations(source, defaultLanguageCode, availableLanguageCodes, meta.supportsSeo))
-        setActiveLanguage(source.requested_language_code || source.current_language_code || defaultLanguageCode)
         setSingleName('')
       }
+      setActiveLanguage(BASE_TAB_VALUE)
       const bindings = bindingsData?.data || []
       const listBinding = bindings.find((item) => item.target_type === 'column' && item.target_id === source.id && item.template_type === 'list')
       const contentBinding = bindings.find((item) => item.target_type === 'column' && item.target_id === source.id && item.template_type === 'content')
@@ -171,9 +175,9 @@ export default function ColumnNodeFormDialog({
         setTranslations({
           [defaultLanguageCode]: createEmptyTranslation(meta.supportsSeo),
         })
-        setActiveLanguage(defaultLanguageCode)
         setSingleName('')
       }
+      setActiveLanguage(BASE_TAB_VALUE)
       setListTemplateId(DEFAULT_TEMPLATE_VALUE)
       setContentTemplateId(DEFAULT_TEMPLATE_VALUE)
       setSingleTemplateId(DEFAULT_TEMPLATE_VALUE)
@@ -264,34 +268,26 @@ export default function ColumnNodeFormDialog({
   const singleTemplates = templates.filter((item) => item.type === 'single')
   const isEditingWithoutNode = mode === 'edit' && !node
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[80vw] max-w-[80vw] max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{mode === 'create' ? `添加${meta.title}` : `编辑${meta.title}`}</DialogTitle>
-          <DialogDescription>
-            {mode === 'create' ? meta.description : `修改${meta.title}信息`}
-          </DialogDescription>
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          {!isSinglePageTree ? (
-            <Tabs value={activeLanguage} onValueChange={setActiveLanguage} className="rounded border p-4">
-              <div className="space-y-3">
-                <div>
-                  <div className="font-medium">语言内容</div>
-                  <div className="text-sm text-muted-foreground">栏目树结构共用，栏目名称按语言维护。</div>
-                </div>
+  const form = (
+    <form onSubmit={handleSubmit} className="space-y-4">
+            <Tabs value={activeLanguage} onValueChange={setActiveLanguage} className="space-y-4">
+              <div>
                 <TabsList className="w-full justify-start">
-                  {languages.map((language) => (
-                    <TabsTrigger key={language.id} value={language.code}>
-                      {language.name}
-                      {language.code === defaultLanguageCode ? ' *' : ''}
-                    </TabsTrigger>
-                  ))}
+                  <TabsTrigger value={BASE_TAB_VALUE}>基础数据</TabsTrigger>
+                  {isSinglePageTree ? (
+                    <TabsTrigger value={SINGLE_CONTENT_TAB_VALUE}>栏目内容</TabsTrigger>
+                  ) : (
+                    languages.map((language) => (
+                      <TabsTrigger key={language.id} value={language.code}>
+                        {language.name}
+                        {language.code === defaultLanguageCode ? ' *' : ''}
+                      </TabsTrigger>
+                    ))
+                  )}
                 </TabsList>
               </div>
 
-              {languages.map((language) => (
+              {!isSinglePageTree ? languages.map((language) => (
                 <TabsContent key={language.id} value={language.code}>
                   <div className="space-y-2">
                     <Label htmlFor={`name_${language.code}`}>栏目名称 {language.code === defaultLanguageCode ? '*' : ''}</Label>
@@ -335,10 +331,9 @@ export default function ColumnNodeFormDialog({
                     </>
                   ) : null}
                 </TabsContent>
-              ))}
-            </Tabs>
-          ) : (
-            <div className="space-y-2">
+              )) : (
+                <TabsContent value={SINGLE_CONTENT_TAB_VALUE}>
+                <div className="space-y-2">
               <Label htmlFor="name">栏目名称 *</Label>
               <Input
                 id="name"
@@ -346,14 +341,12 @@ export default function ColumnNodeFormDialog({
                 onChange={(e) => setSingleName(e.target.value)}
                 placeholder="请输入栏目名称"
               />
-            </div>
-          )}
+                </div>
+                </TabsContent>
+              )}
 
-          <div className="rounded border p-4 space-y-4">
-            <div>
-              <div className="font-medium">基础字段</div>
-              <div className="text-sm text-muted-foreground">这些字段不区分语言，所有语言共用同一份数据。</div>
-            </div>
+          <TabsContent value={BASE_TAB_VALUE} className="mt-4">
+          <div className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="parent_id">父栏目</Label>
               <Select
@@ -472,16 +465,36 @@ export default function ColumnNodeFormDialog({
               </div>
             )}
           </div>
+          </TabsContent>
+          </Tabs>
 
           <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              取消
-            </Button>
+            {presentation === 'dialog' ? (
+              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                取消
+              </Button>
+            ) : null}
             <Button type="submit" disabled={mutation.isPending || isEditingWithoutNode}>
-              {mutation.isPending ? '提交中...' : '确定'}
+              {mutation.isPending ? '保存中...' : mode === 'create' ? '确定' : '保存栏目配置'}
             </Button>
           </DialogFooter>
-        </form>
+    </form>
+  )
+
+  if (presentation === 'panel') {
+    return form
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="w-[80vw] max-w-[80vw] max-h-[80vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{mode === 'create' ? `添加${meta.title}` : `编辑${meta.title}`}</DialogTitle>
+          <DialogDescription>
+            {mode === 'create' ? meta.description : `修改${meta.title}信息`}
+          </DialogDescription>
+        </DialogHeader>
+        {form}
       </DialogContent>
     </Dialog>
   )
