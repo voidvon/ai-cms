@@ -14,7 +14,7 @@ export default async function contentItemsRoutes(app) {
     onRequest: [requireAuth]
   }, async (request, reply) => {
     try {
-      const { page, limit, column_id, columnId, include_descendants, includeDescendants, language, lang } = request.query;
+      const { page, limit, column_id, columnId, include_descendants, includeDescendants, language, lang, keyword, q } = request.query;
       const { modelCode } = request.params;
       const result = listContentItemsAdmin(modelCode, {
         page: page ? parseInt(page, 10) : undefined,
@@ -24,7 +24,8 @@ export default async function contentItemsRoutes(app) {
           || include_descendants === 'true'
           || includeDescendants === '1'
           || includeDescendants === 'true',
-        languageCode: language ?? lang
+        languageCode: language ?? lang,
+        nameKeyword: keyword ?? q
       });
       return { success: true, ...result };
     } catch (error) {

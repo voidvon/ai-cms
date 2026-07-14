@@ -7,6 +7,7 @@ export interface ContentItemsListParams {
   column_id?: number
   include_descendants?: number | boolean
   language?: string
+  keyword?: string
 }
 
 export interface ContentItemsDetailParams {

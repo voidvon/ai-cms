@@ -249,7 +249,8 @@ export function listContentEntriesPaged(modelCode, {
   columnId = null,
   includeDescendants = false,
   visibleOnly = false,
-  languageCode = null
+  languageCode = null,
+  nameKeyword = ''
 } = {}) {
   ensureContentModelStorageSchema();
   const selectedLanguage = resolveLanguage(languageCode);
@@ -258,6 +259,7 @@ export function listContentEntriesPaged(modelCode, {
   const safeLimit = Math.min(Math.max(toInteger(limit, 20), 1), 200);
   const safePage = Math.max(toInteger(page, 1), 1);
   const safeColumnId = toInteger(columnId, 0);
+  const normalizedNameKeyword = String(nameKeyword || '').trim();
   const hasColumnFilter = safeColumnId > 0;
   const offset = (safePage - 1) * safeLimit;
   const params = [
@@ -292,6 +294,10 @@ export function listContentEntriesPaged(modelCode, {
     if (!includeDescendants) {
       queryParams.push(safeColumnId);
     }
+  }
+  if (normalizedNameKeyword) {
+    whereParts.push(`instr(lower(${buildContentValueExpr(modelCode, 'name')}), lower(?)) > 0`);
+    queryParams.push(normalizedNameKeyword);
   }
   const where = whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : '';
 
@@ -335,14 +341,33 @@ export function listContentEntriesPaged(modelCode, {
       : [selectedLanguage.code, ...queryParams, safeLimit, offset]
   );
 
+  const countParams = [];
+  if (hasColumnFilter && includeDescendants) {
+    countParams.push(safeColumnId);
+  }
+  if (normalizedNameKeyword) {
+    countParams.push(selectedLanguage.id, selectedLanguage.default_id);
+  }
+  if (hasColumnFilter && !includeDescendants) {
+    countParams.push(safeColumnId);
+  }
+  if (normalizedNameKeyword) {
+    countParams.push(normalizedNameKeyword);
+  }
+
   const total = queryOne(
     `
       ${treeSql}
       SELECT COUNT(*) AS count
       FROM ${quoteIdentifier(tableName)} e
+      ${normalizedNameKeyword ? `
+      LEFT JOIN ${quoteIdentifier(translationTableName)} t ON t.entry_id = e.id AND t.language_id = ?
+      LEFT JOIN ${quoteIdentifier(translationTableName)} dt ON dt.entry_id = e.id AND dt.language_id = ?
+      ${getFallbackTranslationJoin(translationTableName)}
+      ` : ''}
       ${where}
     `,
-    hasColumnFilter && includeDescendants ? [safeColumnId] : (!includeDescendants && hasColumnFilter ? [safeColumnId] : [])
+    countParams
   )?.count || 0;
 
   return {

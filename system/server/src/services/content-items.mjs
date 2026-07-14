@@ -57,7 +57,8 @@ export function listContentItemsAdmin(modelCode, {
   limit = 20,
   columnId = null,
   includeDescendants = false,
-  languageCode = null
+  languageCode = null,
+  nameKeyword = ''
 } = {}) {
   const normalizedModelCode = requireContentModelCode(modelCode);
   const result = listContentEntriesPaged(normalizedModelCode, {
@@ -66,7 +67,8 @@ export function listContentItemsAdmin(modelCode, {
     columnId,
     includeDescendants,
     visibleOnly: false,
-    languageCode
+    languageCode,
+    nameKeyword
   });
   result.items.sort(resolveContentItemComparator(normalizedModelCode));
   return result;

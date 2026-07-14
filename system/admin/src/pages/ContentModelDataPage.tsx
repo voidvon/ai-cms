@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Pencil, RefreshCw, Trash2 } from 'lucide-react'
+import { Loader2, Pencil, RefreshCw, Search, Trash2 } from 'lucide-react'
 import { contentModelsApi } from '@/api/advanced'
 import { columnsApi } from '@/api/columns'
 import { contentItemsApi } from '@/api/content-items'
@@ -9,6 +9,7 @@ import { languagesApi } from '@/api/languages'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
 import {
   Pagination,
   PaginationContent,
@@ -54,6 +55,8 @@ export default function ContentModelDataPage({
   const [selectedModelCode, setSelectedModelCode] = useState('')
   const [selectedColumnId, setSelectedColumnId] = useState('all')
   const [page, setPage] = useState(1)
+  const [keywordInput, setKeywordInput] = useState('')
+  const [keyword, setKeyword] = useState('')
   const [formOpen, setFormOpen] = useState(false)
   const [editingItem, setEditingItem] = useState<ListedContentItem | undefined>(undefined)
   const [deleteTarget, setDeleteTarget] = useState<ListedContentItem | null>(null)
@@ -118,13 +121,14 @@ export default function ContentModelDataPage({
   }, [modelColumnOptions, selectedColumnId])
 
   const { data: itemsData, isLoading: itemsLoading } = useQuery({
-    queryKey: ['content-items', selectedModel?.code || '', 'model-data', selectedColumnId, page, PAGE_LIMIT, defaultLanguageCode],
+    queryKey: ['content-items', selectedModel?.code || '', 'model-data', selectedColumnId, keyword, page, PAGE_LIMIT, defaultLanguageCode],
     queryFn: () => contentItemsApi.list<ListedContentItem>(selectedModel!.code, {
       page,
       limit: PAGE_LIMIT,
       column_id: selectedColumnId !== 'all' ? Number.parseInt(selectedColumnId, 10) : undefined,
       include_descendants: selectedColumnId !== 'all' ? 1 : undefined,
       language: defaultLanguageCode,
+      keyword: keyword || undefined,
     }),
     enabled: Boolean(selectedModel?.code),
     staleTime: 0,
@@ -174,6 +178,8 @@ export default function ContentModelDataPage({
     }
     setSelectedModelCode(nextModelCode)
     setSelectedColumnId('all')
+    setKeywordInput('')
+    setKeyword('')
     setPage(1)
     setFormOpen(false)
     setEditingItem(undefined)
@@ -181,6 +187,12 @@ export default function ContentModelDataPage({
 
   const handleSelectColumn = (nextColumnId: string) => {
     setSelectedColumnId(nextColumnId)
+    setPage(1)
+  }
+
+  const handleSearchSubmit = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    setKeyword(keywordInput.trim())
     setPage(1)
   }
 
@@ -224,7 +236,7 @@ export default function ContentModelDataPage({
   return (
     <div className="space-y-4">
       <div className="space-y-4">
-          <div className={lockModelSelection ? 'grid items-center gap-4 lg:grid-cols-[auto_minmax(0,260px)_minmax(0,1fr)]' : 'grid items-center gap-4 lg:grid-cols-[auto_minmax(0,260px)_minmax(0,260px)_minmax(0,1fr)]'}>
+          <div className={lockModelSelection ? 'grid items-center gap-4 xl:grid-cols-[auto_minmax(0,240px)_minmax(240px,1fr)_auto]' : 'grid items-center gap-4 xl:grid-cols-[auto_minmax(0,220px)_minmax(0,220px)_minmax(240px,1fr)_auto]'}>
             <Button onClick={handleCreate}>{createButtonLabel}</Button>
 
             {!lockModelSelection ? (
@@ -259,6 +271,20 @@ export default function ContentModelDataPage({
                 </SelectContent>
               </Select>
             </div>
+
+            <form className="min-w-0" onSubmit={handleSearchSubmit}>
+              <div className="flex gap-2">
+                <Input
+                  value={keywordInput}
+                  onChange={(event) => setKeywordInput(event.target.value)}
+                  placeholder={selectedModel.code === 'product' ? '搜索产品名称' : `搜索${titleFieldLabel}`}
+                  aria-label={selectedModel.code === 'product' ? '搜索产品名称' : `搜索${titleFieldLabel}`}
+                />
+                <Button type="submit" variant="outline" size="icon" aria-label="搜索">
+                  <Search className="size-4" />
+                </Button>
+              </div>
+            </form>
 
             <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
               <Badge variant="outline">{selectedModel.code}</Badge>
