@@ -51,12 +51,17 @@ node .codex/skills/publish-pdf-product-detail/scripts/preflight.mjs \
   --keyword-csv docs/关键词列表/按产品系列类型拆分/<关键词文件>.csv \
   --product-id <ID> \
   --product-image <产品主图> \
+  --pdf <销售资料.pdf> \
   --html <销售资料.html> \
+  --pdf <技术资料.pdf> \
   --html <技术资料.html> \
+  --pdf <安装维修指南.pdf> \
+  --analysis-dir tmp/pdf-analysis/<产品或任务标识> \
   --html <安装维修指南.html>
 ```
 
 `--product-image` 可重复传入；没有产品图时省略。前置检查会运行与 CMS 上传一致的转换链路，但不写库。只有检查通过后才能进入英文整理阶段。
+`--pdf` 与 `--html` 数量一致时按参数顺序使用 PyMuPDF 生成页级清单和事实对账；先人工处理报告中的候选差异，确认必须零遗漏时增加 `--strict-pdf-facts`。
 
 ### 3. 建立并验收英文母版
 
@@ -96,9 +101,36 @@ node .codex/skills/publish-pdf-product-detail/scripts/set-product-images.mjs \
 
 英文导入负责上传文档图片并把正文路径改成 `/uploads/...`。导入后重新读取数据库中的英文 `content_html`，将其作为后续翻译的结构和媒体母版。
 
+随后把原始 PDF 作为英文附件上传，文档类型必须与转换阶段一致：
+
+```bash
+node .codex/skills/publish-pdf-product-detail/scripts/set-product-pdf-attachments.mjs \
+  --product-id <ID> \
+  --language en \
+  --pdf technical_information=<技术资料.pdf> \
+  --pdf installation_guide=<安装维修指南.pdf> \
+  --backup-path <本次工作流基线备份>
+```
+
+脚本默认合并和按文件哈希复用已有媒体；英文 PDF 只关联 `en`，其他语言没有本地化 PDF 时使用现有英文附件 fallback，不重复上传。只有用户要求替换该语言附件引用时使用 `--replace`；旧媒体保留到最终验证后再通过引用检查清理。
+
 ### 7. 从英文翻译全部启用语言
 
 逐语言直接从已验收、已导入的英文正文翻译。使用 `parse5` 只替换可见文本和需要本地化的属性；保留 HTML 层级、类名、表格、图片 URL、尺寸、型号、标准、数值、单位和文档编号。
+
+先使用可断点续传的草稿生成脚本，不要临时重写逐节点翻译代码：
+
+```bash
+node .codex/skills/publish-pdf-product-detail/scripts/generate-translation-drafts.mjs \
+  --product-id <ID> \
+  --output-dir tmp/product-<ID>-translation-drafts \
+  --batch-size 100 \
+  --concurrency 2
+```
+
+脚本按完整段落或表格单元翻译，把内联 HTML 替换为顺序不可变的占位符，过滤纯数字单元，并校验型号、文档编号、数字和占位符没有漂移。启动批次前先探测已启用 provider 的最终文本能力，默认 provider 不可用时自动 fallback；每批成功后单独落盘，相同英文母版哈希可断点续传。先用 `--prepare-only` 只生成清单；provider 或凭据不可用时停在草稿阶段，不写数据库。
+
+生成的 `draft.json` 状态固定为 `needs-local-seo-and-link-review`。逐语言完成关键词、SEO 长度、术语和内链本地化验收后，才通过 `$product-detail-add-product` 的内容服务契约统一写回；禁止直接把未验收草稿发布。
 
 默认复用英文导入后已有的 `/uploads/...` 图片 URL，不为每种语言重复上传相同图片。只有某语言确实使用不同图片时，才单独走媒体上传链路。
 产品主图和图库属于基础字段，全部语言共用；除非图片包含必须本地化的文字，不为语言创建重复产品图。

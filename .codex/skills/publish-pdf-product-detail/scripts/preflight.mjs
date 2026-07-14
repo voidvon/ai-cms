@@ -4,12 +4,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { createHash } from 'node:crypto';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import * as parse5 from 'parse5';
 import sharp from 'sharp';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(SCRIPT_DIR, '../../../..');
+const PDF_ANALYZER = path.join(PROJECT_ROOT, '.codex/skills/convert-pdf-to-html/scripts/analyze_pdf.py');
 const { IMAGE_UPLOAD_SOURCE_MAX_SIZE_KB, UPLOAD_ALLOWED_EXTENSIONS } = await import(
   path.join(PROJECT_ROOT, 'system/server/src/config.mjs')
 );
@@ -21,19 +23,33 @@ function usage() {
   console.log(`用法:
   node preflight.mjs --keyword-csv <CSV> --html <HTML> [--html <HTML> ...]
                      [--pdf <PDF> ...] [--product-image <图片> ...]
-                     [--product-id <ID>]
+                     [--product-id <ID>] [--analysis-dir <目录>]
+                     [--strict-pdf-facts]
 
 说明:
   路径相对于当前工作目录解析。已有产品可传 --product-id 检查栏目和产品记录。
-  --product-image 会按 CMS 实际上传转换链路预检，但不会写入数据库或生成文件。`);
+  --product-image 会按 CMS 实际上传转换链路预检，但不会写入数据库或生成文件。
+  PDF 与 HTML 数量一致时按参数顺序执行事实对账；--strict-pdf-facts 会把待复核缺失视为失败。`);
 }
 
 function parseArgs(argv) {
-  const output = { html: [], pdf: [], productImages: [], keywordCsv: '', productId: null };
+  const output = {
+    html: [],
+    pdf: [],
+    productImages: [],
+    keywordCsv: '',
+    productId: null,
+    analysisDir: '',
+    strictPdfFacts: false
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
     if (token === '--help' || token === '-h') {
       output.help = true;
+      continue;
+    }
+    if (token === '--strict-pdf-facts') {
+      output.strictPdfFacts = true;
       continue;
     }
     const value = argv[index + 1];
@@ -45,10 +61,68 @@ function parseArgs(argv) {
     else if (token === '--product-image') output.productImages.push(value);
     else if (token === '--keyword-csv') output.keywordCsv = value;
     else if (token === '--product-id') output.productId = Number.parseInt(value, 10);
+    else if (token === '--analysis-dir') output.analysisDir = value;
     else throw new Error(`未知参数: ${token}`);
     index += 1;
   }
   return output;
+}
+
+function analyzePdf(pdfPath, htmlPath, analysisRoot, errors, warnings, strictPdfFacts) {
+  if (!fs.existsSync(PDF_ANALYZER)) {
+    errors.push(`缺少 PyMuPDF 分析脚本: ${PDF_ANALYZER}`);
+    return null;
+  }
+  const source = fs.readFileSync(pdfPath);
+  const fingerprint = createHash('sha256').update(source).digest('hex').slice(0, 12);
+  const stem = path.basename(pdfPath, path.extname(pdfPath))
+    .replace(/[^a-z0-9_-]+/gi, '-')
+    .replace(/^-+|-+$/g, '') || 'document';
+  const outputDir = path.join(analysisRoot, `${stem}-${fingerprint}`);
+  const commandArgs = [
+    PDF_ANALYZER,
+    '--pdf', pdfPath,
+    '--output-dir', outputDir
+  ];
+  if (htmlPath) commandArgs.push('--html', htmlPath);
+  const result = spawnSync('python3', commandArgs, {
+    cwd: PROJECT_ROOT,
+    encoding: 'utf8',
+    maxBuffer: 20 * 1024 * 1024
+  });
+  if (result.error) {
+    errors.push(`无法执行 PyMuPDF 分析: ${pdfPath}: ${result.error.message}`);
+    return null;
+  }
+  if (result.status !== 0) {
+    errors.push(`PyMuPDF 分析失败: ${pdfPath}: ${(result.stderr || result.stdout || '').trim()}`);
+    return null;
+  }
+
+  const reportPath = path.join(outputDir, 'report.json');
+  if (!fs.existsSync(reportPath)) {
+    errors.push(`PyMuPDF 未生成报告: ${reportPath}`);
+    return null;
+  }
+  const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+  const missingFactCount = Number(report?.html_comparison?.missing_count || 0);
+  if (missingFactCount > 0) {
+    const message = `${pdfPath}: PDF→HTML 有 ${missingFactCount} 个事实候选待复核，见 ${reportPath}`;
+    if (strictPdfFacts) errors.push(message);
+    else warnings.push(message);
+  }
+  return {
+    file: pdfPath,
+    exists: true,
+    sha256: report.document?.sha256 || '',
+    pageCount: report.document?.page_count || 0,
+    scanLikelyPages: report.document?.scan_likely_pages || [],
+    tableCandidateCount: report.document?.table_candidate_count || 0,
+    imageCandidateCount: report.document?.image_candidate_count || 0,
+    comparedHtml: htmlPath || null,
+    missingFactCount,
+    report: reportPath
+  };
 }
 
 async function inspectProductImage(filePath, errors, warnings) {
@@ -328,16 +402,31 @@ async function main() {
     }
   }
 
-  const pdfs = args.pdf.map(resolveInputPath).map((file) => {
-    const exists = fs.existsSync(file);
-    if (!exists) errors.push(`PDF 不存在: ${file}`);
-    return { file, exists };
-  });
+  const resolvedPdfPaths = args.pdf.map(resolveInputPath);
+  for (const file of resolvedPdfPaths) {
+    if (!fs.existsSync(file)) errors.push(`PDF 不存在: ${file}`);
+    else if (path.extname(file).toLowerCase() !== '.pdf') errors.push(`不是 PDF 文件: ${file}`);
+  }
 
   const documents = [];
-  for (const htmlPath of args.html.map(resolveInputPath)) {
+  const resolvedHtmlPaths = args.html.map(resolveInputPath);
+  for (const htmlPath of resolvedHtmlPaths) {
     const result = await inspectHtml(htmlPath, errors, warnings);
     if (result) documents.push(result);
+  }
+  if (resolvedPdfPaths.length > 0 && resolvedPdfPaths.length !== resolvedHtmlPaths.length) {
+    warnings.push('PDF 与 HTML 数量不一致，已生成 PDF 分析报告，但未执行逐份事实对账');
+  }
+  const analysisRoot = args.analysisDir
+    ? resolveInputPath(args.analysisDir)
+    : path.join(PROJECT_ROOT, 'tmp/pdf-analysis');
+  const pdfs = [];
+  for (let index = 0; index < resolvedPdfPaths.length; index += 1) {
+    const pdfPath = resolvedPdfPaths[index];
+    if (!fs.existsSync(pdfPath) || path.extname(pdfPath).toLowerCase() !== '.pdf') continue;
+    const htmlPath = resolvedPdfPaths.length === resolvedHtmlPaths.length ? resolvedHtmlPaths[index] : null;
+    const result = analyzePdf(pdfPath, htmlPath, analysisRoot, errors, warnings, args.strictPdfFacts);
+    if (result) pdfs.push(result);
   }
   const productImages = [];
   for (const imagePath of args.productImages.map(resolveInputPath)) {

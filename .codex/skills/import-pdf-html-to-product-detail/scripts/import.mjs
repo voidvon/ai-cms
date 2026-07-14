@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -14,11 +15,6 @@ const { uploadMediaAsset, deleteMediaAsset } = await import('../../../../system/
 
 const options = parseArgs(process.argv.slice(2));
 const db = getDb();
-const timestamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 17);
-const backupPath = path.join(repoRoot, `tmp/site-before-pdf-html-import-${options.productId}-${timestamp}.sqlite`);
-fs.mkdirSync(path.dirname(backupPath), { recursive: true });
-db.exec(`VACUUM INTO '${backupPath.replaceAll("'", "''")}'`);
-
 const language = queryOne('SELECT id, code FROM languages WHERE code = ?', [options.language]);
 if (!language) fail(`Language not found: ${options.language}`);
 const translation = queryOne(
@@ -26,6 +22,11 @@ const translation = queryOne(
   [options.productId, language.id],
 );
 if (!translation) fail(`Product ${options.productId} translation ${options.language} not found`);
+
+// Finish all deterministic input checks before creating a backup or mutating media/database state.
+const preparedDocuments = options.htmlFiles.map(prepareDocument);
+const backup = ensureBackup(options);
+const backupPath = backup.path;
 
 const oldAssets = queryAll(
   `SELECT id, relative_path FROM media_assets WHERE purpose = 'richtext_image' ORDER BY id`,
@@ -35,22 +36,12 @@ const uploaded = [];
 db.exec('BEGIN IMMEDIATE');
 try {
   const fragments = [];
-  for (const htmlFile of options.htmlFiles) {
-    const absoluteHtml = path.resolve(repoRoot, htmlFile);
-    let fragment = extractBody(fs.readFileSync(absoluteHtml, 'utf8'), htmlFile);
-    if (!options.keepChrome) fragment = stripDocumentChrome(fragment);
-    rejectForbiddenMarkup(fragment, htmlFile);
-
-    const sources = [...new Set([...fragment.matchAll(/<img\b[^>]*\bsrc="([^"]+)"/gi)].map((match) => match[1]))];
-    for (const source of sources) {
-      if (/^(?:https?:|data:|\/)/i.test(source)) {
-        fail(`Image must be a local HTML asset before import: ${source}`);
-      }
-      const sourcePath = path.resolve(path.dirname(absoluteHtml), source);
-      if (!fs.existsSync(sourcePath)) fail(`Image not found: ${sourcePath}`);
+  for (const document of preparedDocuments) {
+    let fragment = document.fragment;
+    for (const { source, sourcePath } of document.images) {
       const asset = await uploadMediaAsset({
         buffer: fs.readFileSync(sourcePath),
-        originalFilename: `${path.basename(absoluteHtml, path.extname(absoluteHtml))}-${path.basename(sourcePath)}`,
+        originalFilename: `${path.basename(document.absoluteHtml, path.extname(document.absoluteHtml))}-${path.basename(sourcePath)}`,
         purpose: 'richtext_image',
       });
       uploaded.push(asset);
@@ -89,13 +80,14 @@ console.log(JSON.stringify({
   productId: options.productId,
   language: options.language,
   backupPath,
+  backupReused: backup.reused,
   uploaded: uploaded.map((asset) => ({ id: asset.id, relativePath: asset.relative_path })),
   deleted: deleted.map((asset) => ({ id: asset.id, deletedFile: asset.deletedFile })),
   built: options.build,
 }, null, 2));
 
 function parseArgs(args) {
-  const result = { htmlFiles: [], language: 'zh-CN', keepChrome: false, keepOldImages: false, build: true };
+  const result = { htmlFiles: [], language: 'zh-CN', keepChrome: false, keepOldImages: false, build: true, backupPath: '' };
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
     if (arg === '--product-id') result.productId = positiveInt(args[++index], arg);
@@ -104,11 +96,55 @@ function parseArgs(args) {
     else if (arg === '--keep-chrome') result.keepChrome = true;
     else if (arg === '--keep-old-images') result.keepOldImages = true;
     else if (arg === '--no-build') result.build = false;
+    else if (arg === '--backup-path') result.backupPath = requiredValue(args[++index], arg);
     else fail(`Unknown argument: ${arg}`);
   }
   if (!result.productId) fail('--product-id is required');
   if (result.htmlFiles.length === 0) fail('At least one --html is required');
   return result;
+}
+
+function prepareDocument(htmlFile) {
+  const absoluteHtml = path.resolve(repoRoot, htmlFile);
+  if (!fs.existsSync(absoluteHtml)) fail(`HTML not found: ${absoluteHtml}`);
+  let fragment = extractBody(fs.readFileSync(absoluteHtml, 'utf8'), htmlFile);
+  if (!options.keepChrome) fragment = stripDocumentChrome(fragment);
+  rejectForbiddenMarkup(fragment, htmlFile);
+  if (!fragment.includes('class="pdf-document')) fail(`HTML has no pdf-document wrapper: ${htmlFile}`);
+
+  const sources = [...new Set([...fragment.matchAll(/<img\b[^>]*\bsrc="([^"]+)"/gi)].map((match) => match[1]))];
+  const images = sources.map((source) => {
+    if (/^(?:https?:|data:|\/)/i.test(source)) {
+      fail(`Image must be a local HTML asset before import: ${source}`);
+    }
+    const sourcePath = path.resolve(path.dirname(absoluteHtml), source);
+    if (!fs.existsSync(sourcePath)) fail(`Image not found: ${sourcePath}`);
+    if (!fs.statSync(sourcePath).isFile()) fail(`Image is not a file: ${sourcePath}`);
+    return { source, sourcePath };
+  });
+  return { htmlFile, absoluteHtml, fragment, images };
+}
+
+function ensureBackup(settings) {
+  const timestamp = new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 17);
+  const backupPath = settings.backupPath
+    ? path.resolve(repoRoot, settings.backupPath)
+    : path.join(repoRoot, `tmp/site-before-pdf-html-import-${settings.productId}-${timestamp}.sqlite`);
+  fs.mkdirSync(path.dirname(backupPath), { recursive: true });
+  const reused = fs.existsSync(backupPath);
+  if (!reused) db.exec(`VACUUM INTO '${backupPath.replaceAll("'", "''")}'`);
+
+  const backupDb = new DatabaseSync(backupPath);
+  try {
+    backupDb.exec('PRAGMA journal_mode = DELETE;');
+    const row = backupDb.prepare('PRAGMA integrity_check;').get();
+    if (String(row?.integrity_check || '').toLowerCase() !== 'ok') {
+      fail(`Backup integrity check failed: ${backupPath}`);
+    }
+  } finally {
+    backupDb.close();
+  }
+  return { path: backupPath, reused };
 }
 
 function requiredValue(value, flag) {

@@ -51,7 +51,7 @@ description: 将 PDF 文档高保真转换为可编辑、可访问、响应式�
 ```
 
 - 技术资料、产品数据表优先使用 `pdf-document--technical`；安装维修指南使用 `pdf-document--manual`。
-- 安装维修指南的 `intro-grid` 中，`.contents` 目录区的 `h2` 必须固定为“安装维修指南”，不得使用“内容”“目录”或 PDF 原文中的其它标题替代。
+- 安装维修指南的 `intro-grid` 中，`.contents` 目录区的 `h2` 必须保持“安装维修指南”这一语义并按目标语言本地化；英文固定使用 `Installation and Maintenance Guide`，简体中文使用“安装维修指南”，不得使用泛化的“内容”或“目录”替代。
 - 所有文档统一使用 `document-main`、`document-header`、`document-code`、`document-brand`、`document-issue`、`title-band`、`document-section`、`document-footer` 这组框架类；技术资料需要表达原 PDF 页分组时使用 `document-page`。
 - 所有正文表格统一使用 `document-table`；需要表达布局密度或表格语义时增加可复用的修饰类，不得另用 `thin`、`compact` 等文档类型私有类代替基础类。
 - `document-header` 和 `title-band` 必须位于 `document-main` 的起始内容区并保持先后顺序；`document-page` 可按原文分页包裹它们和正文区块。各文档类型的视觉差异只能通过 `pdf-document--technical`、`pdf-document--manual` 修饰类在共享 CSS 中表达。
@@ -70,8 +70,16 @@ description: 将 PDF 文档高保真转换为可编辑、可访问、响应式�
 
 ### 2. 分析 PDF
 
-- 检查页数、页面尺寸、字体、可提取文本、嵌入图片和矢量路径。
-- 优先使用 `pdfinfo`、`pdftotext`、`pdffonts`、MuPDF 或 PyMuPDF；缺少工具时再选择本机可用的等价工具。
+- 固定优先使用本 Skill 的 PyMuPDF 分析脚本检查页数、页面尺寸、字体、可提取文本、嵌入图片、矢量路径、表格候选和扫描页候选：
+
+```bash
+python3 .codex/skills/convert-pdf-to-html/scripts/analyze_pdf.py \
+  --pdf <源文件.pdf> \
+  --output-dir <工作目录>/analysis
+```
+
+- 全局 Python 缺少依赖时按 `requirements.txt` 安装 PyMuPDF；不得为单次任务重写 PDFKit 临时代码。PyMuPDF 无法处理特定 PDF 时，记录原因后才使用 Poppler、macOS PDFKit 或其他等价工具作为 fallback。
+- 把 `report.json`、`report.md`、`source-text.txt`、`pages/`、`previews/` 和 `tables/` 作为转换阶段的页级真值清单；整页预览仍然只用于理解关系。
 - 判断 PDF 属于扫描件还是原生排版文件。
 - 为每页建立内容清单：标题、段落、列表、表格、注释、产品剖面图、尺寸图、曲线图和页眉页脚。
 - 先渲染整页预览用于理解关系，不把整页预览直接作为最终内容。
@@ -135,6 +143,7 @@ description: 将 PDF 文档高保真转换为可编辑、可访问、响应式�
 - 在手机宽度检查单列顺序、文本溢出和图片缩放。
 - 使用 Chrome 打印预览检查 A4 模式；确认移动端断点没有影响打印栏数。
 - 对照 PDF 逐项核验所有段落、数值、单位、表头、图例和标注。
+- HTML 完成后再次运行分析脚本并传入 `--html <结果.html>`。逐项处理 `report.json.html_comparison.missing`；确认事实确实遗漏时修正 HTML，事实位于工程图、被版式拆词或属于有意排除内容时在交付报告中说明。需要把候选缺失作为硬门时增加 `--fail-on-missing-facts`。
 - 重点检查每张裁图是否过宽、包含无关内容或缺失底部和边缘。
 - 修正后重新检查受影响区域，不仅验证 CSS 或文件存在性。
 
@@ -145,4 +154,5 @@ description: 将 PDF 文档高保真转换为可编辑、可访问、响应式�
 - 将图片放入清晰命名的 `assets/` 目录，不使用页码或随机字符串作为最终文件名。
 - 交付 HTML 中的每个图片标签必须保留已验证的 `width`、`height` 属性，对应最终位图文件必须具有相同像素尺寸，不得在接入 CMS 前删除或替换为高倍率中间图。
 - 简要说明哪些内容已结构化为 HTML，哪些复杂图形保留为图片。
+- 同时交付 PyMuPDF 的 `report.json` 和便于人工查看的 `report.md`，并记录源 PDF SHA-256，供后续导入前检验证同一真源。
 - 明确说明未能验证的浏览器、字体或打印行为。

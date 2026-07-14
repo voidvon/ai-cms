@@ -42,7 +42,7 @@ node .codex/skills/import-pdf-html-to-product-detail/scripts/import.mjs \
 
 脚本按 HTML 参数顺序拼接正文，并执行：
 
-- 使用 SQLite `VACUUM INTO` 创建时间戳备份。
+- 先检查产品翻译记录、全部 HTML、结构和本地图片；全部通过后才使用 SQLite `VACUUM INTO` 创建时间戳备份。
 - 从每份 HTML 的 `<body>` 提取文档片段。
 - 移除 `document-header`、`title-band`、`document-footer`。
 - 拒绝 `<style>`、内联 `style` 和正文 `<link>`。
@@ -59,6 +59,7 @@ node .codex/skills/import-pdf-html-to-product-detail/scripts/import.mjs \
 - `--keep-chrome`：保留文档页眉、标题带和页脚。
 - `--keep-old-images`：不删除旧正文中的媒体。
 - `--no-build`：只导入，不生成目标页面。
+- `--backup-path <文件>`：创建或复用本次工作流的同一份一致性备份；复用前执行完整性检查，避免每个子步骤重复生成大体积备份。
 
 ## 验证
 

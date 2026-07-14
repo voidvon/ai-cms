@@ -85,7 +85,7 @@ function buildContentDetailPublicUrl({ entry, columnPath = null, detailRule = nu
     columnPath = columnPath.join('/');
   }
 
-  const normalizedColumnPath = String(columnPath || '').trim().replace(/^\/+|\/+$/g, '');
+  const normalizedColumnPath = normalizeColumnPathForSectionRoot(columnPath, sectionRoot);
   const id = toInteger(entry?.id, 0);
   const normalizedRule = String(detailRule || '').trim();
 
@@ -126,14 +126,9 @@ function buildContentDetailOutputPath({ entry, columnPath = null, detailRule = n
     return resolveEntryCustomOutputPath(customUrl, columnPath, sectionRoot);
   }
 
-  if (Array.isArray(columnPath)) {
-    columnPath = columnPath.filter(Boolean);
-  } else {
-    columnPath = String(columnPath || '')
-      .split('/')
-      .map((segment) => segment.trim())
-      .filter(Boolean);
-  }
+  columnPath = normalizeColumnPathForSectionRoot(columnPath, sectionRoot)
+    .split('/')
+    .filter(Boolean);
 
   const id = toInteger(entry?.id, 0);
   const normalizedRule = String(detailRule || '').trim();
@@ -211,6 +206,26 @@ export function buildRelativeCategoryPathFromRoutePath(routePath, sectionRoot = 
 
   const remainder = normalizedRoutePath.slice(normalizedSectionRoot.length).replace(/^\/+|\/+$/g, '');
   return remainder || '';
+}
+
+function normalizeColumnPathForSectionRoot(columnPath, sectionRoot) {
+  const normalizedColumnPath = trimSlashes(
+    Array.isArray(columnPath)
+      ? columnPath.map((segment) => String(segment || '').trim()).filter(Boolean).join('/')
+      : columnPath
+  );
+  if (!normalizedColumnPath) {
+    return '';
+  }
+
+  const normalizedSectionRoot = trimSlashes(sectionRoot);
+  if (
+    normalizedSectionRoot === normalizedColumnPath
+    || normalizedSectionRoot.endsWith(`/${normalizedColumnPath}`)
+  ) {
+    return '';
+  }
+  return normalizedColumnPath;
 }
 
 function ensureTrailingSlash(value) {

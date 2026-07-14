@@ -33,6 +33,8 @@
 
 - 一个原始转换 HTML；
 - 一个同级 `assets/` 图片目录；
+- 一份由 PyMuPDF 生成且带源文件 SHA-256 的 `report.json` 和 `report.md`；
+- 页级文本、理解预览、表格候选和 PDF→HTML 事实候选对账结果；
 - 文档类型和顺序；
 - PDF 页数、文档编号、版本及未能确认的内容；
 - 桌面、手机和打印验证结果。
@@ -70,6 +72,7 @@
 - 本地关键词计划；
 - 本地化锚文本和带正确语言前缀的内链；
 - 发布或保持草稿的结论。
+- 英文母版哈希、批次草稿和实际使用的 provider；provider 探测失败时保留不含密钥的错误摘要。
 
 ## 英文母版验收门
 
@@ -142,7 +145,9 @@
 
 ## 写库、构建与回滚
 
-首次写库前使用 SQLite 一致性备份方式，例如 `.backup` 或 `VACUUM INTO`。不要在 WAL 未检查点时只复制主数据库文件。
+全部输入预检通过后、首次写库前使用 SQLite 一致性备份方式，例如 `.backup` 或 `VACUUM INTO`。同一工作流的图片、英文正文和 PDF 附件步骤复用该基线备份，并执行 `integrity_check`；不要在 WAL 未检查点时只复制主数据库文件，也不要为前置检查失败创建无效备份。
+
+原始 PDF 使用 `purpose: pdf_document` 上传并写入英文翻译的 `attachments_json`。按 `sales_brochure`、`technical_information`、`installation_guide` 分类；只有存在真实本地化 PDF 时才为其他语言创建单独附件，否则沿用英文 fallback。
 
 中间导入统一使用 `--no-build`。所有语言写完后先运行数据库审计，通过后仅执行一次 `npm run build:site`，再运行静态审计。
 

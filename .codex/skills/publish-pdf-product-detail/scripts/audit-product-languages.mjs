@@ -14,7 +14,7 @@ function usage() {
   console.log(`用法:
   node audit-product-languages.mjs --product-id <ID>
        [--canonical-language en] [--required-keyword <关键词> ...] [--check-static]
-       [--allow-no-pdf-documents]
+       [--allow-no-pdf-documents] [--require-pdf-attachments] [--strict-seo-length]
 
 说明:
   默认要求英文母版至少包含一个 .pdf-document。仅审计旧数据时可显式放宽。`);
@@ -26,7 +26,9 @@ function parseArgs(argv) {
     canonicalLanguage: 'en',
     requiredKeywords: [],
     checkStatic: false,
-    allowNoPdfDocuments: false
+    allowNoPdfDocuments: false,
+    requirePdfAttachments: false,
+    strictSeoLength: false
   };
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
@@ -40,6 +42,14 @@ function parseArgs(argv) {
     }
     if (token === '--allow-no-pdf-documents') {
       output.allowNoPdfDocuments = true;
+      continue;
+    }
+    if (token === '--require-pdf-attachments') {
+      output.requirePdfAttachments = true;
+      continue;
+    }
+    if (token === '--strict-seo-length') {
+      output.strictSeoLength = true;
       continue;
     }
     const value = argv[index + 1];
@@ -100,6 +110,25 @@ function normalizeImageList(value) {
   }
 }
 
+function normalizeAttachmentList(value) {
+  if (Array.isArray(value)) return [...new Set(value.map((item) => String(item || '').trim()).filter(Boolean))];
+  try {
+    const parsed = JSON.parse(String(value || '[]'));
+    return Array.isArray(parsed) ? [...new Set(parsed.map((item) => String(item || '').trim()).filter(Boolean))] : [];
+  } catch {
+    return [];
+  }
+}
+
+function codePointLength(value) {
+  return [...String(value || '').trim()].length;
+}
+
+function addSeoLengthFinding(message, strict, languageErrors, languageWarnings) {
+  if (strict) languageErrors.push(message);
+  else languageWarnings.push(message);
+}
+
 function resolveStaticFile(outputDir, publicUrl, prefix) {
   const unprefixed = stripLanguagePrefix(publicUrl, prefix).replace(/^\/+/, '');
   if (!unprefixed) return path.resolve(PROJECT_ROOT, outputDir, 'index.html');
@@ -107,15 +136,24 @@ function resolveStaticFile(outputDir, publicUrl, prefix) {
   return path.resolve(PROJECT_ROOT, outputDir, unprefixed);
 }
 
-function analyzeTranslation(language, translation, expectedProductUrl, canonicalCounts, errors) {
+function analyzeTranslation(language, translation, expectedProductUrl, canonicalCounts, errors, warnings, strictSeoLength) {
   const code = language.code;
   const prefix = language.site?.path_prefix || '/';
   const languageErrors = [];
+  const languageWarnings = [];
   const requiredFields = ['name', 'summary', 'content_html', 'seo_title', 'seo_description'];
   for (const field of requiredFields) {
     if (!String(translation?.[field] || '').trim()) languageErrors.push(`缺少 ${field}`);
   }
   if (translation?.publish_status !== 'published') languageErrors.push('不是 published 状态');
+  const seoTitleLength = codePointLength(translation?.seo_title);
+  const seoDescriptionLength = codePointLength(translation?.seo_description);
+  if (seoTitleLength > 65) {
+    addSeoLengthFinding(`SEO title 长度 ${seoTitleLength}，建议不超过 65 个字符`, strictSeoLength, languageErrors, languageWarnings);
+  }
+  if (seoDescriptionLength > 170) {
+    addSeoLengthFinding(`SEO description 长度 ${seoDescriptionLength}，建议不超过 170 个字符`, strictSeoLength, languageErrors, languageWarnings);
+  }
 
   const document = parse5.parseFragment(String(translation?.content_html || ''));
   const anchors = [];
@@ -169,6 +207,7 @@ function analyzeTranslation(language, translation, expectedProductUrl, canonical
   const visibleText = textContent(document).replace(/\s+/g, ' ').trim();
   if (code !== 'zh-CN' && visibleText.includes('。')) languageErrors.push('正文残留中文句号');
   errors.push(...languageErrors.map((message) => `[${code}] ${message}`));
+  warnings.push(...languageWarnings.map((message) => `[${code}] ${message}`));
 
   return {
     code,
@@ -176,6 +215,9 @@ function analyzeTranslation(language, translation, expectedProductUrl, canonical
     bodyCharacters: [...visibleText].length,
     documentCounts: counts,
     internalLinks: anchors.filter((anchor) => anchor.href.startsWith('/')).length,
+    seoTitleLength,
+    seoDescriptionLength,
+    warnings: languageWarnings,
     errors: languageErrors
   };
 }
@@ -203,12 +245,13 @@ async function main() {
     process.exit(2);
   }
 
-  const [contentItems, languagesService, columnsService, pathsService, uploadsService] = await Promise.all([
+  const [contentItems, languagesService, columnsService, pathsService, uploadsService, dbService] = await Promise.all([
     import(path.join(PROJECT_ROOT, 'system/server/src/services/content-items.mjs')),
     import(path.join(PROJECT_ROOT, 'system/server/src/services/languages.mjs')),
     import(path.join(PROJECT_ROOT, 'system/server/src/services/columns.mjs')),
     import(path.join(PROJECT_ROOT, 'system/server/src/services/column-paths.mjs')),
-    import(path.join(PROJECT_ROOT, 'system/server/src/services/uploads.mjs'))
+    import(path.join(PROJECT_ROOT, 'system/server/src/services/uploads.mjs')),
+    import(path.join(PROJECT_ROOT, 'system/server/src/db.mjs'))
   ]);
   const product = contentItems.getContentItemById('product', args.productId, {
     languageCode: 'en',
@@ -228,6 +271,7 @@ async function main() {
   const productUrl = pathsService.buildContentDetailUrlFromColumn(product, column, columnPath);
   const canonical = product.translations?.en;
   const errors = [];
+  const warnings = [];
   const productImages = normalizeImageList(product.images);
   const primaryImage = String(product.primary_image || '').trim();
   if (productImages.length > 0 && !primaryImage) errors.push('[images] 图库存在但缺少主图');
@@ -242,6 +286,36 @@ async function main() {
   }
 
   if (!canonical) errors.push('[en] 缺少英文母版');
+  const canonicalAttachments = normalizeAttachmentList(canonical?.attachments_json);
+  if (args.requirePdfAttachments && canonicalAttachments.length === 0) {
+    errors.push('[en] 缺少原始 PDF 附件');
+  }
+  const attachmentReports = canonicalAttachments.map((relativePath) => {
+    const asset = dbService.queryOne(
+      `SELECT m.id, m.purpose, m.pdf_document_type, m.language_id, l.code AS language_code
+       FROM media_assets m
+       LEFT JOIN languages l ON l.id = m.language_id
+       WHERE m.relative_path = ?`,
+      [relativePath]
+    );
+    const filePath = uploadsService.resolveUploadedFilePath(relativePath);
+    const item = {
+      relativePath,
+      mediaId: asset?.id || null,
+      purpose: asset?.purpose || null,
+      documentType: asset?.pdf_document_type || null,
+      language: asset?.language_code || null,
+      fileExists: Boolean(filePath && fs.existsSync(filePath))
+    };
+    if (!asset) errors.push(`[attachments] 媒体记录不存在: ${relativePath}`);
+    else {
+      if (asset.purpose !== 'pdf_document') errors.push(`[attachments] 不是 pdf_document: ${relativePath}`);
+      if (asset.language_code !== 'en') errors.push(`[attachments] 英文母版附件语言不是 en: ${relativePath}`);
+      if (!asset.pdf_document_type) errors.push(`[attachments] 缺少文档类型: ${relativePath}`);
+    }
+    if (!item.fileExists) errors.push(`[attachments] PDF 文件不存在: ${relativePath}`);
+    return item;
+  });
   const canonicalDocument = parse5.parseFragment(String(canonical?.content_html || ''));
   const canonicalCounts = { pdf: 0, technical: 0, manual: 0 };
   walk(canonicalDocument, (node) => {
@@ -278,7 +352,15 @@ async function main() {
       languageReports.push({ code: language.code, errors: [message] });
       continue;
     }
-    languageReports.push(analyzeTranslation(language, translation, productUrl, canonicalCounts, errors));
+    languageReports.push(analyzeTranslation(
+      language,
+      translation,
+      productUrl,
+      canonicalCounts,
+      errors,
+      warnings,
+      args.strictSeoLength
+    ));
 
     if (args.checkStatic) {
       const pageFile = resolveStaticFile(language.site.output_dir, addLanguagePrefix(productUrl, language.site.path_prefix), language.site.path_prefix);
@@ -317,12 +399,16 @@ async function main() {
       primaryImage,
       gallery: productImages
     },
+    pdfAttachments: attachmentReports,
     enabledLanguages: languages.map((language) => language.code),
     canonicalDocumentCounts: canonicalCounts,
     requiredKeywords: args.requiredKeywords,
     checkStatic: args.checkStatic,
     allowNoPdfDocuments: args.allowNoPdfDocuments,
+    requirePdfAttachments: args.requirePdfAttachments,
+    strictSeoLength: args.strictSeoLength,
     languages: languageReports,
+    warnings,
     errors
   };
   console.log(JSON.stringify(report, null, 2));

@@ -19,7 +19,11 @@ async function main() {
     sections: ['index']
   });
 
-  const sampleManagedItem = listContentItems('product', { visibleOnly: false, limit: 1 })[0];
+  const sampleManagedItem = listContentItems('product', {
+    visibleOnly: false,
+    limit: 1,
+    languageCode: 'en'
+  })[0];
   assert(sampleManagedItem?.name, '缺少可搜索内容数据，无法执行搜索接口回归。');
   const searchKeyword = String(sampleManagedItem.name).trim();
 

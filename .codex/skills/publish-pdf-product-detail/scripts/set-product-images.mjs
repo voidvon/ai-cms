@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { DatabaseSync } from 'node:sqlite';
 import { fileURLToPath } from 'node:url';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -20,6 +21,7 @@ function usage() {
   console.log(`用法:
   node set-product-images.mjs --product-id <ID> --image <图片> [--image <图片> ...]
                               [--replace-gallery] [--keep-primary]
+                              [--backup-path <SQLite备份>]
 
 默认行为:
   通过 CMS 媒体服务转换并上传图片；保留现有图库并追加新图，第一张新图设为主图。
@@ -48,7 +50,8 @@ function parseArgs(argv) {
     images: [],
     replaceGallery: false,
     keepPrimary: false,
-    help: false
+    help: false,
+    backupPath: ''
   };
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
@@ -57,6 +60,7 @@ function parseArgs(argv) {
     else if (token === '--image') output.images.push(requiredValue(argv[++index], token));
     else if (token === '--replace-gallery') output.replaceGallery = true;
     else if (token === '--keep-primary') output.keepPrimary = true;
+    else if (token === '--backup-path') output.backupPath = requiredValue(argv[++index], token);
     else fail(`未知参数: ${token}`);
   }
   if (!output.help) {
@@ -87,6 +91,27 @@ function timestamp() {
   return new Date().toISOString().replace(/[-:TZ.]/g, '').slice(0, 17);
 }
 
+function ensureBackup(db, options) {
+  const backupPath = options.backupPath
+    ? path.resolve(INVOCATION_CWD, options.backupPath)
+    : path.join(PROJECT_ROOT, `tmp/site-before-product-images-${options.productId}-${timestamp()}.sqlite`);
+  fs.mkdirSync(path.dirname(backupPath), { recursive: true });
+  const reused = fs.existsSync(backupPath);
+  if (!reused) db.exec(`VACUUM INTO '${backupPath.replaceAll("'", "''")}'`);
+
+  const backupDb = new DatabaseSync(backupPath);
+  try {
+    backupDb.exec('PRAGMA journal_mode = DELETE;');
+    const row = backupDb.prepare('PRAGMA integrity_check;').get();
+    if (String(row?.integrity_check || '').toLowerCase() !== 'ok') {
+      fail(`数据库备份完整性检查失败: ${backupPath}`);
+    }
+  } finally {
+    backupDb.close();
+  }
+  return { path: backupPath, reused };
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   if (options.help) {
@@ -111,12 +136,8 @@ async function main() {
   const currentImages = normalizeImageList(product.images);
   const currentPrimary = String(product.primary_image || currentImages[0] || '').trim();
   const db = getDb();
-  const backupPath = path.join(
-    PROJECT_ROOT,
-    `tmp/site-before-product-images-${options.productId}-${timestamp()}.sqlite`
-  );
-  fs.mkdirSync(path.dirname(backupPath), { recursive: true });
-  db.exec(`VACUUM INTO '${backupPath.replaceAll("'", "''")}'`);
+  const backup = ensureBackup(db, options);
+  const backupPath = backup.path;
 
   const uploaded = [];
   db.exec('BEGIN IMMEDIATE');
@@ -151,6 +172,7 @@ async function main() {
       success: true,
       productId: options.productId,
       backupPath,
+      backupReused: backup.reused,
       mode: options.replaceGallery ? 'replace-gallery' : 'append-gallery',
       previous: { images: currentImages, primaryImage: currentPrimary },
       uploaded: uploaded.map((asset) => ({
