@@ -47,8 +47,9 @@ export const adminApi = {
     path?: string
     ip?: string
     userAgentKind?: 'non_bot' | 'bot' | 'all'
-    refererMode?: 'all' | 'with_referer'
+    refererFilters?: string
     statusMode?: 'all' | '2xx' | '3xx' | '4xx' | '404' | '5xx'
+    statusOperator?: 'is' | 'is_not'
   }) => {
     const response = await apiClient.get<ApiResponse<{
       items: AccessLog[]

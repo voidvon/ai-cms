@@ -143,8 +143,9 @@ export function listAccessLogs(options = {}) {
   const pathKeyword = normalizeText(options.path);
   const ipKeyword = normalizeText(options.ip);
   const userAgentKind = normalizeAccessLogUserAgentKindFilter(options.userAgentKind);
-  const refererMode = normalizeAccessLogRefererFilter(options.refererMode);
+  const refererFilters = normalizeAccessLogRefererFilters(options);
   const statusMode = normalizeAccessLogStatusFilter(options.statusMode);
+  const statusOperator = normalizeAccessLogStatusOperator(options.statusOperator);
   const where = [];
   const params = [];
 
@@ -166,21 +167,11 @@ export function listAccessLogs(options = {}) {
     params.push('bot');
   }
 
-  if (refererMode === 'with_referer') {
-    where.push(`COALESCE(TRIM(l.referer), '') != ''`);
+  for (const filter of refererFilters) {
+    appendRefererFilterSql(where, params, filter);
   }
 
-  if (statusMode === '2xx') {
-    where.push('l.status_code >= 200 AND l.status_code < 300');
-  } else if (statusMode === '3xx') {
-    where.push('l.status_code >= 300 AND l.status_code < 400');
-  } else if (statusMode === '4xx') {
-    where.push('l.status_code >= 400 AND l.status_code < 500');
-  } else if (statusMode === '404') {
-    where.push('l.status_code = 404');
-  } else if (statusMode === '5xx') {
-    where.push('l.status_code >= 500 AND l.status_code < 600');
-  }
+  appendStatusFilterSql(where, statusMode, statusOperator);
 
   const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
   const totalRow = queryAll(
@@ -451,13 +442,100 @@ function normalizeAccessLogUserAgentKindFilter(value) {
   return 'non_bot';
 }
 
-function normalizeAccessLogRefererFilter(value) {
+function normalizeAccessLogRefererOperator(value, legacyMode = '') {
   const normalized = normalizeText(value).toLowerCase();
-  if (normalized === 'with_referer' || normalized === 'all') {
+  if (
+    normalized === 'all'
+    || normalized === 'none_of'
+    || normalized === 'contains'
+    || normalized === 'not_contains'
+    || normalized === 'empty'
+    || normalized === 'not_empty'
+  ) {
     return normalized;
   }
 
+  if (normalizeText(legacyMode).toLowerCase() === 'with_referer') {
+    return 'not_empty';
+  }
+
   return 'all';
+}
+
+function normalizeAccessLogRefererFilters(options = {}) {
+  let rawFilters = [];
+
+  if (Array.isArray(options.refererFilters)) {
+    rawFilters = options.refererFilters;
+  } else if (typeof options.refererFilters === 'string' && options.refererFilters.trim()) {
+    try {
+      const parsed = JSON.parse(options.refererFilters);
+      rawFilters = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      rawFilters = [];
+    }
+  }
+
+  const normalizedFilters = rawFilters
+    .slice(0, 10)
+    .map((filter) => ({
+      operator: normalizeAccessLogRefererOperator(filter?.operator),
+      value: normalizeText(filter?.value)
+    }))
+    .filter((filter) => (
+      filter.operator !== 'all'
+      && (!refererOperatorNeedsValue(filter.operator) || Boolean(filter.value))
+    ));
+
+  if (normalizedFilters.length > 0 || rawFilters.length > 0) {
+    return normalizedFilters;
+  }
+
+  const legacyOperator = normalizeAccessLogRefererOperator(options.refererOperator, options.refererMode);
+  const legacyValue = normalizeText(options.refererValue);
+  if (legacyOperator === 'all' || (refererOperatorNeedsValue(legacyOperator) && !legacyValue)) {
+    return [];
+  }
+
+  return [{ operator: legacyOperator, value: legacyValue }];
+}
+
+function refererOperatorNeedsValue(operator) {
+  return operator !== 'empty' && operator !== 'not_empty';
+}
+
+function appendRefererFilterSql(where, params, filter) {
+  if (filter.operator === 'empty') {
+    where.push(`COALESCE(TRIM(l.referer), '') = ''`);
+  } else if (filter.operator === 'not_empty') {
+    where.push(`COALESCE(TRIM(l.referer), '') != ''`);
+  } else if (filter.operator === 'contains') {
+    where.push(`l.referer LIKE ? ESCAPE '\\'`);
+    params.push(`%${escapeSqlLikePattern(filter.value)}%`);
+  } else if (filter.operator === 'not_contains') {
+    where.push(`l.referer NOT LIKE ? ESCAPE '\\'`);
+    params.push(`%${escapeSqlLikePattern(filter.value)}%`);
+  } else if (filter.operator === 'none_of') {
+    const excludedReferers = normalizeRefererFilterValues(filter.value);
+    if (excludedReferers.length > 0) {
+      where.push(`TRIM(l.referer) NOT IN (${excludedReferers.map(() => '?').join(', ')})`);
+      params.push(...excludedReferers);
+    }
+  }
+}
+
+function normalizeRefererFilterValues(value) {
+  return [...new Set(
+    normalizeText(value)
+      .split(/[\n,]/)
+      .map((item) => item.trim())
+      .filter(Boolean)
+      .slice(0, 50)
+  )];
+}
+
+function escapeSqlLikePattern(value) {
+  return value.replace(/[\\%_]/g, '\\$&');
 }
 
 function normalizeAccessLogStatusFilter(value) {
@@ -474,6 +552,26 @@ function normalizeAccessLogStatusFilter(value) {
   }
 
   return 'all';
+}
+
+function normalizeAccessLogStatusOperator(value) {
+  return normalizeText(value).toLowerCase() === 'is_not' ? 'is_not' : 'is';
+}
+
+function appendStatusFilterSql(where, statusMode, statusOperator) {
+  const statusConditions = {
+    '2xx': 'l.status_code >= 200 AND l.status_code < 300',
+    '3xx': 'l.status_code >= 300 AND l.status_code < 400',
+    '4xx': 'l.status_code >= 400 AND l.status_code < 500',
+    '404': 'l.status_code = 404',
+    '5xx': 'l.status_code >= 500 AND l.status_code < 600'
+  };
+  const condition = statusConditions[statusMode];
+  if (!condition) {
+    return;
+  }
+
+  where.push(statusOperator === 'is_not' ? `NOT (${condition})` : `(${condition})`);
 }
 
 function normalizeStoredUserAgentKind(value) {
