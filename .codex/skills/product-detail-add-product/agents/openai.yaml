@@ -1,4 +1,4 @@
 interface:
   display_name: "CMS 产品新增"
-  short_description: "维护产品规格、多语言内链、栏目和数据库模板。"
-  default_prompt: "Use $product-detail-add-product 在当前 CMS 中新增或更新产品详情，从价格表提取型号族规格，优化自然且可抓取的多语言内链，并完成静态构建验证。"
+  short_description: "锁定型号并全目录研究，再验收英文母版。"
+  default_prompt: "Use $product-detail-add-product 在当前 CMS 中锁定产品型号范围，搜索整个关键词拆分目录并区分命中、有效查询和内链统计，完成英文母版后等待我确认再扩展全部语言。"

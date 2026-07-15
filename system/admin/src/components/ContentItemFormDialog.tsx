@@ -690,21 +690,6 @@ export default function ContentItemFormDialog({
                       />
                     </div>
                   ) : null}
-                  {isFormFieldAvailable(fieldMap, 'content_html') ? (
-                    <div className="space-y-2">
-                      <Label>{getFieldLabel(fieldMap, 'content_html', '详细内容')}</Label>
-                      <RichTextEditor
-                        value={String(translation.content_html || '')}
-                        readOnly={!isFieldEditable(fieldMap, 'content_html')}
-                        onChange={(content_html) => {
-                          setActiveLanguage(language.code)
-                          updateTranslation({ content_html })
-                        }}
-                        placeholder="请输入详细内容"
-                        uploadPurpose="richtext_image"
-                      />
-                    </div>
-                  ) : null}
                   {dynamicTranslationFields.length ? (
                     <div className="grid gap-4 md:grid-cols-2">
                       {dynamicTranslationFields.map((field) => {
@@ -798,6 +783,21 @@ export default function ContentItemFormDialog({
                         }}
                         placeholder="请输入SEO描述"
                         rows={3}
+                      />
+                    </div>
+                  ) : null}
+                  {isFormFieldAvailable(fieldMap, 'content_html') ? (
+                    <div className="space-y-2">
+                      <Label>{getFieldLabel(fieldMap, 'content_html', '详细内容')}</Label>
+                      <RichTextEditor
+                        value={String(translation.content_html || '')}
+                        readOnly={!isFieldEditable(fieldMap, 'content_html')}
+                        onChange={(content_html) => {
+                          setActiveLanguage(language.code)
+                          updateTranslation({ content_html })
+                        }}
+                        placeholder="请输入详细内容"
+                        uploadPurpose="richtext_image"
                       />
                     </div>
                   ) : null}

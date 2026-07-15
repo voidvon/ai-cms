@@ -3,6 +3,7 @@ import { Agent, run, setDefaultOpenAIClient } from '@openai/agents';
 import { setDefaultModelProvider } from '@openai/agents-core';
 import { OpenAIProvider } from '@openai/agents-openai';
 import { getDefaultAiModelRuntimeConfig } from '../ai-models.mjs';
+import { reconcileResponsesStream } from './responses-stream-compatibility.mjs';
 
 let openaiClient = null;
 let openaiProvider = null;
@@ -111,9 +112,7 @@ function createFlyapiResponsesCompatibilityModel(model) {
       return model.getResponse(request);
     },
     async *getStreamedResponse(request) {
-      for await (const event of model.getStreamedResponse(request)) {
-        yield normalizeResponsesStreamEvent(event);
-      }
+      yield* reconcileResponsesStream(model.getStreamedResponse(request));
     },
     async getRetryAdvice(args) {
       if (typeof model.getRetryAdvice !== 'function') {
@@ -121,34 +120,5 @@ function createFlyapiResponsesCompatibilityModel(model) {
       }
       return model.getRetryAdvice(args);
     },
-  };
-}
-
-function normalizeResponsesStreamEvent(event) {
-  if (event?.type !== 'response_done' || !Array.isArray(event.response?.output)) {
-    return event;
-  }
-
-  return {
-    ...event,
-    response: {
-      ...event.response,
-      output: event.response.output.map((item) => normalizeResponseOutputItem(item)),
-    },
-  };
-}
-
-function normalizeResponseOutputItem(item) {
-  if (item?.type !== 'message' || item.role !== 'assistant') {
-    return item;
-  }
-
-  if (item.status === 'in_progress' || item.status === 'completed' || item.status === 'incomplete') {
-    return item;
-  }
-
-  return {
-    ...item,
-    status: 'completed',
   };
 }
