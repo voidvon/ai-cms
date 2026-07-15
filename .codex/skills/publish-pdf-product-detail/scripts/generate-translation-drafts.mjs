@@ -344,6 +344,7 @@ function buildPrompt(items, language) {
       'Return every input id exactly once and in the original order.',
       'Preserve every ⟦HTML_0000⟧ placeholder exactly and in the same order.',
       'Do not translate or alter brands, product models, document codes, standards, numbers, units, URLs, or HTML placeholders.',
+      'Do not introduce numeric digits or model-like codes when the source text contains none; write translated number words as words.',
       'Translate complete sentences naturally for technical industrial readers; do not add explanations.',
     ],
     items,

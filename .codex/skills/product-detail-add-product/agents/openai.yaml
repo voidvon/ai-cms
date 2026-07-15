@@ -1,4 +1,4 @@
 interface:
-  display_name: "CMS 产品新增"
-  short_description: "锁定型号并全目录研究，再验收英文母版。"
-  default_prompt: "Use $product-detail-add-product 在当前 CMS 中锁定产品型号范围，搜索整个关键词拆分目录并区分命中、有效查询和内链统计，完成英文母版后等待我确认再扩展全部语言。"
+  display_name: "CMS 产品资料检索与新增"
+  short_description: "自动查找产品型号资料与官方 PDF，合并转换为可发布产品详情。"
+  default_prompt: "Use $product-detail-add-product 根据产品型号或信息 ID 自动查找并筛选官方资料与 PDF，生成研究介绍，合并转换后的文档 HTML，完成英文母版后等待我确认多语言扩展。"
