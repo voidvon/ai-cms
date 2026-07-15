@@ -10,6 +10,15 @@ import type {
   PaginationMeta
 } from '@/types'
 
+export type AccessLogFilterParams = {
+  path?: string
+  ip?: string
+  userAgentKind?: 'non_bot' | 'bot' | 'all'
+  refererFilters?: string
+  statusMode?: 'all' | '2xx' | '3xx' | '4xx' | '404' | '5xx'
+  statusOperator?: 'is' | 'is_not'
+}
+
 export const adminApi = {
   list: async () => {
     const response = await apiClient.get<ApiResponse<Admin[]>>('/admin/list')
@@ -41,15 +50,9 @@ export const adminApi = {
     return response.data
   },
 
-  listAccessLogs: async (params?: {
+  listAccessLogs: async (params?: AccessLogFilterParams & {
     page?: number
     limit?: number
-    path?: string
-    ip?: string
-    userAgentKind?: 'non_bot' | 'bot' | 'all'
-    refererFilters?: string
-    statusMode?: 'all' | '2xx' | '3xx' | '4xx' | '404' | '5xx'
-    statusOperator?: 'is' | 'is_not'
   }) => {
     const response = await apiClient.get<ApiResponse<{
       items: AccessLog[]
@@ -77,8 +80,8 @@ export const adminApi = {
     return response.data
   },
 
-  clearAccessLogs: async () => {
-    const response = await apiClient.delete<ApiResponse<void>>('/admin/access-logs')
+  clearAccessLogs: async (params?: AccessLogFilterParams) => {
+    const response = await apiClient.delete<ApiResponse<{ deleted_count: number }>>('/admin/access-logs', { params })
     return response.data
   },
 

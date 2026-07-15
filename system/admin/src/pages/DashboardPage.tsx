@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { Check, ListFilter, Pencil, Plus, Trash2, X } from 'lucide-react'
-import { adminApi } from '@/api/admin'
+import { adminApi, type AccessLogFilterParams } from '@/api/admin'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -250,6 +250,19 @@ function getUserAgentKindFilter(filter: AppliedUserAgentFilterCondition | null):
 
 function getStatusModeFilter(filter: AppliedStatusFilterCondition | null): StatusModeFilter {
   return filter?.value || 'all'
+}
+
+function createAccessLogFilterParams(filters: DashboardFilters): AccessLogFilterParams {
+  return {
+    path: filters.path || undefined,
+    ip: filters.ip || undefined,
+    userAgentKind: getUserAgentKindFilter(filters.userAgentFilter),
+    refererFilters: filters.refererFilters.length > 0
+      ? JSON.stringify(filters.refererFilters)
+      : undefined,
+    statusMode: getStatusModeFilter(filters.statusFilter),
+    statusOperator: filters.statusFilter?.operator || 'is',
+  }
 }
 
 function createDefaultDashboardFilters(): DashboardFilters {
@@ -648,6 +661,8 @@ export default function DashboardPage() {
     return () => window.clearTimeout(timeoutId)
   }, [filterInputs, filters])
 
+  const accessLogFilterParams = createAccessLogFilterParams(filters)
+
   const summaryQuery = useQuery({
     queryKey: ['dashboard-access-log-summary'],
     queryFn: () => adminApi.getAccessLogSummary(),
@@ -656,16 +671,9 @@ export default function DashboardPage() {
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['dashboard-access-logs', page, filters.path, filters.ip, filters.userAgentFilter, filters.refererFilters, filters.statusFilter],
     queryFn: () => adminApi.listAccessLogs({
+      ...accessLogFilterParams,
       page,
       limit: PAGE_SIZE,
-      path: filters.path || undefined,
-      ip: filters.ip || undefined,
-      userAgentKind: getUserAgentKindFilter(filters.userAgentFilter),
-      refererFilters: filters.refererFilters.length > 0
-        ? JSON.stringify(filters.refererFilters)
-        : undefined,
-      statusMode: getStatusModeFilter(filters.statusFilter),
-      statusOperator: filters.statusFilter?.operator || 'is',
     }),
   })
 
@@ -679,9 +687,10 @@ export default function DashboardPage() {
   const activeFilterSignature = createAdvancedFilterSignature(filters)
 
   const clearLogsMutation = useMutation({
-    mutationFn: () => adminApi.clearAccessLogs(),
-    onSuccess: () => {
-      toast.success('访问记录已清空')
+    mutationFn: (params: AccessLogFilterParams) => adminApi.clearAccessLogs(params),
+    onSuccess: (result) => {
+      const deletedCount = result.data?.deleted_count ?? 0
+      toast.success(`已清空当前筛选条件下的 ${deletedCount} 条访问记录`)
       setClearDialogOpen(false)
       setPage(1)
       void refetch()
@@ -841,7 +850,7 @@ export default function DashboardPage() {
   }
 
   const confirmClearLogs = () => {
-    clearLogsMutation.mutate()
+    clearLogsMutation.mutate(accessLogFilterParams)
   }
 
   return (
@@ -1342,7 +1351,7 @@ export default function DashboardPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>确认清空访问记录</AlertDialogTitle>
             <AlertDialogDescription>
-              该操作会删除当前仪表盘访问记录表中的全部数据，且无法恢复。是否继续？
+              该操作会删除当前筛选条件匹配的 {total} 条访问记录，其他记录不受影响，且删除后无法恢复。是否继续？
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -133,9 +133,23 @@ export default async function adminApiRoutes(app) {
 
   app.delete('/admin/access-logs', {
     onRequest: [requireAuth, requireAdminManage]
-  }, async () => {
-    clearAccessLogs();
-    return { success: true, message: '访问记录已清空' };
+  }, async (request) => {
+    const deletedCount = clearAccessLogs({
+      path: request.query?.path,
+      ip: request.query?.ip,
+      userAgentKind: request.query?.userAgentKind,
+      refererMode: request.query?.refererMode,
+      refererOperator: request.query?.refererOperator,
+      refererValue: request.query?.refererValue,
+      refererFilters: request.query?.refererFilters,
+      statusMode: request.query?.statusMode,
+      statusOperator: request.query?.statusOperator
+    });
+    return {
+      success: true,
+      data: { deleted_count: deletedCount },
+      message: `已清空当前筛选条件下的 ${deletedCount} 条访问记录`
+    };
   });
 
   // 获取管理员详情

@@ -140,40 +140,8 @@ export function listAccessLogs(options = {}) {
   const page = normalizePositiveInteger(options.page, 1);
   const limit = Math.min(normalizePositiveInteger(options.limit, 50), 200);
   const offset = (page - 1) * limit;
-  const pathKeyword = normalizeText(options.path);
-  const ipKeyword = normalizeText(options.ip);
-  const userAgentKind = normalizeAccessLogUserAgentKindFilter(options.userAgentKind);
-  const refererFilters = normalizeAccessLogRefererFilters(options);
-  const statusMode = normalizeAccessLogStatusFilter(options.statusMode);
-  const statusOperator = normalizeAccessLogStatusOperator(options.statusOperator);
-  const where = [];
-  const params = [];
+  const { whereClause, params } = buildAccessLogFilterSql(options, 'non_bot');
 
-  if (pathKeyword) {
-    where.push('(l.page_path LIKE ? OR l.page_url LIKE ?)');
-    params.push(`%${pathKeyword}%`, `%${pathKeyword}%`);
-  }
-
-  if (ipKeyword) {
-    where.push('l.client_ip LIKE ?');
-    params.push(`%${ipKeyword}%`);
-  }
-
-  if (userAgentKind === 'bot') {
-    where.push('l.user_agent_kind = ?');
-    params.push('bot');
-  } else if (userAgentKind === 'non_bot') {
-    where.push('l.user_agent_kind != ?');
-    params.push('bot');
-  }
-
-  for (const filter of refererFilters) {
-    appendRefererFilterSql(where, params, filter);
-  }
-
-  appendStatusFilterSql(where, statusMode, statusOperator);
-
-  const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
   const totalRow = queryAll(
     `SELECT COUNT(*) AS total FROM access_logs l ${whereClause}`,
     params
@@ -209,6 +177,44 @@ export function listAccessLogs(options = {}) {
       total: Number(totalRow.total || 0)
     }
   };
+}
+
+function buildAccessLogFilterSql(options = {}, defaultUserAgentKind = 'non_bot') {
+  const pathKeyword = normalizeText(options.path);
+  const ipKeyword = normalizeText(options.ip);
+  const userAgentKind = normalizeAccessLogUserAgentKindFilter(options.userAgentKind, defaultUserAgentKind);
+  const refererFilters = normalizeAccessLogRefererFilters(options);
+  const statusMode = normalizeAccessLogStatusFilter(options.statusMode);
+  const statusOperator = normalizeAccessLogStatusOperator(options.statusOperator);
+  const where = [];
+  const params = [];
+
+  if (pathKeyword) {
+    where.push('(l.page_path LIKE ? OR l.page_url LIKE ?)');
+    params.push(`%${pathKeyword}%`, `%${pathKeyword}%`);
+  }
+
+  if (ipKeyword) {
+    where.push('l.client_ip LIKE ?');
+    params.push(`%${ipKeyword}%`);
+  }
+
+  if (userAgentKind === 'bot') {
+    where.push('l.user_agent_kind = ?');
+    params.push('bot');
+  } else if (userAgentKind === 'non_bot') {
+    where.push('l.user_agent_kind != ?');
+    params.push('bot');
+  }
+
+  for (const filter of refererFilters) {
+    appendRefererFilterSql(where, params, filter);
+  }
+
+  appendStatusFilterSql(where, statusMode, statusOperator);
+
+  const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
+  return { whereClause, params };
 }
 
 export function getAccessLogDashboardSummary() {
@@ -290,10 +296,16 @@ export function getAccessLogDashboardSummary() {
   };
 }
 
-export function clearAccessLogs() {
+export function clearAccessLogs(options = {}) {
   ensureAccessLogsSchema();
-  execute('DELETE FROM access_logs');
-  return true;
+  const { whereClause, params } = buildAccessLogFilterSql(options, 'all');
+  const result = whereClause
+    ? execute(
+        `DELETE FROM access_logs WHERE id IN (SELECT l.id FROM access_logs l ${whereClause})`,
+        params
+      )
+    : execute('DELETE FROM access_logs');
+  return Number(result.changes || 0);
 }
 
 export function shouldRecordPageAccess(request, reply) {
@@ -433,13 +445,13 @@ function normalizePositiveInteger(value, fallback) {
   return normalized;
 }
 
-function normalizeAccessLogUserAgentKindFilter(value) {
+function normalizeAccessLogUserAgentKindFilter(value, fallback = 'non_bot') {
   const normalized = normalizeText(value).toLowerCase();
   if (normalized === 'all' || normalized === 'bot' || normalized === 'non_bot') {
     return normalized;
   }
 
-  return 'non_bot';
+  return fallback;
 }
 
 function normalizeAccessLogRefererOperator(value, legacyMode = '') {
