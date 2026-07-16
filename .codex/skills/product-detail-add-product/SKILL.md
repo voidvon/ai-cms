@@ -48,6 +48,8 @@ description: 在当前数据库驱动的 Spirax Sarco Node.js CMS 中筛选、�
 - 在任务临时目录保存 `research-report.md`、`source-manifest.json`、`pdf-selection.md`、`fact-matrix.md`、选用 PDF、SHA-256 和转换分析报告。搜索摘要和文件名只能用于发现来源，不能作为产品事实。
 - 对候选 PDF 检查最终响应、`%PDF` 文件头、语言、文档编号、修订、目标型号正文覆盖和重复版本；为每份文件明确标记 `selected`、`supporting-only` 或 `rejected` 及理由。多型号 PDF 不自动扩大页面型号范围。
 - 对 `selected` PDF 使用 `$convert-pdf-to-html`；再用 `$import-pdf-html-to-product-detail` 接入正文。复用这两个技能的分析、固定 HTML 结构、图片上传、备份和导入链路，不自行编写第二套转换或导入机制。
+- 在完成 PDF 选择后，额外建立“公开下载附件计划”：销售手册（`sales_brochure`）、技术资料（`technical_information`）和安装维修指南（`installation_guide`）分别列出可下载文件、文档编号、资料语言、型号范围与媒体资源路径。`selected` 只决定是否转换并合入正文；已验证的 `supporting-only` 官方资料也可以作为下载附件。每一类没有准确、可公开验证文件时如实省略，不能以相邻型号资料凑齐分类。
+- 下载文件必须下载到项目后通过 `/admin/pdf-assets` 的现有 PDF 媒体链路登记为 `media_assets.purpose = 'pdf_document'`，带正确 `pdf_document_type`、标题、文档编号和语言；先按“语言 + 文档编号 + 分类”检查媒体库，本地文件已存在且可读时直接复用，避免重复上传。产品翻译的 `attachments_json` 只能保存该本地媒体的 `/uploads/pdfs/...` 路径，不得保存外部 URL、远程媒体地址或直接修改静态 HTML。非英文翻译仅保存真实本地化 PDF：静态构建按 `sales_brochure`、`technical_information`、`installation_guide`、`attachment` 分别回退，某分类存在本地 PDF 时只展示本地资料，缺该分类时才补英文同分类资料。每个已发布语言都要保留其实际资料语言标识。
 - 不从关键词 CSV 推断参数、材质、口径、压力等级、认证或下载 URL。
 - 每个准备写入公开正文的能力、参数和适用条件都要进入 `fact-matrix.md`，带来源 URL/文件、文档编号、版本和 PDF 页码或网页章节。冲突优先按精确型号、官方性和较新修订消解；无法消解的事实不写入正文。
 - 不把内部资料路径、搜索量、关键词筛选过程、数据库或仓库术语写入用户可见内容。
@@ -58,7 +60,7 @@ description: 在当前数据库驱动的 Spirax Sarco Node.js CMS 中筛选、�
 使用当前内容模型字段，不新增产品专属硬编码字段：
 
 - 基础字段：`column_id`、`custom_url`、`code`、`images`、`primary_image`、`spec_options_json`、`is_visible`、`is_featured_home`、`sort_order`、`created_at`。
-- 翻译字段：`name`、`summary`、`content_html`、`template_data_json`、`seo_title`、`seo_description`、`publish_status`。
+- 翻译字段：`name`、`summary`、`content_html`、`template_data_json`、`attachments_json`、`seo_title`、`seo_description`、`publish_status`。
 - `custom_url` 是可选的内容文件名，必须包含文件名，例如 `td52/index.html`；留空时由栏目 `detail_rule` 和内容 ID 生成 URL。
 - `spec_options_json` 是字符串数组，每项是一条可展示、可用于询盘的规格文本。先确定当前详情页明确覆盖的型号集合，再从 `docs/价格汇总表.csv` 中逐型号精确提取；排除备件、套件和仅提及该型号的行，无精确整机记录时使用空数组。
 - `publish_status` 只在内容完成并应公开时设为 `published`。同时设置 `is_visible: 1` 才能正常参与公开列表和生成。
@@ -70,6 +72,7 @@ description: 在当前数据库驱动的 Spirax Sarco Node.js CMS 中筛选、�
 
 - 先在 `en` 中确定产品名称、术语、事实、单位、表格、资料顺序、SEO 和内链信息架构。
 - 英文资料直接整理为英文正文；非英文资料必须先准确转换为英文母版，再进入后续翻译阶段。
+- `attachments_json` 与正文导入是两条独立链路：正文可只转换最小 `selected` 集合，下载区仍应展示已验证且适用于当前型号的销售手册、技术资料和安装资料。附件区由既有 `product_download_groups` 组件按“销售手册 → 技术资料 → 安装资料”分组，单一型号页不得登记仅覆盖兄弟型号的文件。
 - 阶段 B 不得从某个译文继续转译另一语言，也不得把 `zh-CN` 当作中间母版。
 - 英文母版验收后，除修正明确发现的事实或结构错误外，翻译阶段不得顺带改写英文内容。
 
@@ -86,6 +89,7 @@ description: 在当前数据库驱动的 Spirax Sarco Node.js CMS 中筛选、�
 - 首选当前 CMS MCP 的 `create_content_item`，或后台/API `POST /api/content-items/product`；更新时使用 `update_content_item` 或 `PUT /api/content-items/product/:id`。
 - payload 必须使用 `{ base, translations }` 双层结构，并先读取当前内容模型字段，避免提交不存在的旧字段。
 - 阶段 A 只写入或更新 `translations.en`，以及新建条目时为满足默认语言约束所必需的空白 `zh-CN` 草稿壳。不得预先创建带英文内容的其他语言记录。
+- 阶段 A 同时将已验证英文下载附件写入 `translations.en.attachments_json`；中文草稿壳和其他未发布语言不写附件。
 - 阶段 B 必须重新读取已发布的 `translations.en` 作为母版，再逐语言写入同一个产品条目；不得创建重复基础记录。
 - 没有可用 API/MCP 时，复用 `content-items.mjs` / `content-entries.mjs` 服务完成校验和写入。不要通过散乱 SQL 绕过规范化、多语言和字段校验。
 - 新增产品通常不需要修改模板。产品详情模板必须始终显示数量选择和联系按钮，不得因 `spec_options_json` 为空或 `topPanel.ctaLabel` 缺失而隐藏；只有规格选择区可以在无规格时省略。若模板不满足该契约，修改数据库中的 `templates`/`template_versions` 及绑定，并复用现有 TSX 运行时；不得把源码目录或 `system/templates/` 当模板真源。
@@ -132,7 +136,7 @@ description: 在当前数据库驱动的 Spirax Sarco Node.js CMS 中筛选、�
 4. 每种语言完成质量检查后再设为 `published`。未完成或无法可靠本地化的语言保持 `draft`，不得复制英文占位。
 5. 通过统一内容服务逐语言写回同一条目。复杂 HTML 使用 `parse5`；不得通过正则破坏结构，也不得修改已验收英文母版。
 6. 全部语言写入完成后只运行一次 `npm run build:site`。构建期间不要继续修改数据库，也不要并发启动第二个静态构建。
-7. 逐语言检查公开详情页、所属列表页、SEO、图片、规格、数量和联系按钮；核对语言前缀/域名、内链目标、锚文本边界、标点，以及 `nofollow`、`target` 和错误语言回退均为零；额外确认 `zh-CN` 用户可见字段的 `Spirax Sarco` 残留数为 `0`，品牌统一为“斯派莎克”。
+7. 逐语言检查公开详情页、所属列表页、SEO、图片、规格、数量和联系按钮；核对语言前缀/域名、内链目标、锚文本边界、标点，以及 `nofollow`、`target` 和错误语言回退均为零；检查页面底部 PDF 下载区只显示已登记附件，资料按“销售手册 → 技术资料 → 安装资料”分组，链接、文档编号、资料语言、PDF 响应和目标型号范围正确。额外确认 `zh-CN` 用户可见字段的 `Spirax Sarco` 残留数为 `0`，品牌统一为“斯派莎克”。
 8. 最终报告英文母版状态、成功发布语言、保留草稿语言、各语言 URL、图片状态、首页推荐状态和完整构建结果。
 
 ## 禁止事项

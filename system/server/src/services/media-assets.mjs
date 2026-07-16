@@ -154,7 +154,7 @@ export function ensureMediaAssetsSchema() {
   schemaEnsured = true;
 }
 
-export async function uploadMediaAsset({ buffer, originalFilename, purpose, languageId, pdfDocumentType }) {
+export async function uploadMediaAsset({ buffer, originalFilename, purpose, languageId, pdfDocumentType, pdfTitle, pdfDocumentCode }) {
   ensureMediaAssetsSchema();
 
   const normalizedPurpose = resolvePurpose(purpose);
@@ -228,8 +228,8 @@ export async function uploadMediaAsset({ buffer, originalFilename, purpose, lang
       fsPath,
       normalizedPurpose === 'pdf_document' ? normalizedLanguageId : null,
       normalizedPurpose === 'pdf_document' ? normalizedPdfDocumentType : null,
-      inferredPdfTitle,
-      inferredPdfDocumentCode,
+      normalizedPurpose === 'pdf_document' ? String(pdfTitle || '').trim() || inferredPdfTitle : inferredPdfTitle,
+      normalizedPurpose === 'pdf_document' ? String(pdfDocumentCode || '').trim() || inferredPdfDocumentCode : inferredPdfDocumentCode,
     ],
   );
 

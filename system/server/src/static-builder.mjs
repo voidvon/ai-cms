@@ -3259,19 +3259,24 @@ function buildLegacyManagedColumnDetailPageProps({ templateContext, rootColumn =
 
 function buildProductAttachmentDownloads({ entryId, languageCode, site }) {
   const requestedLanguageCode = String(languageCode || '').trim();
-  let attachmentPaths = loadProductAttachmentPaths(entryId, requestedLanguageCode);
-  if (attachmentPaths.length === 0 && requestedLanguageCode.toLowerCase() !== 'en') {
-    attachmentPaths = loadProductAttachmentPaths(entryId, 'en');
-  }
-  if (attachmentPaths.length === 0) return [];
+  const attachmentPaths = loadProductAttachmentPaths(entryId, requestedLanguageCode);
+  const englishAttachmentPaths = requestedLanguageCode.toLowerCase() === 'en'
+    ? []
+    : loadProductAttachmentPaths(entryId, 'en');
+  if (attachmentPaths.length === 0 && englishAttachmentPaths.length === 0) return [];
 
   const assetByPath = getProductPdfAssetMap();
+  const resolvedAttachmentPaths = resolveProductAttachmentPathsByType({
+    attachmentPaths,
+    englishAttachmentPaths,
+    assetByPath
+  });
   const isZh = requestedLanguageCode.toLowerCase() === 'zh-cn';
   const groupLabels = isZh
     ? {
         technical_information: '技术资料',
         installation_guide: '安装与维护',
-        sales_brochure: '产品手册',
+        sales_brochure: '销售手册',
         attachment: '其他文档'
       }
     : {
@@ -3282,7 +3287,7 @@ function buildProductAttachmentDownloads({ entryId, languageCode, site }) {
       };
   const groupedEntries = new Map();
 
-  for (const relativePath of attachmentPaths) {
+  for (const relativePath of resolvedAttachmentPaths) {
     const asset = assetByPath.get(relativePath);
     if (!asset) continue;
     const groupType = String(asset.pdf_document_type || 'attachment').trim() || 'attachment';
@@ -3291,17 +3296,35 @@ function buildProductAttachmentDownloads({ entryId, languageCode, site }) {
       name: String(asset.pdf_title || asset.original_name || relativePath).trim(),
       reference: String(asset.pdf_document_code || '').trim() || '-',
       language: String(asset.language_name || asset.language_code || '').trim() || 'Default',
-      href: resolvePublicAssetUrl(relativePath, site)
+      href: relativePath
     });
   }
 
-  const groupOrder = ['technical_information', 'installation_guide', 'sales_brochure', 'attachment'];
+  const groupOrder = ['sales_brochure', 'technical_information', 'installation_guide', 'attachment'];
   return groupOrder
     .filter((groupType) => groupedEntries.has(groupType))
     .map((groupType) => ({
       title: groupLabels[groupType],
       entries: groupedEntries.get(groupType)
     }));
+}
+
+function resolveProductAttachmentPathsByType({ attachmentPaths, englishAttachmentPaths, assetByPath }) {
+  const localPaths = uniqueKnownProductPdfPaths(attachmentPaths, assetByPath);
+  const localTypes = new Set(localPaths.map((relativePath) => getProductPdfType(assetByPath.get(relativePath))));
+  const fallbackPaths = uniqueKnownProductPdfPaths(englishAttachmentPaths, assetByPath)
+    .filter((relativePath) => !localTypes.has(getProductPdfType(assetByPath.get(relativePath))));
+  return [...localPaths, ...fallbackPaths];
+}
+
+function uniqueKnownProductPdfPaths(paths, assetByPath) {
+  return Array.from(new Set((Array.isArray(paths) ? paths : [])
+    .map((item) => String(item || '').trim())
+    .filter((relativePath) => relativePath && assetByPath.has(relativePath))));
+}
+
+function getProductPdfType(asset) {
+  return String(asset?.pdf_document_type || 'attachment').trim() || 'attachment';
 }
 
 function loadProductAttachmentPaths(entryId, languageCode) {
@@ -5287,11 +5310,17 @@ function normalizeLegacyRichTextHtml(value, siteConfig = null) {
     return '';
   }
   let output = html.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
+  const localPdfDownloadTokens = [];
+  output = output.replace(/<a\b(?=[^>]*\bclass\s*=\s*["'][^"']*\bdownload-link\b[^"']*["'])[^>]*\bhref\s*=\s*(["'])(\/uploads\/pdfs\/[^"']+)\1[^>]*>/gi, (match, quote, relativePath) => {
+    const token = `__LOCAL_PDF_DOWNLOAD_${localPdfDownloadTokens.length}__`;
+    localPdfDownloadTokens.push({ token, relativePath });
+    return match.replace(relativePath, token);
+  });
 
   output = normalizeLegacyMetaAttributes(output);
   output = normalizeLegacyAssetText(output, siteConfig);
 
-  return output
+  output = output
     .replace(/href="https?:\/\/\/+"/gi, 'href="/"')
     .replace(/data-ke-src="https?:\/\/\/+"/gi, 'data-ke-src="/"')
     .replace(/https?:\/\/\/+(?=[^/"])/gi, '/')
@@ -5306,6 +5335,11 @@ function normalizeLegacyRichTextHtml(value, siteConfig = null) {
       }
       return match;
     });
+
+  for (const { token, relativePath } of localPdfDownloadTokens) {
+    output = output.replaceAll(token, relativePath);
+  }
+  return output;
 }
 
 function normalizeLegacyBodyHtml(value, siteConfig = null, options = {}) {

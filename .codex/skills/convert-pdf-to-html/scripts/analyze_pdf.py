@@ -292,7 +292,7 @@ def inspect_page(
     page_area = max(float(page.rect.width * page.rect.height), 1.0)
     max_image_ratio = max(
         (
-            max(0.0, pymupdf.Rect(item["bbox"]).get_area()) / page_area
+            max(0.0, pymupdf.Rect(item["bbox"]).width * pymupdf.Rect(item["bbox"]).height) / page_area
             for item in image_candidates
         ),
         default=0.0,
