@@ -55,7 +55,7 @@ export default function TopicManagementPage() {
   const [topicTemplateId, setTopicTemplateId] = useState(NO_TOPIC_TEMPLATE_VALUE)
   const [languageDrafts, setLanguageDrafts] = useState<Record<string, TopicLanguageDraft>>({})
   const [baseRelatedContentJson, setBaseRelatedContentJson] = useState('[]')
-  const [activeTab, setActiveTab] = useState('')
+  const [activeTab, setActiveTab] = useState(BASE_TAB_VALUE)
 
   const { data: languagesData } = useQuery({
     queryKey: ['languages'],
@@ -63,7 +63,7 @@ export default function TopicManagementPage() {
   })
   const languages = useMemo(() => (languagesData?.data || []).filter((item) => item.is_enabled !== 0), [languagesData?.data])
   const defaultLanguageCode = languages.find((item) => item.is_default === 1)?.code || languages[0]?.code || 'zh-CN'
-  const selectedTab = activeTab || defaultLanguageCode
+  const selectedTab = activeTab || BASE_TAB_VALUE
   const activeLanguageCode = selectedTab === BASE_TAB_VALUE ? defaultLanguageCode : selectedTab
   const fillEditorHeight = !isMobile
 
@@ -150,14 +150,10 @@ export default function TopicManagementPage() {
   }, [selectedColumnId, topicColumns])
 
   useEffect(() => {
-    if (!activeTab && defaultLanguageCode) {
-      setActiveTab(defaultLanguageCode)
-      return
-    }
     if (activeTab !== BASE_TAB_VALUE && !languages.some((language) => language.code === activeTab)) {
-      setActiveTab(defaultLanguageCode)
+      setActiveTab(BASE_TAB_VALUE)
     }
-  }, [activeTab, defaultLanguageCode, languages])
+  }, [activeTab, languages])
 
   useEffect(() => {
     if (!selectedColumn) {
