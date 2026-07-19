@@ -855,50 +855,51 @@ export default function DashboardPage() {
 
   return (
     <div className="flex min-h-full flex-col gap-4 md:h-full md:min-h-0 md:overflow-hidden">
-      <div className="grid shrink-0 gap-4 md:grid-cols-5">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>今日访问量</CardDescription>
-            <CardTitle>{metrics?.today_visits ?? 0}</CardTitle>
+      <div className="flex shrink-0 gap-2 overflow-x-auto pb-1 md:grid md:grid-cols-5 md:gap-4 md:overflow-visible md:pb-0">
+        <Card className="min-w-[138px] shrink-0 md:min-w-0">
+          <CardHeader className="gap-1.5 p-3 md:pb-2 md:p-6">
+            <CardDescription className="text-xs leading-tight md:text-sm">今日访问量</CardDescription>
+            <CardTitle className="text-lg leading-none md:text-2xl">{metrics?.today_visits ?? 0}</CardTitle>
           </CardHeader>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>近 24 小时访问量</CardDescription>
-            <CardTitle>{metrics?.recent_visits ?? 0}</CardTitle>
+        <Card className="min-w-[138px] shrink-0 md:min-w-0">
+          <CardHeader className="gap-1.5 p-3 md:pb-2 md:p-6">
+            <CardDescription className="text-xs leading-tight md:text-sm">近 24 小时访问量</CardDescription>
+            <CardTitle className="text-lg leading-none md:text-2xl">{metrics?.recent_visits ?? 0}</CardTitle>
           </CardHeader>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>近 24 小时独立 IP（排除机器人）</CardDescription>
-            <CardTitle>{metrics?.recent_unique_ips ?? 0}</CardTitle>
+        <Card className="min-w-[138px] shrink-0 md:min-w-0">
+          <CardHeader className="gap-1.5 p-3 md:pb-2 md:p-6">
+            <CardDescription className="text-xs leading-tight md:text-sm">24小时真实用户</CardDescription>
+            <CardTitle className="text-lg leading-none md:text-2xl">{metrics?.recent_real_users ?? 0}</CardTitle>
           </CardHeader>
         </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardDescription>404 错误数</CardDescription>
-            <CardTitle>{metrics?.total_404_errors ?? 0}</CardTitle>
+        <Card className="min-w-[138px] shrink-0 md:min-w-0">
+          <CardHeader className="gap-1.5 p-3 md:pb-2 md:p-6">
+            <CardDescription className="text-xs leading-tight md:text-sm">404 错误数</CardDescription>
+            <CardTitle className="text-lg leading-none md:text-2xl">{metrics?.total_404_errors ?? 0}</CardTitle>
           </CardHeader>
         </Card>
-        <Card>
-          <CardHeader className="gap-3 pb-2">
-            <div className="space-y-1">
-              <CardDescription>累计页面数</CardDescription>
-              <CardTitle>{metrics?.total_pages ?? 0}</CardTitle>
-            </div>
-            <div>
-              <Button variant="outline" size="sm" onClick={() => setTopPagesOpen(true)}>
-                查看热门页面
+        <Card className="min-w-[138px] shrink-0 md:min-w-0">
+          <CardHeader className="gap-1.5 p-3 md:gap-3 md:p-6 md:pb-2">
+            <div className="space-y-0.5 md:space-y-1">
+              <CardDescription className="text-xs leading-tight md:text-sm">累计页面数</CardDescription>
+              <Button
+                variant="ghost"
+                className="h-auto p-0 text-left text-lg font-semibold leading-none tracking-tight hover:bg-transparent md:text-2xl"
+                onClick={() => setTopPagesOpen(true)}
+              >
+                {metrics?.total_pages ?? 0}
               </Button>
             </div>
           </CardHeader>
         </Card>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-3">
-        <div className="flex shrink-0 flex-wrap items-center gap-3">
+        <div className="flex shrink-0 flex-nowrap items-center gap-3 overflow-x-auto overscroll-x-contain pb-1 md:flex-wrap md:overflow-visible md:pb-0">
           <Popover open={filterPanelOpen} onOpenChange={handleFilterPanelOpenChange}>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2">
+              <Button variant="outline" className="shrink-0 gap-2">
                 <ListFilter className="size-4" aria-hidden="true" />
                 筛选
                 {filters.refererFilters.length + (filters.userAgentFilter ? 1 : 0) + (filters.statusFilter ? 1 : 0) > 0 ? (
@@ -1163,20 +1164,20 @@ export default function DashboardPage() {
             </PopoverContent>
           </Popover>
           <Input
-            className="w-[260px]"
+            className="w-[260px] shrink-0"
             value={pathInput}
             onChange={(event) => setPathInput(event.target.value)}
             placeholder="按路径或完整 URL 筛选"
           />
           <Input
-            className="w-[220px]"
+            className="w-[220px] shrink-0"
             value={ipInput}
             onChange={(event) => setIpInput(event.target.value)}
             placeholder="按 IP 筛选，例如 203.0.113.9"
           />
-          <Button onClick={applyFilters}>查询</Button>
-          <Button variant="outline" onClick={refreshLogs}>刷新</Button>
-          <Button variant="destructive" onClick={() => setClearDialogOpen(true)}>
+          <Button className="shrink-0" onClick={applyFilters}>查询</Button>
+          <Button className="shrink-0" variant="outline" onClick={refreshLogs}>刷新</Button>
+          <Button className="shrink-0" variant="destructive" onClick={() => setClearDialogOpen(true)}>
             清空
           </Button>
         </div>

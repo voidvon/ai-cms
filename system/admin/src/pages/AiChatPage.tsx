@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Loader2, Pencil, RefreshCw, Settings2, Stamp, Trash2 } from 'lucide-react'
+import { Eye, FileCog, FilePlus2, FileSignature, Pencil, RefreshCw, Search, Settings2, Stamp, Trash2 } from 'lucide-react'
 import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { documentWorkspacesApi } from '@/api/document-workspaces'
 import { documentAgentApi } from '@/api/document-agent'
@@ -10,6 +10,8 @@ import { ChatWorkspaceShell, type ChatWorkspaceShellMessage } from '@/components
 import { DocumentCompanyManagerDialog } from '@/components/DocumentCompanyManagerDialog'
 import { DocumentStampManagerDialog } from '@/components/DocumentStampManagerDialog'
 import { DocumentTemplateCompanySlotsDialog } from '@/components/DocumentTemplateCompanySlotsDialog'
+import { DocumentTemplateManagerDialog } from '@/components/DocumentTemplateManagerDialog'
+import { DocumentTemplatePickerDialog } from '@/components/DocumentTemplatePickerDialog'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,14 +22,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { DataTablePagination } from '@/components/DataTablePagination'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { formatRelativeTime } from '@/lib/datetime'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { toast } from 'sonner'
-import type { DocumentAgentDraftStreamState, DocumentCompany, DocumentCompanySlot, DocumentDraft, DocumentDraftConversationState, DocumentDraftStampPlacement, DocumentStamp, DocumentTemplate } from '@/types'
+import type { DocumentAgentDraftStreamState, DocumentCompany, DocumentCompanySlot, DocumentDraft, DocumentDraftStampPlacement, DocumentStamp, DocumentTemplate } from '@/types'
 
 const DOCUMENT_TYPE_LABELS: Record<'quote' | 'contract', string> = {
   quote: '报价单',
@@ -42,15 +48,17 @@ type DashboardHeaderContext = {
 
 const DEFAULT_DOCUMENT_PAGE_WIDTH = 794
 const DEFAULT_DOCUMENT_PAGE_PADDING = 38
+const DOCUMENT_PAGE_LIMIT = 20
 
 export default function AiChatPage() {
   const { headerSlotElement, setDocumentTitle, setMainContentPadding } =
     useOutletContext<DashboardHeaderContext>()
   const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
+  const isMobile = useIsMobile(1024)
   const previewFrameRef = useRef<HTMLIFrameElement | null>(null)
+  const mobilePreviewFrameRef = useRef<HTMLIFrameElement | null>(null)
   const titleInputRef = useRef<HTMLInputElement | null>(null)
-  const [selectedDocumentType, setSelectedDocumentType] = useState<'quote' | 'contract'>('quote')
   const [previewVersion, setPreviewVersion] = useState(0)
   const [deleteDraftId, setDeleteDraftId] = useState<string>('')
   const [companySlotsTemplate, setCompanySlotsTemplate] = useState<DocumentTemplate | null>(null)
@@ -58,12 +66,15 @@ export default function AiChatPage() {
   const [titleInputValue, setTitleInputValue] = useState('')
   const [isCompanyManagerOpen, setIsCompanyManagerOpen] = useState(false)
   const [isStampManagerOpen, setIsStampManagerOpen] = useState(false)
+  const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false)
+  const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false)
+  const [managedDocumentType, setManagedDocumentType] = useState<DocumentTemplate['document_type'] | null>(null)
+  const [creatingTemplateId, setCreatingTemplateId] = useState<number | null>(null)
+  const [documentPage, setDocumentPage] = useState(1)
+  const [documentSearchInput, setDocumentSearchInput] = useState('')
+  const [documentSearch, setDocumentSearch] = useState('')
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<Record<string, string>>({})
   const [selectedStampIdToApply, setSelectedStampIdToApply] = useState<string>('')
-  const [conversationState, setConversationState] = useState<DocumentDraftConversationState>({
-    missing_fields: [],
-    suggested_questions: [],
-  })
   const [streamState, setStreamState] = useState<DocumentAgentDraftStreamState>({
     isStreaming: false,
     assistantText: '',
@@ -77,16 +88,14 @@ export default function AiChatPage() {
   })
 
   const templates = templatesData?.data || []
-  const groupedTemplates = useMemo(() => {
-    return {
-      quote: templates.filter((item) => item.document_type === 'quote'),
-      contract: templates.filter((item) => item.document_type === 'contract'),
-    }
-  }, [templates])
 
   const draftsQuery = useQuery({
-    queryKey: ['document-drafts'],
-    queryFn: () => documentWorkspacesApi.listDrafts(30),
+    queryKey: ['document-drafts', documentPage, documentSearch],
+    queryFn: () => documentWorkspacesApi.listDrafts({
+      page: documentPage,
+      limit: DOCUMENT_PAGE_LIMIT,
+      search: documentSearch,
+    }),
   })
 
   const stampsQuery = useQuery({
@@ -100,6 +109,7 @@ export default function AiChatPage() {
   })
 
   const recentDrafts = draftsQuery.data?.data || []
+  const draftsPagination = draftsQuery.data?.pagination
   const stamps = (stampsQuery.data?.data || []) as DocumentStamp[]
   const companies = (companiesQuery.data?.data || []) as DocumentCompany[]
 
@@ -120,32 +130,25 @@ export default function AiChatPage() {
   const syncPreviewStampState = (override?: {
     stamps?: DocumentDraftStampPlacement[]
   }) => {
-    const frameWindow = previewFrameRef.current?.contentWindow
-    if (!frameWindow) {
-      return
-    }
-
     const nextStamps = override?.stamps || currentDraftStamps
-
-    frameWindow.postMessage({
-      type: 'document-preview-set-stamps',
-      stamps: nextStamps,
-    }, window.location.origin)
-
-    window.setTimeout(() => {
-      const latestFrameWindow = previewFrameRef.current?.contentWindow
-      if (!latestFrameWindow) {
-        return
-      }
-      latestFrameWindow.postMessage({
+    const postStampState = (frame: HTMLIFrameElement | null) => {
+      frame?.contentWindow?.postMessage({
         type: 'document-preview-set-stamps',
         stamps: nextStamps,
       }, window.location.origin)
+    }
+
+    postStampState(previewFrameRef.current)
+    postStampState(mobilePreviewFrameRef.current)
+
+    window.setTimeout(() => {
+      postStampState(previewFrameRef.current)
+      postStampState(mobilePreviewFrameRef.current)
     }, 180)
   }
 
   useEffect(() => {
-    setDocumentTitle(previewHeaderTitle || 'AI 文档')
+    setDocumentTitle(previewHeaderTitle || '文档列表')
   }, [previewHeaderTitle, setDocumentTitle])
 
   useEffect(() => {
@@ -178,10 +181,7 @@ export default function AiChatPage() {
   }
 
   useEffect(() => {
-    setConversationState({
-      missing_fields: [],
-      suggested_questions: [],
-    })
+    setIsMobilePreviewOpen(false)
     setStreamState({
       isStreaming: false,
       assistantText: '',
@@ -234,12 +234,18 @@ export default function AiChatPage() {
     },
     onSuccess: async (response) => {
       const nextDraft = response.data
+      setCreatingTemplateId(null)
       if (!nextDraft) {
         return
       }
+      setIsTemplatePickerOpen(false)
       setDraftSearchParam(nextDraft.id)
       await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
       await queryClient.invalidateQueries({ queryKey: ['document-draft', nextDraft.id] })
+    },
+    onError: (error: unknown) => {
+      setCreatingTemplateId(null)
+      toast.error(getDocumentErrorMessage(error, '创建文档失败'))
     },
   })
 
@@ -279,11 +285,7 @@ export default function AiChatPage() {
             }],
           }))
         },
-        onDraftUpdated: ({ draft, missing_fields }) => {
-          setConversationState((current) => ({
-            ...current,
-            missing_fields: missing_fields || [],
-          }))
+        onDraftUpdated: ({ draft }) => {
           void queryClient.setQueryData(['document-draft', id], { success: true, data: draft })
           setPreviewVersion((value) => value + 1)
         },
@@ -297,10 +299,6 @@ export default function AiChatPage() {
         isStreaming: false,
         assistantText: '',
         toolActivities: [],
-      })
-      setConversationState({
-        missing_fields: response.missing_fields || [],
-        suggested_questions: response.suggested_questions || [],
       })
       setPreviewVersion((value) => value + 1)
       await queryClient.invalidateQueries({ queryKey: ['document-companies'] })
@@ -392,8 +390,9 @@ export default function AiChatPage() {
     syncPreviewStampState()
   }, [currentDraft?.id, currentDraftStamps, previewVersion])
 
-  const handleTemplateSelect = async (template: DocumentTemplate) => {
-    await createDraftMutation.mutateAsync(template)
+  const handleTemplateSelect = (template: DocumentTemplate) => {
+    setCreatingTemplateId(template.id)
+    createDraftMutation.mutate(template)
   }
 
   const handleDraftSelect = async (nextDraftId: string) => {
@@ -416,7 +415,8 @@ export default function AiChatPage() {
   }
 
   const handlePrintCurrentDraft = () => {
-    const frameWindow = previewFrameRef.current?.contentWindow
+    const activePreviewFrame = isMobile ? mobilePreviewFrameRef.current : previewFrameRef.current
+    const frameWindow = activePreviewFrame?.contentWindow
     if (!frameWindow) {
       return
     }
@@ -544,76 +544,80 @@ export default function AiChatPage() {
   }
 
   const headerContent = currentDraft ? (
-    <div className="hidden min-w-0 items-center lg:grid lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-4">
-      <div className="min-w-0">
-        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-          <div className="min-w-0 text-center">
-            <p className="truncate text-sm font-medium">{previewHeaderTitle}</p>
-          </div>
-          <div className="flex justify-end">
-            <Button type="button" variant="outline" size="sm" onClick={handlePrintCurrentDraft}>
-              导出
-            </Button>
+    <div className="min-w-0">
+      <div className="flex items-center justify-end lg:hidden">
+        <Button type="button" variant="outline" size="sm" onClick={() => setIsMobilePreviewOpen(true)}>
+          <Eye className="size-4" />
+          预览
+        </Button>
+      </div>
+      <div className="hidden min-w-0 items-center lg:grid lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-4">
+        <div className="min-w-0">
+          <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+            <div className="min-w-0 text-center">
+              <p className="truncate text-sm font-medium">{previewHeaderTitle}</p>
+            </div>
+            <div className="flex justify-end">
+              <Button type="button" variant="outline" size="sm" onClick={handlePrintCurrentDraft}>
+                导出
+              </Button>
+            </div>
           </div>
         </div>
-      </div>
-      <div className="flex items-center justify-center">
-        <div className="group/title flex min-w-0 items-center justify-center">
-          {isEditingTitle ? (
-            <Input
-              ref={titleInputRef}
-              value={titleInputValue}
-              onChange={(event) => setTitleInputValue(event.target.value)}
-              onBlur={() => void submitTitleEdit()}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  event.preventDefault()
-                  void submitTitleEdit()
-                }
-                if (event.key === 'Escape') {
-                  event.preventDefault()
-                  cancelEditTitle()
-                }
-              }}
-              disabled={updateDraftTitleMutation.isPending}
-              className="h-8 max-w-full rounded-none border-0 bg-transparent px-0 text-center text-sm font-medium shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
-            />
-          ) : (
-            <div className="relative max-w-full">
-              <div className="truncate text-center text-sm font-medium">
-                {currentDraft.title || '未命名会话'}
+        <div className="flex items-center justify-center">
+          <div className="group/title flex min-w-0 items-center justify-center">
+            {isEditingTitle ? (
+              <Input
+                ref={titleInputRef}
+                value={titleInputValue}
+                onChange={(event) => setTitleInputValue(event.target.value)}
+                onBlur={() => void submitTitleEdit()}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault()
+                    void submitTitleEdit()
+                  }
+                  if (event.key === 'Escape') {
+                    event.preventDefault()
+                    cancelEditTitle()
+                  }
+                }}
+                disabled={updateDraftTitleMutation.isPending}
+                className="h-8 max-w-full rounded-none border-0 bg-transparent px-0 text-center text-sm font-medium shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+              />
+            ) : (
+              <div className="relative max-w-full">
+                <div className="truncate text-center text-sm font-medium">
+                  {currentDraft.title || '未命名会话'}
+                </div>
+                <button
+                  type="button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={beginEditTitle}
+                  className="absolute left-full top-1/2 ml-1 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none group-hover/title:opacity-100"
+                  aria-label="修改标题"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </button>
               </div>
-              <button
-                type="button"
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={beginEditTitle}
-                className="absolute left-full top-1/2 ml-1 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded text-muted-foreground opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none group-hover/title:opacity-100"
-                aria-label="修改标题"
-              >
-                <Pencil className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
     </div>
   ) : (
-    <div className="hidden min-w-0 items-center lg:grid lg:grid-cols-[minmax(0,1fr)_420px] lg:gap-4">
-      <div className="flex min-w-0 items-center justify-center">
-        <div className="truncate text-center text-sm font-medium">选择模板</div>
-      </div>
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0 flex-1 truncate text-center text-sm font-medium">继续旧草稿</div>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={() => void draftsQuery.refetch()}
-          disabled={draftsQuery.isFetching}
-        >
-          <RefreshCw className={`h-4 w-4 ${draftsQuery.isFetching ? 'animate-spin' : ''}`} />
-        </Button>
-      </div>
+    <div className="hidden min-w-0 items-center justify-between gap-3 lg:flex">
+      <div className="truncate text-sm font-medium">文档列表</div>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        onClick={() => void draftsQuery.refetch()}
+        disabled={draftsQuery.isFetching}
+        aria-label="刷新文档列表"
+      >
+        <RefreshCw className={`size-4 ${draftsQuery.isFetching ? 'animate-spin' : ''}`} />
+      </Button>
     </div>
   )
 
@@ -623,137 +627,131 @@ export default function AiChatPage() {
       <Card className="flex h-full min-h-0 flex-col overflow-hidden rounded-none border-0 shadow-none">
         <CardContent className="min-h-0 flex-1 overflow-hidden p-0">
           {!currentDraft ? (
-            <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px]">
-              <section className="flex h-full min-h-0 flex-col border-b bg-background lg:border-b-0 lg:border-r">
-                <div className="min-h-0 flex-1 overflow-y-auto p-5">
-                  <div className="mb-5 flex flex-wrap items-center gap-2">
-                    <Button
-                      variant={selectedDocumentType === 'quote' ? 'default' : 'outline'}
-                      onClick={() => setSelectedDocumentType('quote')}
-                    >
-                      报价单
-                    </Button>
-                    <Button
-                      variant={selectedDocumentType === 'contract' ? 'default' : 'outline'}
-                      onClick={() => setSelectedDocumentType('contract')}
-                    >
-                      销售合同
-                    </Button>
-                    <Button type="button" variant="outline" onClick={() => setIsCompanyManagerOpen(true)}>
-                      公司管理
-                    </Button>
-                    <Button type="button" variant="outline" onClick={() => setIsStampManagerOpen(true)}>
-                      <Stamp className="h-4 w-4" />
-                      印章管理
-                    </Button>
-                  </div>
+            <div className="flex h-full min-h-0 flex-col bg-background p-4 sm:p-6">
+              <div className="mb-4 flex h-10 shrink-0 flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain">
+                <Button type="button" className="shrink-0" onClick={() => setIsTemplatePickerOpen(true)}>
+                  <FilePlus2 className="size-4" />
+                  添加文档
+                </Button>
+                <form
+                  className="flex w-48 shrink-0 gap-2"
+                  onSubmit={(event) => {
+                    event.preventDefault()
+                    setDocumentSearch(documentSearchInput.trim())
+                    setDocumentPage(1)
+                  }}
+                >
+                  <Input
+                    value={documentSearchInput}
+                    onChange={(event) => setDocumentSearchInput(event.target.value)}
+                    placeholder="搜索文档名称"
+                    aria-label="搜索文档名称"
+                    className="min-w-0"
+                  />
+                  <Button type="submit" variant="outline" size="icon" aria-label="搜索文档">
+                    <Search className="size-4" />
+                  </Button>
+                </form>
+                <Button type="button" variant="outline" className="shrink-0" onClick={() => setManagedDocumentType('quote')}>
+                  <FileCog className="size-4" />
+                  报价单管理
+                </Button>
+                <Button type="button" variant="outline" className="shrink-0" onClick={() => setManagedDocumentType('contract')}>
+                  <FileSignature className="size-4" />
+                  合同管理
+                </Button>
+                <Button type="button" variant="outline" className="shrink-0" onClick={() => setIsCompanyManagerOpen(true)}>
+                  公司管理
+                </Button>
+                <Button type="button" variant="outline" className="shrink-0" onClick={() => setIsStampManagerOpen(true)}>
+                  <Stamp className="size-4" />
+                  印章管理
+                </Button>
+              </div>
 
-                  <div className="grid gap-4">
-                    {(groupedTemplates[selectedDocumentType] || []).map((template) => (
-                      <button
-                        key={template.id}
-                        type="button"
-                        onClick={() => void handleTemplateSelect(template)}
-                        className="bg-background px-5 py-4 text-left transition hover:bg-muted/20"
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="space-y-2">
-                            <h3 className="text-base font-semibold">{template.name}</h3>
-                            <p className="text-sm leading-6 text-muted-foreground">
-                              {template.description || '进入后可继续通过 AI 对话补全客户、产品、价格和条款信息。'}
-                            </p>
+              <div className="min-h-0 flex-1 overflow-hidden rounded-lg border">
+                <Table containerClassName="h-full min-h-0">
+                  <TableHeader className="sticky top-0 z-10 bg-background">
+                    <TableRow>
+                      <TableHead className="min-w-[240px]">文档名称</TableHead>
+                      <TableHead className="whitespace-nowrap">文档编号</TableHead>
+                      <TableHead className="whitespace-nowrap">类型</TableHead>
+                      <TableHead className="min-w-[160px]">客户</TableHead>
+                      <TableHead className="whitespace-nowrap">状态</TableHead>
+                      <TableHead className="whitespace-nowrap">更新时间</TableHead>
+                      <TableHead className="whitespace-nowrap text-right">操作</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {draftsQuery.isLoading ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">正在加载文档...</TableCell>
+                      </TableRow>
+                    ) : recentDrafts.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={7} className="h-48 text-center">
+                          <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                            <FilePlus2 className="size-8" />
+                            <div>
+                              <div className="font-medium text-foreground">{documentSearch ? '没有匹配的文档' : '还没有文档'}</div>
+                              <div className="mt-1 text-sm">{documentSearch ? '请尝试其它名称关键词。' : '点击“添加文档”并选择模板开始创建。'}</div>
+                            </div>
+                            {!documentSearch ? <Button type="button" size="sm" onClick={() => setIsTemplatePickerOpen(true)}>添加文档</Button> : null}
                           </div>
-                          <div className="flex items-center gap-2">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={(event) => {
-                                event.preventDefault()
-                                event.stopPropagation()
-                                setCompanySlotsTemplate(template)
-                              }}
-                              aria-label={`配置 ${template.name} 的公司位置`}
-                            >
-                              <Settings2 className="h-4 w-4" />
-                            </Button>
-                            <Badge variant="outline">{DOCUMENT_TYPE_LABELS[template.document_type]}</Badge>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-
-                    {isTemplatesLoading ? (
-                      <div className="flex items-center gap-2 border border-dashed px-4 py-6 text-sm text-muted-foreground">
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        正在加载文档模板...
-                      </div>
-                    ) : null}
-                  </div>
-                </div>
-              </section>
-
-              <section className="flex h-full min-h-0 flex-col bg-background">
-                <div className="min-h-0 flex-1 overflow-y-auto px-4 py-5">
-                  {recentDrafts.length === 0 ? (
-                    <div className="flex h-full min-h-[220px] items-center justify-center border border-dashed bg-muted/10 px-6 text-center text-sm leading-6 text-muted-foreground">
-                      还没有历史草稿。先从左侧选择模板开始。
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {recentDrafts.map((draft) => (
-                        <div
-                          key={draft.id}
-                          className="group relative border border-border/70 bg-background transition hover:border-primary/40 hover:bg-muted/20"
-                        >
+                        </TableCell>
+                      </TableRow>
+                    ) : recentDrafts.map((draft) => (
+                      <TableRow key={draft.id}>
+                        <TableCell className="max-w-[320px]">
                           <button
                             type="button"
                             onClick={() => void handleDraftSelect(draft.id)}
-                            className="block w-full px-4 py-4 text-left"
+                            className="block max-w-full cursor-pointer truncate text-left font-medium text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                            title={draft.title || '未命名文档'}
                           >
-                            <div className="flex items-start justify-between gap-4">
-                              <div className="min-w-0 space-y-1">
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="outline">{DOCUMENT_TYPE_LABELS[draft.document_type]}</Badge>
-                                  <span className="truncate text-sm font-medium">{draft.title || '未命名草稿'}</span>
-                                </div>
-                                <p className="truncate text-sm text-muted-foreground">
-                                  {draft.document_template_name || '-'}
-                                </p>
-                                <p className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-                                  {draft.messages[draft.messages.length - 1]?.text
-                                    || String(draft.draft_payload?.customer?.company || draft.draft_payload?.customer?.name || '暂无对话记录')}
-                                </p>
-                              </div>
-                              <div className="shrink-0 pr-9 text-right">
-                                <div className="mt-2 text-xs text-muted-foreground">
-                                  {formatDraftTime(draft.updated_at)}
-                                </div>
-                              </div>
-                            </div>
+                            {draft.title || '未命名文档'}
                           </button>
-                          <button
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap font-mono text-xs">{getDraftDocumentNumber(draft) || '-'}</TableCell>
+                        <TableCell className="whitespace-nowrap">{DOCUMENT_TYPE_LABELS[draft.document_type]}</TableCell>
+                        <TableCell className="max-w-[220px] truncate" title={getDraftCustomerName(draft)}>{getDraftCustomerName(draft) || '-'}</TableCell>
+                        <TableCell className="whitespace-nowrap">{getDraftStatusLabel(draft.status)}</TableCell>
+                        <TableCell className="whitespace-nowrap text-muted-foreground">{formatRelativeTime(draft.updated_at)}</TableCell>
+                        <TableCell className="whitespace-nowrap text-right">
+                          <Button
                             type="button"
-                            className="invisible absolute right-4 top-4 flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition hover:bg-destructive/10 hover:text-destructive group-hover:visible"
+                            variant="destructiveGhost"
+                            size="icon-sm"
                             onClick={() => setDeleteDraftId(draft.id)}
-                            aria-label={`删除草稿 ${draft.title || '未命名草稿'}`}
+                            aria-label={`删除文档 ${draft.title || '未命名文档'}`}
+                            title="删除文档"
                           >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </section>
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+              {draftsPagination ? (
+                <DataTablePagination
+                  className="mt-3"
+                  page={draftsPagination.page}
+                  totalPages={draftsPagination.totalPages}
+                  total={draftsPagination.total}
+                  pageSize={DOCUMENT_PAGE_LIMIT}
+                  onPageChange={setDocumentPage}
+                />
+              ) : null}
             </div>
           ) : (
             <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px]">
-                <section className="relative flex h-full min-h-0 flex-col border-b lg:border-b-0 lg:border-r">
+                <section className="relative hidden h-full min-h-0 flex-col border-r lg:flex">
                 <iframe
                   ref={previewFrameRef}
-                  key={previewUrl}
-                  src={previewUrl}
+                  key={`desktop-${previewUrl}`}
+                  src={!isMobile ? previewUrl : undefined}
                   title="文档预览"
                   onLoad={() => syncPreviewStampState()}
                   className="min-h-0 flex-1 bg-transparent"
@@ -884,6 +882,129 @@ export default function AiChatPage() {
         </CardContent>
       </Card>
 
+      {isMobile && currentDraft ? (
+        <Sheet open={isMobilePreviewOpen} onOpenChange={setIsMobilePreviewOpen}>
+          <SheetContent side="right" className="flex h-full w-screen max-w-none flex-col gap-0 p-0 sm:max-w-none">
+            <SheetHeader className="h-14 shrink-0 justify-center border-b px-4 pr-14 text-left">
+              <SheetTitle className="truncate text-base">{previewHeaderTitle || '文档预览'}</SheetTitle>
+              <SheetDescription className="sr-only">当前文档的移动端预览</SheetDescription>
+            </SheetHeader>
+            <div className="relative flex min-h-0 flex-1">
+              <iframe
+                ref={mobilePreviewFrameRef}
+                key={`mobile-${previewUrl}`}
+                src={isMobilePreviewOpen ? previewUrl : undefined}
+                title="移动端文档预览"
+                onLoad={() => syncPreviewStampState()}
+                className="min-h-0 flex-1 bg-transparent"
+              />
+              <div className="pointer-events-none absolute bottom-4 right-4 z-10">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      type="button"
+                      size="icon"
+                      className="pointer-events-auto h-12 w-12 rounded-full shadow-lg"
+                      aria-label="打开内容填充工具"
+                    >
+                      <Settings2 className="h-5 w-5" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent
+                    align="end"
+                    side="top"
+                    className="pointer-events-auto max-h-[70vh] w-[min(360px,calc(100vw-2rem))] space-y-5 overflow-y-auto p-4"
+                  >
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold">公司填充</p>
+                          <p className="text-xs text-muted-foreground">选择公司并填充到当前文档角色。</p>
+                        </div>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setIsCompanyManagerOpen(true)}>
+                          公司管理
+                        </Button>
+                      </div>
+                      <div className="space-y-3">
+                        {companySlots.length > 0 ? companySlots.map((slot) => (
+                          <div key={`mobile-${slot.key}`} className="space-y-2">
+                            <div className="text-xs font-medium text-muted-foreground">{slot.label}</div>
+                            <div className="flex items-center gap-2">
+                              <Select
+                                value={selectedCompanyIds[slot.key] || ''}
+                                onValueChange={(value) => setSelectedCompanyIds((current) => ({ ...current, [slot.key]: value }))}
+                              >
+                                <SelectTrigger className="min-w-0 flex-1">
+                                  <SelectValue placeholder={`选择${slot.label}`} />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {companies.map((company) => (
+                                    <SelectItem key={`mobile-${slot.key}-${company.id}`} value={String(company.id)}>
+                                      {company.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => void handleApplyCompany(slot)}
+                                disabled={!selectedCompanyIds[slot.key]}
+                              >
+                                填充
+                              </Button>
+                            </div>
+                          </div>
+                        )) : (
+                          <div className="rounded-lg border border-dashed px-3 py-4 text-xs leading-5 text-muted-foreground">
+                            当前模板还没有配置公司填充位置。
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-3 border-t pt-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold">印章填充</p>
+                          <p className="text-xs text-muted-foreground">选择印章并添加到当前文档。</p>
+                        </div>
+                        <Button type="button" variant="outline" size="sm" onClick={() => setIsStampManagerOpen(true)}>
+                          <Stamp className="h-4 w-4" />
+                          印章管理
+                        </Button>
+                      </div>
+                      <Select value={selectedStampIdToApply} onValueChange={setSelectedStampIdToApply}>
+                        <SelectTrigger className="w-full">
+                          <SelectValue placeholder="选择要盖的章" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {stamps.map((stamp) => (
+                            <SelectItem key={`mobile-stamp-${stamp.id}`} value={String(stamp.id)}>
+                              {stamp.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => void handleApplyStamp()}
+                        disabled={!selectedStampIdToApply}
+                        className="w-full"
+                      >
+                        添加印章
+                      </Button>
+                    </div>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            </div>
+          </SheetContent>
+        </Sheet>
+      ) : null}
+
       <AlertDialog open={Boolean(deleteDraftId)} onOpenChange={(open) => { if (!open) setDeleteDraftId('') }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -901,6 +1022,31 @@ export default function AiChatPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      <DocumentTemplatePickerDialog
+        open={isTemplatePickerOpen}
+        onOpenChange={(open) => {
+          if (!createDraftMutation.isPending) {
+            setIsTemplatePickerOpen(open)
+          }
+        }}
+        templates={templates}
+        isLoading={isTemplatesLoading}
+        creatingTemplateId={creatingTemplateId}
+        onSelect={handleTemplateSelect}
+      />
+      {managedDocumentType ? (
+        <DocumentTemplateManagerDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) {
+              setManagedDocumentType(null)
+            }
+          }}
+          documentType={managedDocumentType}
+          templates={templates}
+          onConfigureCompanySlots={setCompanySlotsTemplate}
+        />
+      ) : null}
       <DocumentStampManagerDialog
         open={isStampManagerOpen}
         onOpenChange={setIsStampManagerOpen}
@@ -924,28 +1070,38 @@ export default function AiChatPage() {
   )
 }
 
-function formatDraftTime(value?: string) {
-  if (!value) {
-    return '-'
-  }
-
-  const date = new Date(value)
-  if (Number.isNaN(date.getTime())) {
-    return value
-  }
-
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date)
-}
-
 function getDraftDocumentNumber(draft?: DocumentDraft | null) {
   const payload = draft?.draft_payload || {}
   const fieldName = draft?.document_type === 'contract' ? 'contractNumber' : 'quoteNumber'
   return String(payload[fieldName] || '').trim()
+}
+
+function getDraftCustomerName(draft?: DocumentDraft | null) {
+  const customer = draft?.draft_payload?.customer
+  if (!customer || typeof customer !== 'object' || Array.isArray(customer)) {
+    return ''
+  }
+  const source = customer as Record<string, unknown>
+  return String(source.company || source.name || '').trim()
+}
+
+function getDraftStatusLabel(status?: string) {
+  const normalized = String(status || '').trim().toLowerCase()
+  if (normalized === 'completed' || normalized === 'published') {
+    return '已完成'
+  }
+  return '草稿'
+}
+
+function getDocumentErrorMessage(error: unknown, fallback: string) {
+  if (!error || typeof error !== 'object') {
+    return fallback
+  }
+  const source = error as {
+    message?: string
+    response?: { data?: { message?: string } }
+  }
+  return source.response?.data?.message || source.message || fallback
 }
 
 function normalizeCompanySlots(meta: unknown): DocumentCompanySlot[] {

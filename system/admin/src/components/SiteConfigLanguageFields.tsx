@@ -21,7 +21,7 @@ export default function SiteConfigLanguageFields({
   const field = (
     name: keyof SiteConfigTranslation,
     label: string,
-    options: { type?: 'text' | 'email' | 'textarea'; rows?: number; placeholder?: string; className?: string; required?: boolean } = {}
+    options: { type?: 'text' | 'email' | 'textarea'; rows?: number; placeholder?: string; className?: string; required?: boolean; alwaysShowInput?: boolean } = {}
   ) => (
     <SiteConfigTranslationField
       key={`${language.code}:${String(name)}`}
@@ -47,7 +47,7 @@ export default function SiteConfigLanguageFields({
         </div>
         <div className="grid gap-x-4 gap-y-5 md:grid-cols-2">
           {field('web_name', '网站名称', { required: isFallbackLanguage, className: 'md:col-span-2', placeholder: '请输入网站名称' })}
-          {field('company_name', '公司名称', { placeholder: '请输入公司名称' })}
+          {field('company_name', '公司名称', { placeholder: '请输入公司名称', alwaysShowInput: true })}
           {field('contact_person', '联系人', { placeholder: '请输入联系人' })}
           {field('company_address', '公司地址', { className: 'md:col-span-2', placeholder: '请输入公司地址' })}
           {field('company_email', '公司邮箱', { type: 'email', placeholder: 'sales@example.com' })}

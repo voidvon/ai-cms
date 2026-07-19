@@ -41,8 +41,12 @@ export default async function documentWorkspaceRoutes(app) {
     onRequest: [requireAuth],
   }, async (request, reply) => {
     try {
-      const drafts = listDocumentDrafts({ limit: request.query?.limit });
-      return { success: true, data: drafts };
+      const drafts = listDocumentDrafts({
+        page: request.query?.page,
+        limit: request.query?.limit,
+        search: request.query?.search,
+      });
+      return { success: true, data: drafts.items, pagination: drafts.pagination };
     } catch (error) {
       reply.code(error.statusCode || 400);
       return { success: false, message: error.message };

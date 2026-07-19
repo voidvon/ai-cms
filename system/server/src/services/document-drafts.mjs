@@ -128,10 +128,25 @@ export function getDocumentDraftById(id) {
   return hydrateDocumentDraftRecord(row);
 }
 
-export function listDocumentDrafts({ limit = 20 } = {}) {
+export function listDocumentDrafts({ page = 1, limit = 20, search = '' } = {}) {
   ensureDocumentDraftsSchema();
-  const normalizedLimit = toInteger(limit, 20);
-  return queryAll(
+  const normalizedLimit = Math.min(Math.max(toInteger(limit, 20), 1), 100);
+  const normalizedPage = Math.max(toInteger(page, 1), 1);
+  const normalizedSearch = String(search || '').trim();
+  const where = normalizedSearch ? 'WHERE dd.title LIKE ?' : '';
+  const searchParams = normalizedSearch ? [`%${normalizedSearch}%`] : [];
+  const total = queryOne(
+    `
+      SELECT COUNT(*) AS count
+      FROM document_drafts dd
+      ${where}
+    `,
+    searchParams
+  )?.count || 0;
+  const totalPages = Math.max(Math.ceil(total / normalizedLimit), 1);
+  const currentPage = Math.min(normalizedPage, totalPages);
+  const offset = (currentPage - 1) * normalizedLimit;
+  const items = queryAll(
     `
       SELECT
         dd.id,
@@ -154,11 +169,22 @@ export function listDocumentDrafts({ limit = 20 } = {}) {
       FROM document_drafts dd
       INNER JOIN document_templates dt ON dt.id = dd.document_template_id
       INNER JOIN templates t ON t.id = dd.template_id
+      ${where}
       ORDER BY dd.updated_at DESC, dd.id DESC
-      LIMIT ?
+      LIMIT ? OFFSET ?
     `,
-    [normalizedLimit]
+    [...searchParams, normalizedLimit, offset]
   ).map(hydrateDocumentDraftRecord);
+
+  return {
+    items,
+    pagination: {
+      total,
+      page: currentPage,
+      limit: normalizedLimit,
+      totalPages,
+    },
+  };
 }
 
 export function updateDocumentDraft(id, updates = {}) {

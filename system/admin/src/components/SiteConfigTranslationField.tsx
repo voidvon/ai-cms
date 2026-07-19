@@ -18,6 +18,7 @@ interface SiteConfigTranslationFieldProps {
   required?: boolean
   type?: 'text' | 'email' | 'textarea'
   rows?: number
+  alwaysShowInput?: boolean
   className?: string
 }
 
@@ -33,13 +34,14 @@ export default function SiteConfigTranslationField({
   required = false,
   type = 'text',
   rows = 3,
+  alwaysShowInput = false,
   className = '',
 }: SiteConfigTranslationFieldProps) {
   const hasOwnValue = String(value || '').trim().length > 0
-  const [editing, setEditing] = useState(isFallbackLanguage || hasOwnValue)
+  const [editing, setEditing] = useState(isFallbackLanguage || hasOwnValue || alwaysShowInput)
+  const inheritedPreview = formatInheritedPreview(inheritedValue)
 
-  if (!isFallbackLanguage && !editing && !hasOwnValue) {
-    const inheritedPreview = formatInheritedPreview(inheritedValue)
+  if (!isFallbackLanguage && !editing && !hasOwnValue && !alwaysShowInput) {
     return (
       <div className={`flex min-h-16 items-center gap-3 border-b py-3 ${className}`}>
         <div className="min-w-0 flex-1">
@@ -69,7 +71,7 @@ export default function SiteConfigTranslationField({
     <div className={`space-y-2 ${className}`}>
       <div className="flex items-center justify-between gap-2">
         <Label htmlFor={id}>{label}{required ? ' *' : ''}</Label>
-        {!isFallbackLanguage ? (
+        {!isFallbackLanguage && (!alwaysShowInput || hasOwnValue) ? (
           <Button
             type="button"
             variant="ghost"
@@ -90,7 +92,7 @@ export default function SiteConfigTranslationField({
           id={id}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          placeholder={placeholder}
+          placeholder={inheritedPlaceholder(inheritedPreview, placeholder, isFallbackLanguage, hasOwnValue)}
           rows={rows}
           required={required}
         />
@@ -100,12 +102,14 @@ export default function SiteConfigTranslationField({
           type={type}
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          placeholder={placeholder}
+          placeholder={inheritedPlaceholder(inheritedPreview, placeholder, isFallbackLanguage, hasOwnValue)}
           required={required}
         />
       )}
       {!isFallbackLanguage ? (
-        <p className="text-xs text-muted-foreground">清空后恢复继承 {fallbackLanguageName}。</p>
+        <p className="text-xs text-muted-foreground">
+          {hasOwnValue ? `清空后恢复继承 ${fallbackLanguageName}。` : `留空则继承 ${fallbackLanguageName}。`}
+        </p>
       ) : null}
     </div>
   )
@@ -117,4 +121,11 @@ function formatInheritedPreview(value?: string | null) {
     return ''
   }
   return normalized.length > 120 ? `${normalized.slice(0, 117)}...` : normalized
+}
+
+function inheritedPlaceholder(preview: string, placeholder: string | undefined, isFallbackLanguage: boolean, hasOwnValue: boolean) {
+  if (!isFallbackLanguage && !hasOwnValue && preview) {
+    return `继承：${preview}`
+  }
+  return placeholder
 }

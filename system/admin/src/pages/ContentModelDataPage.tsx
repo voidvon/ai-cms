@@ -10,13 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-} from '@/components/ui/pagination'
+import { DataTablePagination } from '@/components/DataTablePagination'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
@@ -376,67 +370,13 @@ export default function ContentModelDataPage({
           </div>
 
           {pagination ? (
-            <div className="flex items-center justify-between">
-              <div className="text-sm text-muted-foreground">
-                共 {pagination.total || 0} 条 · 第 {pagination.page} / {pagination.totalPages} 页
-              </div>
-              {pagination.totalPages > 1 ? (
-                <Pagination className="mx-0 w-auto justify-end">
-                  <PaginationContent>
-                    <PaginationItem>
-                      <PaginationLink
-                        href="#"
-                        size="default"
-                        className={pagination.page === 1 ? 'pointer-events-none opacity-50' : ''}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          if (pagination.page > 1) {
-                            setPage(pagination.page - 1)
-                          }
-                        }}
-                      >
-                        上一页
-                      </PaginationLink>
-                    </PaginationItem>
-                    {buildPaginationItems(pagination.page, pagination.totalPages).map((item, index) => (
-                      item === 'ellipsis' ? (
-                        <PaginationItem key={`ellipsis-${index}`}>
-                          <PaginationEllipsis />
-                        </PaginationItem>
-                      ) : (
-                        <PaginationItem key={item}>
-                          <PaginationLink
-                            href="#"
-                            isActive={item === pagination.page}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              setPage(item)
-                            }}
-                          >
-                            {item}
-                          </PaginationLink>
-                        </PaginationItem>
-                      )
-                    ))}
-                    <PaginationItem>
-                      <PaginationLink
-                        href="#"
-                        size="default"
-                        className={pagination.page === pagination.totalPages ? 'pointer-events-none opacity-50' : ''}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          if (pagination.page < pagination.totalPages) {
-                            setPage(pagination.page + 1)
-                          }
-                        }}
-                      >
-                        下一页
-                      </PaginationLink>
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
-              ) : null}
-            </div>
+            <DataTablePagination
+              page={pagination.page}
+              totalPages={pagination.totalPages}
+              total={pagination.total || 0}
+              pageSize={PAGE_LIMIT}
+              onPageChange={setPage}
+            />
           ) : null}
       </div>
 
@@ -513,29 +453,4 @@ function resolveColumnCount({
     + Number(showVisibility)
     + Number(showSortOrder)
     + Number(showCreatedAt)
-}
-
-function buildPaginationItems(currentPage: number, totalPages: number): Array<number | 'ellipsis'> {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1)
-  }
-
-  const items: Array<number | 'ellipsis'> = [1]
-  const start = Math.max(2, currentPage - 1)
-  const end = Math.min(totalPages - 1, currentPage + 1)
-
-  if (start > 2) {
-    items.push('ellipsis')
-  }
-
-  for (let page = start; page <= end; page += 1) {
-    items.push(page)
-  }
-
-  if (end < totalPages - 1) {
-    items.push('ellipsis')
-  }
-
-  items.push(totalPages)
-  return items
 }

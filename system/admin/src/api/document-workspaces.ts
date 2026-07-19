@@ -6,6 +6,7 @@ import type {
   DocumentDraftMessageResult,
   DocumentStamp,
   DocumentTemplate,
+  PaginationInfo,
 } from '@/types'
 
 const DOCUMENT_AI_REQUEST_TIMEOUT_MS = 180000
@@ -28,9 +29,13 @@ export const documentWorkspacesApi = {
     return response.data
   },
 
-  listDrafts: async (limit?: number) => {
-    const response = await apiClient.get<ApiResponse<DocumentDraft[]>>('/document-drafts', {
-      params: typeof limit === 'number' ? { limit } : {},
+  listDrafts: async (params?: { page?: number; limit?: number; search?: string }) => {
+    const response = await apiClient.get<ApiResponse<DocumentDraft[]> & { pagination: PaginationInfo }>('/document-drafts', {
+      params: {
+        page: params?.page,
+        limit: params?.limit,
+        search: params?.search || undefined,
+      },
     })
     return response.data
   },

@@ -61,7 +61,7 @@ export interface AccessLogTopPage {
 export interface AccessLogSummary {
   metrics: {
     today_visits: number;
-    recent_unique_ips: number;
+    recent_real_users: number;
     total_pages: number;
     recent_visits: number;
     total_404_errors: number;

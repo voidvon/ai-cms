@@ -3,6 +3,7 @@ import { Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { authApi } from '@/api/auth'
 import {
+  ArrowLeft,
   Bot,
   Cpu,
   ChevronDown,
@@ -52,6 +53,7 @@ import {
   BreadcrumbPage,
 } from '@/components/ui/breadcrumb'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Button } from '@/components/ui/button'
 
 export default function DashboardLayout() {
   const navigate = useNavigate()
@@ -153,6 +155,9 @@ export default function DashboardLayout() {
   }, [location.pathname])
 
   const isMainPaddingDisabledByRoute = location.pathname === '/ai'
+  const hideRouteBreadcrumb = location.pathname === '/ai-docs'
+  const isAiDocumentEditor = location.pathname === '/ai-docs'
+    && new URLSearchParams(location.search).has('draft')
 
   const currentDocumentTitle = useMemo(() => {
     return String(documentTitleOverride || routeTitle).trim() || '管理后台'
@@ -265,14 +270,30 @@ export default function DashboardLayout() {
       <SidebarInset className="min-h-0 overflow-hidden">
         <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger />
-          <Separator orientation="vertical" className="mr-2 h-4" />
-          <Breadcrumb>
-            <BreadcrumbList>
-              <BreadcrumbItem>
-                <BreadcrumbPage>{routeTitle}</BreadcrumbPage>
-              </BreadcrumbItem>
-            </BreadcrumbList>
-          </Breadcrumb>
+          {isAiDocumentEditor ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={() => navigate('/ai-docs')}
+              aria-label="返回文档列表"
+              title="返回文档列表"
+            >
+              <ArrowLeft className="size-4" />
+            </Button>
+          ) : null}
+          {!hideRouteBreadcrumb ? (
+            <>
+              <Separator orientation="vertical" className="mr-2 h-4" />
+              <Breadcrumb>
+                <BreadcrumbList>
+                  <BreadcrumbItem>
+                    <BreadcrumbPage>{routeTitle}</BreadcrumbPage>
+                  </BreadcrumbItem>
+                </BreadcrumbList>
+              </Breadcrumb>
+            </>
+          ) : null}
           <div ref={setHeaderSlotElement} className="min-w-0 flex-1" />
         </header>
         <main

@@ -24,6 +24,11 @@ const PAGE_ASSET_EXTENSIONS = new Set([
   '.woff2',
   '.xml'
 ]);
+const REAL_USER_EXCLUDED_REFERER_KEYWORD = 'spiraxsteam';
+const REAL_USER_REFERER_FILTERS = [
+  { operator: 'not_empty', value: '' },
+  { operator: 'not_contains', value: REAL_USER_EXCLUDED_REFERER_KEYWORD }
+];
 
 export function ensureAccessLogsSchema() {
   execute(`
@@ -226,18 +231,24 @@ export function getAccessLogDashboardSummary() {
     WHERE datetime(visited_at) >= datetime('now', 'start of day')
   `)[0] || { total: 0 };
 
-  const recentAccessRows = queryAll(`
-    SELECT client_ip, user_agent_kind
-    FROM access_logs
-    WHERE datetime(visited_at) >= datetime('now', '-24 hours')
-  `);
-
-  const recentUniqueIps = new Set(
-    recentAccessRows
-      .filter((row) => normalizeStoredUserAgentKind(row.user_agent_kind) !== 'bot')
-      .map((row) => normalizeText(row.client_ip))
-      .filter(Boolean)
+  const realUserFilter = buildAccessLogFilterSql(
+    {
+      userAgentKind: 'non_bot',
+      refererFilters: REAL_USER_REFERER_FILTERS
+    },
+    'non_bot'
   );
+  const recentRealUsersWhereClause = realUserFilter.whereClause
+    ? `${realUserFilter.whereClause} AND datetime(l.visited_at) >= datetime('now', '-24 hours') AND COALESCE(TRIM(l.client_ip), '') != ''`
+    : `WHERE datetime(l.visited_at) >= datetime('now', '-24 hours') AND COALESCE(TRIM(l.client_ip), '') != ''`;
+  const recentRealUsersRow = queryAll(
+    `
+      SELECT COUNT(DISTINCT TRIM(l.client_ip)) AS total
+      FROM access_logs l
+      ${recentRealUsersWhereClause}
+    `,
+    realUserFilter.params
+  )[0] || { total: 0 };
 
   const totalPagesRow = queryAll(`
     SELECT COUNT(DISTINCT CASE
@@ -281,7 +292,7 @@ export function getAccessLogDashboardSummary() {
   return {
     metrics: {
       today_visits: Number(todayVisitsRow.total || 0),
-      recent_unique_ips: recentUniqueIps.size,
+      recent_real_users: Number(recentRealUsersRow.total || 0),
       total_pages: Number(totalPagesRow.total || 0),
       recent_visits: Number(recentVisitsRow.total || 0),
       total_404_errors: Number(totalNotFoundRow.total || 0)

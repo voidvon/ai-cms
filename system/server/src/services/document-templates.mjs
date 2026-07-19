@@ -307,21 +307,15 @@ function upsertDocumentTemplateMetadata(themeId, definition, templateId) {
       `
         UPDATE document_templates
         SET
-          name = ?,
-          description = ?,
           document_type = ?,
           template_id = ?,
-          sort_order = ?,
           default_payload_json = ?,
           updated_at = ?
         WHERE id = ?
       `,
       [
-        definition.name,
-        definition.description,
         definition.document_type,
         templateId,
-        definition.sort_order,
         JSON.stringify(mergedDefaultPayload),
         now,
         existing.id,
