@@ -333,6 +333,63 @@ export interface ContentModel {
   updated_at?: string;
 }
 
+export interface ContentTableViewColumn {
+  field_name: string;
+  field_label: string;
+  label: string;
+  label_override?: string | null;
+  field_type: string;
+  is_required: number;
+  is_editable: number;
+  is_searchable: number;
+  is_visible: number;
+  width: number;
+  align: 'left' | 'center' | 'right' | string;
+  sort_order: number;
+  settings_json?: string | null;
+}
+
+export interface ContentTableView {
+  id?: number | null;
+  column_id: number;
+  model_code: string;
+  model_name?: string;
+  is_default?: boolean;
+  columns: ContentTableViewColumn[];
+}
+
+export interface DataTableField {
+  id: number;
+  field_key: string;
+  field_name: string;
+  field_type: string;
+  is_required: number;
+  is_primary: number;
+  is_deleted?: number;
+  sort_order: number;
+  settings_json?: string | null;
+  settings?: Record<string, unknown> | null;
+}
+
+export interface DataTable {
+  id: number;
+  column_id: number;
+  model_code?: string | null;
+  name: string;
+  column_name?: string;
+  fields: DataTableField[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface DataTableRecord {
+  id: number;
+  source_record_id?: number | null;
+  fields: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Column {
   id: number;
   name: string;

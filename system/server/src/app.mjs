@@ -170,6 +170,7 @@ async function registerCommonRoutes(app, { publicSite }) {
   if (!publicSite) {
     await app.register(import('./routes/auth.mjs'), { prefix: '/admin' });
     await app.register(import('./routes/api/content-items.mjs'), { prefix: '/api' });
+    await app.register(import('./routes/api/data-tables.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/column-nodes.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/template-variants.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/templates.mjs'), { prefix: '/api' });

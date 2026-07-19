@@ -202,6 +202,7 @@ export default function DashboardLayout() {
                     <SidebarMenuButton
                       onClick={() => navigate(item.path)}
                       isActive={location.pathname === item.path}
+                      closeOnMobileClick
                     >
                       <item.icon />
                       <span>{item.label}</span>
@@ -225,6 +226,7 @@ export default function DashboardLayout() {
                               <SidebarMenuSubButton
                                 onClick={() => navigate(item.path)}
                                 isActive={location.pathname === item.path}
+                                closeOnMobileClick
                               >
                                 <item.icon />
                                 <span>{item.label}</span>

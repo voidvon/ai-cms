@@ -1,19 +1,23 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { createPortal } from 'react-dom'
+import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { columnsApi } from '@/api/columns'
 import { contentModelsApi } from '@/api/advanced'
 import { contentItemsApi } from '@/api/content-items'
+import { dataTablesApi } from '@/api/data-tables'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { ConfigurableDataTable } from '@/components/ConfigurableDataTable'
+import { DataTableFieldEditor } from '@/components/DataTableFieldEditor'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Ellipsis, Pencil, Trash2 } from 'lucide-react'
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { Ellipsis, ListOrdered, Pencil, Settings2, Trash2 } from 'lucide-react'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,54 +30,32 @@ import {
 } from '@/components/ui/alert-dialog'
 import { formatDate } from '@/lib/datetime'
 import { toast } from 'sonner'
-import type { Column, ContentModel, ManagedContentItem } from '@/types'
+import type { Column, ContentTableViewColumn, DataTableField, DataTableRecord, ManagedContentItem } from '@/types'
 
 const PRICE_MODEL_CODE = 'price_record'
 const PRICE_LIST_BASE_PATH = '/price-lists/'
 
-type PriceRecordItem = ManagedContentItem & {
-  model?: string
-  spec?: string
-  diameter?: string
-  price?: number | null
-  material_code?: string
-  category?: string
-  description?: string
-  stock?: number | null
-  reference_no?: string
-  name_en?: string
-  material?: string
+type DashboardHeaderContext = {
+  headerSlotElement: HTMLDivElement | null
 }
 
-type PriceRecordField = 'name' | 'model' | 'spec' | 'diameter' | 'price' | 'material_code' | 'category' | 'stock' | 'reference_no' | 'name_en' | 'material'
+type PriceRecordItem = ManagedContentItem
 
-type PriceGridRow = Record<PriceRecordField, string> & {
+type PriceGridRow = Record<string, any> & {
   id?: number
   column_id?: number
   updated_at?: string
   created_at?: string
   _localId: string
   _isDraft: boolean
-  _original: Record<PriceRecordField, string>
+  _original: Record<string, string>
 }
 
 const GRID_MIN_EMPTY_ROW_COUNT = 20
-const PRICE_GRID_COLUMNS: Array<{ field: PriceRecordField, label: string, type?: 'text' | 'number', className?: string }> = [
-  { field: 'name', label: '名称', className: 'min-w-[160px]' },
-  { field: 'model', label: '型号', className: 'min-w-[130px]' },
-  { field: 'spec', label: '规格', className: 'min-w-[130px]' },
-  { field: 'diameter', label: '口径', className: 'min-w-[100px]' },
-  { field: 'price', label: '价格', type: 'number', className: 'min-w-[100px]' },
-  { field: 'material_code', label: '物料代码', className: 'min-w-[140px]' },
-  { field: 'category', label: '分类', className: 'min-w-[120px]' },
-  { field: 'stock', label: '库存', type: 'number', className: 'min-w-[90px]' },
-  { field: 'reference_no', label: '参考编号', className: 'min-w-[140px]' },
-  { field: 'name_en', label: '英文名称', className: 'min-w-[160px]' },
-  { field: 'material', label: '材质', className: 'min-w-[120px]' },
-]
 
 export default function PriceManagementPage() {
   const queryClient = useQueryClient()
+  const { headerSlotElement } = useOutletContext<DashboardHeaderContext>()
   const [searchParams, setSearchParams] = useSearchParams()
   const [newListName, setNewListName] = useState('')
   const [deleteTarget, setDeleteTarget] = useState<PriceRecordItem | null>(null)
@@ -82,6 +64,8 @@ export default function PriceManagementPage() {
   const [listActionTarget, setListActionTarget] = useState<Column | null>(null)
   const [deleteListOpen, setDeleteListOpen] = useState(false)
   const [priceSearch, setPriceSearch] = useState('')
+  const [mobileListDrawerOpen, setMobileListDrawerOpen] = useState(false)
+  const [fieldEditorOpen, setFieldEditorOpen] = useState(false)
 
   const { data: modelsData, isLoading: modelsLoading } = useQuery({
     queryKey: ['content-models'],
@@ -125,16 +109,19 @@ export default function PriceManagementPage() {
     setPriceSearch('')
   }, [selectedColumn?.id])
 
-  const { data: itemsData, isLoading: itemsLoading } = useQuery({
-    queryKey: ['content-items', PRICE_MODEL_CODE, 'price-management', selectedColumn?.id || 0],
-    queryFn: () => contentItemsApi.list<PriceRecordItem>(PRICE_MODEL_CODE, {
-      page: 1,
-      limit: 500,
-      column_id: selectedColumn?.id,
-    }),
+  const { data: dataTableData, isLoading: dataTableLoading } = useQuery({
+    queryKey: ['data-table', selectedColumn?.id || 0],
+    queryFn: () => dataTablesApi.get(selectedColumn!.id),
+    enabled: Boolean(selectedColumn?.id),
+  })
+  const { data: dataRecordsData, isLoading: dataRecordsLoading } = useQuery({
+    queryKey: ['data-table-records', selectedColumn?.id || 0, priceSearch],
+    queryFn: () => dataTablesApi.listRecords(selectedColumn!.id, { page: 1, limit: 500, keyword: priceSearch }),
     enabled: Boolean(selectedColumn?.id),
     staleTime: 0,
   })
+  const dataTable = dataTableData?.data || null
+  const dataRecords = dataRecordsData?.items || []
 
   const createListMutation = useMutation({
     mutationFn: async () => {
@@ -164,6 +151,7 @@ export default function PriceManagementPage() {
     onSuccess: (response) => {
       toast.success('报价列表已创建')
       setNewListName('')
+      setMobileListDrawerOpen(false)
       queryClient.invalidateQueries({ queryKey: ['columns'] })
       const createdColumn = response.data
       if (createdColumn?.id) {
@@ -213,7 +201,7 @@ export default function PriceManagementPage() {
       setDeleteListOpen(false)
       setListActionTarget(null)
       queryClient.invalidateQueries({ queryKey: ['columns'] })
-      queryClient.invalidateQueries({ queryKey: ['content-items', PRICE_MODEL_CODE] })
+      queryClient.invalidateQueries({ queryKey: ['data-table'] })
       const nextColumn = priceListColumns.find((column) => column.id !== deletedColumn.id) || null
       const nextParams = new URLSearchParams(searchParams)
       if (nextColumn) {
@@ -229,9 +217,9 @@ export default function PriceManagementPage() {
   })
 
   const deleteMutation = useMutation({
-    mutationFn: async (itemId: number) => contentItemsApi.delete(PRICE_MODEL_CODE, itemId),
+    mutationFn: async (itemId: number) => dataTablesApi.deleteRecord(selectedColumn!.id, itemId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['content-items', PRICE_MODEL_CODE] })
+      queryClient.invalidateQueries({ queryKey: ['data-table-records', selectedColumn?.id || 0] })
       toast.success('价格条目已删除')
       setDeleteTarget(null)
     },
@@ -240,21 +228,33 @@ export default function PriceManagementPage() {
     },
   })
 
-  const items = itemsData?.items || []
+  const saveDataFieldsMutation = useMutation({
+    mutationFn: (fields: DataTableField[]) => dataTablesApi.updateFields(selectedColumn!.id, fields),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['data-table', selectedColumn?.id || 0] })
+      queryClient.invalidateQueries({ queryKey: ['data-table-records', selectedColumn?.id || 0] })
+      setFieldEditorOpen(false)
+      toast.success('字段配置已保存')
+    },
+    onError: (error: any) => toast.error(error.response?.data?.message || error.message || '保存字段失败'),
+  })
 
   const handleSelectList = (column: Column) => {
     const nextParams = new URLSearchParams(searchParams)
     nextParams.set('list', String(column.id))
     setSearchParams(nextParams)
+    setMobileListDrawerOpen(false)
   }
 
   const handleOpenRenameList = (column: Column) => {
+    setMobileListDrawerOpen(false)
     setListActionTarget(column)
     setListDialogName(column.name || '')
     setListDialogOpen(true)
   }
 
   const handleOpenDeleteList = (column: Column) => {
+    setMobileListDrawerOpen(false)
     setListActionTarget(column)
     setDeleteListOpen(true)
   }
@@ -263,116 +263,174 @@ export default function PriceManagementPage() {
     return <div>加载中...</div>
   }
 
+  const renderPriceListControls = (inputId: string) => (
+    <div className="flex min-h-0 flex-1 flex-col space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor={inputId}>新增报价列表</Label>
+        <div className="flex gap-2">
+          <Input
+            id={inputId}
+            value={newListName}
+            onChange={(event) => setNewListName(event.target.value)}
+            placeholder="例如：2026 Q3 工业蒸汽阀门"
+          />
+          <Button onClick={() => createListMutation.mutate()} disabled={createListMutation.isPending}>
+            新增
+          </Button>
+        </div>
+      </div>
+
+      <Separator />
+
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="space-y-2 pr-3">
+          {priceListColumns.length > 0 ? priceListColumns.map((column) => (
+            <div
+              key={column.id}
+              className={`group/price-list-item flex w-full items-start gap-2 rounded-lg border px-3 py-3 text-left transition-colors ${
+                selectedColumn?.id === column.id ? 'border-primary bg-muted' : 'hover:bg-muted/60'
+              }`}
+            >
+              <button
+                type="button"
+                onClick={() => handleSelectList(column)}
+                className="min-w-0 flex-1 text-left"
+              >
+                <div className="truncate font-medium">{column.name}</div>
+                <div className="mt-1 truncate text-xs text-muted-foreground">
+                  {column.route_path || '-'}
+                </div>
+              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0 opacity-100 transition-opacity xl:opacity-0 xl:group-hover/price-list-item:opacity-100 xl:group-focus-within/price-list-item:opacity-100 data-[state=open]:opacity-100"
+                    aria-label={`${column.name}列表操作`}
+                  >
+                    <Ellipsis className="size-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onSelect={() => handleOpenRenameList(column)}>
+                    <Pencil className="size-4" />
+                    重命名
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="text-destructive focus:text-destructive"
+                    onSelect={() => handleOpenDeleteList(column)}
+                  >
+                    <Trash2 className="size-4" />
+                    删除
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          )) : (
+            <div className="rounded border border-dashed px-4 py-6 text-sm text-muted-foreground">
+              还没有报价列表。先在上方创建一个。
+            </div>
+          )}
+        </div>
+      </ScrollArea>
+    </div>
+  )
+
   return (
     <div className="flex h-full flex-col">
+      {headerSlotElement ? createPortal(
+        <div className="flex justify-end xl:hidden">
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            onClick={() => setMobileListDrawerOpen(true)}
+            aria-label="选择报价列表"
+            title="选择报价列表"
+          >
+            <ListOrdered className="size-5" />
+          </Button>
+        </div>,
+        headerSlotElement,
+      ) : null}
+
       <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
-        <Card className="flex min-h-0 flex-col overflow-hidden">
+        <Card className="hidden min-h-0 flex-col overflow-hidden xl:flex">
           <CardHeader>
             <CardTitle>报价列表</CardTitle>
             <CardDescription>新增后可在右侧录入该列表下的价格条目。</CardDescription>
           </CardHeader>
-          <CardContent className="flex min-h-0 flex-1 flex-col space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="new-price-list">新增报价列表</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="new-price-list"
-                  value={newListName}
-                  onChange={(event) => setNewListName(event.target.value)}
-                  placeholder="例如：2026 Q3 工业蒸汽阀门"
-                />
-                <Button onClick={() => createListMutation.mutate()} disabled={createListMutation.isPending}>
-                  新增
-                </Button>
-              </div>
-            </div>
-
-            <Separator />
-
-            <ScrollArea className="min-h-0 flex-1">
-              <div className="space-y-2 pr-3">
-                {priceListColumns.length > 0 ? priceListColumns.map((column) => (
-                  <div
-                    key={column.id}
-                    className={`group/price-list-item flex w-full items-start gap-2 rounded-lg border px-3 py-3 text-left transition-colors ${
-                      selectedColumn?.id === column.id ? 'border-primary bg-muted' : 'hover:bg-muted/60'
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => handleSelectList(column)}
-                      className="min-w-0 flex-1 text-left"
-                    >
-                      <div className="truncate font-medium">{column.name}</div>
-                      <div className="mt-1 truncate text-xs text-muted-foreground">
-                        {column.route_path || '-'}
-                      </div>
-                    </button>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 shrink-0 opacity-0 transition-opacity group-hover/price-list-item:opacity-100 group-focus-within/price-list-item:opacity-100 data-[state=open]:opacity-100"
-                          aria-label={`${column.name}列表操作`}
-                        >
-                          <Ellipsis className="size-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onSelect={() => handleOpenRenameList(column)}>
-                          <Pencil className="size-4" />
-                          重命名
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive focus:text-destructive"
-                          onSelect={() => handleOpenDeleteList(column)}
-                        >
-                          <Trash2 className="size-4" />
-                          删除
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
-                )) : (
-                  <div className="rounded border border-dashed px-4 py-6 text-sm text-muted-foreground">
-                    还没有报价列表。先在上方创建一个。
-                  </div>
-                )}
-              </div>
-            </ScrollArea>
+          <CardContent className="flex min-h-0 flex-1 flex-col">
+            {renderPriceListControls('new-price-list-desktop')}
           </CardContent>
         </Card>
 
         <Card className="flex min-h-0 flex-col overflow-hidden">
           <CardHeader>
-            <Input
-              value={priceSearch}
-              onChange={(event) => setPriceSearch(event.target.value)}
-              placeholder="搜索..."
-              disabled={!selectedColumn}
-              className="w-[180px]"
-            />
+            <div className="flex items-center gap-2">
+              <Input
+                value={priceSearch}
+                onChange={(event) => setPriceSearch(event.target.value)}
+                placeholder="搜索..."
+                disabled={!selectedColumn}
+                className="w-[180px]"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="icon"
+                disabled={!dataTable}
+                onClick={() => setFieldEditorOpen(true)}
+                aria-label="表格字段设置"
+                title="表格字段设置"
+              >
+                <Settings2 className="size-4" />
+              </Button>
+            </div>
           </CardHeader>
           <CardContent className="min-h-0 flex-1 overflow-hidden">
             {!selectedColumn ? (
               <div className="rounded border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
                 请选择一个报价列表。
               </div>
-            ) : itemsLoading ? (
+            ) : dataTableLoading || dataRecordsLoading || !dataTable ? (
               <div>加载中...</div>
             ) : (
-              <PriceRecordGrid
-                items={items}
-                selectedColumnId={selectedColumn.id}
-                search={priceSearch}
-                onDeleteItem={setDeleteTarget}
+              <DataRecordsGrid
+                records={dataRecords}
+                fields={dataTable.fields}
+                columnId={selectedColumn.id}
+                onDeleteRecord={(record) => {
+                  const primaryKey = dataTable.fields.find((field) => field.is_primary === 1)?.field_key
+                  setDeleteTarget({ id: record.id, name: String(primaryKey ? record.fields[primaryKey] || '' : '') } as PriceRecordItem)
+                }}
               />
             )}
           </CardContent>
         </Card>
       </div>
+
+      <Sheet open={mobileListDrawerOpen} onOpenChange={setMobileListDrawerOpen}>
+        <SheetContent side="right" className="flex w-[90vw] max-w-sm flex-col gap-0 p-0 xl:hidden">
+          <SheetHeader className="shrink-0 border-b px-5 py-4 pr-14 text-left">
+            <SheetTitle>报价列表</SheetTitle>
+            <SheetDescription>选择或管理报价列表。</SheetDescription>
+          </SheetHeader>
+          <div className="flex min-h-0 flex-1 flex-col p-5">
+            {renderPriceListControls('new-price-list-mobile')}
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <DataTableFieldEditor
+        open={fieldEditorOpen}
+        fields={dataTable?.fields || []}
+        onOpenChange={setFieldEditorOpen}
+        onSave={(fields) => saveDataFieldsMutation.mutate(fields)}
+        saving={saveDataFieldsMutation.isPending}
+      />
 
       <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => {
         if (!open) {
@@ -500,29 +558,153 @@ function buildRenamedColumnTranslations(column: Column, name: string) {
   }
 }
 
-function PriceRecordGrid({
+type DynamicGridRow = {
+  id?: number
+  localId: string
+  isDraft: boolean
+  fields: Record<string, string>
+}
+
+function DataRecordsGrid({
+  records,
+  fields,
+  columnId,
+  onDeleteRecord,
+}: {
+  records: DataTableRecord[]
+  fields: DataTableField[]
+  columnId: number
+  onDeleteRecord: (record: DataTableRecord) => void
+}) {
+  const queryClient = useQueryClient()
+  const [rows, setRows] = useState<DynamicGridRow[]>(() => buildDynamicRows(records, fields, columnId))
+  const [savingRows, setSavingRows] = useState<Record<string, boolean>>({})
+  const columns = useMemo(() => fields.map(dataFieldToViewColumn), [fields])
+
+  useEffect(() => {
+    setRows(buildDynamicRows(records, fields, columnId))
+  }, [columnId, fields, records])
+
+  const saveMutation = useMutation({
+    mutationFn: async (row: DynamicGridRow) => {
+      const payload = Object.fromEntries(fields.map((field) => [field.field_key, row.fields[field.field_key] || '']))
+      return row.id
+        ? dataTablesApi.updateRecord(columnId, row.id, payload)
+        : dataTablesApi.createRecord(columnId, payload)
+    },
+    onMutate: (row) => setSavingRows((current) => ({ ...current, [row.localId]: true })),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['data-table-records', columnId] }),
+    onError: (error: any) => toast.error(error.response?.data?.message || error.message || '保存记录失败'),
+    onSettled: (_data, _error, row) => {
+      if (!row) return
+      setSavingRows((current) => {
+        const next = { ...current }
+        delete next[row.localId]
+        return next
+      })
+    },
+  })
+
+  const updateCell = (localId: string, fieldKey: string, value: string) => {
+    setRows((current) => current.map((row) => row.localId === localId
+      ? { ...row, fields: { ...row.fields, [fieldKey]: value } }
+      : row))
+  }
+
+  const commitRow = (localId: string) => {
+    const row = rows.find((item) => item.localId === localId)
+    if (!row || savingRows[localId] || !Object.values(row.fields).some((value) => value.trim())) return
+    saveMutation.mutate(row)
+  }
+
+  return (
+    <div className="h-full overflow-hidden rounded border">
+      <ConfigurableDataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(row) => row.localId}
+        renderCell={(row, column) => (
+          <Input
+            type={column.field_type === 'number' || column.field_type === 'currency' ? 'number' : column.field_type === 'date' ? 'date' : 'text'}
+            value={row.fields[column.field_name] || ''}
+            disabled={Boolean(savingRows[row.localId])}
+            onChange={(event) => updateCell(row.localId, column.field_name, event.target.value)}
+            onBlur={() => commitRow(row.localId)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' || event.key === 'Escape') event.currentTarget.blur()
+            }}
+            aria-label={column.label}
+            className="h-10 rounded-none border-0 bg-transparent px-2 shadow-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-wait"
+          />
+        )}
+        renderActions={(row) => !row.isDraft && row.id ? (
+          <Button type="button" variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover/configurable-row:opacity-100 group-focus-within/configurable-row:opacity-100" onClick={() => onDeleteRecord({ id: row.id!, fields: row.fields })} aria-label="删除记录">
+            <Trash2 className="size-4 text-destructive" />
+          </Button>
+        ) : null}
+      />
+    </div>
+  )
+}
+
+function buildDynamicRows(records: DataTableRecord[], fields: DataTableField[], columnId: number): DynamicGridRow[] {
+  const persisted = records.map((record) => ({
+    id: record.id,
+    localId: `record-${record.id}`,
+    isDraft: false,
+    fields: Object.fromEntries(fields.map((field) => [field.field_key, stringifyCell(record.fields[field.field_key])])),
+  }))
+  const drafts = Array.from({ length: GRID_MIN_EMPTY_ROW_COUNT }, (_value, index) => ({
+    localId: `draft-${columnId}-${index}`,
+    isDraft: true,
+    fields: Object.fromEntries(fields.map((field) => [field.field_key, ''])),
+  }))
+  return [...persisted, ...drafts]
+}
+
+function dataFieldToViewColumn(field: DataTableField, index: number): ContentTableViewColumn {
+  return {
+    field_name: field.field_key,
+    field_label: field.field_name,
+    label: field.field_name,
+    field_type: field.field_type,
+    is_required: field.is_required,
+    is_editable: 1,
+    is_searchable: 1,
+    is_visible: 1,
+    width: field.field_type === 'number' || field.field_type === 'currency' ? 120 : 160,
+    align: field.field_type === 'number' || field.field_type === 'currency' ? 'right' : 'left',
+    sort_order: index * 10,
+  }
+}
+
+export function PriceRecordGrid({
   items,
   selectedColumnId,
+  columns,
+  allColumns,
   search,
   onDeleteItem,
 }: {
   items: PriceRecordItem[]
   selectedColumnId: number
+  columns: ContentTableViewColumn[]
+  allColumns: ContentTableViewColumn[]
   search: string
   onDeleteItem: (item: PriceRecordItem) => void
 }) {
   const queryClient = useQueryClient()
-  const [rows, setRows] = useState<PriceGridRow[]>(() => buildGridRows(items, selectedColumnId))
+  const [rows, setRows] = useState<PriceGridRow[]>(() => buildGridRows(items, selectedColumnId, allColumns))
   const [savingRows, setSavingRows] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
-    setRows(buildGridRows(items, selectedColumnId))
-  }, [items, selectedColumnId])
+    setRows(buildGridRows(items, selectedColumnId, allColumns))
+  }, [allColumns, items, selectedColumnId])
 
   const saveMutation = useMutation({
     mutationFn: async (row: PriceGridRow) => {
-      const payload = buildPriceRecordPayload(row, selectedColumnId)
-      if (!payload.base.name) {
+      const payload = buildPriceRecordPayload(row, selectedColumnId, allColumns)
+      if (!getGridCellValue(row, 'name')) {
         throw new Error('请输入名称')
       }
       if (row.id) {
@@ -551,12 +733,13 @@ function PriceRecordGrid({
     },
   })
 
-  const handleChangeCell = (rowLocalId: string, field: PriceRecordField, value: string) => {
+  const handleChangeCell = (rowLocalId: string, fieldName: string, value: string) => {
     setRows((current) => ensureMinimumEmptyRows(
       current.map((row) => (
-        row._localId === rowLocalId ? { ...row, [field]: value } : row
+        row._localId === rowLocalId ? { ...row, [fieldName]: value } : row
       )),
       selectedColumnId,
+      allColumns,
     ))
   }
 
@@ -565,70 +748,49 @@ function PriceRecordGrid({
     if (!row || savingRows[rowLocalId]) {
       return
     }
-    if (!isGridRowDirty(row)) {
+    if (!isGridRowDirty(row, allColumns)) {
       return
     }
-    if (!isGridRowChanged(row)) {
+    if (!isGridRowChanged(row, allColumns)) {
       return
     }
-    if (!row.name.trim()) {
+    if (!getGridCellValue(row, 'name').trim()) {
       toast.error('请输入名称')
       return
     }
     saveMutation.mutate(row)
   }
 
-  const visibleRows = useMemo(() => filterGridRows(rows, search), [rows, search])
+  const visibleRows = useMemo(() => filterGridRows(rows, search, columns), [columns, rows, search])
 
   return (
     <div className="h-full overflow-hidden rounded border">
-      <Table className="min-w-[1320px]" containerClassName="h-full">
-          <TableHeader>
-            <TableRow className="sticky top-0 z-10 bg-card hover:bg-card">
-              {PRICE_GRID_COLUMNS.map((column) => (
-                <TableHead key={column.field} className={column.className}>
-                  {column.label}
-                </TableHead>
-              ))}
-              <TableHead className="min-w-[140px]">更新时间</TableHead>
-              <TableHead className="w-14 text-right">操作</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {visibleRows.map((row) => (
-              <TableRow key={row._localId} className="group/price-row">
-                {PRICE_GRID_COLUMNS.map((column) => (
-                  <TableCell key={column.field} className="h-10 border-r p-0 align-middle">
-                    <PriceGridCell
-                      row={row}
-                      column={column}
-                      disabled={Boolean(savingRows[row._localId])}
-                      onChange={handleChangeCell}
-                      onCommit={handleCommitRow}
-                    />
-                  </TableCell>
-                ))}
-                <TableCell className="h-10 border-r px-2 text-xs text-muted-foreground">
-                  {row._isDraft ? '' : formatDate(row.updated_at || row.created_at || '')}
-                </TableCell>
-                <TableCell className="h-10 p-1 text-right">
-                  {!row._isDraft ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 opacity-0 transition-opacity group-hover/price-row:opacity-100 group-focus-within/price-row:opacity-100"
-                      onClick={() => onDeleteItem(gridRowToPriceRecordItem(row))}
-                      aria-label="删除价格条目"
-                    >
-                      <Trash2 className="size-4 text-destructive" />
-                    </Button>
-                  ) : null}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+      <ConfigurableDataTable
+        columns={columns}
+        rows={visibleRows}
+        rowKey={(row) => row._localId}
+        renderCell={(row, column) => (
+          <PriceGridCell
+            row={row}
+            column={column}
+            disabled={Boolean(savingRows[row._localId])}
+            onChange={handleChangeCell}
+            onCommit={handleCommitRow}
+          />
+        )}
+        renderActions={(row) => !row._isDraft ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 opacity-0 transition-opacity group-hover/configurable-row:opacity-100 group-focus-within/configurable-row:opacity-100"
+            onClick={() => onDeleteItem(gridRowToPriceRecordItem(row))}
+            aria-label="删除价格条目"
+          >
+            <Trash2 className="size-4 text-destructive" />
+          </Button>
+        ) : null}
+      />
     </div>
   )
 }
@@ -641,17 +803,25 @@ function PriceGridCell({
   onCommit,
 }: {
   row: PriceGridRow
-  column: { field: PriceRecordField, label: string, type?: 'text' | 'number' }
+  column: ContentTableViewColumn
   disabled: boolean
-  onChange: (rowLocalId: string, field: PriceRecordField, value: string) => void
+  onChange: (rowLocalId: string, fieldName: string, value: string) => void
   onCommit: (rowLocalId: string) => void
 }) {
+  if (column.is_editable !== 1) {
+    return (
+      <div className="truncate px-2 text-sm text-muted-foreground">
+        {formatGridCellValue(row, column)}
+      </div>
+    )
+  }
+
   return (
     <Input
-      type={column.type || 'text'}
-      value={row[column.field]}
+      type={column.field_type === 'number' ? 'number' : 'text'}
+      value={getGridCellValue(row, column.field_name)}
       disabled={disabled}
-      onChange={(event) => onChange(row._localId, column.field, event.target.value)}
+      onChange={(event) => onChange(row._localId, column.field_name, event.target.value)}
       onBlur={() => onCommit(row._localId)}
       onKeyDown={(event) => {
         if (event.key === 'Enter') {
@@ -667,23 +837,23 @@ function PriceGridCell({
   )
 }
 
-function buildGridRows(items: PriceRecordItem[], selectedColumnId: number): PriceGridRow[] {
-  const persistedRows = items.map((item) => priceRecordToGridRow(item))
-  return ensureMinimumEmptyRows(persistedRows, selectedColumnId)
+function buildGridRows(items: PriceRecordItem[], selectedColumnId: number, columns: ContentTableViewColumn[]): PriceGridRow[] {
+  const persistedRows = items.map((item) => priceRecordToGridRow(item, columns))
+  return ensureMinimumEmptyRows(persistedRows, selectedColumnId, columns)
 }
 
-function ensureMinimumEmptyRows(rows: PriceGridRow[], selectedColumnId: number) {
-  const emptyDraftCount = rows.filter((row) => row._isDraft && !isGridRowDirty(row)).length
+function ensureMinimumEmptyRows(rows: PriceGridRow[], selectedColumnId: number, columns: ContentTableViewColumn[]) {
+  const emptyDraftCount = rows.filter((row) => row._isDraft && !isGridRowDirty(row, columns)).length
   if (emptyDraftCount >= GRID_MIN_EMPTY_ROW_COUNT) {
     return rows
   }
   const timestamp = Date.now()
   const rowsToAdd = GRID_MIN_EMPTY_ROW_COUNT - emptyDraftCount
-  const draftRows = Array.from({ length: rowsToAdd }, (_value, index) => createDraftGridRow(selectedColumnId, `${timestamp}-${index}`))
+  const draftRows = Array.from({ length: rowsToAdd }, (_value, index) => createDraftGridRow(selectedColumnId, `${timestamp}-${index}`, columns))
   return [...rows, ...draftRows]
 }
 
-function filterGridRows(rows: PriceGridRow[], search: string) {
+function filterGridRows(rows: PriceGridRow[], search: string, columns: ContentTableViewColumn[]) {
   const keyword = search.trim().toLowerCase()
   if (!keyword) {
     return rows
@@ -692,29 +862,18 @@ function filterGridRows(rows: PriceGridRow[], search: string) {
     if (row._isDraft) {
       return true
     }
-    return PRICE_GRID_COLUMNS.some((column) => row[column.field].toLowerCase().includes(keyword))
+    return columns.some((column) => getGridCellValue(row, column.field_name).toLowerCase().includes(keyword))
   })
 }
 
-function priceRecordToGridRow(item: PriceRecordItem): PriceGridRow {
-  const values = {
-    name: stringifyCell(item.name),
-    model: stringifyCell(item.model),
-    spec: stringifyCell(item.spec),
-    diameter: stringifyCell(item.diameter),
-    price: stringifyCell(item.price),
-    material_code: stringifyCell(item.material_code),
-    category: stringifyCell(item.category),
-    stock: stringifyCell(item.stock),
-    reference_no: stringifyCell(item.reference_no),
-    name_en: stringifyCell(item.name_en),
-    material: stringifyCell(item.material),
-  }
+function priceRecordToGridRow(item: PriceRecordItem, columns: ContentTableViewColumn[]): PriceGridRow {
+  const source = item as unknown as Record<string, unknown>
+  const values = Object.fromEntries(columns.map((column) => [column.field_name, stringifyCell(source[column.field_name])]))
   return {
     id: item.id,
     column_id: Number(item.column_id || 0) || undefined,
-    updated_at: item.updated_at,
-    created_at: item.created_at,
+    updated_at: item.updated_at ? String(item.updated_at) : undefined,
+    created_at: item.created_at ? String(item.created_at) : undefined,
     _localId: `item-${item.id}`,
     _isDraft: false,
     _original: values,
@@ -722,8 +881,8 @@ function priceRecordToGridRow(item: PriceRecordItem): PriceGridRow {
   }
 }
 
-function createDraftGridRow(selectedColumnId: number, index: number | string): PriceGridRow {
-  const values = createEmptyGridValues()
+function createDraftGridRow(selectedColumnId: number, index: number | string, columns: ContentTableViewColumn[]): PriceGridRow {
+  const values = createEmptyGridValues(columns)
   return {
     column_id: selectedColumnId,
     _localId: `draft-${selectedColumnId}-${index}`,
@@ -733,48 +892,51 @@ function createDraftGridRow(selectedColumnId: number, index: number | string): P
   }
 }
 
-function buildPriceRecordPayload(row: PriceGridRow, selectedColumnId: number) {
+function buildPriceRecordPayload(row: PriceGridRow, selectedColumnId: number, columns: ContentTableViewColumn[]) {
+  const values = Object.fromEntries(
+    columns
+      .filter((column) => column.is_editable === 1)
+      .map((column) => [column.field_name, getGridCellValue(row, column.field_name).trim()]),
+  )
   return {
     base: {
       column_id: selectedColumnId || row.column_id,
-      name: row.name.trim(),
-      model: row.model.trim(),
-      spec: row.spec.trim(),
-      diameter: row.diameter.trim(),
-      price: row.price.trim(),
-      material_code: row.material_code.trim(),
-      category: row.category.trim(),
-      description: '',
-      stock: row.stock.trim(),
-      reference_no: row.reference_no.trim(),
-      name_en: row.name_en.trim(),
-      material: row.material.trim(),
+      ...values,
     },
   }
 }
 
-function isGridRowDirty(row: PriceGridRow) {
-  return PRICE_GRID_COLUMNS.some((column) => row[column.field].trim())
+function isGridRowDirty(row: PriceGridRow, columns: ContentTableViewColumn[]) {
+  return columns.some((column) => column.is_editable === 1 && getGridCellValue(row, column.field_name).trim())
 }
 
-function isGridRowChanged(row: PriceGridRow) {
-  return PRICE_GRID_COLUMNS.some((column) => row[column.field] !== row._original[column.field])
+function isGridRowChanged(row: PriceGridRow, columns: ContentTableViewColumn[]) {
+  return columns.some((column) => (
+    column.is_editable === 1
+    && getGridCellValue(row, column.field_name) !== (row._original[column.field_name] || '')
+  ))
 }
 
-function createEmptyGridValues(): Record<PriceRecordField, string> {
-  return {
-    name: '',
-    model: '',
-    spec: '',
-    diameter: '',
-    price: '',
-    material_code: '',
-    category: '',
-    stock: '',
-    reference_no: '',
-    name_en: '',
-    material: '',
+function createEmptyGridValues(columns: ContentTableViewColumn[]): Record<string, string> {
+  return Object.fromEntries(columns.map((column) => [column.field_name, '']))
+}
+
+function getGridCellValue(row: PriceGridRow, fieldName: string) {
+  return stringifyCell(row[fieldName])
+}
+
+function formatGridCellValue(row: PriceGridRow, column: ContentTableViewColumn) {
+  const value = getGridCellValue(row, column.field_name)
+  if (!value || row._isDraft) {
+    return ''
   }
+  if (column.field_type === 'datetime') {
+    return formatDate(value)
+  }
+  if (column.field_type === 'boolean') {
+    return value === '1' || value === 'true' ? '是' : '否'
+  }
+  return value
 }
 
 function stringifyCell(value: unknown) {
@@ -788,18 +950,8 @@ function gridRowToPriceRecordItem(row: PriceGridRow): PriceRecordItem {
   return {
     id: row.id || 0,
     column_id: row.column_id,
-    name: row.name,
-    model: row.model,
-    spec: row.spec,
-    diameter: row.diameter,
-    price: row.price === '' ? null : Number(row.price),
-    material_code: row.material_code,
-    category: row.category,
-    stock: row.stock === '' ? null : Number(row.stock),
-    reference_no: row.reference_no,
-    name_en: row.name_en,
-    material: row.material,
+    name: getGridCellValue(row, 'name'),
     updated_at: row.updated_at,
     created_at: row.created_at,
-  } as PriceRecordItem
+  } as unknown as PriceRecordItem
 }

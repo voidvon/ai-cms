@@ -855,43 +855,41 @@ export default function DashboardPage() {
 
   return (
     <div className="flex min-h-full flex-col gap-4 md:h-full md:min-h-0 md:overflow-hidden">
-      <div className="flex shrink-0 gap-2 overflow-x-auto pb-1 md:grid md:grid-cols-5 md:gap-4 md:overflow-visible md:pb-0">
-        <Card className="min-w-[138px] shrink-0 md:min-w-0">
-          <CardHeader className="gap-1.5 p-3 md:pb-2 md:p-6">
-            <CardDescription className="text-xs leading-tight md:text-sm">今日访问量</CardDescription>
-            <CardTitle className="text-lg leading-none md:text-2xl">{metrics?.today_visits ?? 0}</CardTitle>
+      <div className="flex shrink-0 gap-2 overflow-x-auto pb-0.5">
+        <Card className="h-[88px] w-[110px] shrink-0">
+          <CardHeader className="h-full items-center justify-center gap-1 p-2 text-center">
+            <CardTitle className="text-[20px] leading-none">{metrics?.today_visits ?? 0}</CardTitle>
+            <CardDescription className="text-[14px] leading-tight">今日访问</CardDescription>
           </CardHeader>
         </Card>
-        <Card className="min-w-[138px] shrink-0 md:min-w-0">
-          <CardHeader className="gap-1.5 p-3 md:pb-2 md:p-6">
-            <CardDescription className="text-xs leading-tight md:text-sm">近 24 小时访问量</CardDescription>
-            <CardTitle className="text-lg leading-none md:text-2xl">{metrics?.recent_visits ?? 0}</CardTitle>
+        <Card className="h-[88px] w-[110px] shrink-0">
+          <CardHeader className="h-full items-center justify-center gap-1 p-2 text-center">
+            <CardTitle className="text-[20px] leading-none">{metrics?.recent_visits ?? 0}</CardTitle>
+            <CardDescription className="text-[14px] leading-tight">24h访问</CardDescription>
           </CardHeader>
         </Card>
-        <Card className="min-w-[138px] shrink-0 md:min-w-0">
-          <CardHeader className="gap-1.5 p-3 md:pb-2 md:p-6">
-            <CardDescription className="text-xs leading-tight md:text-sm">24小时真实用户</CardDescription>
-            <CardTitle className="text-lg leading-none md:text-2xl">{metrics?.recent_real_users ?? 0}</CardTitle>
+        <Card className="h-[88px] w-[110px] shrink-0">
+          <CardHeader className="h-full items-center justify-center gap-1 p-2 text-center">
+            <CardTitle className="text-[20px] leading-none">{metrics?.recent_real_users ?? 0}</CardTitle>
+            <CardDescription className="text-[14px] leading-tight">24h用户</CardDescription>
           </CardHeader>
         </Card>
-        <Card className="min-w-[138px] shrink-0 md:min-w-0">
-          <CardHeader className="gap-1.5 p-3 md:pb-2 md:p-6">
-            <CardDescription className="text-xs leading-tight md:text-sm">404 错误数</CardDescription>
-            <CardTitle className="text-lg leading-none md:text-2xl">{metrics?.total_404_errors ?? 0}</CardTitle>
+        <Card className="h-[88px] w-[110px] shrink-0">
+          <CardHeader className="h-full items-center justify-center gap-1 p-2 text-center">
+            <CardTitle className="text-[20px] leading-none">{metrics?.total_404_errors ?? 0}</CardTitle>
+            <CardDescription className="text-[14px] leading-tight">404错误</CardDescription>
           </CardHeader>
         </Card>
-        <Card className="min-w-[138px] shrink-0 md:min-w-0">
-          <CardHeader className="gap-1.5 p-3 md:gap-3 md:p-6 md:pb-2">
-            <div className="space-y-0.5 md:space-y-1">
-              <CardDescription className="text-xs leading-tight md:text-sm">累计页面数</CardDescription>
-              <Button
-                variant="ghost"
-                className="h-auto p-0 text-left text-lg font-semibold leading-none tracking-tight hover:bg-transparent md:text-2xl"
-                onClick={() => setTopPagesOpen(true)}
-              >
-                {metrics?.total_pages ?? 0}
-              </Button>
-            </div>
+        <Card className="h-[88px] w-[110px] shrink-0">
+          <CardHeader className="h-full items-center justify-center gap-1 p-2 text-center">
+            <Button
+              variant="ghost"
+              className="h-auto w-fit p-0 text-center text-[20px] font-semibold leading-none tracking-tight hover:bg-transparent"
+              onClick={() => setTopPagesOpen(true)}
+            >
+              {metrics?.total_pages ?? 0}
+            </Button>
+            <CardDescription className="text-[14px] leading-tight">累计页面</CardDescription>
           </CardHeader>
         </Card>
       </div>

@@ -7,6 +7,13 @@ import {
   updateColumnRecord,
   updateManualColumn
 } from '../../services/columns.mjs';
+import {
+  deleteContentTableViewByColumn,
+  getContentTableView,
+  resetContentTableView,
+  saveContentTableView
+} from '../../services/content-table-views.mjs';
+import { deleteDataTableByColumn } from '../../services/data-tables.mjs';
 
 export default async function columnsRoutes(app) {
   app.get('/columns', {
@@ -35,6 +42,41 @@ export default async function columnsRoutes(app) {
       return { success: false, message: '栏目不存在' };
     }
     return { success: true, data: column };
+  });
+
+  app.get('/columns/:id/table-view', {
+    onRequest: [requireAuth]
+  }, async (request, reply) => {
+    try {
+      return { success: true, data: getContentTableView(request.params.id) };
+    } catch (error) {
+      reply.code(400);
+      return { success: false, message: error.message };
+    }
+  });
+
+  app.put('/columns/:id/table-view', {
+    onRequest: [requireAuth]
+  }, async (request, reply) => {
+    try {
+      const view = saveContentTableView(request.params.id, request.body || {});
+      return { success: true, data: view, message: '表格列配置已保存' };
+    } catch (error) {
+      reply.code(400);
+      return { success: false, message: error.message };
+    }
+  });
+
+  app.post('/columns/:id/table-view/reset', {
+    onRequest: [requireAuth]
+  }, async (request, reply) => {
+    try {
+      const view = resetContentTableView(request.params.id);
+      return { success: true, data: view, message: '已恢复默认列配置' };
+    } catch (error) {
+      reply.code(400);
+      return { success: false, message: error.message };
+    }
   });
 
   app.post('/columns', {
@@ -83,6 +125,8 @@ export default async function columnsRoutes(app) {
         reply.code(404);
         return { success: false, message: '栏目不存在' };
       }
+      deleteContentTableViewByColumn(request.params.id);
+      deleteDataTableByColumn(request.params.id);
       return { success: true, data: column, message: '栏目已删除' };
     } catch (error) {
       reply.code(400);
