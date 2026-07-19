@@ -2055,7 +2055,6 @@ function buildFooterMetaData(templateContext) {
   }
 
   const fallbackRecords = [
-    templateContext?.site?.web_copyright,
     templateContext?.site?.icp_number,
     templateContext?.site?.company_phone,
     templateContext?.site?.company_address
@@ -2140,8 +2139,6 @@ function expandLegacyCommonPlaceholders(value, templateContext) {
     .replaceAll('#HOPE_WebIcp#', site.icp_number || '')
     .replaceAll('#HOPE_WebQQ#', site.web_qq || '')
     .replaceAll('#HOPE_WebMsn#', site.web_mobile || '')
-    .replaceAll('#HOPE_Webauthor#', site.web_author || '')
-    .replaceAll('#HOPE_Copyright#', site.web_copyright || '')
     .replaceAll('#HOPE_ManagedCat()#', buildLegacyManagedColumnMenu(templateContext.managedColumnCategories, site))
     .replaceAll('#HOPE_ManagedCat2()#', buildLegacyManagedColumnMenuCompact(templateContext.managedColumnCategories, site));
 

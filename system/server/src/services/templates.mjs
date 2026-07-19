@@ -2111,8 +2111,6 @@ function buildTemplateValidationProps(template, siteConfig = null) {
       resolved_language_code: siteConfig?.resolved_language_code || siteConfig?.current_language_code || siteConfig?.requested_language_code || '',
       icp_number: siteConfig?.icp_number || '',
       web_qq: siteConfig?.web_qq || '',
-      web_author: siteConfig?.web_author || '',
-      web_copyright: siteConfig?.web_copyright || '',
       template_data: siteTemplateData,
       language_site_path_prefix: normalizeLanguageSitePathPrefix(siteConfig?.language_site_path_prefix)
     },

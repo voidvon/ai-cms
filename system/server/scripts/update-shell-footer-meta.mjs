@@ -8,7 +8,7 @@ const FOOTER_META_HELPER_SOURCE = `function renderFooterMetaRecords(footerMeta =
     ? footerMeta.records.map((item) => String(item || '').trim()).filter(Boolean)
     : [];
   const fallbackRecords = [
-    site?.web_copyright || site?.company_name || site?.web_name || '',
+    site?.company_name || site?.web_name || '',
     site?.icp_number || '',
     site?.company_phone || '',
     site?.company_address || ''
@@ -58,7 +58,7 @@ nextTsxSource = assertReplace(
 nextTsxSource = assertReplace(
   nextTsxSource,
   `                <div className="sg-site-footer__records">
-                  <p>{site?.web_copyright || site?.company_name || site?.web_name || ''}</p>
+                  <p>{site?.company_name || site?.web_name || ''}</p>
                   {site?.icp_number ? <p>{site.icp_number}</p> : null}
                   {site?.company_phone ? <p>{site.company_phone}</p> : null}
                   {site?.company_address ? <p>{site.company_address}</p> : null}

@@ -62,8 +62,6 @@ TSX 模板运行在服务端渲染环境中，只提供模板变量、`React`、
 | `site.web_url` | 网站地址 |
 | `site.icp_number` | ICP 备案号 |
 | `site.web_qq` | QQ |
-| `site.web_author` | 作者/维护信息 |
-| `site.web_copyright` | 版权信息 |
 
 ### `meta`
 

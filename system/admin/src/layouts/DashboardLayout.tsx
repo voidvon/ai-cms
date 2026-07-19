@@ -110,7 +110,7 @@ export default function DashboardLayout() {
       icon: Globe,
       items: [
         { path: '/languages', label: '多语言', icon: Languages },
-        { path: '/site-config', label: '网站配置', icon: Globe },
+        { path: '/site-config', label: '全站配置', icon: Globe },
         { path: '/static-gen', label: '静态生成', icon: RefreshCw },
       ]
     },

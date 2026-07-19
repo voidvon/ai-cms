@@ -53,6 +53,7 @@ export default function TopicManagementPage() {
   const [contentPickerModelCode, setContentPickerModelCode] = useState('')
   const [contentPickerKeyword, setContentPickerKeyword] = useState('')
   const [topicTemplateId, setTopicTemplateId] = useState(NO_TOPIC_TEMPLATE_VALUE)
+  const [topicRoutePath, setTopicRoutePath] = useState('')
   const [languageDrafts, setLanguageDrafts] = useState<Record<string, TopicLanguageDraft>>({})
   const [baseRelatedContentJson, setBaseRelatedContentJson] = useState('[]')
   const [activeTab, setActiveTab] = useState(BASE_TAB_VALUE)
@@ -157,9 +158,11 @@ export default function TopicManagementPage() {
 
   useEffect(() => {
     if (!selectedColumn) {
+      setTopicRoutePath('')
       setLanguageDrafts({})
       return
     }
+    setTopicRoutePath(selectedColumn.route_path || '')
     const nextDrafts: Record<string, TopicLanguageDraft> = {}
     for (const language of languages) {
       const profile = profileMapsByLanguage.get(language.code)?.get(selectedColumn.id) || null
@@ -172,6 +175,7 @@ export default function TopicManagementPage() {
     setBaseRelatedContentJson(resolveSharedRelatedContentJson(selectedColumn.id, languages, profileMapsByLanguage, defaultLanguageCode))
   }, [
     selectedColumn?.id,
+    selectedColumn?.route_path,
     languages.map((language) => language.code).join('|'),
     JSON.stringify(selectedColumn?.translations || {}),
     JSON.stringify(Array.from(profileMapsByLanguage.entries()).map(([language, map]) => [
@@ -212,9 +216,17 @@ export default function TopicManagementPage() {
     if (!defaultDraft.name.trim()) {
       throw new Error('请输入专题名称')
     }
+    if (!topicRoutePath.trim()) {
+      throw new Error('请输入自定义 URL')
+    }
     await columnsApi.update(
       selectedColumn.id,
-      buildTopicColumnTranslationsPayload(selectedColumn, languageDrafts, languages.map((language) => language.code)),
+      buildTopicColumnTranslationsPayload(
+        selectedColumn,
+        languageDrafts,
+        languages.map((language) => language.code),
+        topicRoutePath,
+      ),
     )
     const savedProfiles = await Promise.all(languages.map(async (language) => {
       const draft = languageDrafts[language.code] || createEmptyLanguageDraft()
@@ -249,7 +261,7 @@ export default function TopicManagementPage() {
       toast.success('专题配置已保存')
     },
     onError: (error: any) => {
-      toast.error(error.response?.data?.message || '保存失败')
+      toast.error(error.response?.data?.message || error.message || '保存失败')
     },
   })
   const generateTopicMutation = useMutation({
@@ -418,6 +430,21 @@ export default function TopicManagementPage() {
                           ))}
                         </SelectContent>
                       </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="topic_route_path">自定义 URL</Label>
+                      <Input
+                        id="topic_route_path"
+                        value={topicRoutePath}
+                        onChange={(event) => setTopicRoutePath(event.target.value)}
+                        placeholder="/topics/example/"
+                        autoComplete="off"
+                        spellCheck={false}
+                        aria-describedby="topic_route_path_help"
+                      />
+                      <p id="topic_route_path_help" className="text-sm text-muted-foreground">
+                        栏目级共享路径；各语言站点前缀由站点配置自动添加。
+                      </p>
                     </div>
                   </div>
 
@@ -592,7 +619,12 @@ function resolveTopicColumnTranslationName(column: Column, languageCode: string,
   return ''
 }
 
-function buildTopicColumnTranslationsPayload(column: Column, drafts: Record<string, TopicLanguageDraft>, languageCodes: string[]) {
+function buildTopicColumnTranslationsPayload(
+  column: Column,
+  drafts: Record<string, TopicLanguageDraft>,
+  languageCodes: string[],
+  routePath: string,
+) {
   const translations: Record<string, { name: string }> = {}
   for (const languageCode of languageCodes) {
     const existingTranslation = column.translations?.[languageCode]
@@ -605,7 +637,7 @@ function buildTopicColumnTranslationsPayload(column: Column, drafts: Record<stri
     parent_id: column.parent_id || 0,
     content_model_id: column.content_model_id || null,
     dir_name: column.dir_name || '',
-    route_path: column.route_path || '',
+    route_path: routePath.trim(),
     detail_rule: column.detail_rule || '',
     sort_order: column.sort_order || 0,
     is_visible: column.is_visible ?? 1,

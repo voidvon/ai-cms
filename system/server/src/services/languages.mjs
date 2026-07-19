@@ -20,6 +20,7 @@ export function ensureLanguagesSchema() {
       name TEXT NOT NULL,
       native_name TEXT,
       is_default INTEGER NOT NULL DEFAULT 0,
+      is_fallback INTEGER NOT NULL DEFAULT 0,
       is_enabled INTEGER NOT NULL DEFAULT 1,
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -41,20 +42,27 @@ export function ensureLanguagesSchema() {
       FOREIGN KEY (language_id) REFERENCES languages(id) ON DELETE CASCADE
     );
 
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_languages_default
-    ON languages(is_default)
-    WHERE is_default = 1;
-
     CREATE UNIQUE INDEX IF NOT EXISTS idx_language_sites_language_id
     ON language_sites(language_id);
   `);
 
+  addColumnIfMissing('languages', 'is_fallback', 'INTEGER NOT NULL DEFAULT 0');
   addColumnIfMissing('language_sites', 'site_mode', "TEXT NOT NULL DEFAULT 'subdir'");
   addColumnIfMissing('language_sites', 'access_port', 'INTEGER');
   addColumnIfMissing('language_sites', 'bind_host', 'TEXT');
   execute("UPDATE language_sites SET site_mode = 'subdir' WHERE site_mode IS NULL OR TRIM(site_mode) = ''");
 
   ensureDefaultLanguage();
+  ensureFallbackLanguage();
+  getDb().exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_languages_default
+    ON languages(is_default)
+    WHERE is_default = 1;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_languages_fallback
+    ON languages(is_fallback)
+    WHERE is_fallback = 1;
+  `);
   schemaEnsured = true;
 }
 
@@ -72,6 +80,7 @@ export function listLanguages() {
         l.name,
         l.native_name,
         l.is_default,
+        l.is_fallback,
         l.is_enabled,
         l.sort_order,
         l.created_at,
@@ -102,6 +111,7 @@ export function getLanguageById(id) {
         l.name,
         l.native_name,
         l.is_default,
+        l.is_fallback,
         l.is_enabled,
         l.sort_order,
         l.created_at,
@@ -134,6 +144,7 @@ export function getDefaultLanguage() {
         l.name,
         l.native_name,
         l.is_default,
+        l.is_fallback,
         l.is_enabled,
         l.sort_order,
         l.created_at,
@@ -149,6 +160,39 @@ export function getDefaultLanguage() {
       FROM languages l
       LEFT JOIN language_sites ls ON ls.language_id = l.id
       WHERE l.is_default = 1
+      LIMIT 1
+    `
+  );
+
+  return row ? mapLanguageRow(row) : null;
+}
+
+export function getFallbackLanguage() {
+  ensureLanguagesSchema();
+  const row = queryOne(
+    `
+      SELECT
+        l.id,
+        l.code,
+        l.name,
+        l.native_name,
+        l.is_default,
+        l.is_fallback,
+        l.is_enabled,
+        l.sort_order,
+        l.created_at,
+        l.updated_at,
+        ls.id AS site_id,
+        ls.host,
+        ls.path_prefix,
+        ls.output_dir,
+        ls.site_mode,
+        ls.access_port,
+        ls.bind_host,
+        ls.is_primary
+      FROM languages l
+      LEFT JOIN language_sites ls ON ls.language_id = l.id
+      WHERE l.is_fallback = 1
       LIMIT 1
     `
   );
@@ -177,6 +221,9 @@ export function createLanguage(input) {
   if (payload.is_default) {
     execute('UPDATE languages SET is_default = 0');
   }
+  if (payload.is_fallback) {
+    execute('UPDATE languages SET is_fallback = 0');
+  }
 
   const result = execute(
     `
@@ -185,17 +232,19 @@ export function createLanguage(input) {
         name,
         native_name,
         is_default,
+        is_fallback,
         is_enabled,
         sort_order,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       payload.code,
       payload.name,
       payload.native_name,
       payload.is_default,
+      payload.is_fallback,
       payload.is_enabled,
       payload.sort_order,
       now,
@@ -225,12 +274,21 @@ export function updateLanguage(id, input) {
   if (payload.is_default) {
     execute('UPDATE languages SET is_default = 0 WHERE id <> ?', [id]);
   } else if (existing.is_default && !payload.is_default) {
-    throw new Error('必须保留一个默认语言');
+    throw new Error('必须保留一个后台管理语言');
+  }
+
+  if (payload.is_fallback) {
+    execute('UPDATE languages SET is_fallback = 0 WHERE id <> ?', [id]);
+  } else if (existing.is_fallback && !payload.is_fallback) {
+    throw new Error('必须保留一个兜底语言');
   }
 
   if (!payload.is_enabled) {
     if (Number(existing.is_default || 0) === 1) {
-      throw new Error('默认语言不能停用');
+      throw new Error('后台管理语言不能停用');
+    }
+    if (Number(existing.is_fallback || 0) === 1) {
+      throw new Error('兜底语言不能停用');
     }
     ensureAtLeastOneEnabledLanguage(id);
   }
@@ -243,6 +301,7 @@ export function updateLanguage(id, input) {
         name = ?,
         native_name = ?,
         is_default = ?,
+        is_fallback = ?,
         is_enabled = ?,
         sort_order = ?,
         updated_at = ?
@@ -253,6 +312,7 @@ export function updateLanguage(id, input) {
       payload.name,
       payload.native_name,
       payload.is_default,
+      payload.is_fallback,
       payload.is_enabled,
       payload.sort_order,
       now,
@@ -272,7 +332,10 @@ export function deleteLanguage(id) {
     return null;
   }
   if (Number(existing.is_default || 0) === 1) {
-    throw new Error('默认语言不能删除');
+    throw new Error('后台管理语言不能删除');
+  }
+  if (Number(existing.is_fallback || 0) === 1) {
+    throw new Error('兜底语言不能删除');
   }
 
   execute('DELETE FROM languages WHERE id = ?', [id]);
@@ -307,11 +370,12 @@ function ensureDefaultLanguage() {
         name,
         native_name,
         is_default,
+        is_fallback,
         is_enabled,
         sort_order,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, 1, 1, 0, ?, ?)
+      ) VALUES (?, ?, ?, 1, 1, 1, 0, ?, ?)
     `,
     ['zh-CN', '简体中文', '简体中文', now, now]
   );
@@ -334,6 +398,24 @@ function ensureDefaultLanguage() {
     [result.lastInsertRowid, null, '/', 'html', SITE_MODE_SUBDIR, null, null, now, now]
   );
   invalidateLanguagesCache();
+}
+
+function ensureFallbackLanguage() {
+  const existingFallback = queryOne('SELECT id FROM languages WHERE is_fallback = 1 LIMIT 1');
+  if (existingFallback) {
+    return;
+  }
+
+  const fallback = queryOne(`
+    SELECT id
+    FROM languages
+    ORDER BY is_default DESC, is_enabled DESC, sort_order ASC, id ASC
+    LIMIT 1
+  `);
+  if (fallback) {
+    execute('UPDATE languages SET is_fallback = 1 WHERE id = ?', [fallback.id]);
+    invalidateLanguagesCache();
+  }
 }
 
 function invalidateLanguagesCache() {
@@ -418,13 +500,19 @@ function normalizeLanguageInput(input, { isCreate = false } = {}) {
   }
 
   const isDefault = toBooleanInt(input?.is_default);
+  const isFallback = toBooleanInt(input?.is_fallback);
+  const isEnabled = isCreate && input?.is_enabled === undefined ? 1 : toBooleanInt(input?.is_enabled);
+  if (isFallback && !isEnabled) {
+    throw new Error('兜底语言必须保持启用');
+  }
 
   return {
     code,
     name,
     native_name: toNullableString(input?.native_name),
     is_default: isDefault,
-    is_enabled: isCreate && input?.is_enabled === undefined ? 1 : toBooleanInt(input?.is_enabled),
+    is_fallback: isFallback,
+    is_enabled: isEnabled,
     sort_order: toInteger(input?.sort_order, 0),
     site: normalizeSiteInput(input?.site || {}, { languageCode: code, isDefault })
   };
@@ -589,6 +677,7 @@ function mapLanguageRow(row) {
     name: row.name,
     native_name: row.native_name || '',
     is_default: Number(row.is_default || 0),
+    is_fallback: Number(row.is_fallback || 0),
     is_enabled: Number(row.is_enabled || 0),
     sort_order: Number(row.sort_order || 0),
     created_at: row.created_at,

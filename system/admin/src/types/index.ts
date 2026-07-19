@@ -96,6 +96,7 @@ export interface Language {
   name: string;
   native_name?: string;
   is_default: number;
+  is_fallback: number;
   is_enabled: number;
   sort_order: number;
   site: LanguageSite;
@@ -382,10 +383,13 @@ export interface SiteConfigTranslation {
   web_name: string;
   company_name?: string | null;
   company_address?: string | null;
+  postal_code?: string | null;
+  company_phone?: string | null;
+  company_fax?: string | null;
   contact_person?: string | null;
   company_email?: string | null;
-  web_copyright?: string | null;
-  web_author?: string | null;
+  web_qq?: string | null;
+  web_mobile?: string | null;
   seo_default_title?: string | null;
   seo_default_description?: string | null;
   seo_home_title?: string | null;
@@ -397,6 +401,7 @@ export interface SiteConfig {
   id?: number;
   web_name: string;
   web_url: string;
+  base_web_url?: string;
   company_name: string;
   company_address: string;
   postal_code: string;
@@ -407,8 +412,6 @@ export interface SiteConfig {
   icp_number: string;
   web_qq: string;
   web_mobile: string;
-  web_copyright: string;
-  web_author: string;
   assets_bind_host?: string | null;
   assets_port?: number | null;
   assets_public_base_url?: string | null;

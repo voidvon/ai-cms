@@ -11,8 +11,6 @@ export type SiteConfig = {
   icp_number?: string | null
   web_qq?: string | null
   web_mobile?: string | null
-  web_author?: string | null
-  web_copyright?: string | null
   assets_bind_host?: string | null
   assets_port?: number | null
   assets_public_base_url?: string | null
