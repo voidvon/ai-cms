@@ -99,7 +99,12 @@ async function validateDist(expectedVersion) {
   const pkg = JSON.parse(await fs.readFile(path.join(root, 'dist/package.json'), 'utf8'));
   const release = JSON.parse(await fs.readFile(path.join(root, 'dist/RELEASE.json'), 'utf8'));
 
-  if (pkg.version !== expectedVersion || release.version !== expectedVersion) {
+  if (
+    pkg.version !== expectedVersion
+    || release.version !== expectedVersion
+    || release.release !== true
+    || !/^[a-f0-9]{7,40}$/i.test(String(release.commit || ''))
+  ) {
     throw new Error('发布包中的版本信息与计算得到的发布版本不一致。');
   }
 

@@ -63,6 +63,33 @@ export function requirePermission(flag) {
 }
 
 /**
+ * 高风险写操作必须来自当前后台站点，避免跨站请求直接触发。
+ */
+export async function requireSameOrigin(request, reply) {
+  const origin = String(request.headers.origin || '').trim();
+  if (!origin) {
+    return;
+  }
+
+  const forwardedHost = String(request.headers['x-forwarded-host'] || '').split(',')[0].trim();
+  const expectedHost = forwardedHost || String(request.headers.host || '').trim();
+
+  try {
+    if (!expectedHost || new URL(origin).host !== expectedHost) {
+      reply.code(403).send({
+        error: 'Forbidden',
+        message: '系统更新请求来源无效'
+      });
+    }
+  } catch {
+    reply.code(403).send({
+      error: 'Forbidden',
+      message: '系统更新请求来源无效'
+    });
+  }
+}
+
+/**
  * 获取客户端 IP
  */
 export function getClientIp(request) {

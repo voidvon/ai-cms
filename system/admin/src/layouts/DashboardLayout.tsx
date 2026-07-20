@@ -54,6 +54,7 @@ import {
 } from '@/components/ui/breadcrumb'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/ui/button'
+import SystemVersionControl from '@/components/SystemVersionControl'
 
 export default function DashboardLayout() {
   const navigate = useNavigate()
@@ -189,7 +190,10 @@ export default function DashboardLayout() {
       <Sidebar>
         <SidebarHeader>
           <div className="px-2 py-2">
-            <h1 className="text-lg font-semibold">管理后台</h1>
+            <div className="flex items-center gap-1.5">
+              <h1 className="text-lg font-semibold">管理后台</h1>
+              <SystemVersionControl />
+            </div>
             <p className="text-sm text-muted-foreground">欢迎, {user.data?.username}</p>
           </div>
         </SidebarHeader>

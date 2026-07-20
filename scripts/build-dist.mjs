@@ -1,10 +1,16 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+
+import { incrementVersion, selectLatestTaggedVersion } from './next-release-version.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const distRoot = path.join(root, 'dist');
-const releaseVersion = await resolveReleaseVersion();
+const releaseIdentity = await resolveReleaseIdentity();
+const releaseVersion = releaseIdentity.version;
+const releaseCommit = releaseIdentity.commit;
+const isFormalReleaseBuild = releaseIdentity.formal;
 
 async function main() {
   await fs.rm(distRoot, { recursive: true, force: true });
@@ -25,15 +31,48 @@ async function main() {
   console.log(`发布包已生成：${distRoot}（版本 ${releaseVersion}）`);
 }
 
-async function resolveReleaseVersion() {
-  const value = process.env.RELEASE_VERSION?.trim()
-    || (await fs.readFile(path.join(root, '.release-version'), 'utf8')).trim();
+async function resolveReleaseIdentity() {
+  const explicitVersion = process.env.RELEASE_VERSION?.trim();
+  const commit = String(process.env.RELEASE_COMMIT || readGitOutput(['rev-parse', 'HEAD'])).trim();
+  let value = explicitVersion;
+
+  if (!value) {
+    const tags = readGitOutput(['tag', '--list']).split(/\r?\n/).filter(Boolean);
+    const exactVersion = selectLatestTaggedVersion(
+      readGitOutput(['tag', '--points-at', 'HEAD']).split(/\r?\n/).filter(Boolean)
+    );
+    const isDirty = Boolean(readGitOutput(['status', '--porcelain']));
+
+    if (exactVersion && !isDirty) {
+      value = exactVersion;
+    } else {
+      const latestVersion = selectLatestTaggedVersion(tags)
+        || (await fs.readFile(path.join(root, '.release-version'), 'utf8')).trim();
+      value = incrementVersion(latestVersion);
+    }
+  }
 
   if (!/^(0|[1-9]\d?)\.(0|[1-9]\d?)\.(0|[1-9]\d?)$/.test(value)) {
     throw new Error(`RELEASE_VERSION 无效：${value}`);
   }
 
-  return value;
+  if (!/^[a-f0-9]{7,40}$/i.test(commit)) {
+    throw new Error(`RELEASE_COMMIT 无效：${commit}`);
+  }
+
+  return {
+    version: value,
+    commit,
+    formal: Boolean(explicitVersion)
+  };
+}
+
+function readGitOutput(args) {
+  return execFileSync('git', args, {
+    cwd: root,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe']
+  }).trim();
 }
 
 async function copyFile(relativePath) {
@@ -134,8 +173,10 @@ async function writeDistPackageJson() {
 async function writeReleaseMetadata() {
   const metadata = {
     version: releaseVersion,
-    tag: `v${releaseVersion}`,
-    commit: process.env.RELEASE_COMMIT?.trim() || null,
+    tag: isFormalReleaseBuild ? `v${releaseVersion}` : null,
+    commit: releaseCommit || null,
+    release: isFormalReleaseBuild,
+    updateable: true,
     builtAt: new Date().toISOString()
   };
 
@@ -155,7 +196,7 @@ async function writeDeployReadme() {
 ## 服务器部署步骤
 
 \`\`\`bash
-npm install
+npm install --legacy-peer-deps --no-audit --no-fund
 npm run build:site
 PORT=1231 HOST=0.0.0.0 NODE_ENV=production npm start
 \`\`\`
@@ -170,6 +211,14 @@ PORT=1231 HOST=0.0.0.0 NODE_ENV=production npm start
 npm run db:init
 npm run admin:create -- admin your-password
 \`\`\`
+
+## 后台在线更新
+
+- 后台从 \`https://github.com/voidvon/ai-cms\` 检查并下载最新 Release。
+- 正式 Release 和包含可信 Git 提交号的普通构建包都允许执行在线更新。
+- Node.js 服务账号需要对程序目录、\`system/\`、\`scripts/\`、\`public/\` 和 \`node_modules/\` 具有写权限。
+- 更新过程会保留 \`data/\`、\`html/\`、\`uploads/\`、环境配置和部署运行目录。
+- 安装完成后会强制重启服务。独立重启守护会等待旧进程退出，再通过项目根目录的 \`server.mjs\` 启动新进程。
 `;
 
   await fs.writeFile(path.join(distRoot, 'DEPLOY.md'), content);
@@ -178,6 +227,7 @@ npm run admin:create -- admin your-password
 function shouldSkip(relativePath, options = {}) {
   const basename = path.basename(relativePath);
   const segments = relativePath.split(path.sep);
+  const normalizedRelativePath = relativePath.split(path.sep).join('/');
   return basename === '.DS_Store'
     || basename.startsWith('._')
     || segments.includes('node_modules')
@@ -185,6 +235,12 @@ function shouldSkip(relativePath, options = {}) {
     || segments.includes('.venv')
     || segments.includes('generated')
     || segments.includes('generated-debug')
+    || normalizedRelativePath === 'public/upload'
+    || normalizedRelativePath.startsWith('public/upload/')
+    || normalizedRelativePath === 'public/uploads'
+    || normalizedRelativePath.startsWith('public/uploads/')
+    || normalizedRelativePath === 'public/uploadfile'
+    || normalizedRelativePath.startsWith('public/uploadfile/')
     || (!options.allowDist && segments.includes('dist'))
     || relativePath.endsWith('.sqlite')
     || relativePath.endsWith('.sqlite-shm')

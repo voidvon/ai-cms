@@ -392,6 +392,7 @@ ensure_runtime_permissions() {
 
   for runtime_path in \
     "${app_dir}/.deploy" \
+    "${app_dir}/.updates" \
     "${app_dir}/logs" \
     "${app_dir}/data" \
     "${app_dir}/html" \
@@ -399,6 +400,23 @@ ensure_runtime_permissions() {
     if [ -e "${runtime_path}" ]; then
       chown -R "${target_user}:${target_group}" "${runtime_path}"
       chmod -R u+rwX,g+rwX,o-rwx "${runtime_path}" 2>/dev/null || true
+    fi
+  done
+
+  # 后台在线更新需要覆盖程序文件并执行 npm install。
+  for application_path in \
+    "${app_dir}/server.mjs" \
+    "${app_dir}/package.json" \
+    "${app_dir}/package-lock.json" \
+    "${app_dir}/DEPLOY.md" \
+    "${app_dir}/RELEASE.json" \
+    "${app_dir}/system" \
+    "${app_dir}/scripts" \
+    "${app_dir}/public" \
+    "${app_dir}/node_modules"; do
+    if [ -e "${application_path}" ]; then
+      chown -R "${target_user}:${target_group}" "${application_path}"
+      chmod -R u+rwX,g+rX,o-rX "${application_path}" 2>/dev/null || true
     fi
   done
 }
@@ -485,7 +503,7 @@ install_npm_dependencies_if_needed() {
   fi
 
   printf '[部署] 正在安装 %s 依赖...\n' "${label}"
-  npm --prefix "${package_dir}" install --omit=dev
+  npm --prefix "${package_dir}" install --omit=dev --legacy-peer-deps --no-audit --no-fund
   printf '%s\n' "${current_hash}" > "${stamp_file}"
 }
 
