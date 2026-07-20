@@ -97,7 +97,7 @@ jobs:
             "release-assets/spiraxsarcocn-v${RELEASE_VERSION}.zip" \
             "release-assets/spiraxsarcocn-v${RELEASE_VERSION}-SHA256SUMS.txt" \
             --target "$GITHUB_SHA" \
-            --title "SpiraxSarcoCN v${RELEASE_VERSION}" \
+            --title "v${RELEASE_VERSION}" \
             --generate-notes \
             --fail-on-no-commits \
             --latest

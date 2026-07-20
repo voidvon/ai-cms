@@ -207,7 +207,7 @@ async function main() {
     '--target',
     capture('git', ['rev-parse', 'HEAD']),
     '--title',
-    `SpiraxSarcoCN ${tag}`,
+    tag,
     '--generate-notes',
     '--fail-on-no-commits',
     '--latest'
