@@ -1,4 +1,0 @@
-interface:
-  display_name: "导入 PDF HTML 到产品详情"
-  short_description: "关键词优化后导入 PDF HTML 和图片到产品详情"
-  default_prompt: "使用 $import-pdf-html-to-product-detail 对 $convert-pdf-to-html 生成的 HTML 做多语言关键词统一与内链优化，再导入指定产品详情并完成媒体清理和单页验证。"

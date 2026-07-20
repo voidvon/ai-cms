@@ -1,4 +1,0 @@
-interface:
-  display_name: "发布多语言 PDF 产品详情"
-  short_description: "重绘无文案16:10产品预览图并从PDF自动发布多语言产品详情"
-  default_prompt: "使用 $publish-pdf-product-detail 根据产品信息 ID、PDF 和产品图片，先生成提示词和无新增文案的 16:10 产品预览图，再完成英文母版、全部语言优化与产品详情发布。"

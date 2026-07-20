@@ -1,4 +1,0 @@
-interface:
-  display_name: "Spirax 专题内容简报"
-  short_description: "先确认英文母版，再逐语言研究本地关键词并扩展内容。"
-  default_prompt: "请使用 $spirax-topic-content-brief，先完成并验证英文 en 母版，提交我确认并暂停；确认后为每种启用语言重新研究本地化关键词，再扩展和验证全部语言。"

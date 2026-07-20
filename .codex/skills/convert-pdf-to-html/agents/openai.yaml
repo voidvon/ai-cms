@@ -1,4 +1,0 @@
-interface:
-  display_name: "PDF 转 HTML"
-  short_description: "将 PDF 高保真转换为结构化、响应式 HTML 页面"
-  default_prompt: "使用 $convert-pdf-to-html 将这个 PDF 转换为结构化 HTML，并精确保留表格、图表和原始版式关系。"
