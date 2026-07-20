@@ -129,7 +129,7 @@ async function sha256(filePath) {
 }
 
 async function createArchives(version) {
-  const packageName = `spiraxsarcocn-v${version}`;
+  const packageName = `ai-cms-v${version}`;
   const packageRoot = path.join(releaseAssetsRoot, packageName);
   const tarPath = path.join(releaseAssetsRoot, `${packageName}.tar.gz`);
   const zipPath = path.join(releaseAssetsRoot, `${packageName}.zip`);

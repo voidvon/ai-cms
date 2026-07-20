@@ -75,7 +75,7 @@ jobs:
         env:
           RELEASE_VERSION: ${{ steps.version.outputs.next_version }}
         run: |
-          package_name="spiraxsarcocn-v${RELEASE_VERSION}"
+          package_name="ai-cms-v${RELEASE_VERSION}"
           mkdir -p "release-assets/${package_name}"
           cp -a dist/. "release-assets/${package_name}/"
           tar -C release-assets -czf "release-assets/${package_name}.tar.gz" "$package_name"
@@ -93,9 +93,9 @@ jobs:
           RELEASE_VERSION: ${{ steps.version.outputs.next_version }}
         run: |
           gh release create "$RELEASE_TAG" \
-            "release-assets/spiraxsarcocn-v${RELEASE_VERSION}.tar.gz" \
-            "release-assets/spiraxsarcocn-v${RELEASE_VERSION}.zip" \
-            "release-assets/spiraxsarcocn-v${RELEASE_VERSION}-SHA256SUMS.txt" \
+            "release-assets/ai-cms-v${RELEASE_VERSION}.tar.gz" \
+            "release-assets/ai-cms-v${RELEASE_VERSION}.zip" \
+            "release-assets/ai-cms-v${RELEASE_VERSION}-SHA256SUMS.txt" \
             --target "$GITHUB_SHA" \
             --title "v${RELEASE_VERSION}" \
             --generate-notes \

@@ -48,9 +48,9 @@ npm run release:prepare
 
 ```text
 release-assets/
-├── spiraxsarcocn-v0.1.1.tar.gz
-├── spiraxsarcocn-v0.1.1.zip
-└── spiraxsarcocn-v0.1.1-SHA256SUMS.txt
+├── ai-cms-v0.1.1.tar.gz
+├── ai-cms-v0.1.1.zip
+└── ai-cms-v0.1.1-SHA256SUMS.txt
 ```
 
 ## 版本规则

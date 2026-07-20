@@ -107,7 +107,7 @@ async function copyOptionalFile(sourceRelativePath, targetRelativePath = sourceR
 
 async function writeDistPackageJson() {
   const pkg = {
-    name: 'spiraxsarcocn-dist',
+    name: 'ai-cms',
     version: releaseVersion,
     private: true,
     type: 'module',
