@@ -18,7 +18,10 @@
     "db:init": "npm --prefix system/server run db:init",
     "admin:create": "npm --prefix system/server run admin:create --",
     "test:server": "npm --prefix system/server run test",
-    "test": "npm run test:server",
+    "test:release-version": "node --test scripts/next-release-version.test.mjs",
+    "test": "npm run test:release-version && npm run test:server",
+    "release:prepare": "node scripts/release.mjs --prepare-only",
+    "release": "node scripts/release.mjs",
     "build:dist": "npm run build:admin && node scripts/build-dist.mjs",
     "build": "npm run build:dist"
   }

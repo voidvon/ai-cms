@@ -1,0 +1,119 @@
+name: 构建并发布版本
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: production-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: 发布下一版本
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: 检查 main 分支
+        env:
+          RELEASE_REF: ${{ github.ref }}
+        run: |
+          if [ "$RELEASE_REF" != "refs/heads/main" ]; then
+            echo "只能从 main 分支开始发布，当前分支引用为：$RELEASE_REF" >&2
+            exit 1
+          fi
+
+      - name: 检出仓库
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: 计算下一发布版本
+        id: version
+        run: node scripts/next-release-version.mjs --github-output "$GITHUB_OUTPUT"
+
+      - name: 安装依赖
+        run: npm ci
+
+      - name: 运行测试
+        run: npm test
+
+      - name: 构建发布包
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.next_version }}
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: npm run build:dist
+
+      - name: 检查发布包
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.next_version }}
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const pkg = JSON.parse(fs.readFileSync("dist/package.json", "utf8"));
+            const release = JSON.parse(fs.readFileSync("dist/RELEASE.json", "utf8"));
+            if (pkg.version !== process.env.EXPECTED_VERSION || release.version !== process.env.EXPECTED_VERSION) {
+              throw new Error("发布包中的版本信息与计算得到的发布版本不一致。");
+            }
+          '
+          forbidden_file="$(find dist -type f \( -name '*.sqlite' -o -name '*.sqlite-shm' -o -name '*.sqlite-wal' -o -name '*.bak' -o -name '.env' -o -name '.env.*' \) -print -quit)"
+          if [ -n "$forbidden_file" ]; then
+            echo "发布包中发现禁止包含的运行数据或敏感文件：$forbidden_file" >&2
+            exit 1
+          fi
+
+      - name: 生成发布附件
+        env:
+          RELEASE_VERSION: ${{ steps.version.outputs.next_version }}
+        run: |
+          package_name="spiraxsarcocn-v${RELEASE_VERSION}"
+          mkdir -p "release-assets/${package_name}"
+          cp -a dist/. "release-assets/${package_name}/"
+          tar -C release-assets -czf "release-assets/${package_name}.tar.gz" "$package_name"
+          (
+            cd release-assets
+            zip -qr "${package_name}.zip" "$package_name"
+            sha256sum "${package_name}.tar.gz" "${package_name}.zip" > "${package_name}-SHA256SUMS.txt"
+          )
+          rm -rf "release-assets/${package_name}"
+
+      - name: 发布到 GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          RELEASE_VERSION: ${{ steps.version.outputs.next_version }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            "release-assets/spiraxsarcocn-v${RELEASE_VERSION}.tar.gz" \
+            "release-assets/spiraxsarcocn-v${RELEASE_VERSION}.zip" \
+            "release-assets/spiraxsarcocn-v${RELEASE_VERSION}-SHA256SUMS.txt" \
+            --target "$GITHUB_SHA" \
+            --title "SpiraxSarcoCN v${RELEASE_VERSION}" \
+            --generate-notes \
+            --fail-on-no-commits \
+            --latest
+
+      - name: 写入发布摘要
+        env:
+          RELEASE_TAG: ${{ steps.version.outputs.tag }}
+          CURRENT_VERSION: ${{ steps.version.outputs.current_version }}
+          RELEASE_VERSION: ${{ steps.version.outputs.next_version }}
+          VERSION_SOURCE: ${{ steps.version.outputs.version_source }}
+        run: |
+          {
+            echo "## 版本发布完成"
+            echo
+            echo "- 上一版本：\`$CURRENT_VERSION\`"
+            echo "- 发布版本：\`$RELEASE_VERSION\`"
+            echo "- 标签：\`$RELEASE_TAG\`"
+            echo "- 版本来源：\`$VERSION_SOURCE\`"
+          } >> "$GITHUB_STEP_SUMMARY"

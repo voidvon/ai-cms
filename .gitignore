@@ -14,6 +14,7 @@ uploads/
 
 node_modules/
 /dist
+/release-assets
 /system/admin/dist
 /system/admin/site-dist
 /system/server/generated/**

@@ -176,11 +176,11 @@ create_local_sqlite_archive() {
 
   LOCAL_DB_SNAPSHOT_FILE="$(mktemp "${TMPDIR:-/tmp}/node-cms-site-sqlite-snapshot.XXXXXX")"
 
-  printf '[deploy] 正在创建 sqlite 一致性快照...\n'
+  printf '[部署] 正在创建 sqlite 一致性快照...\n'
   sqlite3 "${db_file}" ".backup '${LOCAL_DB_SNAPSHOT_FILE}'"
   sqlite3 "${LOCAL_DB_SNAPSHOT_FILE}" "PRAGMA quick_check;" | grep -qx 'ok'
 
-  printf '[deploy] 正在压缩 sqlite 快照...\n'
+  printf '[部署] 正在压缩 sqlite 快照...\n'
   gzip -c "${LOCAL_DB_SNAPSHOT_FILE}" > "${archive_file}"
 }
 
@@ -191,7 +191,7 @@ main() {
   require_command ssh
   require_command rsync
 
-  printf '\n[deploy] 正在构建 dist 发布包...\n'
+  printf '\n[部署] 正在构建 dist 发布包...\n'
   (
     cd "${PROJECT_ROOT}"
     npm run build:dist
@@ -212,7 +212,7 @@ main() {
     create_local_sqlite_archive "${LOCAL_SQLITE_DB_PATH}" "${LOCAL_DB_ARCHIVE_FILE}"
 
     if [ "${BUILD_STATIC_ON_DEPLOY}" != "1" ]; then
-      printf '[deploy] 警告：已启用数据库上传，但未启用静态生成；远端 html/ 不会重新生成。\n'
+      printf '[部署] 警告：已启用数据库上传，但未启用静态生成；远端 html/ 不会重新生成。\n'
     fi
   fi
 
@@ -223,10 +223,10 @@ main() {
     -o IdentitiesOnly=yes
   )
 
-  printf '[deploy] 正在确认远端目录存在...\n'
+  printf '[部署] 正在确认远端目录存在...\n'
   ssh "${ssh_options[@]}" "${REMOTE_USER}@${REMOTE_HOST}" "mkdir -p '${REMOTE_DIR}' '${REMOTE_DIR}/.deploy'"
 
-  printf '[deploy] 正在同步 dist 发布包到 %s...\n' "${REMOTE_DIR}"
+  printf '[部署] 正在同步 dist 发布包到 %s...\n' "${REMOTE_DIR}"
   rsync -az --delete \
     --rsh="ssh ${ssh_options[*]}" \
     --filter='P /.deploy/' \
@@ -252,16 +252,16 @@ main() {
     "${PROJECT_ROOT}/dist/" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/"
 
   if [ "${DEPLOY_UPLOAD_DB}" = "1" ]; then
-    printf '[deploy] 正在上传压缩后的 sqlite 数据库...\n'
+    printf '[部署] 正在上传压缩后的 sqlite 数据库...\n'
     rsync -az \
       --rsh="ssh ${ssh_options[*]}" \
       "${LOCAL_DB_ARCHIVE_FILE}" "${REMOTE_USER}@${REMOTE_HOST}:${REMOTE_DIR}/.deploy/site.sqlite.gz"
   fi
 
   if [ "${BUILD_STATIC_ON_DEPLOY}" = "1" ]; then
-    printf '[deploy] 正在检查依赖并重新生成静态页面...\n'
+    printf '[部署] 正在检查依赖并重新生成静态页面...\n'
   else
-    printf '[deploy] 正在检查依赖，本次不生成静态页面...\n'
+    printf '[部署] 正在检查依赖，本次不生成静态页面...\n'
   fi
 
   ssh "${ssh_options[@]}" "${REMOTE_USER}@${REMOTE_HOST}" \
@@ -333,7 +333,7 @@ create_sqlite_backup() {
   local backup_dir="$2"
 
   if [ ! -f "${db_file}" ]; then
-    printf '[deploy] 未找到 sqlite 数据库，跳过备份。\n'
+    printf '[部署] 未找到 sqlite 数据库，跳过备份。\n'
     return 0
   fi
 
@@ -351,7 +351,7 @@ create_sqlite_backup() {
   fi
 
   prune_sqlite_backups "${backup_dir}"
-  printf '[deploy] SQLite 备份已创建：%s\n' "${backup_file}"
+  printf '[部署] SQLite 备份已创建：%s\n' "${backup_file}"
 }
 
 restore_uploaded_sqlite_database() {
@@ -360,7 +360,7 @@ restore_uploaded_sqlite_database() {
   local backup_dir="$3"
 
   if [ ! -f "${archive_file}" ]; then
-    printf '[deploy] 未找到预期的已上传 sqlite 压缩包：%s\n' "${archive_file}" >&2
+    printf '[部署] 未找到预期的已上传 sqlite 压缩包：%s\n' "${archive_file}" >&2
     exit 1
   fi
 
@@ -377,7 +377,7 @@ restore_uploaded_sqlite_database() {
   rm -f "${archive_file}"
 
   SKIP_PRE_RESTART_SQLITE_BACKUP=1
-  printf '[deploy] 已将上传的 sqlite 数据库恢复到：%s\n' "${db_file}"
+  printf '[部署] 已将上传的 sqlite 数据库恢复到：%s\n' "${db_file}"
 }
 
 ensure_runtime_permissions() {
@@ -407,14 +407,14 @@ run_local_health_checks() {
   local base_url="${HEALTH_CHECK_URL:-https://www.spiraxsteam.com}"
 
   if ! command -v curl >/dev/null 2>&1; then
-    printf '[deploy] 未找到 curl，跳过健康检查。\n'
+    printf '[部署] 未找到 curl，跳过健康检查。\n'
     return 0
   fi
 
-  printf '[deploy] 正在对 %s 执行健康检查...\n' "${base_url}"
+  printf '[部署] 正在对 %s 执行健康检查...\n' "${base_url}"
   curl -fsS --max-time 15 -o /dev/null "${base_url}/"
   curl -fsS --max-time 15 -o /dev/null "${base_url}/admin/"
-  printf '[deploy] 健康检查通过：/ 和 /admin/\n'
+  printf '[部署] 健康检查通过：/ 和 /admin/\n'
 }
 
 start_app_as_www() {
@@ -451,7 +451,7 @@ run_static_generation_if_requested() {
   if [ "${BUILD_STATIC_ON_DEPLOY:-0}" = "1" ]; then
     npm run build:site
   else
-    printf '[deploy] 跳过静态页面生成，保留现有 html/。\n'
+    printf '[部署] 跳过静态页面生成，保留现有 html/。\n'
   fi
 }
 
@@ -464,7 +464,7 @@ install_npm_dependencies_if_needed() {
   local previous_hash
 
   if [ ! -f "${package_dir}/package.json" ]; then
-    printf '[deploy] 未找到 %s 的 package.json，跳过依赖安装。\n' "${label}"
+    printf '[部署] 未找到 %s 的 package.json，跳过依赖安装。\n' "${label}"
     return 0
   fi
 
@@ -480,11 +480,11 @@ install_npm_dependencies_if_needed() {
   previous_hash="$(cat "${stamp_file}" 2>/dev/null || true)"
 
   if [ "${current_hash}" = "${previous_hash}" ] && [ -d "${package_dir}/node_modules" ]; then
-    printf '[deploy] %s 依赖未变化，跳过 npm install。\n' "${label}"
+    printf '[部署] %s 依赖未变化，跳过 npm install。\n' "${label}"
     return 0
   fi
 
-  printf '[deploy] 正在安装 %s 依赖...\n' "${label}"
+  printf '[部署] 正在安装 %s 依赖...\n' "${label}"
   npm --prefix "${package_dir}" install --omit=dev
   printf '%s\n' "${current_hash}" > "${stamp_file}"
 }
@@ -503,8 +503,8 @@ install_npm_dependencies_if_needed "${APP_DIR}/system/admin" "system-admin-deps"
 
 if [ "${DEPLOY_RUNTIME_MANAGER:-bt-manual}" = "bt" ]; then
   if [ "${DEPLOY_UPLOAD_DB:-0}" = "1" ]; then
-    printf '[deploy] 警告：DEPLOY_RUNTIME_MANAGER=bt 可能会在替换数据库时保持应用运行。\n'
-    printf '[deploy] 建议使用 bt-manual 模式，或在脚本外提供停止/启动命令。\n'
+    printf '[部署] 警告：DEPLOY_RUNTIME_MANAGER=bt 可能会在替换数据库时保持应用运行。\n'
+    printf '[部署] 建议使用 bt-manual 模式，或在脚本外提供停止/启动命令。\n'
     restore_uploaded_sqlite_database "${UPLOADED_SQLITE_ARCHIVE_FILE}" "${SQLITE_DB_FILE}" "${SQLITE_BACKUP_DIR}"
   fi
 
@@ -514,12 +514,12 @@ if [ "${DEPLOY_RUNTIME_MANAGER:-bt-manual}" = "bt" ]; then
   run_static_generation_if_requested
   ensure_runtime_permissions "${APP_DIR}"
   if [ -n "${BT_RESTART_COMMAND:-}" ]; then
-    printf '[deploy] 正在执行 BT 重启命令...\n'
+    printf '[部署] 正在执行 BT 重启命令...\n'
     bash -lc "${BT_RESTART_COMMAND}"
     run_local_health_checks
   else
-    printf '[deploy] 检测到 BT 管理项目。文件已更新，静态页面已重新生成。\n'
-    printf '[deploy] 如果项目没有自动重载，请在 BT 面板中重启或重载 Node 项目。\n'
+    printf '[部署] 检测到 BT 管理项目。文件已更新，静态页面已重新生成。\n'
+    printf '[部署] 如果项目没有自动重载，请在 BT 面板中重启或重载 Node 项目。\n'
   fi
 elif [ "${DEPLOY_RUNTIME_MANAGER:-bt-manual}" = "bt-manual" ]; then
   terminate_app_processes_by_cwd "${APP_DIR}"
@@ -567,7 +567,7 @@ else
 fi
 EOF
 
-  printf '[deploy] 完成。\n'
+  printf '[部署] 完成。\n'
 }
 
 main "$@"

@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const distRoot = path.join(root, 'dist');
+const releaseVersion = await resolveReleaseVersion();
 
 async function main() {
   await fs.rm(distRoot, { recursive: true, force: true });
@@ -18,9 +19,21 @@ async function main() {
   await copyAdminSiteSource();
   await copyPublicAssets();
   await createRuntimeDirs();
+  await writeReleaseMetadata();
   await writeDeployReadme();
 
-  console.log(`Distribution package generated: ${distRoot}`);
+  console.log(`发布包已生成：${distRoot}（版本 ${releaseVersion}）`);
+}
+
+async function resolveReleaseVersion() {
+  const value = process.env.RELEASE_VERSION?.trim()
+    || (await fs.readFile(path.join(root, '.release-version'), 'utf8')).trim();
+
+  if (!/^(0|[1-9]\d?)\.(0|[1-9]\d?)\.(0|[1-9]\d?)$/.test(value)) {
+    throw new Error(`RELEASE_VERSION 无效：${value}`);
+  }
+
+  return value;
 }
 
 async function copyFile(relativePath) {
@@ -95,6 +108,7 @@ async function copyOptionalFile(sourceRelativePath, targetRelativePath = sourceR
 async function writeDistPackageJson() {
   const pkg = {
     name: 'spiraxsarcocn-dist',
+    version: releaseVersion,
     private: true,
     type: 'module',
     workspaces: [
@@ -117,12 +131,28 @@ async function writeDistPackageJson() {
   );
 }
 
+async function writeReleaseMetadata() {
+  const metadata = {
+    version: releaseVersion,
+    tag: `v${releaseVersion}`,
+    commit: process.env.RELEASE_COMMIT?.trim() || null,
+    builtAt: new Date().toISOString()
+  };
+
+  await fs.writeFile(
+    path.join(distRoot, 'RELEASE.json'),
+    `${JSON.stringify(metadata, null, 2)}\n`
+  );
+}
+
 async function writeDeployReadme() {
-  const content = `# Deployment Package
+  const content = `# 部署包说明
 
-This directory is the deployable runtime package.
+此目录是可部署的运行包。
 
-## Server Steps
+发布版本：\`${releaseVersion}\`
+
+## 服务器部署步骤
 
 \`\`\`bash
 npm install
@@ -130,12 +160,12 @@ npm run build:site
 PORT=1231 HOST=0.0.0.0 NODE_ENV=production npm start
 \`\`\`
 
-## Runtime Data
+## 运行数据说明
 
-- \`html/\` is generated on the server by \`npm run build:site\`.
-- \`system/admin/src/site/\` contains editable React templates. After changing them, click the admin generate button or run \`npm run build:site\`; the latest source is compiled at generation time.
-- \`data/site.sqlite\` is runtime data and is not included in this package.
-- For a fresh server, initialize or restore the database before generating HTML.
+- \`html/\` 由服务器执行 \`npm run build:site\` 后生成。
+- \`system/admin/src/site/\` 包含可编辑的 React 模板。修改后，可在后台点击生成按钮，或执行 \`npm run build:site\`；静态生成时会编译最新源码。
+- \`data/site.sqlite\` 属于运行数据，不包含在此部署包中。
+- 新服务器应先初始化或恢复数据库，再生成 HTML。
 \`\`\`bash
 npm run db:init
 npm run admin:create -- admin your-password
