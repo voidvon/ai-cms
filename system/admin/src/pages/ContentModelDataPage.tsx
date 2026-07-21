@@ -27,10 +27,10 @@ import { buildColumnPathMap, buildColumnTreeOptions } from '@/lib/column-options
 import { formatDate } from '@/lib/datetime'
 import { getFieldLabel, mapFieldsByName } from '@/lib/content-model-fields'
 import { toast } from 'sonner'
-import type { Column, ManagedContentItem, SectionContentItem } from '@/types'
+import type { Column, ManagedContentItem } from '@/types'
 import ContentItemFormDialog from '@/components/ContentItemFormDialog'
 
-type ListedContentItem = ManagedContentItem | SectionContentItem
+type ListedContentItem = ManagedContentItem
 
 const PAGE_LIMIT = 20
 
@@ -158,13 +158,12 @@ export default function ContentModelDataPage({
 
   const items = itemsData?.items || []
   const pagination = itemsData?.pagination
-  const titleFieldName = fieldMap.has('title') ? 'title' : 'name'
-  const titleFieldLabel = getFieldLabel(fieldMap, titleFieldName, titleFieldName === 'title' ? '标题' : '名称')
+  const titleFieldLabel = getFieldLabel(fieldMap, 'name', '名称')
   const showCode = fieldMap.has('code') && selectedModel.code !== 'product'
   const showFeatured = fieldMap.has('is_featured_home')
   const showVisibility = fieldMap.has('is_visible')
   const showSortOrder = fieldMap.has('sort_order')
-  const showCreatedAt = fieldMap.has('created_at')
+  const showUpdatedAt = fieldMap.has('created_at') || fieldMap.has('updated_at')
 
   const handleSelectModel = (nextModelCode: string) => {
     if (lockModelSelection) {
@@ -298,20 +297,20 @@ export default function ContentModelDataPage({
                   {showFeatured ? <TableHead>{getFieldLabel(fieldMap, 'is_featured_home', '推荐')}</TableHead> : null}
                   {showVisibility ? <TableHead>{getFieldLabel(fieldMap, 'is_visible', '显示状态')}</TableHead> : null}
                   {showSortOrder ? <TableHead>{getFieldLabel(fieldMap, 'sort_order', '排序')}</TableHead> : null}
-                  {showCreatedAt ? <TableHead>{getFieldLabel(fieldMap, 'created_at', '创建时间')}</TableHead> : null}
+                  {showUpdatedAt ? <TableHead>更新时间</TableHead> : null}
                   <TableHead className="text-right">操作</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {itemsLoading ? (
                   <TableRow>
-                    <TableCell colSpan={resolveColumnCount({ showCode, showFeatured, showVisibility, showSortOrder, showCreatedAt })} className="text-center">
+                    <TableCell colSpan={resolveColumnCount({ showCode, showFeatured, showVisibility, showSortOrder, showUpdatedAt })} className="text-center">
                       加载中...
                     </TableCell>
                   </TableRow>
                 ) : items.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={resolveColumnCount({ showCode, showFeatured, showVisibility, showSortOrder, showCreatedAt })} className="text-center">
+                    <TableCell colSpan={resolveColumnCount({ showCode, showFeatured, showVisibility, showSortOrder, showUpdatedAt })} className="text-center">
                       暂无内容
                     </TableCell>
                   </TableRow>
@@ -319,17 +318,17 @@ export default function ContentModelDataPage({
                   items.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell>{item.id}</TableCell>
-                      <TableCell className="font-medium">{resolveContentItemTitle(item)}</TableCell>
+                      <TableCell className="font-medium">{resolveContentItemName(item)}</TableCell>
                       {showCode ? <TableCell>{'code' in item ? item.code || '-' : '-'}</TableCell> : null}
                       <TableCell>{resolveColumnLabel(item, modelColumns, columnPathById)}</TableCell>
                       {showFeatured ? (
-                        <TableCell>{Number(item.is_featured_home || (item as SectionContentItem).is_featured || 0) === 1 ? <Badge>是</Badge> : <Badge variant="outline">否</Badge>}</TableCell>
+                        <TableCell>{Number(item.is_featured_home || 0) === 1 ? <Badge>是</Badge> : <Badge variant="outline">否</Badge>}</TableCell>
                       ) : null}
                       {showVisibility ? (
                         <TableCell>{(item as ManagedContentItem).is_visible === 1 ? <Badge>显示</Badge> : <Badge variant="secondary">隐藏</Badge>}</TableCell>
                       ) : null}
                       {showSortOrder ? <TableCell>{Number(item.sort_order || 0)}</TableCell> : null}
-                      {showCreatedAt ? <TableCell>{formatDate(resolveCreatedAt(item))}</TableCell> : null}
+                      {showUpdatedAt ? <TableCell>{formatDate(item.updated_at || '')}</TableCell> : null}
                       <TableCell className="text-right">
                         <Button
                           variant="ghost"
@@ -385,7 +384,7 @@ export default function ContentModelDataPage({
           <AlertDialogHeader>
             <AlertDialogTitle>确认删除内容</AlertDialogTitle>
             <AlertDialogDescription>
-              将删除“{deleteTarget ? resolveContentItemTitle(deleteTarget) : ''}”，该操作不可撤销。
+              将删除“{deleteTarget ? resolveContentItemName(deleteTarget) : ''}”，该操作不可撤销。
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -411,12 +410,8 @@ export default function ContentModelDataPage({
   )
 }
 
-function resolveContentItemTitle(item: ListedContentItem) {
-  return 'title' in item ? String(item.title || '') : String(item.name || '')
-}
-
-function resolveCreatedAt(item: ListedContentItem) {
-  return 'created_at' in item ? String(item.created_at || '') : ''
+function resolveContentItemName(item: ListedContentItem) {
+  return String(item.name || '')
 }
 
 function resolveColumnLabel(
@@ -439,18 +434,18 @@ function resolveColumnCount({
   showFeatured,
   showVisibility,
   showSortOrder,
-  showCreatedAt,
+  showUpdatedAt,
 }: {
   showCode: boolean
   showFeatured: boolean
   showVisibility: boolean
   showSortOrder: boolean
-  showCreatedAt: boolean
+  showUpdatedAt: boolean
 }) {
   return 4
     + Number(showCode)
     + Number(showFeatured)
     + Number(showVisibility)
     + Number(showSortOrder)
-    + Number(showCreatedAt)
+    + Number(showUpdatedAt)
 }

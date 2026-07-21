@@ -389,7 +389,6 @@ function hydrateColumns(rows, {
             language,
             {
               name: translation.name,
-              title: translation.name,
               summary: translation.summary,
               content_html: translation.content_html,
               template_data_json: translation.template_data_json,
@@ -704,8 +703,7 @@ function normalizeContentModelId(value) {
 function normalizeColumnTranslations(translations, {
   defaultLanguageCode,
   existingTranslations = {},
-  fallbackBase,
-  nameField = 'name'
+  fallbackBase
 }) {
   const output = {};
   const knownCodes = new Set(listLanguages().map((language) => language.code));
@@ -715,12 +713,8 @@ function normalizeColumnTranslations(translations, {
       continue;
     }
     const translationName = String(
-      value?.[nameField]
-      ?? value?.name
-      ?? value?.title
-      ?? existingTranslations?.[languageCode]?.[nameField]
+      value?.name
       ?? existingTranslations?.[languageCode]?.name
-      ?? existingTranslations?.[languageCode]?.title
       ?? ''
     ).trim();
     const normalized = {
@@ -749,7 +743,7 @@ function normalizeColumnTranslations(translations, {
   if (!output[defaultLanguageCode]) {
     const fallback = existingTranslations?.[defaultLanguageCode];
     output[defaultLanguageCode] = {
-      name: String(fallback?.name || fallback?.title || fallbackBase.name || '').trim(),
+      name: String(fallback?.name || fallbackBase.name || '').trim(),
       summary: String(fallback?.summary || fallbackBase.summary || ''),
       content_html: String(fallback?.content_html || fallbackBase.content_html || ''),
       template_data_json: normalizeTemplateDataJson(fallback?.template_data_json ?? fallback?.template_data ?? fallbackBase.template_data_json ?? fallbackBase.template_data ?? null),

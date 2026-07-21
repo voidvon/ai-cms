@@ -23,7 +23,7 @@ const tsxGroups: VariableGroup[] = [
       'currentColumnItem?.name',
       'currentColumnItem?.url',
       'parentColumn?.name',
-      'currentContent?.title',
+      'currentContent?.name',
     ],
   },
   {

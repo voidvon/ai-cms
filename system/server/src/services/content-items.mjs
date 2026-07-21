@@ -68,9 +68,9 @@ export function listContentItemsAdmin(modelCode, {
     includeDescendants,
     visibleOnly: false,
     languageCode,
-    nameKeyword
+    nameKeyword,
+    orderBy: 'updated_at_desc'
   });
-  result.items.sort(resolveContentItemComparator(normalizedModelCode));
   return result;
 }
 

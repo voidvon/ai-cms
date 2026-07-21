@@ -138,6 +138,8 @@ export interface ManagedContentItem {
   translation_statuses?: ContentTranslationStatus[];
   translations?: Record<string, ManagedContentTranslation>;
   dynamic_fields?: Record<string, unknown>;
+  created_at?: string;
+  updated_at?: string;
   [key: string]: unknown;
 }
 
@@ -152,44 +154,6 @@ export interface ManagedContentTranslation {
   publish_status: PublishStatus;
   dynamic_fields?: Record<string, unknown>;
   [key: string]: unknown;
-}
-
-export interface SectionContentItem {
-  id: number;
-  column_id?: number | null;
-  custom_url?: string | null;
-  title: string;
-  summary?: string;
-  content_html?: string;
-  seo_title?: string;
-  seo_description?: string;
-  template_data_json?: string | null;
-  template_data?: Record<string, unknown> | null;
-  image?: string;
-  picture?: string;
-  is_featured?: number;
-  is_featured_home?: number;
-  sort_order: number;
-  created_at: string;
-  column_name?: string;
-  current_language_code?: string;
-  requested_language_code?: string;
-  resolved_language_code?: string;
-  fallback_language_code?: string | null;
-  is_language_fallback?: boolean;
-  translation_statuses?: ContentTranslationStatus[];
-  translations?: Record<string, SectionContentTranslation>;
-}
-
-export interface SectionContentTranslation {
-  title: string;
-  summary?: string;
-  content_html?: string;
-  template_data_json?: string | null;
-  template_data?: Record<string, unknown> | null;
-  seo_title?: string;
-  seo_description?: string;
-  publish_status: PublishStatus;
 }
 
 export interface ColumnNode {

@@ -1130,8 +1130,7 @@ function buildPreviewPageContext({ pageType, title, url, section, column, conten
     currentContent: content ? {
       id: toInteger(content.id, 0),
       type: content.type || '',
-      title: content.title || content.name || '',
-      name: content.name || content.title || '',
+      name: content.name || '',
       url: content.url || ''
     } : null
   };
@@ -1202,7 +1201,7 @@ function getPreviewSectionEntry(sectionConfig = null) {
   return getPreviewSectionEntries(1, sectionConfig)[0] || {
     id: 1,
     column_id: 1,
-    title: '示例文章',
+    name: '示例文章',
     summary: '示例文章摘要',
     content_html: '示例文章正文',
     created_at: new Date().toISOString()
@@ -1219,7 +1218,7 @@ function getPreviewSectionEntryFallback() {
   return {
     id: 1,
     column_id: 1,
-    title: '示例文章',
+    name: '示例文章',
     summary: '示例文章摘要',
     content_html: '示例文章正文',
     created_at: new Date().toISOString()
@@ -1446,7 +1445,7 @@ function buildPreviewManagedContentLinksHtml(limit = 8, rootColumn = null, site 
 
 function buildPreviewSectionEntryLinks(sectionConfig = null, limit = 10) {
   return getPreviewSectionEntries(limit, sectionConfig).map((item) => (
-    `<li><a href="${escapeHtml(buildPreviewSectionEntryUrl(item, sectionConfig))}">${escapeHtml(item.title || '')}</a></li>`
+    `<li><a href="${escapeHtml(buildPreviewSectionEntryUrl(item, sectionConfig))}">${escapeHtml(item.name || '')}</a></li>`
   )).join('');
 }
 

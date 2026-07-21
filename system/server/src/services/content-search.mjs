@@ -2,7 +2,7 @@ import { listSearchableFieldNames } from './content-model-fields.mjs';
 import {
   listContentEntriesPaged,
   resolveContentEntryCoverImage,
-  resolveContentEntryDisplayTitle
+  resolveContentEntryDisplayName
 } from './content-entries.mjs';
 import { ensureContentModelStorageSchema } from './content-model-storage.mjs';
 import { listContentModels } from './content-models.mjs';
@@ -149,7 +149,7 @@ export function normalizeSearchModelCodes(models) {
 }
 
 function resolveResultTitle(modelCode, item) {
-  return resolveContentEntryDisplayTitle(item);
+  return resolveContentEntryDisplayName(item);
 }
 
 function resolveResultCoverImage(item) {

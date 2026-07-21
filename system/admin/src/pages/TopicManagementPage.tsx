@@ -20,9 +20,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
-import type { Column, ContentModel, ManagedContentItem, SectionContentItem, TemplateBinding } from '@/types'
+import type { Column, ContentModel, ManagedContentItem, TemplateBinding } from '@/types'
 
-type ListedContentItem = ManagedContentItem | SectionContentItem
+type ListedContentItem = ManagedContentItem
 
 interface RelatedContentRef {
   model: string
@@ -864,7 +864,7 @@ function RelatedContentPickerDialog({
                   return (
                     <TableRow key={`${selectedModel.code}:${item.id}`}>
                       <TableCell>{item.id}</TableCell>
-                      <TableCell className="font-medium">{resolveContentItemTitle(item) || '-'}</TableCell>
+                      <TableCell className="font-medium">{resolveContentItemName(item) || '-'}</TableCell>
                       <TableCell>{item.column_name || item.column_id || '-'}</TableCell>
                       <TableCell className="text-right">
                         <Button
@@ -953,8 +953,8 @@ function parseRelatedContentRefs(value: string): RelatedContentRef[] {
   }
 }
 
-function resolveContentItemTitle(item: ListedContentItem) {
-  return 'title' in item ? String(item.title || '') : String(item.name || '')
+function resolveContentItemName(item: ListedContentItem) {
+  return String(item.name || '')
 }
 
 function filterContentItems(items: ListedContentItem[], keyword: string) {
@@ -965,7 +965,7 @@ function filterContentItems(items: ListedContentItem[], keyword: string) {
   return items.filter((item) => {
     const searchableText = [
       item.id,
-      resolveContentItemTitle(item),
+      resolveContentItemName(item),
       item.column_name,
       item.column_id,
     ].map((value) => String(value || '').toLowerCase()).join(' ')

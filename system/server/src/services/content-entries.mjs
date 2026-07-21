@@ -250,7 +250,8 @@ export function listContentEntriesPaged(modelCode, {
   includeDescendants = false,
   visibleOnly = false,
   languageCode = null,
-  nameKeyword = ''
+  nameKeyword = '',
+  orderBy = 'default'
 } = {}) {
   ensureContentModelStorageSchema();
   const selectedLanguage = resolveLanguage(languageCode);
@@ -332,7 +333,7 @@ export function listContentEntriesPaged(modelCode, {
       LEFT JOIN column_translations tc ON tc.column_id = c.id AND tc.language_id = ?
       LEFT JOIN column_translations dtc ON dtc.column_id = c.id AND dtc.language_id = ?
       ${where}
-      ORDER BY ${buildContentEntryOrderClause(modelCode)}
+      ORDER BY ${buildContentEntryOrderClause(modelCode, orderBy)}
       LIMIT ?
       OFFSET ?
     `,
@@ -446,7 +447,6 @@ export function getContentEntryById(modelCode, id, {
       translations.map((translation) => {
         const translationData = {
           name: translation.name,
-          title: translation.name,
           summary: translation.summary,
           content_html: translation.content_html,
           template_data_json: translation.template_data_json,
@@ -760,13 +760,12 @@ function normalizeContentEntryInput(modelCode, input, { existingEntry = null } =
     ? (normalizeSingleImage(baseInput.primary_image ?? existing.primary_image) || images[0] || singleImage || '')
     : singleImage;
   const customUrl = normalizeEntryCustomUrl(baseInput.custom_url ?? existing.custom_url);
-  const nameField = resolveTranslationNameField(baseInput, input?.translations, existing);
   const baseName = nameStoredOnMainTable
     ? String(baseInput.name ?? existing.name ?? '').trim()
     : '';
 
   const fallbackBase = {
-    name: String(existing.title || existing.name || '').trim(),
+    name: String(existing.name || '').trim(),
     summary: String(existing.summary || ''),
     content_html: String(existing.content_html || ''),
     template_data_json: existing.template_data_json ?? existing.template_data ?? null,
@@ -787,7 +786,6 @@ function normalizeContentEntryInput(modelCode, input, { existingEntry = null } =
         existingTranslations: existing.translations || {},
         fallbackBase,
         dynamicFields,
-        nameField,
         requiredNameError: '请输入默认语言的名称'
       })
     : {};
@@ -830,7 +828,6 @@ function normalizeTranslations(translations, {
   existingTranslations = {},
   fallbackBase,
   dynamicFields = [],
-  nameField = 'name',
   requiredNameError = '请输入默认语言的名称'
 }) {
   const output = {};
@@ -842,12 +839,8 @@ function normalizeTranslations(translations, {
       continue;
     }
     const translationName = String(
-      value?.[nameField]
-      ?? value?.name
-      ?? value?.title
-      ?? existingTranslations?.[languageCode]?.[nameField]
+      value?.name
       ?? existingTranslations?.[languageCode]?.name
-      ?? existingTranslations?.[languageCode]?.title
       ?? ''
     ).trim();
     output[languageCode] = {
@@ -940,7 +933,6 @@ function mapEntryRow(modelCode, row) {
 
   const entry = {
     ...base,
-    title: base.name,
     picture: primaryImage,
     image: primaryImage,
     is_featured: base.is_featured_home
@@ -959,8 +951,8 @@ export function resolveContentEntryComparator(modelCode) {
     : compareEntriesByCreatedAt;
 }
 
-export function resolveContentEntryDisplayTitle(item) {
-  return String(item?.title || item?.name || '').trim();
+export function resolveContentEntryDisplayName(item) {
+  return String(item?.name || '').trim();
 }
 
 export function resolveContentEntryCoverImage(item) {
@@ -969,7 +961,10 @@ export function resolveContentEntryCoverImage(item) {
     || null;
 }
 
-function buildContentEntryOrderClause(modelCode) {
+function buildContentEntryOrderClause(modelCode, orderBy = 'default') {
+  if (orderBy === 'updated_at_desc') {
+    return 'datetime(e.updated_at) DESC, e.id DESC';
+  }
   return hasSortableContentEntries(modelCode)
     ? 'e.sort_order ASC, e.id DESC'
     : 'e.created_at DESC, e.id DESC';
@@ -977,19 +972,6 @@ function buildContentEntryOrderClause(modelCode) {
 
 function hasSortableContentEntries(modelCode) {
   return getModelFieldNameSet(modelCode).has('sort_order');
-}
-
-function resolveTranslationNameField(baseInput, translations, existing) {
-  if (Object.values(translations || {}).some((value) => value && Object.prototype.hasOwnProperty.call(value, 'title'))) {
-    return 'title';
-  }
-  if (Object.prototype.hasOwnProperty.call(baseInput || {}, 'title')) {
-    return 'title';
-  }
-  if (Object.prototype.hasOwnProperty.call(existing || {}, 'title') && !Object.prototype.hasOwnProperty.call(existing || {}, 'name')) {
-    return 'title';
-  }
-  return 'name';
 }
 
 function compareEntriesByCreatedAt(left, right) {

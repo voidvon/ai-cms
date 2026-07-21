@@ -28,13 +28,10 @@ import type {
   ContentModelField,
   ManagedContentItem,
   ManagedContentTranslation,
-  SectionContentItem,
-  SectionContentTranslation,
 } from '@/types'
 
-type ContentItem = ManagedContentItem | SectionContentItem
-type ContentItemTranslation = ManagedContentTranslation | SectionContentTranslation
-type TranslationNameField = 'title' | 'name'
+type ContentItem = ManagedContentItem
+type ContentItemTranslation = ManagedContentTranslation
 
 interface TopicColumnNode extends Column {
   children: TopicColumnNode[]
@@ -46,7 +43,6 @@ interface RelatedContentRef {
 }
 
 interface FormModelCapabilities {
-  translationNameField: TranslationNameField
   translationNameLabel: string
   translationNamePlaceholder: string
   requiredNameError: string
@@ -190,7 +186,7 @@ export default function ContentItemFormDialog({
 
     if (source && mode === 'edit') {
       setBaseData(createBaseDataFromItem(source))
-      setTranslations(buildInitialTranslations(capabilities, source, defaultLanguageCode, availableLanguageCodes))
+      setTranslations(buildInitialTranslations(source, defaultLanguageCode, availableLanguageCodes))
       setActiveLanguage(source.requested_language_code || source.current_language_code || defaultLanguageCode)
       return
     }
@@ -198,7 +194,7 @@ export default function ContentItemFormDialog({
     if (mode === 'create') {
       setBaseData(createEmptyBaseData(defaultColumnId))
       setTranslations({
-        [defaultLanguageCode]: createEmptyTranslation(capabilities, { publish_status: 'published' }),
+        [defaultLanguageCode]: createEmptyTranslation({ publish_status: 'published' }),
       })
       setActiveLanguage(defaultLanguageCode)
     }
@@ -259,10 +255,8 @@ export default function ContentItemFormDialog({
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
-    const defaultTranslation = translations[defaultLanguageCode] || createEmptyTranslation(capabilities)
-    const requiredName = capabilities.translationNameField === 'title'
-      ? String((defaultTranslation as SectionContentTranslation).title || '').trim()
-      : String((defaultTranslation as ManagedContentTranslation).name || '').trim()
+    const defaultTranslation = translations[defaultLanguageCode] || createEmptyTranslation()
+    const requiredName = String(defaultTranslation.name || '').trim()
     if (!requiredName) {
       toast.error(meta.requiredNameError)
       return
@@ -270,12 +264,12 @@ export default function ContentItemFormDialog({
     mutation.mutate()
   }
 
-  const updateTranslation = (patch: Partial<ContentItemTranslation>) => {
+  const updateTranslation = (languageCode: string, patch: Partial<ContentItemTranslation>) => {
     setTranslations((previous) => ({
       ...previous,
-      [activeLanguage]: {
-        ...createEmptyTranslation(capabilities),
-        ...(previous[activeLanguage] || {}),
+      [languageCode]: {
+        ...createEmptyTranslation(),
+        ...(previous[languageCode] || {}),
         ...patch,
       },
     }))
@@ -625,27 +619,22 @@ export default function ContentItemFormDialog({
             </TabsContent>
 
             {languages.map((language) => {
-              const translation = translations[language.code] || createEmptyTranslation(capabilities)
+              const translation = translations[language.code] || createEmptyTranslation()
               return (
                 <TabsContent key={language.id} value={language.code}>
                   <div className="grid gap-4 md:grid-cols-2">
-                    {isFormFieldAvailable(fieldMap, capabilities.translationNameField) ? (
+                    {isFormFieldAvailable(fieldMap, 'name') ? (
                       <div className="space-y-2">
                         <Label htmlFor={`translation_name_${language.code}`}>
-                          {getFieldLabel(fieldMap, capabilities.translationNameField, capabilities.translationNameLabel)} {language.code === defaultLanguageCode ? '*' : ''}
+                          {getFieldLabel(fieldMap, 'name', capabilities.translationNameLabel)} {language.code === defaultLanguageCode ? '*' : ''}
                         </Label>
                         <Input
                           id={`translation_name_${language.code}`}
-                          value={capabilities.translationNameField === 'title'
-                            ? String((translation as SectionContentTranslation).title || '')
-                            : String((translation as ManagedContentTranslation).name || '')
-                          }
-                          disabled={!isFieldEditable(fieldMap, capabilities.translationNameField)}
+                          value={String(translation.name || '')}
+                          disabled={!isFieldEditable(fieldMap, 'name')}
                           onChange={(e) => {
                             setActiveLanguage(language.code)
-                            updateTranslation(capabilities.translationNameField === 'title'
-                              ? { title: e.target.value } as Partial<ContentItemTranslation>
-                              : { name: e.target.value } as Partial<ContentItemTranslation>)
+                            updateTranslation(language.code, { name: e.target.value })
                           }}
                           placeholder={capabilities.translationNamePlaceholder}
                         />
@@ -659,7 +648,7 @@ export default function ContentItemFormDialog({
                           disabled={!isFieldEditable(fieldMap, 'publish_status')}
                           onValueChange={(value: 'draft' | 'published') => {
                             setActiveLanguage(language.code)
-                            updateTranslation({ publish_status: value })
+                            updateTranslation(language.code, { publish_status: value })
                           }}
                         >
                           <SelectTrigger>
@@ -683,7 +672,7 @@ export default function ContentItemFormDialog({
                         disabled={!isFieldEditable(fieldMap, 'summary')}
                         onChange={(e) => {
                           setActiveLanguage(language.code)
-                          updateTranslation({ summary: e.target.value })
+                          updateTranslation(language.code, { summary: e.target.value })
                         }}
                         placeholder="请输入摘要"
                         rows={3}
@@ -710,7 +699,7 @@ export default function ContentItemFormDialog({
                                 {...commonProps}
                                 onChange={(event) => {
                                   setActiveLanguage(language.code)
-                                  updateTranslation({ [field.field_name]: event.target.value } as Partial<ContentItemTranslation>)
+                                  updateTranslation(language.code, { [field.field_name]: event.target.value } as Partial<ContentItemTranslation>)
                                 }}
                                 rows={4}
                                 placeholder={`请输入${fieldLabel}`}
@@ -729,7 +718,7 @@ export default function ContentItemFormDialog({
                                 disabled={!isFieldEditable(fieldMap, field.field_name)}
                                 onChange={(attachments) => {
                                   setActiveLanguage(language.code)
-                                  updateTranslation({ [field.field_name]: attachments } as Partial<ContentItemTranslation>)
+                                  updateTranslation(language.code, { [field.field_name]: attachments } as Partial<ContentItemTranslation>)
                                 }}
                               />
                             </div>
@@ -746,7 +735,7 @@ export default function ContentItemFormDialog({
                               {...commonProps}
                               onChange={(event) => {
                                 setActiveLanguage(language.code)
-                                updateTranslation({ [field.field_name]: event.target.value } as Partial<ContentItemTranslation>)
+                                updateTranslation(language.code, { [field.field_name]: event.target.value } as Partial<ContentItemTranslation>)
                               }}
                               placeholder={`请输入${fieldLabel}`}
                             />
@@ -764,7 +753,7 @@ export default function ContentItemFormDialog({
                         disabled={!isFieldEditable(fieldMap, 'seo_title')}
                         onChange={(e) => {
                           setActiveLanguage(language.code)
-                          updateTranslation({ seo_title: e.target.value })
+                          updateTranslation(language.code, { seo_title: e.target.value })
                         }}
                         placeholder="请输入SEO标题"
                       />
@@ -779,7 +768,7 @@ export default function ContentItemFormDialog({
                         disabled={!isFieldEditable(fieldMap, 'seo_description')}
                         onChange={(e) => {
                           setActiveLanguage(language.code)
-                          updateTranslation({ seo_description: e.target.value })
+                          updateTranslation(language.code, { seo_description: e.target.value })
                         }}
                         placeholder="请输入SEO描述"
                         rows={3}
@@ -794,7 +783,7 @@ export default function ContentItemFormDialog({
                         readOnly={!isFieldEditable(fieldMap, 'content_html')}
                         onChange={(content_html) => {
                           setActiveLanguage(language.code)
-                          updateTranslation({ content_html })
+                          updateTranslation(language.code, { content_html })
                         }}
                         placeholder="请输入详细内容"
                         uploadPurpose="richtext_image"
@@ -826,7 +815,6 @@ function getModelMeta(capabilities: FormModelCapabilities) {
     editTitle: '编辑内容',
     createDescription: '填写内容信息',
     languageDescription: capabilities.languageDescription,
-    translationNameField: capabilities.translationNameField,
     translationNameLabel: capabilities.translationNameLabel,
     translationNamePlaceholder: capabilities.translationNamePlaceholder,
     requiredNameError: capabilities.requiredNameError,
@@ -1054,36 +1042,22 @@ function createEmptyBaseData(defaultColumnId?: number) {
 }
 
 function createBaseDataFromItem(item: ContentItem) {
-  const sectionItem = item as SectionContentItem
-  const managedItem = item as ManagedContentItem
   return {
-    code: managedItem.code || '',
+    code: item.code || '',
     column_id: item.column_id || undefined,
     custom_url: item.custom_url || '',
-    picture: sectionItem.picture || sectionItem.image || managedItem.primary_image || '',
-    images: Array.isArray(managedItem.images) ? managedItem.images : [],
-    spec_options_json: Array.isArray(managedItem.spec_options) ? managedItem.spec_options : [],
-    is_featured_home: item.is_featured_home || sectionItem.is_featured || 0,
-    is_visible: managedItem.is_visible || 1,
+    picture: item.primary_image || '',
+    images: Array.isArray(item.images) ? item.images : [],
+    spec_options_json: Array.isArray(item.spec_options) ? item.spec_options : [],
+    is_featured_home: item.is_featured_home || 0,
+    is_visible: item.is_visible || 1,
     sort_order: item.sort_order || 0,
-    created_at: sectionItem.created_at || '',
-    ...(managedItem.dynamic_fields && typeof managedItem.dynamic_fields === 'object' ? managedItem.dynamic_fields : {}),
+    created_at: item.created_at || '',
+    ...(item.dynamic_fields && typeof item.dynamic_fields === 'object' ? item.dynamic_fields : {}),
   }
 }
 
-function createEmptyTranslation(capabilities: FormModelCapabilities, patch: Partial<ContentItemTranslation> = {}): ContentItemTranslation {
-  if (capabilities.translationNameField === 'title') {
-    return {
-      title: '',
-      summary: '',
-      content_html: '',
-      seo_title: '',
-      seo_description: '',
-      publish_status: 'draft',
-      ...patch,
-    } as SectionContentTranslation
-  }
-
+function createEmptyTranslation(patch: Partial<ContentItemTranslation> = {}): ContentItemTranslation {
   return {
     name: '',
     summary: '',
@@ -1092,11 +1066,10 @@ function createEmptyTranslation(capabilities: FormModelCapabilities, patch: Part
     seo_description: '',
     publish_status: 'draft',
     ...patch,
-  } as ManagedContentTranslation
+  }
 }
 
 function buildInitialTranslations(
-  capabilities: FormModelCapabilities,
   item: ContentItem,
   defaultLanguageCode: string,
   availableLanguageCodes: string[],
@@ -1105,31 +1078,22 @@ function buildInitialTranslations(
   const output: Record<string, ContentItemTranslation> = {}
 
   for (const code of availableLanguageCodes) {
-    output[code] = createEmptyTranslation(capabilities, source[code] || {})
+    output[code] = createEmptyTranslation(source[code] || {})
   }
 
   if (!output[defaultLanguageCode]) {
-    output[defaultLanguageCode] = createEmptyTranslation(capabilities)
+    output[defaultLanguageCode] = createEmptyTranslation()
   }
 
   if (!source[defaultLanguageCode]) {
-    output[defaultLanguageCode] = capabilities.translationNameField === 'title'
-      ? createEmptyTranslation(capabilities, {
-          title: (item as SectionContentItem).title || '',
-          summary: item.summary || '',
-          content_html: item.content_html || '',
-          seo_title: item.seo_title || '',
-          seo_description: item.seo_description || '',
-          publish_status: 'published',
-        })
-      : createEmptyTranslation(capabilities, {
-          name: (item as ManagedContentItem).name || '',
-          summary: item.summary || '',
-          content_html: item.content_html || '',
-          seo_title: item.seo_title || '',
-          seo_description: item.seo_description || '',
-          publish_status: 'published',
-        })
+    output[defaultLanguageCode] = createEmptyTranslation({
+      name: item.name || '',
+      summary: item.summary || '',
+      content_html: item.content_html || '',
+      seo_title: item.seo_title || '',
+      seo_description: item.seo_description || '',
+      publish_status: 'published',
+    })
   }
 
   return output
@@ -1137,9 +1101,7 @@ function buildInitialTranslations(
 
 function inferFormModelCapabilities(modelCode: string, fields: ContentModelField[]): FormModelCapabilities {
   const fieldMap = mapFieldsByName(fields)
-  const hasTitleField = fieldMap.has('title')
-  const translationNameField: TranslationNameField = hasTitleField ? 'title' : 'name'
-  const translationNameLabel = getFieldLabel(fieldMap, translationNameField, hasTitleField ? '标题' : '名称')
+  const translationNameLabel = getFieldLabel(fieldMap, 'name', '名称')
   const primaryImageFieldName: 'picture' | 'images' = fieldMap.has('images') ? 'images' : 'picture'
   const defaultImagePurpose: MediaPurpose = modelCode === 'news'
     ? 'news_cover'
@@ -1148,7 +1110,6 @@ function inferFormModelCapabilities(modelCode: string, fields: ContentModelField
       : 'attachment'
 
   return {
-    translationNameField,
     translationNameLabel,
     translationNamePlaceholder: `请输入${translationNameLabel}`,
     requiredNameError: `请输入默认语言的${translationNameLabel}`,

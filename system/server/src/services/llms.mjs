@@ -509,7 +509,7 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null, text }) {
         routePath: buildSectionColumnPublicUrl(section, columnNode),
         section: formatLabelWithSuffix(section.sectionLabel, text.sectionCategorySuffix, text),
         summary: formatSectionCategorySummary(section.sectionLabel, text.sectionCategoryPrefix, columnNode.name, text),
-        contentLines: items.length > 0 ? [formatFact(text.sampleItems, joinNames(items.map((item) => item.title), text))] : []
+        contentLines: items.length > 0 ? [formatFact(text.sampleItems, joinNames(items.map((item) => item.name), text))] : []
       }));
     }
   }
@@ -523,10 +523,10 @@ function collectMarkdownPages({ site, siteUrl, languageCode = null, text }) {
     }
 
     pages.push(createPage({
-      title: item.title,
+      title: item.name,
       routePath: buildContentDetailUrlFromColumn(item, section.rootColumn),
       section: formatLabelWithSuffix(section.sectionLabel, text.sectionDetailSuffix, text),
-      summary: item.summary || item.title,
+      summary: item.summary || item.name,
       contentLines: [
         columnNode?.name ? formatFact(text.itemCategory, columnNode.name) : '',
         extractPlainText(item.content_html)

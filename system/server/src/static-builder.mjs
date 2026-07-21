@@ -1157,7 +1157,7 @@ function buildTopicRelatedContentCards(profiles, templateContext) {
         allowApi: false,
         allowAssets: false
       });
-      const title = String(item.title || item.name || item.code || `#${item.id}`).trim();
+      const title = String(item.name || item.code || `#${item.id}`).trim();
       return {
         id: normalizeInteger(item.id, 0),
         model: ref.model,
@@ -1941,7 +1941,7 @@ function createTemplateColumnTag(templateContext) {
         const templateData = item?.template_data && typeof item.template_data === 'object'
           ? item.template_data
           : null;
-        const title = String(item?.name || item?.title || '').trim();
+        const title = String(item?.name || '').trim();
         const summary = normalizeRenderableLegacyText(item?.summary || '');
         const image = resolveLegacyContentPreviewImage(item);
         return {
@@ -2201,7 +2201,7 @@ function buildLegacyHomePageProps(templateContext) {
     .slice(0, 6)
     .map((item) => ({
       id: item.id,
-      title: item.title || '',
+      title: item.name || '',
       url: buildSiteScopedArticleUrl(item, templateContext, newsSection),
       image: resolveLegacyContentPreviewImage(item),
       summary: resolveRenderableContentSummary(item),
@@ -2211,7 +2211,7 @@ function buildLegacyHomePageProps(templateContext) {
     .slice(0, 6)
     .map((item) => ({
       id: item.id,
-      title: item.title || '',
+      title: item.name || '',
       url: buildSiteScopedArticleUrl(item, templateContext, serviceSection),
       image: resolveLegacyContentPreviewImage(item),
       summary: resolveRenderableContentSummary(item),
@@ -2513,7 +2513,7 @@ function buildHeaderSectionChildren(rows, section, activeColumnId, { sectionEntr
     .sort(compareHeaderNavEntries)
     .map((item) => ({
       id: item.id,
-      name: item.title || item.name || '',
+      name: item.name || '',
       parentId: normalizeInteger(item.column_id, 0),
       modelCode: 'news',
       sourceType: 'news_item',
@@ -3221,7 +3221,6 @@ function buildLegacyManagedColumnDetailPageProps({ templateContext, rootColumn =
     bodyHtml: enrichedBody.html,
     currentManagedItem: {
       id: normalizeInteger(managedItem.id, 0),
-      title: managedItem.name || '',
       name: managedItem.name || '',
       code: managedItem.code || '',
       summary: managedItem.summary || '',
@@ -3235,7 +3234,6 @@ function buildLegacyManagedColumnDetailPageProps({ templateContext, rootColumn =
     relatedManagedItems: relatedManagedItems.map((item) => ({
       id: item.id,
       name: item.name || '',
-      title: item.name || '',
       url: buildSiteScopedManagedContentUrl(item, templateContext.site),
       image: normalizeUploadedRelativePath(String(item.primary_image || '').trim()),
       summary: item.summary || ''
@@ -3440,7 +3438,7 @@ function buildLegacySectionContentListPageProps({
     }),
     articleCardItems: pageItems.map((item) => ({
       id: item.id,
-      title: item.title || '',
+      title: item.name || '',
       url: prefixSitePathForContext(buildContentDetailUrlFromColumn(item, columnNode), templateContext.site, { allowApi: false, allowAssets: false }),
       image: resolveLegacyContentPreviewImage(item),
       summary: resolveRenderableContentSummary(item),
@@ -3489,7 +3487,7 @@ function buildLegacySectionContentDetailPageProps({ templateContext, section, se
     ...buildLegacyCommonProps(templateContext),
     ...buildLegacyPageContextProps({
       pageType: 'section-detail',
-      title: item.title || '',
+      title: item.name || '',
       url: articleUrl,
       section: {
         id: normalizeInteger(resolvedSectionConfig.rootColumn?.id, 0),
@@ -3519,24 +3517,24 @@ function buildLegacySectionContentDetailPageProps({ templateContext, section, se
     sectionCategoryHtml: buildSectionCategoryListHtml(templateContext, sectionDir),
     secondaryMenuItems: buildSectionMenuItems(templateContext, sectionDir, normalizeInteger(columnNode?.id, 0)),
     currentSectionHeroImage: sectionPrimaryImage,
-    title: item.title || '',
+    title: item.name || '',
     itemDescription: resolveRenderableContentSummary(item) || '',
     columnId: normalizeInteger(item.column_id, 0),
     columnName: columnNode?.name || '',
-    bodyHtml: normalizeLegacyBodyHtml(item.content_html, templateContext.site, { fallbackAlt: item.title }) || '',
+    bodyHtml: normalizeLegacyBodyHtml(item.content_html, templateContext.site, { fallbackAlt: item.name }) || '',
     currentArticle: {
       ...item,
       id: normalizeInteger(item.id, 0),
-      title: item.title || '',
+      title: item.name || '',
       summary: resolveRenderableContentSummary(item),
-      bodyHtml: normalizeLegacyBodyHtml(item.content_html, templateContext.site, { fallbackAlt: item.title }) || '',
+      bodyHtml: normalizeLegacyBodyHtml(item.content_html, templateContext.site, { fallbackAlt: item.name }) || '',
       image: resolveLegacyContentPreviewImage(item),
       date: formatLegacyDateOnly(item.created_at),
       url: articleUrl
     },
     relatedArticleItems: relatedArticles.map((entry) => ({
       id: entry.id,
-      title: entry.title || '',
+      title: entry.name || '',
       url: resolvedSectionConfig.rootColumn
         ? prefixSitePathForContext(buildContentDetailUrlFromColumn(entry, resolvedSectionConfig.rootColumn), templateContext.site, { allowApi: false, allowAssets: false })
         : prefixSitePathForContext(`/news/detail/${normalizeInteger(entry.id, 0)}.html`, templateContext.site, { allowApi: false, allowAssets: false }),
@@ -3544,8 +3542,8 @@ function buildLegacySectionContentDetailPageProps({ templateContext, section, se
       summary: resolveRenderableContentSummary(entry),
       date: formatLegacyDateOnly(entry.created_at)
     })),
-    previousHtml: previous ? `<a href="${previous.id}.html" class="Font_2e4690_a ">${escapeHtml(previous.title || '')}</a>` : `<span class="Font_2e4690_a">${escapeHtml(uiText.noPreviousArticle)}</span>`,
-    nextHtml: next ? `<a href="${next.id}.html" class="Font_2e4690_a ">${escapeHtml(next.title || '')}</a>` : `<span class="Font_2e4690_a">${escapeHtml(uiText.noNextArticle)}</span>`,
+    previousHtml: previous ? `<a href="${previous.id}.html" class="Font_2e4690_a ">${escapeHtml(previous.name || '')}</a>` : `<span class="Font_2e4690_a">${escapeHtml(uiText.noPreviousArticle)}</span>`,
+    nextHtml: next ? `<a href="${next.id}.html" class="Font_2e4690_a ">${escapeHtml(next.name || '')}</a>` : `<span class="Font_2e4690_a">${escapeHtml(uiText.noNextArticle)}</span>`,
     seoMeta: buildSectionEntrySeoMeta(item, templateContext.site, { url: articleUrl }),
     jsonLd: buildJsonLdSectionEntry(item, templateContext.site, { url: articleUrl }),
     faviconLinks: generateFaviconLinks(templateContext.site),
@@ -3718,12 +3716,11 @@ function normalizeTemplateContent(content, options = {}) {
   if (!content) {
     return null;
   }
-  const title = content.title || content.name || '';
+  const name = content.name || '';
   return {
     id: normalizeInteger(content.id, 0),
     type: options.type || '',
-    title,
-    name: content.name || title,
+    name,
     url: options.url || '',
     template_data: content.template_data || null,
     templateData: content.template_data || null
@@ -3839,11 +3836,11 @@ function buildLegacySectionRootPageData({
   const existing = normalizeLegacyColumnPageData(rootColumn?.template_data, templateContext.site) || {};
   const safeColumnBuckets = columnBuckets instanceof Map ? columnBuckets : new Map();
   const generatedCards = (directRootItems || []).map((item) => ({
-    title: item.title || '',
+    title: item.name || '',
     description: resolveRenderableContentSummary(item),
       href: buildSiteScopedArticleUrl(item, templateContext, section),
     image: resolveLegacyContentPreviewImage(item),
-    imageAlt: item.title || '',
+    imageAlt: item.name || '',
     cta: ''
   }));
   const generatedSections = (topLevelColumns || []).map((columnNode) => {
@@ -3954,7 +3951,7 @@ function buildLegacySectionRootListPageProps({
     }),
     articleCardItems: pageItems.map((item) => ({
       id: item.id,
-      title: item.title || '',
+      title: item.name || '',
       url: buildSiteScopedArticleUrl(item, templateContext, section),
       image: resolveLegacyContentPreviewImage(item),
       summary: resolveRenderableContentSummary(item),
@@ -4000,7 +3997,7 @@ function buildLegacySectionRootColumnLinks({ templateContext, section, columnNod
     .slice()
     .sort(compareByCreatedDesc)
     .map((item) => ({
-      title: item.title || '',
+      title: item.name || '',
       href: buildSiteScopedArticleUrl(item, templateContext, section),
       description: resolveRenderableContentSummary(item)
     }));
@@ -4618,7 +4615,7 @@ function buildLegacySectionContentListItems({ pageItems, summaryClassName, colum
 
     return {
       id: item.id,
-      title: item.title || '',
+      title: item.name || '',
       url: fullUrl,
       date: formatLegacyDateOnly(item.created_at) || '',
       summary: gotTopicLegacy(summary || '', 230),
@@ -4731,7 +4728,7 @@ function buildLegacyIndexNews(templateContext) {
   const items = newsSection
     ? getSectionEntries(templateContext, newsSection)
     : [];
-  return items.map((item) => `<li><a href="${buildSiteScopedArticleUrl(item, templateContext, newsSection)}" class="Ba">${escapeHtml(item.title || '')}</a></li>`).join('');
+  return items.map((item) => `<li><a href="${buildSiteScopedArticleUrl(item, templateContext, newsSection)}" class="Ba">${escapeHtml(item.name || '')}</a></li>`).join('');
 }
 
 function buildLegacyServiceIndex(templateContext) {
@@ -4739,7 +4736,7 @@ function buildLegacyServiceIndex(templateContext) {
   const items = serviceSection
     ? getSectionEntries(templateContext, serviceSection)
     : [];
-  return items.map((item) => `<li><a href="${buildSiteScopedArticleUrl(item, templateContext, serviceSection)}">${escapeHtml(item.title || '')}</a></li>`).join('');
+  return items.map((item) => `<li><a href="${buildSiteScopedArticleUrl(item, templateContext, serviceSection)}">${escapeHtml(item.name || '')}</a></li>`).join('');
 }
 
 function getDescendantNewsCategoryIds(categories, rootId) {
@@ -5233,7 +5230,7 @@ function resolveRenderableContentSummary(item) {
     return truncateRenderableContentSummary(contentSummary);
   }
 
-  return truncateRenderableContentSummary(normalizeRenderableLegacyText(item?.title));
+  return truncateRenderableContentSummary(normalizeRenderableLegacyText(item?.name));
 }
 
 function extractRenderableContentBodySummary(value) {
