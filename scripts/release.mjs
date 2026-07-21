@@ -139,13 +139,18 @@ async function createArchives(version) {
   const tarPath = path.join(releaseAssetsRoot, `${packageName}.tar.gz`);
   const zipPath = path.join(releaseAssetsRoot, `${packageName}.zip`);
   const checksumPath = path.join(releaseAssetsRoot, `${packageName}-SHA256SUMS.txt`);
+  const archiveEnv = {
+    ...process.env,
+    // macOS 会把扩展属性写成 ._* AppleDouble 条目，Linux 上的更新器会将其识别为包外路径。
+    COPYFILE_DISABLE: '1'
+  };
 
   await fs.rm(releaseAssetsRoot, { recursive: true, force: true });
   await fs.mkdir(packageRoot, { recursive: true });
   await fs.cp(path.join(root, 'dist'), packageRoot, { recursive: true });
 
-  run('tar', ['-C', releaseAssetsRoot, '-czf', tarPath, packageName]);
-  run('zip', ['-qr', zipPath, packageName], { cwd: releaseAssetsRoot });
+  run('tar', ['--no-xattrs', '-C', releaseAssetsRoot, '-czf', tarPath, packageName], { env: archiveEnv });
+  run('zip', ['-qXr', zipPath, packageName], { cwd: releaseAssetsRoot, env: archiveEnv });
 
   const checksums = [
     `${await sha256(tarPath)}  ${path.basename(tarPath)}`,
