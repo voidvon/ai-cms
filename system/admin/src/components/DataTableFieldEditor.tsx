@@ -62,7 +62,7 @@ function DataTableFieldEditorContent({
     const index = draft.length + 1
     setDraft((current) => [...current, {
       id: -Date.now(),
-      field_key: `fld_new_${Date.now()}`,
+      field_key: `draft-${crypto.randomUUID()}`,
       field_name: `新字段 ${index}`,
       field_type: 'text',
       is_primary: 0,
@@ -95,7 +95,7 @@ function DataTableFieldEditorContent({
         <ScrollArea className="min-h-0 flex-1 px-6 py-4">
           <div className="space-y-2">
             {draft.map((field, index) => (
-              <div key={field.field_key} className="grid gap-3 rounded-md border p-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center">
+              <div key={field.field_key} className="grid gap-3 rounded-md border p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
                 <div className="flex min-w-0 items-center gap-2">
                   <GripVertical className="size-4 shrink-0 text-muted-foreground" />
                   <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2">
@@ -112,10 +112,8 @@ function DataTableFieldEditorContent({
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-4">
-                  <span className="text-xs text-muted-foreground">{field.is_primary === 1 ? '主字段' : field.field_key}</span>
-                </div>
                 <div className="flex justify-end">
+                  {field.is_primary === 1 ? <span className="mr-2 self-center text-xs text-muted-foreground">主字段</span> : null}
                   <Button type="button" variant="ghost" size="icon" disabled={field.is_primary === 1} onClick={() => removeField(field)} aria-label="删除字段"><Trash2 className="size-4 text-destructive" /></Button>
                   <Button type="button" variant="ghost" size="icon" disabled={index === 0} onClick={() => moveField(index, -1)} aria-label="上移字段"><ArrowUp className="size-4" /></Button>
                   <Button type="button" variant="ghost" size="icon" disabled={index === draft.length - 1} onClick={() => moveField(index, 1)} aria-label="下移字段"><ArrowDown className="size-4" /></Button>

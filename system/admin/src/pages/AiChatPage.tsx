@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Eye, FileCog, FilePlus2, FileSignature, Pencil, RefreshCw, Search, Settings2, Stamp, Trash2 } from 'lucide-react'
+import { Check, Eye, FileCog, FilePlus2, FileSignature, Pencil, RefreshCw, Search, Settings2, Stamp, Trash2, X } from 'lucide-react'
 import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { documentWorkspacesApi } from '@/api/document-workspaces'
 import { documentAgentApi } from '@/api/document-agent'
@@ -64,6 +64,8 @@ export default function AiChatPage() {
   const [companySlotsTemplate, setCompanySlotsTemplate] = useState<DocumentTemplate | null>(null)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
   const [titleInputValue, setTitleInputValue] = useState('')
+  const [renamingDraftId, setRenamingDraftId] = useState('')
+  const [renamingDraftTitle, setRenamingDraftTitle] = useState('')
   const [isCompanyManagerOpen, setIsCompanyManagerOpen] = useState(false)
   const [isStampManagerOpen, setIsStampManagerOpen] = useState(false)
   const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false)
@@ -344,8 +346,11 @@ export default function AiChatPage() {
       }
       setIsEditingTitle(false)
       setTitleInputValue(String(nextDraft.title || '').trim())
+      setRenamingDraftId('')
+      setRenamingDraftTitle('')
       await queryClient.setQueryData(['document-draft', nextDraft.id], { success: true, data: nextDraft })
       await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
+      toast.success('文档名称已更新')
     },
     onError: (error: any) => {
       toast.error(error.response?.data?.message || '修改标题失败')
@@ -543,6 +548,30 @@ export default function AiChatPage() {
     })
   }
 
+  const beginListDraftRename = (draft: DocumentDraft) => {
+    setRenamingDraftId(draft.id)
+    setRenamingDraftTitle(String(draft.title || '').trim())
+  }
+
+  const cancelListDraftRename = () => {
+    setRenamingDraftId('')
+    setRenamingDraftTitle('')
+  }
+
+  const submitListDraftRename = (draft: DocumentDraft) => {
+    if (updateDraftTitleMutation.isPending) return
+    const normalizedTitle = String(renamingDraftTitle || '').trim()
+    if (!normalizedTitle) {
+      toast.error('文档名称不能为空')
+      return
+    }
+    if (normalizedTitle === String(draft.title || '').trim()) {
+      cancelListDraftRename()
+      return
+    }
+    updateDraftTitleMutation.mutate({ id: draft.id, title: normalizedTitle })
+  }
+
   const headerContent = currentDraft ? (
     <div className="min-w-0">
       <div className="flex items-center justify-end lg:hidden">
@@ -703,14 +732,74 @@ export default function AiChatPage() {
                     ) : recentDrafts.map((draft) => (
                       <TableRow key={draft.id}>
                         <TableCell className="max-w-[320px]">
-                          <button
-                            type="button"
-                            onClick={() => void handleDraftSelect(draft.id)}
-                            className="block max-w-full cursor-pointer truncate text-left font-medium text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                            title={draft.title || '未命名文档'}
-                          >
-                            {draft.title || '未命名文档'}
-                          </button>
+                          {renamingDraftId === draft.id ? (
+                            <form
+                              className="flex min-w-[220px] items-center gap-1"
+                              onSubmit={(event) => {
+                                event.preventDefault()
+                                submitListDraftRename(draft)
+                              }}
+                            >
+                              <Input
+                                autoFocus
+                                value={renamingDraftTitle}
+                                onChange={(event) => setRenamingDraftTitle(event.target.value)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Escape') {
+                                    event.preventDefault()
+                                    cancelListDraftRename()
+                                  }
+                                }}
+                                disabled={updateDraftTitleMutation.isPending}
+                                aria-label={`重命名文档 ${draft.title || '未命名文档'}`}
+                                className="h-8 min-w-0"
+                              />
+                              <Button
+                                type="submit"
+                                variant="ghost"
+                                size="icon-sm"
+                                disabled={!renamingDraftTitle.trim() || updateDraftTitleMutation.isPending}
+                                aria-label="保存文档名称"
+                                title="保存"
+                              >
+                                <Check className="size-4" />
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                onClick={cancelListDraftRename}
+                                disabled={updateDraftTitleMutation.isPending}
+                                aria-label="取消重命名"
+                                title="取消"
+                              >
+                                <X className="size-4" />
+                              </Button>
+                            </form>
+                          ) : (
+                            <div className="group/document-title flex min-w-0 items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => void handleDraftSelect(draft.id)}
+                                className="min-w-0 cursor-pointer truncate text-left font-medium text-primary underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                title={draft.title || '未命名文档'}
+                              >
+                                {draft.title || '未命名文档'}
+                              </button>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                className="pointer-events-none size-5 shrink-0 text-muted-foreground opacity-0 transition-[color,opacity] hover:text-foreground focus-visible:pointer-events-auto focus-visible:opacity-100 group-hover/document-title:pointer-events-auto group-hover/document-title:opacity-100 group-focus-within/document-title:pointer-events-auto group-focus-within/document-title:opacity-100"
+                                onClick={() => beginListDraftRename(draft)}
+                                disabled={updateDraftTitleMutation.isPending}
+                                aria-label={`重命名文档 ${draft.title || '未命名文档'}`}
+                                title="重命名"
+                              >
+                                <Pencil style={{ width: 10, height: 10 }} strokeWidth={1.5} />
+                              </Button>
+                            </div>
+                          )}
                         </TableCell>
                         <TableCell className="whitespace-nowrap font-mono text-xs">{getDraftDocumentNumber(draft) || '-'}</TableCell>
                         <TableCell className="whitespace-nowrap">{DOCUMENT_TYPE_LABELS[draft.document_type]}</TableCell>

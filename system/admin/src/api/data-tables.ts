@@ -7,7 +7,14 @@ export const dataTablesApi = {
     return response.data
   },
   updateFields: async (columnId: number, fields: Array<Partial<DataTableFieldPayload>>) => {
-    const response = await apiClient.put<ApiResponse<DataTable>>(`/data-tables/by-column/${columnId}/fields`, { fields })
+    const payload = fields.map((field) => {
+      const next = { ...field }
+      if (String(next.field_key || '').startsWith('draft-')) {
+        delete next.field_key
+      }
+      return next
+    })
+    const response = await apiClient.put<ApiResponse<DataTable>>(`/data-tables/by-column/${columnId}/fields`, { fields: payload })
     return response.data
   },
   listRecords: async (columnId: number, params?: { page?: number; limit?: number; keyword?: string }) => {

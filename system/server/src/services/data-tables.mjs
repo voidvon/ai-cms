@@ -8,6 +8,7 @@ const FIELD_TYPES = new Set(['text', 'textarea', 'number', 'currency', 'date', '
 const IMMUTABLE_FIELD_NAMES = new Set(['id', 'column_id', 'created_at', 'updated_at']);
 const HIDDEN_DEFAULT_FIELD_NAMES = new Set(['custom_url', 'code', 'is_visible', 'is_featured_home', 'sort_order', 'publish_status']);
 const HIDDEN_DEFAULT_FIELD_TYPES = new Set(['richtext', 'textarea', 'image', 'images', 'attachments']);
+const OPAQUE_FIELD_KEY_PATTERN = /^fld_[0-9a-f]{32}$/;
 let schemaEnsured = false;
 
 export function ensureDataTablesSchema() {
@@ -27,7 +28,6 @@ export function ensureDataTablesSchema() {
       field_key TEXT NOT NULL,
       field_name TEXT NOT NULL,
       field_type TEXT NOT NULL DEFAULT 'text',
-      is_required INTEGER NOT NULL DEFAULT 0,
       is_primary INTEGER NOT NULL DEFAULT 0,
       is_deleted INTEGER NOT NULL DEFAULT 0,
       sort_order INTEGER NOT NULL DEFAULT 0,
@@ -50,7 +50,6 @@ export function ensureDataTablesSchema() {
     CREATE INDEX IF NOT EXISTS idx_data_table_records_table ON data_table_records(table_id, updated_at DESC, id DESC);
   `);
   addColumnIfMissing('data_table_fields', 'source_field_name', 'TEXT');
-  execute('UPDATE data_table_fields SET is_required = 0 WHERE is_required <> 0');
   schemaEnsured = true;
 }
 
@@ -59,6 +58,7 @@ export function getDataTableByColumn(columnId) {
   const context = resolveContext(columnId);
   const table = ensureTable(context);
   ensureDefaultFields(table.id, context.model);
+  migrateDataTableFieldKeys(table.id);
   migrateLegacyRecords(table, context);
   return readTable(table.id, context);
 }
@@ -67,6 +67,7 @@ export function updateDataTableFields(columnId, input = {}) {
   ensureDataTablesSchema();
   const context = resolveContext(columnId);
   const table = ensureTable(context);
+  migrateDataTableFieldKeys(table.id);
   const fields = normalizeFields(input.fields, table.id);
   const now = new Date().toISOString();
   const db = getDb();
@@ -76,13 +77,13 @@ export function updateDataTableFields(columnId, input = {}) {
       const existing = queryOne('SELECT id FROM data_table_fields WHERE table_id = ? AND field_key = ?', [table.id, field.field_key]);
       if (existing) {
         execute(
-          `UPDATE data_table_fields SET field_name = ?, field_type = ?, is_required = ?, is_primary = ?, is_deleted = 0, sort_order = ?, settings_json = ?, updated_at = ? WHERE id = ?`,
-          [field.field_name, field.field_type, 0, field.is_primary, index * 10, field.settings_json, now, existing.id]
+          `UPDATE data_table_fields SET field_name = ?, field_type = ?, is_primary = ?, is_deleted = 0, sort_order = ?, settings_json = ?, updated_at = ? WHERE id = ?`,
+          [field.field_name, field.field_type, field.is_primary, index * 10, field.settings_json, now, existing.id]
         );
       } else {
         execute(
-          `INSERT INTO data_table_fields (table_id, field_key, field_name, field_type, is_required, is_primary, sort_order, settings_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [table.id, field.field_key, field.field_name, field.field_type, 0, field.is_primary, index * 10, field.settings_json, now, now]
+          `INSERT INTO data_table_fields (table_id, field_key, field_name, field_type, is_primary, sort_order, settings_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [table.id, field.field_key, field.field_name, field.field_type, field.is_primary, index * 10, field.settings_json, now, now]
         );
       }
     });
@@ -208,10 +209,52 @@ function ensureDefaultFields(tableId, model) {
   ));
   fields.forEach((field, index) => {
     execute(
-      `INSERT OR IGNORE INTO data_table_fields (table_id, field_key, field_name, field_type, is_required, is_primary, sort_order, settings_json, source_field_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [tableId, `fld_${field.field_name}`, field.field_label || field.field_name, normalizeType(field.field_type), 0, Number(field.field_name === 'name'), index * 10, field.settings_json || null, field.field_name]
+      `INSERT OR IGNORE INTO data_table_fields (table_id, field_key, field_name, field_type, is_primary, sort_order, settings_json, source_field_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [tableId, createOpaqueFieldKey(), field.field_label || field.field_name, normalizeType(field.field_type), Number(field.field_name === 'name'), index * 10, field.settings_json || null, field.field_name]
     );
   });
+}
+
+function migrateDataTableFieldKeys(tableId) {
+  const fields = queryAll(
+    'SELECT id, field_key FROM data_table_fields WHERE table_id = ? ORDER BY id ASC',
+    [tableId]
+  );
+  const keyMap = new Map(
+    fields
+      .filter((field) => !OPAQUE_FIELD_KEY_PATTERN.test(String(field.field_key || '')))
+      .map((field) => [String(field.field_key), createOpaqueFieldKey()])
+  );
+  if (keyMap.size === 0) return;
+
+  const db = getDb();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const records = queryAll('SELECT id, data_json FROM data_table_records WHERE table_id = ?', [tableId]);
+    records.forEach((record) => {
+      const currentData = parseJson(record.data_json);
+      const nextData = remapDataTableRecordFields(currentData, keyMap);
+      if (nextData !== currentData) {
+        execute('UPDATE data_table_records SET data_json = ? WHERE id = ?', [JSON.stringify(nextData), record.id]);
+      }
+    });
+    fields.forEach((field) => {
+      const nextKey = keyMap.get(String(field.field_key));
+      if (nextKey) {
+        execute('UPDATE data_table_fields SET field_key = ? WHERE id = ?', [nextKey, field.id]);
+      }
+    });
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+export function remapDataTableRecordFields(fields, keyMap) {
+  const entries = Object.entries(fields || {});
+  if (!entries.some(([key]) => keyMap.has(key))) return fields;
+  return Object.fromEntries(entries.map(([key, value]) => [keyMap.get(key) || key, value]));
 }
 
 function migrateLegacyRecords(table, context) {
@@ -257,7 +300,11 @@ function normalizeFields(input, tableId) {
   if (!Array.isArray(input) || input.length === 0) throw new Error('至少需要一个字段');
   const seen = new Set();
   return input.map((field) => {
-    const fieldKey = String(field?.field_key || '').trim() || `fld_${randomUUID().replaceAll('-', '')}`;
+    const requestedKey = String(field?.field_key || '').trim();
+    const existing = requestedKey
+      ? queryOne('SELECT field_key FROM data_table_fields WHERE table_id = ? AND field_key = ?', [tableId, requestedKey])
+      : null;
+    const fieldKey = existing?.field_key || createOpaqueFieldKey();
     const fieldName = String(field?.field_name || '').trim();
     if (!fieldName) throw new Error('字段名称不能为空');
     if (seen.has(fieldKey)) throw new Error(`字段重复：${fieldKey}`);
@@ -265,6 +312,10 @@ function normalizeFields(input, tableId) {
     const type = normalizeType(field?.field_type);
     return { table_id: tableId, field_key: fieldKey, field_name: fieldName.slice(0, 100), field_type: type, is_primary: field?.is_primary ? 1 : 0, settings_json: normalizeSettings(field?.settings_json ?? field?.settings) };
   });
+}
+
+function createOpaqueFieldKey() {
+  return `fld_${randomUUID().replaceAll('-', '')}`;
 }
 
 function normalizeRecordFields(table, fields) {

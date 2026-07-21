@@ -563,7 +563,6 @@ function DataRecordsGrid({
   columnId: number
   onDeleteRecord: (record: DataTableRecord) => void
 }) {
-  const queryClient = useQueryClient()
   const [rows, setRows] = useState<DynamicGridRow[]>(() => buildDynamicRows(records, fields, columnId))
   const [savingRows, setSavingRows] = useState<Record<string, boolean>>({})
   const columns = useMemo(() => fields.map(dataFieldToViewColumn), [fields])
@@ -576,7 +575,27 @@ function DataRecordsGrid({
         : dataTablesApi.createRecord(columnId, payload)
     },
     onMutate: (row) => setSavingRows((current) => ({ ...current, [row.localId]: true })),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['data-table-records', columnId] }),
+    onSuccess: (response, row) => {
+      const savedRecord = response.data
+      if (!savedRecord) return
+      const savedFields = Object.fromEntries(fields.map((field) => [
+        field.field_key,
+        stringifyCell(savedRecord.fields[field.field_key]),
+      ]))
+      setRows((current) => {
+        const next = current.map((item) => item.localId === row.localId ? {
+          id: savedRecord.id,
+          localId: `record-${savedRecord.id}`,
+          isDraft: false,
+          fields: savedFields,
+          originalFields: savedFields,
+        } : item)
+        const draftCount = next.filter((item) => item.isDraft).length
+        return draftCount >= GRID_MIN_EMPTY_ROW_COUNT
+          ? next
+          : [...next, ...buildEmptyDynamicRows(fields, columnId, GRID_MIN_EMPTY_ROW_COUNT - draftCount)]
+      })
+    },
     onError: (error: unknown) => toast.error(getApiErrorMessage(error, '保存记录失败')),
     onSettled: (_data, _error, row) => {
       if (!row) return
@@ -619,9 +638,14 @@ function DataRecordsGrid({
             value={row.fields[column.field_name] || ''}
             disabled={Boolean(savingRows[row.localId])}
             onChange={(event) => updateCell(row.localId, column.field_name, event.target.value)}
-            onBlur={() => commitRow(row.localId)}
+            onBlur={(event) => {
+              const nextTarget = event.relatedTarget
+              const tableRow = event.currentTarget.closest('tr')
+              if (nextTarget instanceof Node && tableRow?.contains(nextTarget)) return
+              commitRow(row.localId)
+            }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' || event.key === 'Escape') event.currentTarget.blur()
+              if (event.key === 'Enter') event.currentTarget.blur()
             }}
             aria-label={column.label}
             className="h-10 rounded-none border-0 bg-transparent px-2 shadow-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-wait"
@@ -648,13 +672,16 @@ function buildDynamicRows(records: DataTableRecord[], fields: DataTableField[], 
       originalFields: values,
     }
   })
-  const drafts = Array.from({ length: GRID_MIN_EMPTY_ROW_COUNT }, (_value, index) => ({
-    localId: `draft-${columnId}-${index}`,
+  return [...persisted, ...buildEmptyDynamicRows(fields, columnId, GRID_MIN_EMPTY_ROW_COUNT)]
+}
+
+function buildEmptyDynamicRows(fields: DataTableField[], columnId: number, count: number): DynamicGridRow[] {
+  return Array.from({ length: count }, () => ({
+    localId: `draft-${columnId}-${crypto.randomUUID()}`,
     isDraft: true,
     fields: Object.fromEntries(fields.map((field) => [field.field_key, ''])),
     originalFields: Object.fromEntries(fields.map((field) => [field.field_key, ''])),
   }))
-  return [...persisted, ...drafts]
 }
 
 function buildDataGridKey(columnId: number, fields: DataTableField[], records: DataTableRecord[]) {

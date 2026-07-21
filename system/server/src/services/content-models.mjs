@@ -318,7 +318,7 @@ function ensureBuiltinModelFields() {
       field_name: 'name',
       field_label: '名称',
       field_type: 'text',
-      is_required: 1,
+      is_required: 0,
       is_editable: 1,
       is_translatable: 0,
       is_searchable: 1,
