@@ -7,12 +7,35 @@ import test from 'node:test';
 
 import {
   compareReleaseVersions,
+  createNpmInstallEnvironment,
   isFormalReleaseMetadata,
   isProtectedUpdatePath,
   isUpdateableBuildMetadata,
   normalizeReleaseVersion,
   scheduleRequiredRestart
 } from '../src/services/system-updates.mjs';
+
+test('在线更新使用独立 npm 缓存并隔离宿主机遗留配置', () => {
+  const env = createNpmInstallEnvironment({
+    PATH: '/usr/bin',
+    npm_config_cache: '/www/server/nodejs/cache',
+    NPM_CONFIG__INIT_MODULE: 'legacy-value',
+    CMS_RELEASE_REPOSITORY: 'example/ai-cms'
+  }, {
+    cachePath: '/srv/ai-cms/.updates/npm-runtime/cache',
+    userConfigPath: '/srv/ai-cms/.updates/npm-runtime/user.npmrc',
+    globalConfigPath: '/srv/ai-cms/.updates/npm-runtime/global.npmrc'
+  });
+
+  assert.equal(env.PATH, '/usr/bin');
+  assert.equal(env.CMS_RELEASE_REPOSITORY, 'example/ai-cms');
+  assert.equal(env.npm_config_cache, undefined);
+  assert.equal(env.NPM_CONFIG__INIT_MODULE, undefined);
+  assert.equal(env.NPM_CONFIG_CACHE, '/srv/ai-cms/.updates/npm-runtime/cache');
+  assert.equal(env.NPM_CONFIG_USERCONFIG, '/srv/ai-cms/.updates/npm-runtime/user.npmrc');
+  assert.equal(env.NPM_CONFIG_GLOBALCONFIG, '/srv/ai-cms/.updates/npm-runtime/global.npmrc');
+  assert.equal(env.NPM_CONFIG_UPDATE_NOTIFIER, 'false');
+});
 
 test('规范化 GitHub Release 版本标签', () => {
   assert.equal(normalizeReleaseVersion('v0.1.3'), '0.1.3');

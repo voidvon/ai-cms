@@ -138,9 +138,10 @@ async function performUpdate() {
     const backup = await applyReleasePayload(payloadRoot, release.version);
 
     try {
+      const npmRuntime = await prepareNpmInstallRuntime();
       await execFileAsync(resolveNpmCommand(), ['install', '--legacy-peer-deps', '--no-audit', '--no-fund'], {
         cwd: PROJECT_ROOT,
-        env: process.env,
+        env: createNpmInstallEnvironment(process.env, npmRuntime),
         maxBuffer: 20 * 1024 * 1024,
         timeout: 10 * 60 * 1000
       });
@@ -512,6 +513,39 @@ exec "$node_bin" "$project_root/server.mjs" >> "$log_file" 2>&1
 
 function resolveNpmCommand() {
   return process.platform === 'win32' ? 'npm.cmd' : 'npm';
+}
+
+async function prepareNpmInstallRuntime() {
+  const runtimeRoot = path.join(PROJECT_ROOT, '.updates', 'npm-runtime');
+  const cachePath = path.join(runtimeRoot, 'cache');
+  const userConfigPath = path.join(runtimeRoot, 'user.npmrc');
+  const globalConfigPath = path.join(runtimeRoot, 'global.npmrc');
+
+  await fs.mkdir(cachePath, { recursive: true });
+  await Promise.all([
+    fs.writeFile(userConfigPath, ''),
+    fs.writeFile(globalConfigPath, '')
+  ]);
+
+  return { cachePath, userConfigPath, globalConfigPath };
+}
+
+export function createNpmInstallEnvironment(sourceEnv, runtime) {
+  const env = {};
+
+  for (const [key, value] of Object.entries(sourceEnv || {})) {
+    if (!key.toLowerCase().startsWith('npm_config_')) {
+      env[key] = value;
+    }
+  }
+
+  return {
+    ...env,
+    NPM_CONFIG_CACHE: runtime.cachePath,
+    NPM_CONFIG_USERCONFIG: runtime.userConfigPath,
+    NPM_CONFIG_GLOBALCONFIG: runtime.globalConfigPath,
+    NPM_CONFIG_UPDATE_NOTIFIER: 'false'
+  };
 }
 
 function formatCommandError(error) {
