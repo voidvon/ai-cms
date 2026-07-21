@@ -50,6 +50,7 @@ export function ensureDataTablesSchema() {
     CREATE INDEX IF NOT EXISTS idx_data_table_records_table ON data_table_records(table_id, updated_at DESC, id DESC);
   `);
   addColumnIfMissing('data_table_fields', 'source_field_name', 'TEXT');
+  execute('UPDATE data_table_fields SET is_required = 0 WHERE is_required <> 0');
   schemaEnsured = true;
 }
 
@@ -76,12 +77,12 @@ export function updateDataTableFields(columnId, input = {}) {
       if (existing) {
         execute(
           `UPDATE data_table_fields SET field_name = ?, field_type = ?, is_required = ?, is_primary = ?, is_deleted = 0, sort_order = ?, settings_json = ?, updated_at = ? WHERE id = ?`,
-          [field.field_name, field.field_type, field.is_required, field.is_primary, index * 10, field.settings_json, now, existing.id]
+          [field.field_name, field.field_type, 0, field.is_primary, index * 10, field.settings_json, now, existing.id]
         );
       } else {
         execute(
           `INSERT INTO data_table_fields (table_id, field_key, field_name, field_type, is_required, is_primary, sort_order, settings_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [table.id, field.field_key, field.field_name, field.field_type, field.is_required, field.is_primary, index * 10, field.settings_json, now, now]
+          [table.id, field.field_key, field.field_name, field.field_type, 0, field.is_primary, index * 10, field.settings_json, now, now]
         );
       }
     });
@@ -105,7 +106,8 @@ export function listDataTableRecords(columnId, { page = 1, limit = 100, keyword 
   const safePage = Math.max(1, Number(page) || 1);
   const safeLimit = Math.min(500, Math.max(1, Number(limit) || 100));
   const rows = queryAll('SELECT id, source_record_id, data_json, created_at, updated_at FROM data_table_records WHERE table_id = ? ORDER BY updated_at DESC, id DESC', [table.id])
-    .map(mapRecord);
+    .map((row) => mapRecord(row, table.fields))
+    .filter((row) => isDataTableRecordValid(row.fields));
   const normalizedKeyword = String(keyword || '').trim().toLowerCase();
   const filtered = normalizedKeyword
     ? rows.filter((row) => JSON.stringify(row.fields).toLowerCase().includes(normalizedKeyword))
@@ -121,7 +123,8 @@ export function listDataTableRecords(columnId, { page = 1, limit = 100, keyword 
 export function createDataTableRecord(columnId, fields = {}) {
   ensureDataTablesSchema();
   const table = getDataTableByColumn(columnId);
-  const data = validateRecordFields(table, fields, true);
+  const data = normalizeRecordFields(table, fields);
+  assertDataTableRecordValid(data);
   const now = new Date().toISOString();
   const result = execute('INSERT INTO data_table_records (table_id, data_json, created_at, updated_at) VALUES (?, ?, ?, ?)', [table.id, JSON.stringify(data), now, now]);
   return getDataTableRecord(table.id, result.lastInsertRowid);
@@ -136,9 +139,10 @@ export function updateDataTableRecord(columnId, recordId, fields = {}) {
   const currentFields = Object.fromEntries(
     Object.entries(parseJson(current.data_json)).filter(([key]) => allowedKeys.has(key))
   );
-  const patch = validateRecordFields(table, fields, false);
+  const patch = normalizeRecordFields(table, fields);
   const merged = { ...currentFields, ...patch };
-  const data = validateRecordFields(table, merged, false);
+  const data = normalizeRecordFields(table, merged);
+  assertDataTableRecordValid(data);
   execute('UPDATE data_table_records SET data_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(data), current.id]);
   return getDataTableRecord(table.id, current.id);
 }
@@ -205,7 +209,7 @@ function ensureDefaultFields(tableId, model) {
   fields.forEach((field, index) => {
     execute(
       `INSERT OR IGNORE INTO data_table_fields (table_id, field_key, field_name, field_type, is_required, is_primary, sort_order, settings_json, source_field_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [tableId, `fld_${field.field_name}`, field.field_label || field.field_name, normalizeType(field.field_type), Number(field.is_required || 0), Number(field.field_name === 'name'), index * 10, field.settings_json || null, field.field_name]
+      [tableId, `fld_${field.field_name}`, field.field_label || field.field_name, normalizeType(field.field_type), 0, Number(field.field_name === 'name'), index * 10, field.settings_json || null, field.field_name]
     );
   });
 }
@@ -220,6 +224,7 @@ function migrateLegacyRecords(table, context) {
   const now = new Date().toISOString();
   sourceRows.forEach((row) => {
     const data = Object.fromEntries(fields.map((field) => [field.field_key, field.source_field_name ? row[field.source_field_name] ?? '' : '']));
+    if (!isDataTableRecordValid(data)) return;
     const existing = queryOne('SELECT id, data_json FROM data_table_records WHERE table_id = ? AND source_record_id = ?', [table.id, row.id]);
     if (!existing) {
       execute('INSERT INTO data_table_records (table_id, source_record_id, data_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?)', [table.id, row.id, JSON.stringify(data), now, now]);
@@ -231,17 +236,21 @@ function migrateLegacyRecords(table, context) {
 
 function readTable(tableId, context) {
   const table = queryOne('SELECT id, column_id, model_code, name, created_at, updated_at FROM data_tables WHERE id = ?', [tableId]);
-  const fields = queryAll('SELECT id, field_key, field_name, field_type, is_required, is_primary, is_deleted, sort_order, settings_json, source_field_name, created_at, updated_at FROM data_table_fields WHERE table_id = ? AND is_deleted = 0 ORDER BY sort_order ASC, id ASC', [tableId]);
+  const fields = queryAll('SELECT id, field_key, field_name, field_type, is_primary, is_deleted, sort_order, settings_json, source_field_name, created_at, updated_at FROM data_table_fields WHERE table_id = ? AND is_deleted = 0 ORDER BY sort_order ASC, id ASC', [tableId]);
   return { ...table, column_name: context.column.name, fields: fields.map((field) => ({ ...field, settings: parseJson(field.settings_json) })) };
 }
 
 function getDataTableRecord(tableId, recordId) {
+  const fields = queryAll('SELECT field_key FROM data_table_fields WHERE table_id = ? AND is_deleted = 0 ORDER BY sort_order ASC, id ASC', [tableId]);
   const row = queryOne('SELECT id, table_id, source_record_id, data_json, created_at, updated_at FROM data_table_records WHERE table_id = ? AND id = ?', [tableId, recordId]);
-  return row ? mapRecord(row) : null;
+  return row ? mapRecord(row, fields) : null;
 }
 
-function mapRecord(row) {
-  return { id: Number(row.id), source_record_id: row.source_record_id ? Number(row.source_record_id) : null, fields: parseJson(row.data_json), created_at: row.created_at, updated_at: row.updated_at };
+function mapRecord(row, fields = []) {
+  const activeKeys = new Set(fields.map((field) => field.field_key));
+  const data = parseJson(row.data_json);
+  const activeData = Object.fromEntries(Object.entries(data).filter(([key]) => activeKeys.has(key)));
+  return { id: Number(row.id), source_record_id: row.source_record_id ? Number(row.source_record_id) : null, fields: activeData, created_at: row.created_at, updated_at: row.updated_at };
 }
 
 function normalizeFields(input, tableId) {
@@ -254,11 +263,11 @@ function normalizeFields(input, tableId) {
     if (seen.has(fieldKey)) throw new Error(`字段重复：${fieldKey}`);
     seen.add(fieldKey);
     const type = normalizeType(field?.field_type);
-    return { table_id: tableId, field_key: fieldKey, field_name: fieldName.slice(0, 100), field_type: type, is_required: field?.is_required ? 1 : 0, is_primary: field?.is_primary ? 1 : 0, settings_json: normalizeSettings(field?.settings_json ?? field?.settings) };
+    return { table_id: tableId, field_key: fieldKey, field_name: fieldName.slice(0, 100), field_type: type, is_primary: field?.is_primary ? 1 : 0, settings_json: normalizeSettings(field?.settings_json ?? field?.settings) };
   });
 }
 
-function validateRecordFields(table, fields, isCreate) {
+function normalizeRecordFields(table, fields) {
   const allowed = new Map(table.fields.map((field) => [field.field_key, field]));
   const data = {};
   Object.entries(fields || {}).forEach(([key, value]) => {
@@ -266,24 +275,39 @@ function validateRecordFields(table, fields, isCreate) {
     if (!definition) throw new Error(`字段不存在：${key}`);
     data[key] = normalizeValue(definition, value);
   });
-  if (isCreate) {
-    table.fields.filter((field) => field.is_required).forEach((field) => {
-      if (data[field.field_key] === undefined || data[field.field_key] === '') throw new Error(`请填写必填字段：${field.field_name}`);
-    });
-  }
   return data;
+}
+
+export function isDataTableRecordValid(fields = {}) {
+  return Object.values(fields || {}).some((value) => hasMeaningfulValue(value));
+}
+
+function assertDataTableRecordValid(fields) {
+  if (!isDataTableRecordValid(fields)) {
+    throw new Error('一行至少需要填写一个字段');
+  }
+}
+
+function hasMeaningfulValue(value) {
+  if (value === null || value === undefined) return false;
+  if (typeof value === 'string') return value.trim().length > 0;
+  if (Array.isArray(value)) return value.some((item) => hasMeaningfulValue(item));
+  return true;
 }
 
 function normalizeValue(field, value) {
   if (value === null || value === undefined) return '';
   if (field.field_type === 'number' || field.field_type === 'currency') {
-    if (value === '') return '';
+    if (typeof value === 'string' && value.trim() === '') return '';
     const number = Number(value);
     if (!Number.isFinite(number)) throw new Error(`字段“${field.field_name}”必须是数字`);
     return number;
   }
-  if (field.field_type === 'boolean') return value === true || value === 1 || value === '1' || value === 'true';
-  if (field.field_type === 'multi_select') return Array.isArray(value) ? value : [];
+  if (field.field_type === 'boolean') {
+    if (typeof value === 'string' && value.trim() === '') return '';
+    return value === true || value === 1 || value === '1' || value === 'true';
+  }
+  if (field.field_type === 'multi_select') return Array.isArray(value) ? value.filter((item) => hasMeaningfulValue(item)) : [];
   return String(value);
 }
 

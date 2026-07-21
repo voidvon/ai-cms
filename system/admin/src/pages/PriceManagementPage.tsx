@@ -4,7 +4,6 @@ import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { columnsApi } from '@/api/columns'
 import { contentModelsApi } from '@/api/advanced'
-import { contentItemsApi } from '@/api/content-items'
 import { dataTablesApi } from '@/api/data-tables'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -28,9 +27,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
-import { formatDate } from '@/lib/datetime'
 import { toast } from 'sonner'
-import type { Column, ContentTableViewColumn, DataTableField, DataTableRecord, ManagedContentItem } from '@/types'
+import type { Column, ContentTableViewColumn, DataTableField, DataTableRecord } from '@/types'
 
 const PRICE_MODEL_CODE = 'price_record'
 const PRICE_LIST_BASE_PATH = '/price-lists/'
@@ -39,17 +37,7 @@ type DashboardHeaderContext = {
   headerSlotElement: HTMLDivElement | null
 }
 
-type PriceRecordItem = ManagedContentItem
-
-type PriceGridRow = Record<string, any> & {
-  id?: number
-  column_id?: number
-  updated_at?: string
-  created_at?: string
-  _localId: string
-  _isDraft: boolean
-  _original: Record<string, string>
-}
+type PriceRecordDeleteTarget = Pick<DataTableRecord, 'id'> & { name: string }
 
 const GRID_MIN_EMPTY_ROW_COUNT = 20
 
@@ -58,7 +46,7 @@ export default function PriceManagementPage() {
   const { headerSlotElement } = useOutletContext<DashboardHeaderContext>()
   const [searchParams, setSearchParams] = useSearchParams()
   const [newListName, setNewListName] = useState('')
-  const [deleteTarget, setDeleteTarget] = useState<PriceRecordItem | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<PriceRecordDeleteTarget | null>(null)
   const [listDialogOpen, setListDialogOpen] = useState(false)
   const [listDialogName, setListDialogName] = useState('')
   const [listActionTarget, setListActionTarget] = useState<Column | null>(null)
@@ -104,10 +92,6 @@ export default function PriceManagementPage() {
       setSearchParams(nextParams, { replace: true })
     }
   }, [priceListColumns, searchParams, selectedColumn, selectedColumnId, setSearchParams])
-
-  useEffect(() => {
-    setPriceSearch('')
-  }, [selectedColumn?.id])
 
   const { data: dataTableData, isLoading: dataTableLoading } = useQuery({
     queryKey: ['data-table', selectedColumn?.id || 0],
@@ -160,8 +144,8 @@ export default function PriceManagementPage() {
         setSearchParams(nextParams, { replace: true })
       }
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || error.message || '创建失败')
+    onError: (error: unknown) => {
+      toast.error(getApiErrorMessage(error, '创建失败'))
     },
   })
 
@@ -187,8 +171,8 @@ export default function PriceManagementPage() {
       setListActionTarget(null)
       queryClient.invalidateQueries({ queryKey: ['columns'] })
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || error.message || '更新失败')
+    onError: (error: unknown) => {
+      toast.error(getApiErrorMessage(error, '更新失败'))
     },
   })
 
@@ -211,8 +195,8 @@ export default function PriceManagementPage() {
       }
       setSearchParams(nextParams, { replace: true })
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || error.message || '删除失败')
+    onError: (error: unknown) => {
+      toast.error(getApiErrorMessage(error, '删除失败'))
     },
   })
 
@@ -223,8 +207,8 @@ export default function PriceManagementPage() {
       toast.success('价格条目已删除')
       setDeleteTarget(null)
     },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || '删除失败')
+    onError: (error: unknown) => {
+      toast.error(getApiErrorMessage(error, '删除失败'))
     },
   })
 
@@ -236,13 +220,14 @@ export default function PriceManagementPage() {
       setFieldEditorOpen(false)
       toast.success('字段配置已保存')
     },
-    onError: (error: any) => toast.error(error.response?.data?.message || error.message || '保存字段失败'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '保存字段失败')),
   })
 
   const handleSelectList = (column: Column) => {
     const nextParams = new URLSearchParams(searchParams)
     nextParams.set('list', String(column.id))
     setSearchParams(nextParams)
+    setPriceSearch('')
     setMobileListDrawerOpen(false)
   }
 
@@ -399,12 +384,13 @@ export default function PriceManagementPage() {
               <div>加载中...</div>
             ) : (
               <DataRecordsGrid
+                key={buildDataGridKey(selectedColumn.id, dataTable.fields, dataRecords)}
                 records={dataRecords}
                 fields={dataTable.fields}
                 columnId={selectedColumn.id}
                 onDeleteRecord={(record) => {
                   const primaryKey = dataTable.fields.find((field) => field.is_primary === 1)?.field_key
-                  setDeleteTarget({ id: record.id, name: String(primaryKey ? record.fields[primaryKey] || '' : '') } as PriceRecordItem)
+                  setDeleteTarget({ id: record.id, name: String(primaryKey ? record.fields[primaryKey] || '' : '') })
                 }}
               />
             )}
@@ -563,6 +549,7 @@ type DynamicGridRow = {
   localId: string
   isDraft: boolean
   fields: Record<string, string>
+  originalFields: Record<string, string>
 }
 
 function DataRecordsGrid({
@@ -581,20 +568,16 @@ function DataRecordsGrid({
   const [savingRows, setSavingRows] = useState<Record<string, boolean>>({})
   const columns = useMemo(() => fields.map(dataFieldToViewColumn), [fields])
 
-  useEffect(() => {
-    setRows(buildDynamicRows(records, fields, columnId))
-  }, [columnId, fields, records])
-
   const saveMutation = useMutation({
     mutationFn: async (row: DynamicGridRow) => {
-      const payload = Object.fromEntries(fields.map((field) => [field.field_key, row.fields[field.field_key] || '']))
+      const payload = Object.fromEntries(fields.map((field) => [field.field_key, row.fields[field.field_key] ?? '']))
       return row.id
         ? dataTablesApi.updateRecord(columnId, row.id, payload)
         : dataTablesApi.createRecord(columnId, payload)
     },
     onMutate: (row) => setSavingRows((current) => ({ ...current, [row.localId]: true })),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['data-table-records', columnId] }),
-    onError: (error: any) => toast.error(error.response?.data?.message || error.message || '保存记录失败'),
+    onError: (error: unknown) => toast.error(getApiErrorMessage(error, '保存记录失败')),
     onSettled: (_data, _error, row) => {
       if (!row) return
       setSavingRows((current) => {
@@ -613,7 +596,13 @@ function DataRecordsGrid({
 
   const commitRow = (localId: string) => {
     const row = rows.find((item) => item.localId === localId)
-    if (!row || savingRows[localId] || !Object.values(row.fields).some((value) => value.trim())) return
+    if (!row || savingRows[localId] || !isDynamicGridRowChanged(row, fields)) return
+    if (!hasAnyDynamicGridValue(row, fields)) {
+      if (!row.isDraft) {
+        toast.error('一行至少需要填写一个字段；如需移除该行，请删除记录')
+      }
+      return
+    }
     saveMutation.mutate(row)
   }
 
@@ -623,6 +612,7 @@ function DataRecordsGrid({
         columns={columns}
         rows={rows}
         rowKey={(row) => row.localId}
+        showRowNumbers
         renderCell={(row, column) => (
           <Input
             type={column.field_type === 'number' || column.field_type === 'currency' ? 'number' : column.field_type === 'date' ? 'date' : 'text'}
@@ -648,18 +638,29 @@ function DataRecordsGrid({
 }
 
 function buildDynamicRows(records: DataTableRecord[], fields: DataTableField[], columnId: number): DynamicGridRow[] {
-  const persisted = records.map((record) => ({
-    id: record.id,
-    localId: `record-${record.id}`,
-    isDraft: false,
-    fields: Object.fromEntries(fields.map((field) => [field.field_key, stringifyCell(record.fields[field.field_key])])),
-  }))
+  const persisted = records.map((record) => {
+    const values = Object.fromEntries(fields.map((field) => [field.field_key, stringifyCell(record.fields[field.field_key])]))
+    return {
+      id: record.id,
+      localId: `record-${record.id}`,
+      isDraft: false,
+      fields: values,
+      originalFields: values,
+    }
+  })
   const drafts = Array.from({ length: GRID_MIN_EMPTY_ROW_COUNT }, (_value, index) => ({
     localId: `draft-${columnId}-${index}`,
     isDraft: true,
     fields: Object.fromEntries(fields.map((field) => [field.field_key, ''])),
+    originalFields: Object.fromEntries(fields.map((field) => [field.field_key, ''])),
   }))
   return [...persisted, ...drafts]
+}
+
+function buildDataGridKey(columnId: number, fields: DataTableField[], records: DataTableRecord[]) {
+  const fieldVersion = fields.map((field) => `${field.field_key}:${field.field_type}:${field.sort_order}`).join('|')
+  const recordVersion = records.map((record) => `${record.id}:${record.updated_at || ''}`).join('|')
+  return `${columnId}::${fieldVersion}::${recordVersion}`
 }
 
 function dataFieldToViewColumn(field: DataTableField, index: number): ContentTableViewColumn {
@@ -668,7 +669,7 @@ function dataFieldToViewColumn(field: DataTableField, index: number): ContentTab
     field_label: field.field_name,
     label: field.field_name,
     field_type: field.field_type,
-    is_required: field.is_required,
+    is_required: 0,
     is_editable: 1,
     is_searchable: 1,
     is_visible: 1,
@@ -678,265 +679,14 @@ function dataFieldToViewColumn(field: DataTableField, index: number): ContentTab
   }
 }
 
-export function PriceRecordGrid({
-  items,
-  selectedColumnId,
-  columns,
-  allColumns,
-  search,
-  onDeleteItem,
-}: {
-  items: PriceRecordItem[]
-  selectedColumnId: number
-  columns: ContentTableViewColumn[]
-  allColumns: ContentTableViewColumn[]
-  search: string
-  onDeleteItem: (item: PriceRecordItem) => void
-}) {
-  const queryClient = useQueryClient()
-  const [rows, setRows] = useState<PriceGridRow[]>(() => buildGridRows(items, selectedColumnId, allColumns))
-  const [savingRows, setSavingRows] = useState<Record<string, boolean>>({})
-
-  useEffect(() => {
-    setRows(buildGridRows(items, selectedColumnId, allColumns))
-  }, [allColumns, items, selectedColumnId])
-
-  const saveMutation = useMutation({
-    mutationFn: async (row: PriceGridRow) => {
-      const payload = buildPriceRecordPayload(row, selectedColumnId, allColumns)
-      if (!getGridCellValue(row, 'name')) {
-        throw new Error('请输入名称')
-      }
-      if (row.id) {
-        return contentItemsApi.update<PriceRecordItem>(PRICE_MODEL_CODE, row.id, payload)
-      }
-      return contentItemsApi.create<PriceRecordItem>(PRICE_MODEL_CODE, payload)
-    },
-    onMutate: (row) => {
-      setSavingRows((current) => ({ ...current, [row._localId]: true }))
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['content-items', PRICE_MODEL_CODE] })
-    },
-    onError: (error: any) => {
-      toast.error(error.response?.data?.message || error.message || '保存失败')
-    },
-    onSettled: (_data, _error, row) => {
-      if (!row) {
-        return
-      }
-      setSavingRows((current) => {
-        const next = { ...current }
-        delete next[row._localId]
-        return next
-      })
-    },
-  })
-
-  const handleChangeCell = (rowLocalId: string, fieldName: string, value: string) => {
-    setRows((current) => ensureMinimumEmptyRows(
-      current.map((row) => (
-        row._localId === rowLocalId ? { ...row, [fieldName]: value } : row
-      )),
-      selectedColumnId,
-      allColumns,
-    ))
-  }
-
-  const handleCommitRow = (rowLocalId: string) => {
-    const row = rows.find((item) => item._localId === rowLocalId)
-    if (!row || savingRows[rowLocalId]) {
-      return
-    }
-    if (!isGridRowDirty(row, allColumns)) {
-      return
-    }
-    if (!isGridRowChanged(row, allColumns)) {
-      return
-    }
-    if (!getGridCellValue(row, 'name').trim()) {
-      toast.error('请输入名称')
-      return
-    }
-    saveMutation.mutate(row)
-  }
-
-  const visibleRows = useMemo(() => filterGridRows(rows, search, columns), [columns, rows, search])
-
-  return (
-    <div className="h-full overflow-hidden rounded border">
-      <ConfigurableDataTable
-        columns={columns}
-        rows={visibleRows}
-        rowKey={(row) => row._localId}
-        renderCell={(row, column) => (
-          <PriceGridCell
-            row={row}
-            column={column}
-            disabled={Boolean(savingRows[row._localId])}
-            onChange={handleChangeCell}
-            onCommit={handleCommitRow}
-          />
-        )}
-        renderActions={(row) => !row._isDraft ? (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 opacity-0 transition-opacity group-hover/configurable-row:opacity-100 group-focus-within/configurable-row:opacity-100"
-            onClick={() => onDeleteItem(gridRowToPriceRecordItem(row))}
-            aria-label="删除价格条目"
-          >
-            <Trash2 className="size-4 text-destructive" />
-          </Button>
-        ) : null}
-      />
-    </div>
-  )
+function hasAnyDynamicGridValue(row: DynamicGridRow, fields: DataTableField[]) {
+  return fields.some((field) => row.fields[field.field_key]?.trim())
 }
 
-function PriceGridCell({
-  row,
-  column,
-  disabled,
-  onChange,
-  onCommit,
-}: {
-  row: PriceGridRow
-  column: ContentTableViewColumn
-  disabled: boolean
-  onChange: (rowLocalId: string, fieldName: string, value: string) => void
-  onCommit: (rowLocalId: string) => void
-}) {
-  if (column.is_editable !== 1) {
-    return (
-      <div className="truncate px-2 text-sm text-muted-foreground">
-        {formatGridCellValue(row, column)}
-      </div>
-    )
-  }
-
-  return (
-    <Input
-      type={column.field_type === 'number' ? 'number' : 'text'}
-      value={getGridCellValue(row, column.field_name)}
-      disabled={disabled}
-      onChange={(event) => onChange(row._localId, column.field_name, event.target.value)}
-      onBlur={() => onCommit(row._localId)}
-      onKeyDown={(event) => {
-        if (event.key === 'Enter') {
-          event.currentTarget.blur()
-        }
-        if (event.key === 'Escape') {
-          event.currentTarget.blur()
-        }
-      }}
-      aria-label={column.label}
-      className="h-10 rounded-none border-0 bg-transparent px-2 shadow-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-wait disabled:opacity-70"
-    />
-  )
-}
-
-function buildGridRows(items: PriceRecordItem[], selectedColumnId: number, columns: ContentTableViewColumn[]): PriceGridRow[] {
-  const persistedRows = items.map((item) => priceRecordToGridRow(item, columns))
-  return ensureMinimumEmptyRows(persistedRows, selectedColumnId, columns)
-}
-
-function ensureMinimumEmptyRows(rows: PriceGridRow[], selectedColumnId: number, columns: ContentTableViewColumn[]) {
-  const emptyDraftCount = rows.filter((row) => row._isDraft && !isGridRowDirty(row, columns)).length
-  if (emptyDraftCount >= GRID_MIN_EMPTY_ROW_COUNT) {
-    return rows
-  }
-  const timestamp = Date.now()
-  const rowsToAdd = GRID_MIN_EMPTY_ROW_COUNT - emptyDraftCount
-  const draftRows = Array.from({ length: rowsToAdd }, (_value, index) => createDraftGridRow(selectedColumnId, `${timestamp}-${index}`, columns))
-  return [...rows, ...draftRows]
-}
-
-function filterGridRows(rows: PriceGridRow[], search: string, columns: ContentTableViewColumn[]) {
-  const keyword = search.trim().toLowerCase()
-  if (!keyword) {
-    return rows
-  }
-  return rows.filter((row) => {
-    if (row._isDraft) {
-      return true
-    }
-    return columns.some((column) => getGridCellValue(row, column.field_name).toLowerCase().includes(keyword))
-  })
-}
-
-function priceRecordToGridRow(item: PriceRecordItem, columns: ContentTableViewColumn[]): PriceGridRow {
-  const source = item as unknown as Record<string, unknown>
-  const values = Object.fromEntries(columns.map((column) => [column.field_name, stringifyCell(source[column.field_name])]))
-  return {
-    id: item.id,
-    column_id: Number(item.column_id || 0) || undefined,
-    updated_at: item.updated_at ? String(item.updated_at) : undefined,
-    created_at: item.created_at ? String(item.created_at) : undefined,
-    _localId: `item-${item.id}`,
-    _isDraft: false,
-    _original: values,
-    ...values,
-  }
-}
-
-function createDraftGridRow(selectedColumnId: number, index: number | string, columns: ContentTableViewColumn[]): PriceGridRow {
-  const values = createEmptyGridValues(columns)
-  return {
-    column_id: selectedColumnId,
-    _localId: `draft-${selectedColumnId}-${index}`,
-    _isDraft: true,
-    _original: values,
-    ...values,
-  }
-}
-
-function buildPriceRecordPayload(row: PriceGridRow, selectedColumnId: number, columns: ContentTableViewColumn[]) {
-  const values = Object.fromEntries(
-    columns
-      .filter((column) => column.is_editable === 1)
-      .map((column) => [column.field_name, getGridCellValue(row, column.field_name).trim()]),
-  )
-  return {
-    base: {
-      column_id: selectedColumnId || row.column_id,
-      ...values,
-    },
-  }
-}
-
-function isGridRowDirty(row: PriceGridRow, columns: ContentTableViewColumn[]) {
-  return columns.some((column) => column.is_editable === 1 && getGridCellValue(row, column.field_name).trim())
-}
-
-function isGridRowChanged(row: PriceGridRow, columns: ContentTableViewColumn[]) {
-  return columns.some((column) => (
-    column.is_editable === 1
-    && getGridCellValue(row, column.field_name) !== (row._original[column.field_name] || '')
+function isDynamicGridRowChanged(row: DynamicGridRow, fields: DataTableField[]) {
+  return fields.some((field) => (
+    (row.fields[field.field_key] || '') !== (row.originalFields[field.field_key] || '')
   ))
-}
-
-function createEmptyGridValues(columns: ContentTableViewColumn[]): Record<string, string> {
-  return Object.fromEntries(columns.map((column) => [column.field_name, '']))
-}
-
-function getGridCellValue(row: PriceGridRow, fieldName: string) {
-  return stringifyCell(row[fieldName])
-}
-
-function formatGridCellValue(row: PriceGridRow, column: ContentTableViewColumn) {
-  const value = getGridCellValue(row, column.field_name)
-  if (!value || row._isDraft) {
-    return ''
-  }
-  if (column.field_type === 'datetime') {
-    return formatDate(value)
-  }
-  if (column.field_type === 'boolean') {
-    return value === '1' || value === 'true' ? '是' : '否'
-  }
-  return value
 }
 
 function stringifyCell(value: unknown) {
@@ -946,12 +696,10 @@ function stringifyCell(value: unknown) {
   return String(value)
 }
 
-function gridRowToPriceRecordItem(row: PriceGridRow): PriceRecordItem {
-  return {
-    id: row.id || 0,
-    column_id: row.column_id,
-    name: getGridCellValue(row, 'name'),
-    updated_at: row.updated_at,
-    created_at: row.created_at,
-  } as unknown as PriceRecordItem
+function getApiErrorMessage(error: unknown, fallback: string) {
+  if (!error || typeof error !== 'object') return fallback
+  const responseMessage = (error as { response?: { data?: { message?: unknown } } }).response?.data?.message
+  if (typeof responseMessage === 'string' && responseMessage) return responseMessage
+  const message = (error as { message?: unknown }).message
+  return typeof message === 'string' && message ? message : fallback
 }

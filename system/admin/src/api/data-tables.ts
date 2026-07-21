@@ -32,7 +32,6 @@ export type DataTableFieldPayload = {
   field_key: string
   field_name: string
   field_type: string
-  is_required: number
   is_primary?: number
   settings?: Record<string, unknown> | null
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { ArrowDown, ArrowUp, GripVertical, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -6,7 +6,6 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Switch } from '@/components/ui/switch'
 import type { DataTableField } from '@/types'
 
 const FIELD_TYPES = [
@@ -35,11 +34,25 @@ export function DataTableFieldEditor({
   onSave: (fields: DataTableField[]) => void
   saving?: boolean
 }) {
-  const [draft, setDraft] = useState<DataTableField[]>(fields)
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      {open ? <DataTableFieldEditorContent fields={fields} onSave={onSave} saving={saving} onClose={() => onOpenChange(false)} /> : null}
+    </Dialog>
+  )
+}
 
-  useEffect(() => {
-    if (open) setDraft(fields)
-  }, [fields, open])
+function DataTableFieldEditorContent({
+  fields,
+  onSave,
+  saving,
+  onClose,
+}: {
+  fields: DataTableField[]
+  onSave: (fields: DataTableField[]) => void
+  saving: boolean
+  onClose: () => void
+}) {
+  const [draft, setDraft] = useState<DataTableField[]>(fields)
 
   const update = (fieldKey: string, patch: Partial<DataTableField>) => {
     setDraft((current) => current.map((field) => field.field_key === fieldKey ? { ...field, ...patch } : field))
@@ -52,7 +65,6 @@ export function DataTableFieldEditor({
       field_key: `fld_new_${Date.now()}`,
       field_name: `新字段 ${index}`,
       field_type: 'text',
-      is_required: 0,
       is_primary: 0,
       sort_order: current.length * 10,
     }])
@@ -75,16 +87,15 @@ export function DataTableFieldEditor({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex h-[min(760px,90vh)] max-w-3xl flex-col gap-0 p-0">
+    <DialogContent className="flex h-[min(760px,90vh)] max-w-3xl flex-col gap-0 p-0">
         <DialogHeader className="shrink-0 border-b px-6 py-5 pr-14 text-left">
           <DialogTitle>字段设置</DialogTitle>
-          <DialogDescription>字段属于当前表格，可自由新增，不会修改数据库物理表结构。</DialogDescription>
+          <DialogDescription>字段属于当前表格，可自由新增；记录只需任意一个字段有值即可保存。</DialogDescription>
         </DialogHeader>
         <ScrollArea className="min-h-0 flex-1 px-6 py-4">
           <div className="space-y-2">
             {draft.map((field, index) => (
-              <div key={field.field_key} className="grid gap-3 rounded-md border p-3 md:grid-cols-[minmax(0,1fr)_130px_auto] md:items-center">
+              <div key={field.field_key} className="grid gap-3 rounded-md border p-3 md:grid-cols-[minmax(0,1fr)_auto_auto] md:items-center">
                 <div className="flex min-w-0 items-center gap-2">
                   <GripVertical className="size-4 shrink-0 text-muted-foreground" />
                   <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2">
@@ -102,10 +113,6 @@ export function DataTableFieldEditor({
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
-                  <div className="flex items-center gap-2">
-                    <Switch checked={field.is_required === 1} onCheckedChange={(checked) => update(field.field_key, { is_required: checked ? 1 : 0 })} aria-label={`${field.field_name}必填`} />
-                    <span className="text-sm">必填</span>
-                  </div>
                   <span className="text-xs text-muted-foreground">{field.is_primary === 1 ? '主字段' : field.field_key}</span>
                 </div>
                 <div className="flex justify-end">
@@ -119,10 +126,9 @@ export function DataTableFieldEditor({
           <Button type="button" variant="outline" className="mt-4" onClick={addField}><Plus className="size-4" />新增字段</Button>
         </ScrollArea>
         <DialogFooter className="shrink-0 border-t px-6 py-4">
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>取消</Button>
+          <Button type="button" variant="outline" onClick={onClose}>取消</Button>
           <Button type="button" onClick={() => onSave(draft)} disabled={saving}>保存字段</Button>
         </DialogFooter>
       </DialogContent>
-    </Dialog>
   )
 }
