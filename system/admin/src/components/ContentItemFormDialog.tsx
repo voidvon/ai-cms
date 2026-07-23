@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { CheckCheck, FilePenLine } from 'lucide-react'
 import type { MediaPurpose } from '@/api/media'
 import { contentModelsApi } from '@/api/advanced'
 import { columnsApi } from '@/api/columns'
@@ -14,7 +15,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import ImageUploadField from '@/components/ImageUploadField'
 import ImagesUploadField from '@/components/ImagesUploadField'
 import AttachmentsField from '@/components/AttachmentsField'
@@ -109,8 +110,13 @@ export default function ContentItemFormDialog({
     queryKey: ['languages'],
     queryFn: () => languagesApi.list(),
   })
-  const languages = useMemo(() => languagesData?.data || [], [languagesData?.data])
-  const defaultLanguageCode = languages.find((language) => language.is_default === 1)?.code || 'zh-CN'
+  const languages = useMemo(
+    () => (languagesData?.data || []).filter((language) => Number(language.is_enabled || 0) === 1),
+    [languagesData?.data],
+  )
+  const defaultLanguageCode = languages.find((language) => language.is_default === 1)?.code
+    || languages[0]?.code
+    || 'zh-CN'
   const topicLanguageCode = selectedTopicLanguageCode || defaultLanguageCode
   const availableLanguageCodes = useMemo(() => languages.map((language) => language.code), [languages])
 
@@ -187,7 +193,7 @@ export default function ContentItemFormDialog({
     if (source && mode === 'edit') {
       setBaseData(createBaseDataFromItem(source))
       setTranslations(buildInitialTranslations(source, defaultLanguageCode, availableLanguageCodes))
-      setActiveLanguage(source.requested_language_code || source.current_language_code || defaultLanguageCode)
+      setActiveLanguage('base')
       return
     }
 
@@ -275,6 +281,25 @@ export default function ContentItemFormDialog({
     }))
   }
 
+  const allLanguagesPublished = languages.length > 0 && languages.every((language) => (
+    translations[language.code]?.publish_status === 'published'
+  ))
+
+  const handleToggleAllPublishStatus = () => {
+    const publishStatus = allLanguagesPublished ? 'draft' : 'published'
+    setTranslations((previous) => {
+      const next = { ...previous }
+      for (const language of languages) {
+        next[language.code] = {
+          ...createEmptyTranslation(),
+          ...(previous[language.code] || {}),
+          publish_status: publishStatus,
+        }
+      }
+      return next
+    })
+  }
+
   const handleAddToTopic = () => {
     const topicColumnId = Number.parseInt(selectedTopicColumnId, 10)
     if (!topicColumnId) {
@@ -286,14 +311,36 @@ export default function ContentItemFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="w-[80vw] max-w-[80vw] max-h-[80vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>{mode === 'create' ? meta.createTitle : meta.editTitle}</DialogTitle>
-          {mode === 'create' ? <DialogDescription>{meta.createDescription}</DialogDescription> : null}
-        </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Tabs value={activeLanguage} onValueChange={setActiveLanguage}>
-            <div>
+      <DialogContent className="h-[80vh] w-[80vw] max-w-[80vw] max-h-[80vh] !flex !flex-col overflow-hidden [&>button]:z-30">
+        <form id="content-item-form" onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <Tabs value={activeLanguage} onValueChange={setActiveLanguage} className="flex min-h-0 flex-1 flex-col">
+            <div className="shrink-0 space-y-3 border-b bg-background pb-3">
+              <DialogHeader>
+                <div className="flex flex-wrap items-center gap-3 pr-8">
+                  <DialogTitle>{mode === 'create' ? meta.createTitle : meta.editTitle}</DialogTitle>
+                  {mode === 'edit' ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleToggleAllPublishStatus}
+                      disabled={languages.length === 0 || !isFieldEditable(fieldMap, 'publish_status')}
+                    >
+                      {allLanguagesPublished ? <FilePenLine className="size-4" /> : <CheckCheck className="size-4" />}
+                      {allLanguagesPublished ? '全部设为草稿' : '全部发布'}
+                    </Button>
+                  ) : null}
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                      取消
+                    </Button>
+                    <Button type="submit" disabled={mutation.isPending}>
+                      {mutation.isPending ? '提交中...' : '确定'}
+                    </Button>
+                  </div>
+                </div>
+                {mode === 'create' ? <DialogDescription>{meta.createDescription}</DialogDescription> : null}
+              </DialogHeader>
               <TabsList className="w-full justify-start">
                 <TabsTrigger value="base">基础信息</TabsTrigger>
                 {languages.map((language) => (
@@ -305,45 +352,44 @@ export default function ContentItemFormDialog({
               </TabsList>
             </div>
 
-            <TabsContent value="base">
-              <div className="rounded border p-4 space-y-4">
-                <div>
-                  <div className="font-medium">基础字段</div>
-                  <div className="text-sm text-muted-foreground">这些字段不区分语言，所有语言共用同一份数据。</div>
+            <div className="min-h-0 flex-1 overflow-y-auto pt-4">
+              <TabsContent value="base">
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  {isFormFieldAvailable(fieldMap, 'code') ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="code">{getFieldLabel(fieldMap, 'code', capabilities.codeFieldLabel)}</Label>
+                      <Input
+                        id="code"
+                        value={String(baseData.code || '')}
+                        disabled={!isFieldEditable(fieldMap, 'code')}
+                        onChange={(e) => setBaseData({ ...baseData, code: e.target.value })}
+                        placeholder={`请输入${capabilities.codeFieldLabel}`}
+                      />
+                    </div>
+                  ) : null}
+                  {isFormFieldAvailable(fieldMap, 'column_id') ? (
+                    <div className="space-y-2">
+                      <Label>{getFieldLabel(fieldMap, 'column_id', '所属栏目')}</Label>
+                      <Select
+                        value={baseData.column_id ? String(baseData.column_id) : ''}
+                        disabled={!isFieldEditable(fieldMap, 'column_id')}
+                        onValueChange={(value) => setBaseData({ ...baseData, column_id: Number.parseInt(value, 10) || undefined })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder={meta.columnPlaceholder} />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {modelColumnOptions.map((option) => (
+                            <SelectItem key={option.value} value={option.value}>
+                              {option.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : null}
                 </div>
-                {isFormFieldAvailable(fieldMap, 'code') ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="code">{getFieldLabel(fieldMap, 'code', capabilities.codeFieldLabel)}</Label>
-                    <Input
-                      id="code"
-                      value={String(baseData.code || '')}
-                      disabled={!isFieldEditable(fieldMap, 'code')}
-                      onChange={(e) => setBaseData({ ...baseData, code: e.target.value })}
-                      placeholder={`请输入${capabilities.codeFieldLabel}`}
-                    />
-                  </div>
-                ) : null}
-                {isFormFieldAvailable(fieldMap, 'column_id') ? (
-                  <div className="space-y-2">
-                    <Label>{getFieldLabel(fieldMap, 'column_id', '所属栏目')}</Label>
-                    <Select
-                      value={baseData.column_id ? String(baseData.column_id) : ''}
-                      disabled={!isFieldEditable(fieldMap, 'column_id')}
-                      onValueChange={(value) => setBaseData({ ...baseData, column_id: Number.parseInt(value, 10) || undefined })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder={meta.columnPlaceholder} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {modelColumnOptions.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                ) : null}
                 <div className="space-y-2">
                   <Label htmlFor="custom_url">自定义文件名</Label>
                   <Input
@@ -618,10 +664,10 @@ export default function ContentItemFormDialog({
               </div>
             </TabsContent>
 
-            {languages.map((language) => {
-              const translation = translations[language.code] || createEmptyTranslation()
-              return (
-                <TabsContent key={language.id} value={language.code}>
+              {languages.map((language) => {
+                const translation = translations[language.code] || createEmptyTranslation()
+                return (
+                  <TabsContent key={language.id} value={language.code}>
                   <div className="grid gap-4 md:grid-cols-2">
                     {isFormFieldAvailable(fieldMap, 'name') ? (
                       <div className="space-y-2">
@@ -790,19 +836,12 @@ export default function ContentItemFormDialog({
                       />
                     </div>
                   ) : null}
-                </TabsContent>
-              )
-            })}
+                  </TabsContent>
+                )
+              })}
+            </div>
           </Tabs>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              取消
-            </Button>
-            <Button type="submit" disabled={mutation.isPending}>
-              {mutation.isPending ? '提交中...' : '确定'}
-            </Button>
-          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

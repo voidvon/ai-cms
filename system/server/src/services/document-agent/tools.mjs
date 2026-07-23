@@ -112,6 +112,7 @@ export function createDocumentAgentTools() {
             amount: z.number().optional(),
             notes: z.string().optional(),
           })),
+          clearExisting: z.boolean().default(false).describe('仅当用户明确要求清空全部现有明细时设为 true'),
           pricing: z.object({
             currency: z.string().optional(),
             subtotal: z.number().optional(),
@@ -128,6 +129,7 @@ export function createDocumentAgentTools() {
             runId: context.runId,
             items: input.items,
             pricing: input.pricing,
+            clearExisting: input.clearExisting,
             summary: input.summary,
             syncConversationId: context.conversationId,
             user: context.user,

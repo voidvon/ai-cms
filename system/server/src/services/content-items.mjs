@@ -139,6 +139,6 @@ function requireContentModelCode(modelCode) {
   return normalizedModelCode;
 }
 
-function resolveContentItemComparator(modelCode) {
+export function resolveContentItemComparator(modelCode) {
   return resolveContentEntryComparator(modelCode);
 }

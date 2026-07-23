@@ -6,7 +6,7 @@ import { createCmsTemplateRuntime } from './cms-template-runtime.mjs';
 import { listColumns } from './services/columns.mjs';
 import { listColumnNodes, mapColumnNodesByRoot } from './services/column-nodes.mjs';
 import { getDescendantColumnIds } from './services/column-tree.mjs';
-import { getContentItemById, listContentItems } from './services/content-items.mjs';
+import { getContentItemById, listContentItems, resolveContentItemComparator } from './services/content-items.mjs';
 import { buildRobotsTxt } from './services/robots.mjs';
 import { buildSitemap } from './services/sitemap.mjs';
 import { buildLlmsFiles } from './services/llms.mjs';
@@ -256,6 +256,7 @@ const STATIC_BUILD_GROUP_ORDER = ['网站页面', '栏目页', '内容页', '系
 const TEMPLATE_CLIENT_ASSET_DIR = path.join('assets', 'cms-templates');
 const {
   renderCmsSitePage: renderCmsTemplatePage,
+  resolveCmsSitePageListComparator,
   cleanupTemplateClientBundles,
   buildRegisteredTsxAssets
 } = createCmsTemplateRuntime({
@@ -1309,6 +1310,7 @@ export function buildManagedColumnListPages({ outputRoot = DEFAULT_OUTPUT_ROOT, 
   }
   const categories = templateContext.managedColumnCategories;
   const managedItems = listManagedColumnItems(targetRootColumn, { visibleOnly: false, limit: 10000, languageCode });
+  const fallbackComparator = resolveContentItemComparator(resolveManagedColumnModelCode(targetRootColumn));
   const columnMap = new Map(categories.map((item) => [item.id, item]));
   const childrenByParent = groupBy(categories, (item) => normalizeInteger(item.parent_id, 0));
   const managedItemsByColumn = groupBy(managedItems, (item) => normalizeInteger(item.column_id, 0));
@@ -1327,7 +1329,11 @@ export function buildManagedColumnListPages({ outputRoot = DEFAULT_OUTPUT_ROOT, 
     columnNode: targetRootColumn,
     parent: null,
     children: topLevelColumns.filter((item) => !isTopicManagedColumn(item)),
-    items: managedItems.slice().sort(compareBySortAndId),
+    items: managedItems.slice().sort(resolveCmsSitePageListComparator('managed-column-list', {
+      templateType: 'list',
+      fallbackCode: 'managed_list',
+      targets: [{ target_type: 'column', target_id: normalizeInteger(targetRootColumn.id, 0) }]
+    }, fallbackComparator)),
     fileStem: 'index',
     columnMap,
     renderGroup
@@ -1343,10 +1349,15 @@ export function buildManagedColumnListPages({ outputRoot = DEFAULT_OUTPUT_ROOT, 
     }
 
     const descendantColumnIds = getDescendantManagedColumnIds(childrenByParent, columnId);
+    const compareManagedItems = resolveCmsSitePageListComparator('managed-column-list', {
+      templateType: 'list',
+      fallbackCode: 'managed_list',
+      targets: [{ target_type: 'column', target_id: columnId }]
+    }, fallbackComparator);
     const items = descendantColumnIds
       .flatMap((id) => managedItemsByColumn.get(id) || [])
       .slice()
-      .sort(compareBySortAndId);
+      .sort(compareManagedItems);
     const parent = columnMap.get(normalizeInteger(columnNode.parent_id, 0));
     const children = (childrenByParent.get(columnId) || []).filter((item) => !isTopicManagedColumn(item));
     filesWritten += writeManagedColumnPageSet({
@@ -1396,6 +1407,7 @@ export function buildManagedColumnContentPages({ outputRoot = DEFAULT_OUTPUT_ROO
   );
 
   const managedItemsByColumn = groupBy(allManagedItems, (item) => normalizeInteger(item.column_id, 0));
+  const compareManagedItems = resolveContentItemComparator(resolveManagedColumnModelCode(targetRootColumn));
   const columnMap = new Map(templateContext.managedColumnCategories.map((item) => [normalizeInteger(item.id, 0), item]));
   let filesWritten = 0;
   const renderGroup = buildColumnRenderGroup({
@@ -1415,7 +1427,7 @@ export function buildManagedColumnContentPages({ outputRoot = DEFAULT_OUTPUT_ROO
 
   for (const managedItem of managedItems) {
     const siblingManagedItems = (managedItemsByColumn.get(normalizeInteger(managedItem.column_id, 0)) || []).filter((item) => item.id !== managedItem.id);
-    const relatedManagedItems = siblingManagedItems.slice().sort(compareBySortAndId).slice(0, 4);
+    const relatedManagedItems = siblingManagedItems.slice().sort(compareManagedItems).slice(0, 4);
     const columnNode = columnMap.get(normalizeInteger(managedItem.column_id, 0)) || null;
     const parent = columnNode ? columnMap.get(normalizeInteger(columnNode.parent_id, 0)) || null : null;
     const html = renderCmsSitePage('managed-column-detail', buildLegacyManagedColumnDetailPageProps({
@@ -5181,10 +5193,6 @@ function paginate(items, pageSize) {
     pages.push(items.slice(index, index + pageSize));
   }
   return pages;
-}
-
-function compareBySortAndId(left, right) {
-  return normalizeInteger(left.sort_order, 0) - normalizeInteger(right.sort_order, 0) || right.id - left.id;
 }
 
 function filterByIdRange(items, idRange) {

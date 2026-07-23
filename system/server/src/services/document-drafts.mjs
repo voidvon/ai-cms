@@ -206,32 +206,56 @@ export function updateDocumentDraft(id, updates = {}) {
   const nextMessages = Array.isArray(updates.messages)
     ? normalizeMessages(updates.messages)
     : existing.messages;
-  const nextTitle = String(updates.title || nextPayload.title || existing.title || '').trim() || buildDefaultTitle(existing.document_type);
-  const nextLanguageCode = String(updates.language_code || nextPayload.language || existing.language_code || 'zh-CN').trim() || 'zh-CN';
-  const nextStatus = String(updates.status || existing.status || 'draft').trim() || 'draft';
+  const nextTitle = String(
+    Object.prototype.hasOwnProperty.call(updates, 'title')
+      ? updates.title
+      : (hasPayloadUpdate ? (nextPayload.title || existing.title || '') : existing.title)
+  ).trim() || buildDefaultTitle(existing.document_type);
+  const nextLanguageCode = String(
+    Object.prototype.hasOwnProperty.call(updates, 'language_code')
+      ? updates.language_code
+      : (hasPayloadUpdate ? (nextPayload.language || existing.language_code || 'zh-CN') : existing.language_code)
+  ).trim() || 'zh-CN';
+  const nextStatus = String(
+    Object.prototype.hasOwnProperty.call(updates, 'status')
+      ? updates.status
+      : (existing.status || 'draft')
+  ).trim() || 'draft';
   const now = new Date().toISOString();
 
+  // Keep independent updates independent. Rewriting the whole row for a title
+  // or message-only update can overwrite a newer payload written by the AI
+  // agent or the document preview (including items and stamps).
+  const setClauses = [];
+  const params = [];
+
+  if (hasPayloadUpdate || Object.prototype.hasOwnProperty.call(updates, 'title')) {
+    setClauses.push('title = ?');
+    params.push(nextTitle);
+  }
+  if (hasPayloadUpdate || Object.prototype.hasOwnProperty.call(updates, 'language_code')) {
+    setClauses.push('language_code = ?');
+    params.push(nextLanguageCode);
+  }
+  if (hasPayloadUpdate) {
+    setClauses.push('draft_payload_json = ?');
+    params.push(JSON.stringify(nextPayload));
+  }
+  if (Array.isArray(updates.messages)) {
+    setClauses.push('messages_json = ?');
+    params.push(JSON.stringify(nextMessages));
+  }
+  if (Object.prototype.hasOwnProperty.call(updates, 'status')) {
+    setClauses.push('status = ?');
+    params.push(nextStatus);
+  }
+
+  setClauses.push('updated_at = ?');
+  params.push(now);
+  params.push(id);
   execute(
-    `
-      UPDATE document_drafts
-      SET
-        title = ?,
-        language_code = ?,
-        draft_payload_json = ?,
-        messages_json = ?,
-        status = ?,
-        updated_at = ?
-      WHERE id = ?
-    `,
-    [
-      nextTitle,
-      nextLanguageCode,
-      JSON.stringify(nextPayload),
-      JSON.stringify(nextMessages),
-      nextStatus,
-      now,
-      id,
-    ]
+    `UPDATE document_drafts SET ${setClauses.join(', ')} WHERE id = ?`,
+    params
   );
 
   return getDocumentDraftById(id);

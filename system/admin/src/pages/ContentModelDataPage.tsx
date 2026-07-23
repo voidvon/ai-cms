@@ -396,16 +396,14 @@ export default function ContentModelDataPage({
         </AlertDialogContent>
       </AlertDialog>
 
-      {formOpen ? (
-        <ContentItemFormDialog
-          open={formOpen}
-          onOpenChange={setFormOpen}
-          item={editingItem}
-          mode={editingItem ? 'edit' : 'create'}
-          modelCode={selectedModel.code}
-          defaultColumnId={selectedColumnId !== 'all' ? Number.parseInt(selectedColumnId, 10) : undefined}
-        />
-      ) : null}
+      <ContentItemFormDialog
+        open={formOpen}
+        onOpenChange={setFormOpen}
+        item={editingItem}
+        mode={editingItem ? 'edit' : 'create'}
+        modelCode={selectedModel.code}
+        defaultColumnId={selectedColumnId !== 'all' ? Number.parseInt(selectedColumnId, 10) : undefined}
+      />
     </div>
   )
 }

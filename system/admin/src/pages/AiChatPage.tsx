@@ -348,7 +348,7 @@ export default function AiChatPage() {
       setTitleInputValue(String(nextDraft.title || '').trim())
       setRenamingDraftId('')
       setRenamingDraftTitle('')
-      await queryClient.setQueryData(['document-draft', nextDraft.id], { success: true, data: nextDraft })
+      await queryClient.invalidateQueries({ queryKey: ['document-draft', nextDraft.id] })
       await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
       toast.success('文档名称已更新')
     },

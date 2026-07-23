@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { GripVertical, ImagePlus, Trash2, Upload } from 'lucide-react'
+import { ArrowLeft, ArrowRight, ImagePlus, Trash2, Upload } from 'lucide-react'
 import { mediaApi, type MediaPurpose } from '@/api/media'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -94,9 +94,9 @@ export default function ImagesUploadField({
         onChange={handleFileChange}
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      <div className="flex flex-wrap gap-3">
         {normalizedValue.length === 0 ? (
-          <div className="col-span-full flex h-44 flex-col items-center justify-center gap-2 rounded-md border bg-muted/20 text-sm text-muted-foreground">
+          <div className="flex h-44 w-full flex-col items-center justify-center gap-2 rounded-md border bg-muted/20 text-sm text-muted-foreground">
             <ImagePlus className="size-5" />
             <span>暂无产品图片</span>
           </div>
@@ -104,24 +104,47 @@ export default function ImagesUploadField({
           normalizedValue.map((item, index) => {
             const previewSrc = item && !PLACEHOLDER_IMAGES.has(item) ? resolveAssetUrl(item) : ''
             return (
-              <div key={`${item}-${index}`} className="space-y-2 rounded-md border p-3">
-                <div className="overflow-hidden rounded-md border bg-muted/20">
+              <div key={`${item}-${index}`} className="w-[200px] space-y-2">
+                <div className="aspect-[4/3] overflow-hidden rounded-md border bg-muted/20">
                   {previewSrc ? (
-                    <img src={previewSrc} alt={`产品图片 ${index + 1}`} className="h-36 w-full object-contain" />
+                    <img src={previewSrc} alt={`产品图片 ${index + 1}`} className="h-full w-full object-contain" />
                   ) : (
-                    <div className="flex h-36 items-center justify-center text-sm text-muted-foreground">
+                    <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
                       图片 {index + 1}
                     </div>
                   )}
                 </div>
                 <div className="flex items-center gap-2">
-                  <Button type="button" size="icon" variant="outline" onClick={() => moveItem(index, -1)} disabled={index === 0}>
-                    <GripVertical className="size-4 rotate-180" />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    onClick={() => moveItem(index, -1)}
+                    disabled={index === 0}
+                    aria-label={`将产品图片 ${index + 1} 左移`}
+                    title="左移"
+                  >
+                    <ArrowLeft className="size-4" />
                   </Button>
-                  <Button type="button" size="icon" variant="outline" onClick={() => moveItem(index, 1)} disabled={index === normalizedValue.length - 1}>
-                    <GripVertical className="size-4" />
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    onClick={() => moveItem(index, 1)}
+                    disabled={index === normalizedValue.length - 1}
+                    aria-label={`将产品图片 ${index + 1} 右移`}
+                    title="右移"
+                  >
+                    <ArrowRight className="size-4" />
                   </Button>
-                  <Button type="button" size="icon" variant="outline" onClick={() => removeItem(index)}>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="outline"
+                    onClick={() => removeItem(index)}
+                    aria-label={`删除产品图片 ${index + 1}`}
+                    title="删除"
+                  >
                     <Trash2 className="size-4" />
                   </Button>
                 </div>

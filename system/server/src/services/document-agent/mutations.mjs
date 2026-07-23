@@ -47,7 +47,19 @@ export function applyDocumentPatchMutation({
   }
 
   const beforePayload = draft.draft_payload || {};
+  if (
+    Array.isArray(patch?.items)
+    && patch.items.length === 0
+    && Array.isArray(beforePayload.items)
+    && beforePayload.items.length > 0
+    && !patch?.clearExistingItems
+  ) {
+    const error = new Error('已有产品明细，拒绝未确认的空数组覆盖');
+    error.statusCode = 400;
+    throw error;
+  }
   const mergedPayload = mergeDocumentDraftPatch(beforePayload, patch || {});
+  delete mergedPayload.clearExistingItems;
   const normalizedPayload = normalizeDocumentDraftPayload(mergedPayload, draft.document_type);
 
   const nextDraft = updateDocumentDraft(draftId, {
@@ -105,12 +117,14 @@ export function replaceDocumentItemsMutation({
   runId,
   items,
   pricing,
+  clearExisting = false,
   summary,
   syncConversationId,
   user,
 }) {
   const patch = {
     items,
+    clearExistingItems: clearExisting,
     ...(pricing ? { pricing } : {}),
   };
 

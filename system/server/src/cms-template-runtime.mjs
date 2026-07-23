@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { getSelectedTemplateVariant, listThemeVariantTemplates } from './services/template-variants.mjs';
 import { resolvePublishedTemplate } from './services/templates.mjs';
 import { compileBrowserCompatibleCss, compileBrowserCompatibleJs } from './template-browser-compat.mjs';
-import { createTsxTemplateElement, renderTsxTemplate } from './tsx-template-renderer.mjs';
+import { createTsxTemplateElement, getTsxTemplateModuleExports, renderTsxTemplate } from './tsx-template-renderer.mjs';
 import { getTsxTemplateStyleAsset } from './tsx-template-styles.mjs';
 import { escapeHtml } from './utils/html.mjs';
 
@@ -62,6 +62,28 @@ export function createCmsTemplateRuntime({
       renderGroup,
       props
     });
+  }
+
+  function resolveCmsSitePageListComparator(pageName, options = {}, fallbackComparator = null) {
+    const templateCode = options.fallbackCode || templateByPage[pageName];
+    const templateType = options.templateType || templateTypeByPage[pageName];
+    const template = templateCode && templateType ? resolveRuntimePublishedTemplate({
+      templateType,
+      targets: options.targets || [],
+      fallbackCode: templateCode,
+      fallbackCodes: []
+    }) : null;
+
+    if (template?.engine !== 'tsx' || !template.tsx_source) {
+      return fallbackComparator;
+    }
+
+    const moduleExports = getTsxTemplateModuleExports(template.tsx_source, {
+      templateCode: template.code || templateCode || pageName
+    });
+    return typeof moduleExports.compareListItems === 'function'
+      ? moduleExports.compareListItems
+      : fallbackComparator;
   }
 
   function renderCmsTsxTemplate(content, props, templateContext, options = {}) {
@@ -620,6 +642,7 @@ export function createCmsTemplateRuntime({
 
   return {
     renderCmsSitePage,
+    resolveCmsSitePageListComparator,
     cleanupTemplateClientBundles,
     buildRegisteredTsxAssets
   };
