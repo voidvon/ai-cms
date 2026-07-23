@@ -178,6 +178,7 @@ function getFallbackTranslationJoin(translationTableName) {
 export function listContentEntries(modelCode, {
   featured = false,
   visibleOnly = true,
+  publishedOnly = false,
   limit = 20,
   languageCode = null
 } = {}) {
@@ -191,6 +192,9 @@ export function listContentEntries(modelCode, {
   // 只有当字段存在时才添加过滤条件
   if (visibleOnly && mainFields.includes('is_visible')) {
     whereParts.push('e.is_visible = 1');
+  }
+  if (publishedOnly) {
+    whereParts.push(`${buildContentValueExpr(modelCode, 'publish_status')} = 'published'`);
   }
   if (featured) {
     whereParts.push('e.is_featured_home = 1');
@@ -249,6 +253,7 @@ export function listContentEntriesPaged(modelCode, {
   columnId = null,
   includeDescendants = false,
   visibleOnly = false,
+  publishedOnly = false,
   languageCode = null,
   nameKeyword = '',
   orderBy = 'default'
@@ -289,6 +294,9 @@ export function listContentEntriesPaged(modelCode, {
   // 只有当字段存在时才添加过滤条件
   if (visibleOnly && mainFields.includes('is_visible')) {
     whereParts.push('e.is_visible = 1');
+  }
+  if (publishedOnly) {
+    whereParts.push(`${buildContentValueExpr(modelCode, 'publish_status')} = 'published'`);
   }
   if (hasColumnFilter) {
     whereParts.push(includeDescendants ? 'e.column_id IN (SELECT id FROM column_tree)' : 'e.column_id = ?');
@@ -346,7 +354,7 @@ export function listContentEntriesPaged(modelCode, {
   if (hasColumnFilter && includeDescendants) {
     countParams.push(safeColumnId);
   }
-  if (normalizedNameKeyword) {
+  if (normalizedNameKeyword || publishedOnly) {
     countParams.push(selectedLanguage.id, selectedLanguage.default_id);
   }
   if (hasColumnFilter && !includeDescendants) {
@@ -361,7 +369,7 @@ export function listContentEntriesPaged(modelCode, {
       ${treeSql}
       SELECT COUNT(*) AS count
       FROM ${quoteIdentifier(tableName)} e
-      ${normalizedNameKeyword ? `
+      ${normalizedNameKeyword || publishedOnly ? `
       LEFT JOIN ${quoteIdentifier(translationTableName)} t ON t.entry_id = e.id AND t.language_id = ?
       LEFT JOIN ${quoteIdentifier(translationTableName)} dt ON dt.entry_id = e.id AND dt.language_id = ?
       ${getFallbackTranslationJoin(translationTableName)}

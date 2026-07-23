@@ -8,7 +8,8 @@ export function buildSectionContentContext({
   columns = null,
   publicSections = null,
   limit = 10000,
-  visibleOnly = true
+  visibleOnly = true,
+  publishedOnly = true
 } = {}) {
   const resolvedColumns = Array.isArray(columns)
     ? columns
@@ -33,6 +34,7 @@ export function buildSectionContentContext({
       languageCode,
       limit,
       visibleOnly,
+      publishedOnly,
       columns: resolvedColumns,
       publicSections: resolvedPublicSections
     });
@@ -76,6 +78,7 @@ export function listSectionEntries(section, {
   languageCode = null,
   limit = 10000,
   visibleOnly = true,
+  publishedOnly = true,
   columns = null,
   publicSections = null
 } = {}) {
@@ -97,6 +100,7 @@ export function listSectionEntries(section, {
     columnId: rootColumnId,
     includeDescendants: true,
     visibleOnly,
+    publishedOnly,
     languageCode
   }).items;
 }

@@ -20,6 +20,7 @@ import {
 import {
   buildSectionContentContext,
   getSectionTopLevelCategories,
+  listSectionEntries,
   resolveSectionListPageSize,
   shouldRenderSectionRootAsList
 } from './services/section-content.mjs';
@@ -160,10 +161,11 @@ function resolveManagedColumnModelCode(rootColumn) {
   return modelCode;
 }
 
-function listManagedColumnItems(rootColumn, { languageCode = null, visibleOnly = false, limit = 10000, featured = false, includeLanguageFallback = false } = {}) {
+function listManagedColumnItems(rootColumn, { languageCode = null, visibleOnly = false, publishedOnly = true, limit = 10000, featured = false, includeLanguageFallback = false } = {}) {
   const items = listContentItems(resolveManagedColumnModelCode(rootColumn), {
     featured,
     visibleOnly,
+    publishedOnly,
     limit,
     languageCode
   });
@@ -214,6 +216,11 @@ function getSectionEntries(templateContext, section, { includeLanguageFallback =
 
 function isCurrentLanguageContentItem(item) {
   return !Boolean(item?.is_language_fallback);
+}
+
+function isPublishedCurrentLanguageContentItem(item) {
+  return isCurrentLanguageContentItem(item)
+    && String(item?.publish_status || '').trim() === 'published';
 }
 
 function buildSectionCategoryUrl(dirName, columnNode) {
@@ -1390,14 +1397,15 @@ export function buildManagedColumnContentPages({ outputRoot = DEFAULT_OUTPUT_ROO
   }
   const queriedManagedItems = listManagedColumnItems(targetRootColumn, {
     visibleOnly: false,
+    publishedOnly: false,
     limit: 10000,
     languageCode,
     includeLanguageFallback: true
   });
-  const allManagedItems = queriedManagedItems.filter(isCurrentLanguageContentItem);
+  const allManagedItems = queriedManagedItems.filter(isPublishedCurrentLanguageContentItem);
   const managedItems = filterByIdRange(allManagedItems, idRange);
   const fallbackManagedItems = filterByIdRange(
-    queriedManagedItems.filter((item) => !isCurrentLanguageContentItem(item)),
+    queriedManagedItems.filter((item) => !isPublishedCurrentLanguageContentItem(item)),
     idRange
   );
 
@@ -1661,14 +1669,21 @@ function buildSectionDetailPagesByDir({
     section.rootColumnId
   ));
   const columnMap = new Map(templateContext.sectionCategories.map((item) => [item.id, item]));
-  const queriedItems = getSectionEntries(templateContext, section, { includeLanguageFallback: true })
+  const queriedItems = listSectionEntries(section, {
+    languageCode: templateContext.languageCode,
+    limit: 10000,
+    visibleOnly: true,
+    publishedOnly: false,
+    columns: templateContext.columns,
+    publicSections: templateContext.publicSections
+  })
     .filter((item) => allowedColumnIds.has(normalizeInteger(item.column_id, 0)))
     .slice()
     .sort((left, right) => left.id - right.id);
-  const allItems = queriedItems.filter(isCurrentLanguageContentItem);
+  const allItems = queriedItems.filter(isPublishedCurrentLanguageContentItem);
   const items = filterByIdRange(allItems, idRange);
   const fallbackItems = filterByIdRange(
-    queriedItems.filter((item) => !isCurrentLanguageContentItem(item)),
+    queriedItems.filter((item) => !isPublishedCurrentLanguageContentItem(item)),
     idRange
   );
   const columnBuckets = groupBy(allItems, (item) => normalizeInteger(item.column_id, 0));
@@ -1945,6 +1960,7 @@ function createTemplateColumnTag(templateContext) {
 
     return listContentItems(modelCode, {
       visibleOnly,
+      publishedOnly: true,
       limit: Math.min(Math.max(normalizeInteger(limit, 20), 1), 200),
       columnId: targetColumnId,
       languageCode: safeLanguageCode

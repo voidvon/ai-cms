@@ -40,6 +40,7 @@ export interface AccessLog {
   referer: string;
   user_agent: string;
   user_agent_kind?: 'browser' | 'bot' | 'other';
+  device_kind?: 'desktop' | 'mobile' | 'other';
   user_agent_label?: string;
   visited_at: string;
 }
@@ -62,6 +63,8 @@ export interface AccessLogSummary {
   metrics: {
     today_visits: number;
     recent_real_users: number;
+    recent_pc_users: number;
+    recent_mobile_users: number;
     total_pages: number;
     recent_visits: number;
     total_404_errors: number;

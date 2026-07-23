@@ -876,6 +876,18 @@ export default function DashboardPage() {
         </Card>
         <Card className="h-[88px] w-[110px] shrink-0">
           <CardHeader className="h-full items-center justify-center gap-1 p-2 text-center">
+            <CardTitle className="text-[20px] leading-none">{metrics?.recent_pc_users ?? 0}</CardTitle>
+            <CardDescription className="text-[14px] leading-tight">24h PC用户</CardDescription>
+          </CardHeader>
+        </Card>
+        <Card className="h-[88px] w-[110px] shrink-0">
+          <CardHeader className="h-full items-center justify-center gap-1 p-2 text-center">
+            <CardTitle className="text-[20px] leading-none">{metrics?.recent_mobile_users ?? 0}</CardTitle>
+            <CardDescription className="text-[14px] leading-tight">24h移动用户</CardDescription>
+          </CardHeader>
+        </Card>
+        <Card className="h-[88px] w-[110px] shrink-0">
+          <CardHeader className="h-full items-center justify-center gap-1 p-2 text-center">
             <CardTitle className="text-[20px] leading-none">{metrics?.total_404_errors ?? 0}</CardTitle>
             <CardDescription className="text-[14px] leading-tight">404错误</CardDescription>
           </CardHeader>

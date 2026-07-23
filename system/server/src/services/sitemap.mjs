@@ -47,6 +47,7 @@ function listManagedColumnItems(rootColumn, { languageCode = null, visibleOnly =
   }
   return listContentItems(resolveManagedColumnModelCode(rootColumn), {
     visibleOnly,
+    publishedOnly: true,
     limit,
     languageCode
   });

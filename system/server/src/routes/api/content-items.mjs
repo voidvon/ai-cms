@@ -41,6 +41,7 @@ export default async function contentItemsRoutes(app) {
       const items = listContentItems(modelCode, {
         featured: featured === 'true' || featured === '1',
         visibleOnly: visible !== 'false' && visible !== '0',
+        publishedOnly: true,
         limit: limit ? parseInt(limit, 10) : undefined,
         languageCode: language ?? lang
       });

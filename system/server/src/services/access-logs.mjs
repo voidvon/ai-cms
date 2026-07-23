@@ -29,6 +29,11 @@ const REAL_USER_REFERER_FILTERS = [
   { operator: 'not_empty', value: '' },
   { operator: 'not_contains', value: REAL_USER_EXCLUDED_REFERER_KEYWORD }
 ];
+export const ACCESS_LOG_RETENTION_DAYS = 3;
+const ACCESS_LOG_TIME_ZONE_OFFSET_MINUTES = 8 * 60;
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+let lastAutomaticCleanupDayKey = '';
+let accessLogDeviceKindsBackfilled = false;
 
 export function ensureAccessLogsSchema() {
   execute(`
@@ -64,6 +69,7 @@ export function ensureAccessLogsSchema() {
 
   addColumnIfMissing('access_logs', 'client_ip_visit_count', 'INTEGER NOT NULL DEFAULT 0');
   addColumnIfMissing('access_logs', 'user_agent_kind', `TEXT NOT NULL DEFAULT 'other'`);
+  addColumnIfMissing('access_logs', 'device_kind', `TEXT NOT NULL DEFAULT 'other'`);
   addColumnIfMissing('access_logs', 'page_url', `TEXT NOT NULL DEFAULT ''`);
 
   execute(`
@@ -76,9 +82,60 @@ export function ensureAccessLogsSchema() {
     ON access_logs (user_agent_kind)
   `);
 
+  execute(`
+    CREATE INDEX IF NOT EXISTS idx_access_logs_device_kind
+    ON access_logs (device_kind)
+  `);
+
+  cleanupExpiredAccessLogsOncePerDay();
   backfillAccessLogVisitCounts();
   backfillAccessLogUserAgentKinds();
+  backfillAccessLogDeviceKinds();
   backfillAccessLogPageUrls();
+}
+
+export function getAccessLogRetentionCutoff(now = new Date()) {
+  const normalizedNow = now instanceof Date ? now : new Date(now);
+  if (Number.isNaN(normalizedNow.getTime())) {
+    throw new TypeError('Invalid access log retention date');
+  }
+
+  const localNow = new Date(
+    normalizedNow.getTime() + ACCESS_LOG_TIME_ZONE_OFFSET_MINUTES * 60 * 1000
+  );
+  const retainedStartAsUtc = Date.UTC(
+    localNow.getUTCFullYear(),
+    localNow.getUTCMonth(),
+    localNow.getUTCDate()
+  ) - (ACCESS_LOG_RETENTION_DAYS - 1) * MILLISECONDS_PER_DAY;
+  const cutoff = new Date(
+    retainedStartAsUtc - ACCESS_LOG_TIME_ZONE_OFFSET_MINUTES * 60 * 1000
+  );
+
+  return {
+    dayKey: localNow.toISOString().slice(0, 10),
+    cutoff: cutoff.toISOString().slice(0, 19).replace('T', ' ')
+  };
+}
+
+export function cleanupExpiredAccessLogs(now = new Date()) {
+  const { cutoff } = getAccessLogRetentionCutoff(now);
+  const result = execute(
+    'DELETE FROM access_logs WHERE datetime(visited_at) < datetime(?)',
+    [cutoff]
+  );
+  return Number(result.changes || 0);
+}
+
+function cleanupExpiredAccessLogsOncePerDay(now = new Date()) {
+  const { dayKey } = getAccessLogRetentionCutoff(now);
+  if (lastAutomaticCleanupDayKey === dayKey) {
+    return 0;
+  }
+
+  const deletedCount = cleanupExpiredAccessLogs(now);
+  lastAutomaticCleanupDayKey = dayKey;
+  return deletedCount;
 }
 
 export function recordAccessLog(input = {}) {
@@ -120,8 +177,9 @@ export function recordAccessLog(input = {}) {
         status_code,
         referer,
         user_agent,
-        user_agent_kind
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        user_agent_kind,
+        device_kind
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       pagePath,
@@ -132,7 +190,8 @@ export function recordAccessLog(input = {}) {
       statusCode,
       normalizeText(input.referer),
       userAgent,
-      userAgentSummary.kind
+      userAgentSummary.kind,
+      userAgentSummary.deviceKind
     ]
   );
 
@@ -165,6 +224,7 @@ export function listAccessLogs(options = {}) {
         l.referer,
         l.user_agent,
         l.user_agent_kind,
+        l.device_kind,
         l.visited_at
       FROM access_logs l
       ${whereClause}
@@ -250,6 +310,17 @@ export function getAccessLogDashboardSummary() {
     realUserFilter.params
   )[0] || { total: 0 };
 
+  const recentDeviceUsersRow = queryAll(
+    `
+      SELECT
+        COUNT(DISTINCT CASE WHEN l.device_kind = 'desktop' THEN TRIM(l.client_ip) END) AS desktop_total,
+        COUNT(DISTINCT CASE WHEN l.device_kind = 'mobile' THEN TRIM(l.client_ip) END) AS mobile_total
+      FROM access_logs l
+      ${recentRealUsersWhereClause}
+    `,
+    realUserFilter.params
+  )[0] || { desktop_total: 0, mobile_total: 0 };
+
   const totalPagesRow = queryAll(`
     SELECT COUNT(DISTINCT CASE
       WHEN COALESCE(TRIM(page_url), '') != '' THEN page_url
@@ -293,6 +364,8 @@ export function getAccessLogDashboardSummary() {
     metrics: {
       today_visits: Number(todayVisitsRow.total || 0),
       recent_real_users: Number(recentRealUsersRow.total || 0),
+      recent_pc_users: Number(recentDeviceUsersRow.desktop_total || 0),
+      recent_mobile_users: Number(recentDeviceUsersRow.mobile_total || 0),
       total_pages: Number(totalPagesRow.total || 0),
       recent_visits: Number(recentVisitsRow.total || 0),
       total_404_errors: Number(totalNotFoundRow.total || 0)
@@ -606,6 +679,15 @@ function normalizeStoredUserAgentKind(value) {
   return '';
 }
 
+function normalizeStoredDeviceKind(value) {
+  const normalized = normalizeText(value).toLowerCase();
+  if (normalized === 'desktop' || normalized === 'mobile' || normalized === 'other') {
+    return normalized;
+  }
+
+  return 'other';
+}
+
 function hydrateAccessLogRow(row = {}) {
   const userAgent = normalizeText(row.user_agent);
   const userAgentSummary = summarizeUserAgent(userAgent);
@@ -617,6 +699,7 @@ function hydrateAccessLogRow(row = {}) {
     page_url: normalizePageUrl(row.page_url, row.page_path),
     user_agent: userAgent,
     user_agent_kind: userAgentKind,
+    device_kind: normalizeStoredDeviceKind(row.device_kind),
     user_agent_label: userAgentSummary.label
   };
 }
@@ -679,6 +762,26 @@ function backfillAccessLogUserAgentKinds() {
   }
 }
 
+function backfillAccessLogDeviceKinds() {
+  if (accessLogDeviceKindsBackfilled) {
+    return;
+  }
+
+  const rows = queryAll('SELECT id, user_agent, device_kind FROM access_logs');
+  for (const row of rows) {
+    const deviceKind = detectDeviceKind(normalizeText(row.user_agent));
+    if (normalizeStoredDeviceKind(row.device_kind) === deviceKind) {
+      continue;
+    }
+
+    execute(
+      'UPDATE access_logs SET device_kind = ? WHERE id = ?',
+      [deviceKind, row.id]
+    );
+  }
+  accessLogDeviceKindsBackfilled = true;
+}
+
 function backfillAccessLogPageUrls() {
   execute(`
     UPDATE access_logs
@@ -687,11 +790,12 @@ function backfillAccessLogPageUrls() {
   `);
 }
 
-function summarizeUserAgent(userAgent) {
+export function summarizeUserAgent(userAgent) {
   if (!userAgent) {
     return {
       kind: 'other',
-      label: '未知客户端'
+      label: '未知客户端',
+      deviceKind: 'other'
     };
   }
 
@@ -699,7 +803,8 @@ function summarizeUserAgent(userAgent) {
   if (knownClientLabel) {
     return {
       kind: 'other',
-      label: knownClientLabel
+      label: knownClientLabel,
+      deviceKind: 'other'
     };
   }
 
@@ -707,7 +812,8 @@ function summarizeUserAgent(userAgent) {
   if (botLabel) {
     return {
       kind: 'bot',
-      label: botLabel
+      label: botLabel,
+      deviceKind: 'other'
     };
   }
 
@@ -715,14 +821,32 @@ function summarizeUserAgent(userAgent) {
   if (browserLabel) {
     return {
       kind: 'browser',
-      label: browserLabel
+      label: browserLabel,
+      deviceKind: detectDeviceKind(userAgent)
     };
   }
 
   return {
     kind: 'other',
-    label: userAgent
+    label: userAgent,
+    deviceKind: detectDeviceKind(userAgent)
   };
+}
+
+function detectDeviceKind(userAgent) {
+  if (!userAgent) {
+    return 'other';
+  }
+
+  if (/(?:android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet)/i.test(userAgent)) {
+    return 'mobile';
+  }
+
+  if (/(?:windows nt|macintosh|x11; linux|cros|ubuntu|freebsd)/i.test(userAgent)) {
+    return 'desktop';
+  }
+
+  return 'other';
 }
 
 function detectKnownClientLabel(userAgent) {

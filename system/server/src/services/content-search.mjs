@@ -15,6 +15,7 @@ export function searchContentEntriesPaged(modelCode, rawQuery, {
   limit = 20,
   languageCode = null,
   visibleOnly = true,
+  publishedOnly = true,
   sortItems = null
 } = {}) {
   ensureContentModelStorageSchema();
@@ -24,6 +25,7 @@ export function searchContentEntriesPaged(modelCode, rawQuery, {
     page,
     limit: 10000,
     visibleOnly,
+    publishedOnly,
     languageCode
   });
 

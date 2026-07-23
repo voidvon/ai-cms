@@ -227,13 +227,13 @@ export default function ContentModelDataPage({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="space-y-4">
-          <div className={lockModelSelection ? 'grid items-center gap-4 xl:grid-cols-[auto_minmax(0,240px)_minmax(240px,1fr)_auto]' : 'grid items-center gap-4 xl:grid-cols-[auto_minmax(0,220px)_minmax(0,220px)_minmax(240px,1fr)_auto]'}>
-            <Button onClick={handleCreate}>{createButtonLabel}</Button>
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+          <div className="flex shrink-0 flex-wrap items-center justify-start gap-4">
+            <Button className="shrink-0" onClick={handleCreate}>{createButtonLabel}</Button>
 
             {!lockModelSelection ? (
-              <div>
+              <div className="w-[220px] max-w-full shrink-0">
                 <Select value={selectedModel.code} onValueChange={handleSelectModel}>
                   <SelectTrigger>
                     <SelectValue />
@@ -249,7 +249,7 @@ export default function ContentModelDataPage({
               </div>
             ) : null}
 
-            <div>
+            <div className="w-[240px] max-w-full shrink-0">
               <Select value={selectedColumnId} onValueChange={handleSelectColumn}>
                 <SelectTrigger>
                   <SelectValue />
@@ -265,7 +265,7 @@ export default function ContentModelDataPage({
               </Select>
             </div>
 
-            <form className="min-w-0" onSubmit={handleSearchSubmit}>
+            <form className="w-[360px] max-w-full shrink-0" onSubmit={handleSearchSubmit}>
               <div className="flex gap-2">
                 <Input
                   value={keywordInput}
@@ -279,16 +279,10 @@ export default function ContentModelDataPage({
               </div>
             </form>
 
-            <div className="flex flex-wrap items-center justify-start gap-2 lg:justify-end">
-              <Badge variant="outline">{selectedModel.code}</Badge>
-              <Badge variant="outline">{selectedModel.fields.length} 字段</Badge>
-              <Badge variant="outline">{modelColumns.length} 栏目</Badge>
-            </div>
           </div>
 
-          <div className="rounded border">
-            <Table>
-              <TableHeader>
+            <Table containerClassName="min-h-0 flex-1 rounded border">
+              <TableHeader className="sticky top-0 z-10 bg-background">
                 <TableRow>
                   <TableHead>ID</TableHead>
                   <TableHead>{titleFieldLabel}</TableHead>
@@ -366,10 +360,10 @@ export default function ContentModelDataPage({
                 )}
               </TableBody>
             </Table>
-          </div>
 
           {pagination ? (
             <DataTablePagination
+              className="shrink-0"
               page={pagination.page}
               totalPages={pagination.totalPages}
               total={pagination.total || 0}

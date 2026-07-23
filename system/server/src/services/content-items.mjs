@@ -27,6 +27,7 @@ export function ensureContentItemsSchema() {
 export function listContentItems(modelCode, {
   featured = false,
   visibleOnly = true,
+  publishedOnly = false,
   limit = 20,
   columnId = null,
   includeDescendants = false,
@@ -41,11 +42,13 @@ export function listContentItems(modelCode, {
       columnId: safeColumnId,
       includeDescendants,
       visibleOnly,
+      publishedOnly,
       languageCode
     }).items
     : listContentEntries(normalizedModelCode, {
       featured,
       visibleOnly,
+      publishedOnly,
       limit,
       languageCode
     });
