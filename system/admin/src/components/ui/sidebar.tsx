@@ -1,5 +1,5 @@
 import * as React from "react"
-import { Slot } from "@radix-ui/react-slot"
+import { Slot as SlotPrimitive } from "radix-ui"
 import { cva, type VariantProps } from "class-variance-authority"
 import { PanelLeft } from "lucide-react"
 
@@ -440,7 +440,7 @@ const SidebarGroupLabel = React.forwardRef<
   HTMLDivElement,
   React.ComponentProps<"div"> & { asChild?: boolean }
 >(({ className, asChild = false, ...props }, ref) => {
-  const Comp = asChild ? Slot : "div"
+  const Comp = asChild ? SlotPrimitive.Slot : "div"
 
   return (
     <Comp
@@ -461,7 +461,7 @@ const SidebarGroupAction = React.forwardRef<
   HTMLButtonElement,
   React.ComponentProps<"button"> & { asChild?: boolean }
 >(({ className, asChild = false, ...props }, ref) => {
-  const Comp = asChild ? Slot : "button"
+  const Comp = asChild ? SlotPrimitive.Slot : "button"
 
   return (
     <Comp
@@ -564,7 +564,7 @@ const SidebarMenuButton = React.forwardRef<
     },
     ref
   ) => {
-    const Comp = asChild ? Slot : "button"
+    const Comp = asChild ? SlotPrimitive.Slot : "button"
     const { isMobile, state, setOpenMobile } = useSidebar()
 
     const button = (
@@ -575,7 +575,7 @@ const SidebarMenuButton = React.forwardRef<
         data-active={isActive}
         className={cn(sidebarMenuButtonVariants({ variant, size }), className)}
         onClick={(event) => {
-          onClick?.(event)
+          onClick?.(event as React.MouseEvent<HTMLButtonElement>)
           if (closeOnMobileClick && isMobile && !event.defaultPrevented) {
             setOpenMobile(false)
           }
@@ -616,7 +616,7 @@ const SidebarMenuAction = React.forwardRef<
     showOnHover?: boolean
   }
 >(({ className, asChild = false, showOnHover = false, ...props }, ref) => {
-  const Comp = asChild ? Slot : "button"
+  const Comp = asChild ? SlotPrimitive.Slot : "button"
 
   return (
     <Comp
@@ -731,7 +731,7 @@ const SidebarMenuSubButton = React.forwardRef<
     closeOnMobileClick?: boolean
   }
 >(({ asChild = false, size = "md", isActive, closeOnMobileClick = false, className, onClick, ...props }, ref) => {
-  const Comp = asChild ? Slot : "a"
+  const Comp = asChild ? SlotPrimitive.Slot : "a"
   const { isMobile, setOpenMobile } = useSidebar()
 
   return (
@@ -741,7 +741,7 @@ const SidebarMenuSubButton = React.forwardRef<
       data-size={size}
       data-active={isActive}
       onClick={(event) => {
-        onClick?.(event)
+        onClick?.(event as React.MouseEvent<HTMLAnchorElement>)
         if (closeOnMobileClick && isMobile && !event.defaultPrevented) {
           setOpenMobile(false)
         }
