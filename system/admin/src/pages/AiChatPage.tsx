@@ -809,7 +809,7 @@ export default function AiChatPage() {
                         <TableCell className="whitespace-nowrap text-right">
                           <Button
                             type="button"
-                            variant="destructiveGhost"
+                            variant="destructive"
                             size="icon-sm"
                             onClick={() => setDeleteDraftId(draft.id)}
                             aria-label={`删除文档 ${draft.title || '未命名文档'}`}

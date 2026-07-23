@@ -46,17 +46,19 @@ export default function SystemVersionControl() {
         }
       }}
     >
-      <PopoverTrigger asChild>
-        <button
+      <PopoverTrigger
+        render={
+          <button
           type="button"
           className="relative inline-flex h-6 items-center rounded-md px-1.5 text-xs font-medium text-muted-foreground transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring"
           aria-label={`当前系统版本 ${currentVersion}${status?.has_update ? '，有新版本可用' : ''}`}
-        >
-          {currentVersion}
-          {status?.has_update ? (
-            <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-red-500 ring-2 ring-sidebar" aria-hidden="true" />
-          ) : null}
-        </button>
+          />
+        }
+      >
+        {currentVersion}
+        {status?.has_update ? (
+          <span className="absolute -right-0.5 -top-0.5 size-2 rounded-full bg-red-500 ring-2 ring-sidebar" aria-hidden="true" />
+        ) : null}
       </PopoverTrigger>
       <PopoverContent align="start" side="bottom" className="w-80 p-0">
         <div className="space-y-3 p-4">

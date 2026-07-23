@@ -45,7 +45,6 @@ import {
   SidebarSeparator,
   SidebarTrigger,
 } from '@/components/ui/sidebar'
-import { Separator } from '@/components/ui/separator'
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -217,12 +216,10 @@ export default function DashboardLayout() {
                 {menuGroups.map((group) => (
                   <Collapsible key={group.label} defaultOpen className="group/collapsible">
                     <SidebarMenuItem>
-                      <CollapsibleTrigger asChild>
-                        <SidebarMenuButton className="w-full">
-                          <group.icon />
-                          <span>{group.label}</span>
-                          <ChevronDown className="ml-auto transition-transform group-data-[state=open]/collapsible:rotate-180" />
-                        </SidebarMenuButton>
+                      <CollapsibleTrigger render={<SidebarMenuButton className="w-full" />}>
+                        <group.icon />
+                        <span>{group.label}</span>
+                        <ChevronDown className="ml-auto transition-transform group-data-open/collapsible:rotate-180" />
                       </CollapsibleTrigger>
                       <CollapsibleContent>
                         <SidebarMenuSub>
@@ -275,7 +272,7 @@ export default function DashboardLayout() {
         </SidebarFooter>
       </Sidebar>
       <SidebarInset className="min-h-0 overflow-hidden">
-        <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
+        <header className="flex h-[42px] shrink-0 items-center gap-2 border-b px-4">
           <SidebarTrigger />
           {isAiDocumentEditor ? (
             <Button
@@ -291,7 +288,6 @@ export default function DashboardLayout() {
           ) : null}
           {!hideRouteBreadcrumb ? (
             <>
-              <Separator orientation="vertical" className="mr-2 h-4" />
               <Breadcrumb>
                 <BreadcrumbList>
                   <BreadcrumbItem>

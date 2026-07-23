@@ -116,7 +116,7 @@ export default function AttachmentsField({
               <Button type="button" size="icon-sm" variant="ghost" onClick={() => moveItem(index, 1)} disabled={disabled || index === normalizedValue.length - 1} title="下移">
                 <ArrowDown className="size-4" />
               </Button>
-              <Button type="button" size="icon-sm" variant="destructiveGhost" onClick={() => removeItem(index)} disabled={disabled} title="移除">
+              <Button type="button" size="icon-sm" variant="destructive" onClick={() => removeItem(index)} disabled={disabled} title="移除">
                 <Trash2 className="size-4" />
               </Button>
             </div>

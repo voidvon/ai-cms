@@ -1,5 +1,4 @@
 import * as React from "react"
-import { Label as LabelPrimitive, Slot as SlotPrimitive } from "radix-ui"
 
 import {
   Controller,
@@ -85,8 +84,8 @@ const FormItem = React.forwardRef<
 FormItem.displayName = "FormItem"
 
 const FormLabel = React.forwardRef<
-  React.ElementRef<typeof LabelPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof LabelPrimitive.Root>
+  HTMLLabelElement,
+  React.ComponentPropsWithoutRef<"label">
 >(({ className, ...props }, ref) => {
   const { error, formItemId } = useFormField()
 
@@ -102,24 +101,21 @@ const FormLabel = React.forwardRef<
 FormLabel.displayName = "FormLabel"
 
 const FormControl = React.forwardRef<
-  React.ElementRef<typeof SlotPrimitive.Slot>,
-  React.ComponentPropsWithoutRef<typeof SlotPrimitive.Slot>
->(({ ...props }, ref) => {
+  HTMLElement,
+  { children: React.ReactElement }
+>(({ children }, ref) => {
   const { error, formItemId, formDescriptionId, formMessageId } = useFormField()
 
-  return (
-    <SlotPrimitive.Slot
-      ref={ref}
-      id={formItemId}
-      aria-describedby={
-        !error
-          ? `${formDescriptionId}`
-          : `${formDescriptionId} ${formMessageId}`
-      }
-      aria-invalid={!!error}
-      {...props}
-    />
-  )
+  return React.cloneElement(children, {
+    ref,
+    id: formItemId,
+    "aria-describedby": !error
+      ? formDescriptionId
+      : `${formDescriptionId} ${formMessageId}`,
+    "aria-invalid": !!error,
+  } as React.HTMLAttributes<HTMLElement> & {
+    ref: React.ForwardedRef<HTMLElement>
+  })
 })
 FormControl.displayName = "FormControl"
 

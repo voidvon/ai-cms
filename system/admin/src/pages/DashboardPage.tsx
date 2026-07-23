@@ -1008,7 +1008,7 @@ export default function DashboardPage() {
                                 </Button>
                                 <Button
                                   type="button"
-                                  variant="destructiveGhost"
+                                  variant="destructive"
                                   size="icon-sm"
                                   onClick={() => deleteSavedFilterPreset(preset.id)}
                                   aria-label={`删除已保存筛选：${preset.name}`}

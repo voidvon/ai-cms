@@ -312,17 +312,16 @@ export default function ContentItemFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[80vh] w-[80vw] max-w-[80vw] max-h-[80vh] !flex !flex-col overflow-hidden [&>button]:z-30">
+      <DialogContent className="h-[80vh] max-h-[80vh] w-[80vw] max-w-[80vw] sm:max-w-[80vw] !flex !flex-col overflow-hidden [&>button]:z-30">
         <form id="content-item-form" onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col overflow-hidden">
           <Tabs value={activeLanguage} onValueChange={setActiveLanguage} className="flex min-h-0 flex-1 flex-col">
-            <div className="shrink-0 space-y-3 border-b bg-background pb-3">
+            <div className="shrink-0 space-y-3 border-b pb-3">
               <DialogHeader>
                 <div className="flex flex-wrap items-center gap-3 pr-8">
                   <DialogTitle>{mode === 'create' ? meta.createTitle : meta.editTitle}</DialogTitle>
                   {mode === 'edit' ? (
                     <Button
                       type="button"
-                      size="sm"
                       variant="outline"
                       onClick={handleToggleAllPublishStatus}
                       disabled={languages.length === 0 || !isFieldEditable(fieldMap, 'publish_status')}
@@ -342,15 +341,17 @@ export default function ContentItemFormDialog({
                 </div>
                 {mode === 'create' ? <DialogDescription>{meta.createDescription}</DialogDescription> : null}
               </DialogHeader>
-              <TabsList className="w-full justify-start">
-                <TabsTrigger value="base">基础信息</TabsTrigger>
-                {languages.map((language) => (
-                  <TabsTrigger key={language.id} value={language.code}>
-                    {language.name}
-                    {language.code === defaultLanguageCode ? ' *' : ''}
-                  </TabsTrigger>
-                ))}
-              </TabsList>
+              <div className="w-full max-w-full overflow-x-auto overscroll-x-contain pb-1">
+                <TabsList className="w-max min-w-full justify-start">
+                  <TabsTrigger className="flex-none" value="base">基础信息</TabsTrigger>
+                  {languages.map((language) => (
+                    <TabsTrigger className="flex-none" key={language.id} value={language.code}>
+                      {language.name}
+                      {language.code === defaultLanguageCode ? ' *' : ''}
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto pt-4">

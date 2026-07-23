@@ -216,15 +216,17 @@ function TreeItem<T = unknown>({
           onDragOver={handleDragOver}
           onDrop={handleDrop}
         >
-          <CollapsibleTrigger asChild>
-            <button
-              type="button"
-              className="group/tree-toggle flex h-8 w-7 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              style={{ marginLeft: depth * 12 }}
-              aria-label="展开或收起"
-            >
-              <ChevronRight className="size-4 transition-transform group-data-[state=open]/tree-toggle:rotate-90" />
-            </button>
+          <CollapsibleTrigger
+            render={
+              <button
+                type="button"
+                className="group/tree-toggle flex h-8 w-7 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                style={{ marginLeft: depth * 12 }}
+                aria-label="展开或收起"
+              />
+            }
+          >
+            <ChevronRight className="size-4 transition-transform group-data-open/tree-toggle:rotate-90" />
           </CollapsibleTrigger>
           <TreeItemButton
             item={item}

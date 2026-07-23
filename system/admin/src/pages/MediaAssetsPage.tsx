@@ -16,7 +16,6 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -267,81 +266,69 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
   const pagination = data?.pagination
 
   return (
-    <div className="h-full min-h-0">
-      <Card className="flex h-full min-h-0 flex-col overflow-hidden border-0 bg-transparent shadow-none">
-        <CardHeader className="space-y-0 p-0 pb-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button type="button" size="sm" className="h-8" onClick={() => setUploadDialogOpen(true)}>
+    <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <Button type="button" onClick={() => setUploadDialogOpen(true)}>
               <FileUp className="size-4" />
               {config.uploadButton}
             </Button>
             {config.showPurposeFilter ? (
-              <div className="w-44">
-                <Select
-                  value={purpose}
-                  onValueChange={(value) => {
-                    setPurpose(value)
-                    setPage(1)
-                  }}
-                >
-                  <SelectTrigger className="h-8">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {PURPOSE_OPTIONS.map((option) => (
-                      <SelectItem key={option.value} value={option.value}>
-                        {option.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
-
-            <div className="w-44">
               <Select
-                value={usage}
+                value={purpose}
                 onValueChange={(value) => {
-                  setUsage(value)
+                  setPurpose(value)
                   setPage(1)
                 }}
               >
-                <SelectTrigger className="h-8">
+                <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {USAGE_OPTIONS.map((option) => (
+                  {PURPOSE_OPTIONS.map((option) => (
                     <SelectItem key={option.value} value={option.value}>
                       {option.label}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            ) : null}
 
-            <form className="min-w-64 flex-1" onSubmit={handleSearchSubmit}>
-              <div className="flex gap-2">
-                <Input
-                  className="h-8"
-                  value={keywordInput}
-                  onChange={(event) => setKeywordInput(event.target.value)}
-                  placeholder={isCompactPdfPage ? '标题、编号、文件名' : '文件名、路径或 MIME'}
-                />
-                <Button type="submit" variant="outline" size="icon-sm" aria-label="查询">
-                  <Search className="size-4" />
-                </Button>
-              </div>
+            <Select
+              value={usage}
+              onValueChange={(value) => {
+                setUsage(value)
+                setPage(1)
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {USAGE_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <form className="flex items-center gap-2" onSubmit={handleSearchSubmit}>
+              <Input
+                value={keywordInput}
+                onChange={(event) => setKeywordInput(event.target.value)}
+                placeholder={isCompactPdfPage ? '标题、编号、文件名' : '文件名、路径或 MIME'}
+              />
+              <Button type="submit" variant="outline" size="icon" aria-label="查询">
+                <Search className="size-4" />
+              </Button>
             </form>
 
             <div className="text-sm text-muted-foreground">
               共 {pagination?.total || 0} 条
             </div>
-          </div>
-        </CardHeader>
-        <CardContent className="flex min-h-0 flex-1 flex-col space-y-3 p-0">
-
-          <div className="min-h-0 flex-1 overflow-auto rounded border">
-            <Table>
+        </div>
+        <Table containerClassName="min-h-0 flex-1 rounded-md border">
               <TableHeader>
                 <TableRow>
                   <TableHead>ID</TableHead>
@@ -388,13 +375,13 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
                         </TableCell>
                       ) : null}
                       {!showLanguageColumn ? (
-                        <TableCell className="group max-w-[260px]">
-                          <span className="inline">
+                        <TableCell className="group w-[260px] max-w-[260px]">
+                          <div className="flex min-w-0 items-center">
                             <a
                               href={getMediaAssetPublicUrl(item)}
                               target="_blank"
                               rel="noreferrer"
-                              className="text-sm font-medium text-primary underline-offset-4 hover:underline"
+                              className="min-w-0 flex-1 truncate text-sm font-medium text-primary underline-offset-4 hover:underline"
                               title={item.original_name || item.relative_path}
                             >
                               {item.original_name || item.relative_path}
@@ -403,13 +390,13 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
                               type="button"
                               variant="ghost"
                               size="icon-sm"
-                              className="ml-1 inline-flex align-middle opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+                              className="ml-1 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
                               onClick={() => copyText(getMediaAssetPublicUrl(item), '已复制完整 URL')}
                               aria-label={`复制 ${item.original_name || item.relative_path} 的完整 URL`}
                             >
                               <Copy className="size-4" />
                             </Button>
-                          </span>
+                          </div>
                         </TableCell>
                       ) : null}
                       <TableCell>{formatFileSize(item.file_size)}</TableCell>
@@ -483,7 +470,7 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
                         </Button>
                         <Button
                           type="button"
-                          variant="destructiveGhost"
+                          variant="destructive"
                           size="icon-sm"
                           onClick={() => setDeleteTarget(item)}
                           aria-label={`删除 ${item.original_name || item.relative_path}`}
@@ -495,8 +482,7 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
                   ))
                 )}
               </TableBody>
-            </Table>
-          </div>
+        </Table>
 
           {pagination && (
             <div className="flex items-center justify-between gap-3">
@@ -561,8 +547,7 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
               )}
             </div>
           )}
-        </CardContent>
-      </Card>
+      </div>
 
       <Dialog
         open={uploadDialogOpen}

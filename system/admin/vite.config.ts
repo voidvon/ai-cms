@@ -89,6 +89,7 @@ export default defineConfig({
           }
 
           if (
+            id.includes('@base-ui/') ||
             id.includes('@radix-ui/') ||
             id.includes('lucide-react') ||
             id.includes('class-variance-authority') ||

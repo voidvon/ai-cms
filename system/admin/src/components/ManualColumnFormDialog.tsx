@@ -252,11 +252,11 @@ export default function ManualColumnFormDialog({
   const form = (
     <form onSubmit={handleSubmit} className="space-y-4">
           <Tabs value={activeLanguage} onValueChange={setActiveLanguage} className="space-y-4">
-            <div>
-              <TabsList className="w-full justify-start">
-                <TabsTrigger value={BASE_TAB_VALUE}>基础数据</TabsTrigger>
+            <div className="w-full max-w-full overflow-x-auto overscroll-x-contain pb-1">
+              <TabsList className="w-max min-w-full justify-start">
+                <TabsTrigger className="flex-none" value={BASE_TAB_VALUE}>基础数据</TabsTrigger>
                 {languages.map((language) => (
-                  <TabsTrigger key={language.id} value={language.code}>
+                  <TabsTrigger className="flex-none" key={language.id} value={language.code}>
                     {language.name}
                     {language.code === defaultLanguageCode ? ' *' : ''}
                   </TabsTrigger>

@@ -406,11 +406,11 @@ export default function TopicManagementPage() {
               onValueChange={setActiveTab}
               className={cn('space-y-4', fillEditorHeight && 'flex min-h-0 flex-1 flex-col')}
             >
-              <div className="shrink-0">
-                <TabsList className="w-full justify-start">
-                  <TabsTrigger value={BASE_TAB_VALUE}>基础数据</TabsTrigger>
+              <div className="w-full max-w-full shrink-0 overflow-x-auto overscroll-x-contain pb-1">
+                <TabsList className="w-max min-w-full justify-start">
+                  <TabsTrigger className="flex-none" value={BASE_TAB_VALUE}>基础数据</TabsTrigger>
                   {languages.map((language) => (
-                    <TabsTrigger key={language.id} value={language.code}>
+                    <TabsTrigger className="flex-none" key={language.id} value={language.code}>
                       {language.name}{language.code === defaultLanguageCode ? ' *' : ''}
                     </TabsTrigger>
                   ))}
@@ -737,7 +737,7 @@ function RelatedContentPicker({
                   <TableCell className="text-right">
                     <Button
                       type="button"
-                      variant="destructiveGhost"
+                      variant="destructive"
                       size="sm"
                       onClick={() => onRemove(ref.model, ref.id)}
                     >

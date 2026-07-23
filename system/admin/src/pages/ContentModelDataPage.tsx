@@ -233,56 +233,49 @@ export default function ContentModelDataPage({
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-          <div className="flex shrink-0 flex-wrap items-center justify-start gap-4">
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
             <Button className="shrink-0" onClick={handleCreate}>{createButtonLabel}</Button>
 
             {!lockModelSelection ? (
-              <div className="w-[220px] max-w-full shrink-0">
-                <Select value={selectedModel.code} onValueChange={handleSelectModel}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {models.map((model) => (
-                      <SelectItem key={model.id} value={model.code}>
-                        {model.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            ) : null}
-
-            <div className="w-[240px] max-w-full shrink-0">
-              <Select value={selectedColumnId} onValueChange={handleSelectColumn}>
+              <Select value={selectedModel.code} onValueChange={handleSelectModel}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">全部栏目</SelectItem>
-                  {modelColumnOptions.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
+                  {models.map((model) => (
+                    <SelectItem key={model.id} value={model.code}>
+                      {model.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-            </div>
+            ) : null}
 
-            <form className="w-[360px] max-w-full shrink-0" onSubmit={handleSearchSubmit}>
-              <div className="flex gap-2">
-                <Input
-                  value={keywordInput}
-                  onChange={(event) => setKeywordInput(event.target.value)}
-                  placeholder={selectedModel.code === 'product' ? '搜索产品名称' : `搜索${titleFieldLabel}`}
-                  aria-label={selectedModel.code === 'product' ? '搜索产品名称' : `搜索${titleFieldLabel}`}
-                />
-                <Button type="submit" variant="outline" size="icon" aria-label="搜索">
-                  <Search className="size-4" />
-                </Button>
-              </div>
+            <Select value={selectedColumnId} onValueChange={handleSelectColumn}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部栏目</SelectItem>
+                {modelColumnOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <form className="flex items-center gap-2" onSubmit={handleSearchSubmit}>
+              <Input
+                value={keywordInput}
+                onChange={(event) => setKeywordInput(event.target.value)}
+                placeholder={selectedModel.code === 'product' ? '搜索产品名称' : `搜索${titleFieldLabel}`}
+                aria-label={selectedModel.code === 'product' ? '搜索产品名称' : `搜索${titleFieldLabel}`}
+              />
+              <Button type="submit" variant="outline" size="icon" aria-label="搜索">
+                <Search className="size-4" />
+              </Button>
             </form>
-
           </div>
 
             <Table containerClassName="min-h-0 flex-1 rounded border">
@@ -350,7 +343,7 @@ export default function ContentModelDataPage({
                           <Pencil />
                         </Button>
                         <Button
-                          variant="destructiveGhost"
+                          variant="destructive"
                           size="icon-sm"
                           onClick={() => handleDelete(item)}
                           title="删除"
