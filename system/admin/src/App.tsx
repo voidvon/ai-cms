@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Toaster } from '@/components/ui/sonner'
 import DashboardLayout from '@/layouts/DashboardLayout'
 import AdminLoginLogsPage from '@/pages/AdminLoginLogsPage'
@@ -15,7 +15,7 @@ import LanguagesPage from '@/pages/LanguagesPage'
 import LlmsDiagnosticsPage from '@/pages/LlmsDiagnosticsPage'
 import LoginPage from '@/pages/LoginPage'
 import MediaAssetsPage from '@/pages/MediaAssetsPage'
-import PriceManagementPage from '@/pages/PriceManagementPage'
+import MultidimensionalTablesPage from '@/pages/PriceManagementPage'
 import SiteConfigPage from '@/pages/SiteConfigPage'
 import SitemapDiagnosticsPage from '@/pages/SitemapDiagnosticsPage'
 import StaticGenerationPage from '@/pages/StaticGenerationPage'
@@ -36,7 +36,8 @@ function App() {
           <Route path="content-models" element={<ContentModelsPage />} />
           <Route path="content-model-data" element={<ContentModelDataPage />} />
           <Route path="topics" element={<TopicManagementPage />} />
-          <Route path="price-management" element={<PriceManagementPage />} />
+          <Route path="multidimensional-tables" element={<MultidimensionalTablesPage />} />
+          <Route path="price-management" element={<LegacyPriceManagementRedirect />} />
           <Route path="pdf-assets" element={<MediaAssetsPage mode="pdfs" />} />
           <Route path="media-assets" element={<MediaAssetsPage />} />
           <Route path="languages" element={<LanguagesPage />} />
@@ -57,6 +58,11 @@ function App() {
       <Toaster />
     </>
   )
+}
+
+function LegacyPriceManagementRedirect() {
+  const location = useLocation()
+  return <Navigate to={{ pathname: '/multidimensional-tables', search: location.search }} replace />
 }
 
 export default App

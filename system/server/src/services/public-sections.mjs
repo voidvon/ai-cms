@@ -2,7 +2,7 @@ import { buildColumnTreeIndex } from './column-tree.mjs';
 import { resolveRelativePublicPath } from './column-paths.mjs';
 
 const SERVICE_SECTION_PATTERN = /(service|services|support|knowledge|learn|training|服务|知识|学习|培训)/i;
-const NON_PUBLIC_SECTION_MODEL_CODES = new Set(['price_record']);
+const NON_PUBLIC_SECTION_MODEL_CODES = new Set(['multidimensional_table']);
 
 export function resolveLegacyColumnPublicId(columnNode) {
   // 公共栏目标识统一直接使用栏目 ID

@@ -30,28 +30,28 @@ import {
 import { toast } from 'sonner'
 import type { Column, ContentTableViewColumn, DataTableField, DataTableRecord } from '@/types'
 
-const PRICE_MODEL_CODE = 'price_record'
-const PRICE_LIST_BASE_PATH = '/price-lists/'
+const TABLE_RECORD_MODEL_CODE = 'multidimensional_table'
+const TABLE_BASE_PATH = '/data-tables/'
 
 type DashboardHeaderContext = {
   headerSlotElement: HTMLDivElement | null
 }
 
-type PriceRecordDeleteTarget = Pick<DataTableRecord, 'id'> & { name: string }
+type RecordDeleteTarget = Pick<DataTableRecord, 'id'> & { name: string }
 
 const GRID_MIN_EMPTY_ROW_COUNT = 20
 
-export default function PriceManagementPage() {
+export default function MultidimensionalTablesPage() {
   const queryClient = useQueryClient()
   const { headerSlotElement } = useOutletContext<DashboardHeaderContext>()
   const [searchParams, setSearchParams] = useSearchParams()
   const [newListName, setNewListName] = useState('')
-  const [deleteTarget, setDeleteTarget] = useState<PriceRecordDeleteTarget | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<RecordDeleteTarget | null>(null)
   const [listDialogOpen, setListDialogOpen] = useState(false)
   const [listDialogName, setListDialogName] = useState('')
   const [listActionTarget, setListActionTarget] = useState<Column | null>(null)
   const [deleteListOpen, setDeleteListOpen] = useState(false)
-  const [priceSearch, setPriceSearch] = useState('')
+  const [recordSearch, setRecordSearch] = useState('')
   const [mobileListDrawerOpen, setMobileListDrawerOpen] = useState(false)
   const [fieldEditorOpen, setFieldEditorOpen] = useState(false)
 
@@ -60,27 +60,31 @@ export default function PriceManagementPage() {
     queryFn: () => contentModelsApi.list(),
   })
   const { data: columnsData, isLoading: columnsLoading } = useQuery({
-    queryKey: ['columns', 'price-management'],
+    queryKey: ['columns', 'multidimensional-tables'],
     queryFn: () => columnsApi.list(),
   })
 
-  const priceModel = useMemo(
-    () => (modelsData?.data || []).find((model) => model.code === PRICE_MODEL_CODE) || null,
+  const tableRecordModel = useMemo(
+    () => (modelsData?.data || []).find((model) => model.code === TABLE_RECORD_MODEL_CODE) || null,
     [modelsData?.data],
   )
-  const priceListColumns = useMemo(
+  const tableRecordModelIds = useMemo(() => new Set(
+    (modelsData?.data || [])
+      .filter((model) => model.code === TABLE_RECORD_MODEL_CODE)
+      .map((model) => Number(model.id)),
+  ), [modelsData?.data])
+  const tableColumns = useMemo(
     () => (columnsData?.data || [])
       .filter((column) => (
-        Number(column.content_model_id || 0) === Number(priceModel?.id || 0)
+        tableRecordModelIds.has(Number(column.content_model_id || 0))
         && column.column_type === 'list'
-        && String(column.route_path || '').startsWith(PRICE_LIST_BASE_PATH)
       ))
       .sort((left, right) => Number(left.sort_order || 0) - Number(right.sort_order || 0) || left.id - right.id),
-    [columnsData?.data, priceModel?.id],
+    [columnsData?.data, tableRecordModelIds],
   )
 
   const selectedColumnId = Number.parseInt(searchParams.get('list') || '0', 10) || 0
-  const selectedColumn = priceListColumns.find((column) => column.id === selectedColumnId) || priceListColumns[0] || null
+  const selectedColumn = tableColumns.find((column) => column.id === selectedColumnId) || tableColumns[0] || null
 
   useEffect(() => {
     if (!selectedColumn) {
@@ -91,7 +95,7 @@ export default function PriceManagementPage() {
       nextParams.set('list', String(selectedColumn.id))
       setSearchParams(nextParams, { replace: true })
     }
-  }, [priceListColumns, searchParams, selectedColumn, selectedColumnId, setSearchParams])
+  }, [tableColumns, searchParams, selectedColumn, selectedColumnId, setSearchParams])
 
   const { data: dataTableData, isLoading: dataTableLoading } = useQuery({
     queryKey: ['data-table', selectedColumn?.id || 0],
@@ -99,8 +103,8 @@ export default function PriceManagementPage() {
     enabled: Boolean(selectedColumn?.id),
   })
   const { data: dataRecordsData, isLoading: dataRecordsLoading } = useQuery({
-    queryKey: ['data-table-records', selectedColumn?.id || 0, priceSearch],
-    queryFn: () => dataTablesApi.listRecords(selectedColumn!.id, { page: 1, limit: 500, keyword: priceSearch }),
+    queryKey: ['data-table-records', selectedColumn?.id || 0, recordSearch],
+    queryFn: () => dataTablesApi.listRecords(selectedColumn!.id, { page: 1, limit: 500, keyword: recordSearch }),
     enabled: Boolean(selectedColumn?.id),
     staleTime: 0,
   })
@@ -111,29 +115,29 @@ export default function PriceManagementPage() {
     mutationFn: async () => {
       const name = String(newListName || '').trim()
       if (!name) {
-        throw new Error('请输入报价列表名称')
+        throw new Error('请输入表格名称')
       }
-      if (!priceModel?.id) {
-        throw new Error('价格条目模型尚未准备完成')
+      if (!tableRecordModel?.id) {
+        throw new Error('多维表格记录模型尚未准备完成')
       }
-      const routePath = buildPriceListRoutePath(name)
+      const routePath = buildTableRoutePath(name)
       return columnsApi.create({
         base: {
           name,
           parent_id: 0,
           column_type: 'list',
-          content_model_id: priceModel.id,
+          content_model_id: tableRecordModel.id,
           custom_url: '',
           dir_name: '',
           route_path: routePath,
           detail_rule: '{id}.html',
-          sort_order: priceListColumns.length * 10,
+          sort_order: tableColumns.length * 10,
           is_visible: 1,
         },
       })
     },
     onSuccess: (response) => {
-      toast.success('报价列表已创建')
+      toast.success('表格已创建')
       setNewListName('')
       setMobileListDrawerOpen(false)
       queryClient.invalidateQueries({ queryKey: ['columns'] })
@@ -152,7 +156,7 @@ export default function PriceManagementPage() {
   const renameListMutation = useMutation({
     mutationFn: async ({ column, name }: { column: Column, name: string }) => {
       if (!name) {
-        throw new Error('请输入报价列表名称')
+        throw new Error('请输入表格名称')
       }
       return columnsApi.update(column.id, {
         parent_id: Number(column.parent_id || 0),
@@ -166,7 +170,7 @@ export default function PriceManagementPage() {
       })
     },
     onSuccess: () => {
-      toast.success('报价列表名称已更新')
+      toast.success('表格名称已更新')
       setListDialogOpen(false)
       setListActionTarget(null)
       queryClient.invalidateQueries({ queryKey: ['columns'] })
@@ -181,12 +185,12 @@ export default function PriceManagementPage() {
       return columnsApi.delete(column.id)
     },
     onSuccess: (_response, deletedColumn) => {
-      toast.success('报价列表已删除')
+      toast.success('表格已删除')
       setDeleteListOpen(false)
       setListActionTarget(null)
       queryClient.invalidateQueries({ queryKey: ['columns'] })
       queryClient.invalidateQueries({ queryKey: ['data-table'] })
-      const nextColumn = priceListColumns.find((column) => column.id !== deletedColumn.id) || null
+      const nextColumn = tableColumns.find((column) => column.id !== deletedColumn.id) || null
       const nextParams = new URLSearchParams(searchParams)
       if (nextColumn) {
         nextParams.set('list', String(nextColumn.id))
@@ -204,7 +208,7 @@ export default function PriceManagementPage() {
     mutationFn: async (itemId: number) => dataTablesApi.deleteRecord(selectedColumn!.id, itemId),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['data-table-records', selectedColumn?.id || 0] })
-      toast.success('价格条目已删除')
+      toast.success('记录已删除')
       setDeleteTarget(null)
     },
     onError: (error: unknown) => {
@@ -227,7 +231,7 @@ export default function PriceManagementPage() {
     const nextParams = new URLSearchParams(searchParams)
     nextParams.set('list', String(column.id))
     setSearchParams(nextParams)
-    setPriceSearch('')
+    setRecordSearch('')
     setMobileListDrawerOpen(false)
   }
 
@@ -248,16 +252,16 @@ export default function PriceManagementPage() {
     return <div>加载中...</div>
   }
 
-  const renderPriceListControls = (inputId: string) => (
+  const renderTableControls = (inputId: string) => (
     <div className="flex min-h-0 flex-1 flex-col space-y-4">
       <div className="space-y-2">
-        <Label htmlFor={inputId}>新增报价列表</Label>
+        <Label htmlFor={inputId}>新建表格</Label>
         <div className="flex gap-2">
           <Input
             id={inputId}
             value={newListName}
             onChange={(event) => setNewListName(event.target.value)}
-            placeholder="例如：2026 Q3 工业蒸汽阀门"
+            placeholder="例如：项目进度"
           />
           <Button onClick={() => createListMutation.mutate()} disabled={createListMutation.isPending}>
             新增
@@ -269,10 +273,10 @@ export default function PriceManagementPage() {
 
       <ScrollArea className="min-h-0 flex-1">
         <div className="space-y-2 pr-3">
-          {priceListColumns.length > 0 ? priceListColumns.map((column) => (
+          {tableColumns.length > 0 ? tableColumns.map((column) => (
             <div
               key={column.id}
-              className={`group/price-list-item flex w-full items-start gap-2 rounded-lg border px-3 py-3 text-left transition-colors ${
+              className={`group/table-list-item flex w-full items-start gap-2 rounded-lg border px-3 py-3 text-left transition-colors ${
                 selectedColumn?.id === column.id ? 'border-primary bg-muted' : 'hover:bg-muted/60'
               }`}
             >
@@ -292,8 +296,8 @@ export default function PriceManagementPage() {
                     type="button"
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 shrink-0 opacity-100 transition-opacity xl:opacity-0 xl:group-hover/price-list-item:opacity-100 xl:group-focus-within/price-list-item:opacity-100 data-[state=open]:opacity-100"
-                    aria-label={`${column.name}列表操作`}
+                    className="h-7 w-7 shrink-0 opacity-100 transition-opacity xl:opacity-0 xl:group-hover/table-list-item:opacity-100 xl:group-focus-within/table-list-item:opacity-100 data-[state=open]:opacity-100"
+                    aria-label={`${column.name}表格操作`}
                   >
                     <Ellipsis className="size-4" />
                   </Button>
@@ -315,7 +319,7 @@ export default function PriceManagementPage() {
             </div>
           )) : (
             <div className="rounded border border-dashed px-4 py-6 text-sm text-muted-foreground">
-              还没有报价列表。先在上方创建一个。
+              还没有表格。先在上方创建一个。
             </div>
           )}
         </div>
@@ -332,8 +336,8 @@ export default function PriceManagementPage() {
             variant="ghost"
             size="icon"
             onClick={() => setMobileListDrawerOpen(true)}
-            aria-label="选择报价列表"
-            title="选择报价列表"
+            aria-label="选择表格"
+            title="选择表格"
           >
             <ListOrdered className="size-5" />
           </Button>
@@ -344,11 +348,11 @@ export default function PriceManagementPage() {
       <div className="grid min-h-0 flex-1 gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
         <Card className="hidden min-h-0 flex-col overflow-hidden xl:flex">
           <CardHeader>
-            <CardTitle>报价列表</CardTitle>
-            <CardDescription>新增后可在右侧录入该列表下的价格条目。</CardDescription>
+            <CardTitle>表格</CardTitle>
+            <CardDescription>创建多张表格，并为每张表格配置独立字段。</CardDescription>
           </CardHeader>
           <CardContent className="flex min-h-0 flex-1 flex-col">
-            {renderPriceListControls('new-price-list-desktop')}
+            {renderTableControls('new-table-desktop')}
           </CardContent>
         </Card>
 
@@ -356,9 +360,9 @@ export default function PriceManagementPage() {
           <CardHeader>
             <div className="flex items-center gap-2">
               <Input
-                value={priceSearch}
-                onChange={(event) => setPriceSearch(event.target.value)}
-                placeholder="搜索..."
+                value={recordSearch}
+                onChange={(event) => setRecordSearch(event.target.value)}
+                placeholder="搜索记录..."
                 disabled={!selectedColumn}
                 className="w-[180px]"
               />
@@ -378,7 +382,7 @@ export default function PriceManagementPage() {
           <CardContent className="min-h-0 flex-1 overflow-hidden">
             {!selectedColumn ? (
               <div className="rounded border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
-                请选择一个报价列表。
+                请选择或新建一个表格。
               </div>
             ) : dataTableLoading || dataRecordsLoading || !dataTable ? (
               <div>加载中...</div>
@@ -389,8 +393,8 @@ export default function PriceManagementPage() {
                 fields={dataTable.fields}
                 columnId={selectedColumn.id}
                 onDeleteRecord={(record) => {
-                  const primaryKey = dataTable.fields.find((field) => field.is_primary === 1)?.field_key
-                  setDeleteTarget({ id: record.id, name: String(primaryKey ? record.fields[primaryKey] || '' : '') })
+                  const firstFieldKey = dataTable.fields[0]?.field_key
+                  setDeleteTarget({ id: record.id, name: String(firstFieldKey ? record.fields[firstFieldKey] || '' : '') })
                 }}
               />
             )}
@@ -401,11 +405,11 @@ export default function PriceManagementPage() {
       <Sheet open={mobileListDrawerOpen} onOpenChange={setMobileListDrawerOpen}>
         <SheetContent side="right" className="flex w-[90vw] max-w-sm flex-col gap-0 p-0 xl:hidden">
           <SheetHeader className="shrink-0 border-b px-5 py-4 pr-14 text-left">
-            <SheetTitle>报价列表</SheetTitle>
-            <SheetDescription>选择或管理报价列表。</SheetDescription>
+            <SheetTitle>表格</SheetTitle>
+            <SheetDescription>选择、新建或管理表格。</SheetDescription>
           </SheetHeader>
           <div className="flex min-h-0 flex-1 flex-col p-5">
-            {renderPriceListControls('new-price-list-mobile')}
+            {renderTableControls('new-table-mobile')}
           </div>
         </SheetContent>
       </Sheet>
@@ -425,7 +429,7 @@ export default function PriceManagementPage() {
       }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除价格条目</AlertDialogTitle>
+            <AlertDialogTitle>删除记录</AlertDialogTitle>
             <AlertDialogDescription>
               删除后不可恢复。确认删除“{deleteTarget?.name || '-'}”吗？
             </AlertDialogDescription>
@@ -453,16 +457,16 @@ export default function PriceManagementPage() {
       }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>重命名报价列表</DialogTitle>
-            <DialogDescription>只更新当前报价列表名称，不修改其路径。</DialogDescription>
+            <DialogTitle>重命名表格</DialogTitle>
+            <DialogDescription>只更新当前表格名称，不修改其内部路径。</DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <Label htmlFor="price-list-name">报价列表名称</Label>
+            <Label htmlFor="table-name">表格名称</Label>
             <Input
-              id="price-list-name"
+              id="table-name"
               value={listDialogName}
               onChange={(event) => setListDialogName(event.target.value)}
-              placeholder="请输入报价列表名称"
+              placeholder="请输入表格名称"
             />
           </div>
           <DialogFooter>
@@ -473,7 +477,7 @@ export default function PriceManagementPage() {
               onClick={() => {
                 const targetColumn = listActionTarget || selectedColumn
                 if (!targetColumn) {
-                  toast.error('当前没有可编辑的报价列表')
+                  toast.error('当前没有可编辑的表格')
                   return
                 }
                 renameListMutation.mutate({
@@ -497,9 +501,9 @@ export default function PriceManagementPage() {
       }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除报价列表</AlertDialogTitle>
+            <AlertDialogTitle>删除表格</AlertDialogTitle>
             <AlertDialogDescription>
-              删除后会一并删除该报价列表下的全部价格条目，且不可恢复。确认删除“{listActionTarget?.name || '-'}”吗？
+              删除后会一并删除该表格下的全部记录，且不可恢复。确认删除“{listActionTarget?.name || '-'}”吗？
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -507,7 +511,7 @@ export default function PriceManagementPage() {
             <AlertDialogAction onClick={() => {
               const targetColumn = listActionTarget || selectedColumn
               if (!targetColumn) {
-                toast.error('当前没有可删除的报价列表')
+                toast.error('当前没有可删除的表格')
                 return
               }
               deleteListMutation.mutate(targetColumn)
@@ -521,7 +525,7 @@ export default function PriceManagementPage() {
   )
 }
 
-function buildPriceListRoutePath(name: string) {
+function buildTableRoutePath(name: string) {
   const slug = String(name || '')
     .trim()
     .toLowerCase()
@@ -530,7 +534,7 @@ function buildPriceListRoutePath(name: string) {
     .replace(/^-|-$/g, '')
 
   const safeSlug = slug || `list-${Date.now()}`
-  return `${PRICE_LIST_BASE_PATH}${safeSlug}/`
+  return `${TABLE_BASE_PATH}${safeSlug}/`
 }
 
 function buildRenamedColumnTranslations(column: Column, name: string) {
@@ -569,7 +573,10 @@ function DataRecordsGrid({
 
   const saveMutation = useMutation({
     mutationFn: async (row: DynamicGridRow) => {
-      const payload = Object.fromEntries(fields.map((field) => [field.field_key, row.fields[field.field_key] ?? '']))
+      const payload = Object.fromEntries(fields.map((field) => [
+        field.field_key,
+        serializeCellValue(field, row.fields[field.field_key] ?? ''),
+      ]))
       return row.id
         ? dataTablesApi.updateRecord(columnId, row.id, payload)
         : dataTablesApi.createRecord(columnId, payload)
@@ -613,8 +620,12 @@ function DataRecordsGrid({
       : row))
   }
 
-  const commitRow = (localId: string) => {
-    const row = rows.find((item) => item.localId === localId)
+  const commitRow = (localId: string, changedField?: { fieldKey: string, value: string }) => {
+    const currentRow = rows.find((item) => item.localId === localId)
+    const row = currentRow && changedField ? {
+      ...currentRow,
+      fields: { ...currentRow.fields, [changedField.fieldKey]: changedField.value },
+    } : currentRow
     if (!row || savingRows[localId] || !isDynamicGridRowChanged(row, fields)) return
     if (!hasAnyDynamicGridValue(row, fields)) {
       if (!row.isDraft) {
@@ -632,25 +643,67 @@ function DataRecordsGrid({
         rows={rows}
         rowKey={(row) => row.localId}
         showRowNumbers
-        renderCell={(row, column) => (
-          <Input
-            type={column.field_type === 'number' || column.field_type === 'currency' ? 'number' : column.field_type === 'date' ? 'date' : 'text'}
-            value={row.fields[column.field_name] || ''}
-            disabled={Boolean(savingRows[row.localId])}
-            onChange={(event) => updateCell(row.localId, column.field_name, event.target.value)}
-            onBlur={(event) => {
-              const nextTarget = event.relatedTarget
-              const tableRow = event.currentTarget.closest('tr')
-              if (nextTarget instanceof Node && tableRow?.contains(nextTarget)) return
-              commitRow(row.localId)
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') event.currentTarget.blur()
-            }}
-            aria-label={column.label}
-            className="h-10 rounded-none border-0 bg-transparent px-2 shadow-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-wait"
-          />
-        )}
+        renderCell={(row, column) => {
+          const field = fields.find((item) => item.field_key === column.field_name)
+          const value = row.fields[column.field_name] || ''
+          const disabled = Boolean(savingRows[row.localId])
+          if (field?.field_type === 'boolean') {
+            return (
+              <label className="flex h-10 items-center justify-center">
+                <input
+                  type="checkbox"
+                  checked={value === 'true' || value === '1'}
+                  disabled={disabled}
+                  onChange={(event) => {
+                    const nextValue = event.target.checked ? 'true' : 'false'
+                    updateCell(row.localId, column.field_name, nextValue)
+                    commitRow(row.localId, { fieldKey: column.field_name, value: nextValue })
+                  }}
+                  aria-label={column.label}
+                  className="size-4 accent-primary"
+                />
+              </label>
+            )
+          }
+          const options = getDataFieldOptions(field)
+          if (field?.field_type === 'select' && options.length > 0) {
+            return (
+              <select
+                value={value}
+                disabled={disabled}
+                onChange={(event) => {
+                  const nextValue = event.target.value
+                  updateCell(row.localId, column.field_name, nextValue)
+                  commitRow(row.localId, { fieldKey: column.field_name, value: nextValue })
+                }}
+                aria-label={column.label}
+                className="h-10 w-full border-0 bg-transparent px-2 text-sm outline-none focus:ring-1 focus:ring-inset focus:ring-ring disabled:cursor-wait"
+              >
+                <option value="">请选择</option>
+                {options.map((option) => <option key={option} value={option}>{option}</option>)}
+              </select>
+            )
+          }
+          return (
+            <Input
+              type={getCellInputType(column.field_type)}
+              value={value}
+              disabled={disabled}
+              onChange={(event) => updateCell(row.localId, column.field_name, event.target.value)}
+              onBlur={(event) => {
+                const nextTarget = event.relatedTarget
+                const tableRow = event.currentTarget.closest('tr')
+                if (nextTarget instanceof Node && tableRow?.contains(nextTarget)) return
+                commitRow(row.localId)
+              }}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') event.currentTarget.blur()
+              }}
+              aria-label={column.label}
+              className="h-10 rounded-none border-0 bg-transparent px-2 shadow-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-wait"
+            />
+          )
+        }}
         renderActions={(row) => !row.isDraft && row.id ? (
           <Button type="button" variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover/configurable-row:opacity-100 group-focus-within/configurable-row:opacity-100" onClick={() => onDeleteRecord({ id: row.id!, fields: row.fields })} aria-label="删除记录">
             <Trash2 className="size-4 text-destructive" />
@@ -721,6 +774,24 @@ function stringifyCell(value: unknown) {
     return ''
   }
   return String(value)
+}
+
+function getCellInputType(fieldType: string) {
+  if (fieldType === 'number' || fieldType === 'currency') return 'number'
+  if (fieldType === 'date') return 'date'
+  if (fieldType === 'datetime') return 'datetime-local'
+  if (fieldType === 'url') return 'url'
+  return 'text'
+}
+
+function getDataFieldOptions(field?: DataTableField) {
+  const options = field?.settings?.options
+  return Array.isArray(options) ? options.map(String).filter(Boolean) : []
+}
+
+function serializeCellValue(field: DataTableField, value: string) {
+  if (field.field_type !== 'multi_select') return value
+  return value.split(/[，,]/).map((item) => item.trim()).filter(Boolean)
 }
 
 function getApiErrorMessage(error: unknown, fallback: string) {

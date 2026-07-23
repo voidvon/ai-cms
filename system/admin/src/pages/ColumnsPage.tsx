@@ -26,6 +26,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { toast } from 'sonner'
+import { filterTopicColumns } from '@/lib/topic-columns'
 import type { Column, ColumnNode, Template, TemplateBinding } from '@/types'
 import ColumnNodeFormDialog from '@/components/ColumnNodeFormDialog'
 import ManualColumnFormDialog from '@/components/ManualColumnFormDialog'
@@ -124,14 +125,12 @@ export default function ColumnsPage() {
   })
 
   const columns = columnsData?.data || []
-  const selectedColumn = columns.find((column) => column.id === selectedColumnId)
-    || columns.find((column) => column.column_semantics?.is_root)
-    || columns[0]
-    || null
+  const managedColumns = useMemo(() => filterTopicColumns(columns), [columns])
+  const selectedColumn = managedColumns.find((column) => column.id === selectedColumnId) || null
 
   const nodeFormRootColumnId = creatingNodeTarget?.rootColumnId || 0
   const nodeFormRootColumn = nodeFormRootColumnId
-    ? columns.find((item) => item.id === nodeFormRootColumnId) || null
+    ? managedColumns.find((item) => item.id === nodeFormRootColumnId) || null
     : null
 
   const deleteNodeMutation = useMutation({
@@ -476,8 +475,9 @@ export default function ColumnsPage() {
   const renderColumnTree = () => {
     return (
       <ColumnTreeSelector
-        columns={columns}
+        columns={managedColumns}
         value={selectedColumn?.id}
+        defaultExpandedIds={[]}
         onValueChange={(column) => handleSelectColumn({ id: column.id, data: column, label: column.name })}
         renderAction={renderColumnTreeAction}
         getMetaText={(column) => <span>ID {column.id}</span>}
@@ -581,7 +581,7 @@ export default function ColumnsPage() {
             mode="edit"
             column={selectedColumn}
             initialKind={selectedColumn.column_type === 'single' ? 'single' : 'link'}
-            columns={columns}
+            columns={managedColumns}
             contentModels={contentModels}
             listTemplates={listTemplates}
             contentTemplates={contentTemplates}
@@ -720,7 +720,7 @@ export default function ColumnsPage() {
           onOpenChange={handleManualColumnDialogOpenChange}
           mode="create"
           initialKind={manualColumnDialogKind}
-          columns={columns}
+          columns={managedColumns}
           contentModels={contentModels}
           listTemplates={listTemplates}
           contentTemplates={contentTemplates}

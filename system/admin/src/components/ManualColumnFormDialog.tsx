@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
+import { filterTopicColumns } from '@/lib/topic-columns'
 import type { Column, ColumnTranslation, ContentModel, Template } from '@/types'
 
 export interface ManualColumnFormValue {
@@ -108,6 +109,7 @@ export default function ManualColumnFormDialog({
   const detailRuleOptions = basicOnly
     ? getDetailRuleOptions(column?.model_code)
     : []
+  const nonTopicColumns = useMemo(() => filterTopicColumns(columns), [columns])
 
   useEffect(() => {
     if (!open) {
@@ -163,13 +165,13 @@ export default function ManualColumnFormDialog({
   }, [open, mode, column?.id, initialKind, initialListTemplateId, initialContentTemplateId, initialSingleTemplateId, defaultLanguageCode, availableLanguageCodes])
 
   const parentOptions = useMemo(() => {
-    return columns.filter((item) => {
+    return nonTopicColumns.filter((item) => {
       if (mode === 'edit' && column && item.id === column.id) {
         return false
       }
       return String(item.column_type || 'list') !== 'single'
     })
-  }, [columns, mode, column])
+  }, [nonTopicColumns, mode, column])
 
   function getDetailRuleOptions(modelCode?: string | null) {
     const normalizedModelCode = String(modelCode || '').trim() as keyof typeof MODEL_DETAIL_RULE_OPTIONS

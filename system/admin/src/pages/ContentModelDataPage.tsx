@@ -26,6 +26,7 @@ import {
 import { buildColumnPathMap, buildColumnTreeOptions } from '@/lib/column-options'
 import { formatDate } from '@/lib/datetime'
 import { getFieldLabel, mapFieldsByName } from '@/lib/content-model-fields'
+import { isContentManagementModel } from '@/lib/content-models'
 import { toast } from 'sonner'
 import type { Column, ManagedContentItem } from '@/types'
 import ContentItemFormDialog from '@/components/ContentItemFormDialog'
@@ -69,7 +70,10 @@ export default function ContentModelDataPage({
     queryFn: () => columnsApi.list({ language: defaultLanguageCode }),
   })
 
-  const models = modelsData?.data || []
+  const models = useMemo(
+    () => (modelsData?.data || []).filter(isContentManagementModel),
+    [modelsData?.data],
+  )
 
   useEffect(() => {
     if (!models.length) {

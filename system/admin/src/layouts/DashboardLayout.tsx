@@ -91,7 +91,7 @@ export default function DashboardLayout() {
     { path: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
     { path: '/ai', label: 'AI 对话', icon: Bot },
     { path: '/ai-docs', label: 'AI 文档', icon: FileText },
-    { path: '/price-management', label: '价格管理', icon: ListOrdered },
+    { path: '/multidimensional-tables', label: '多维表格', icon: ListOrdered },
     { path: '/content-model-data', label: '信息管理', icon: FileText },
     { path: '/topics', label: '专题管理', icon: FileText },
     { path: '/columns', label: '栏目管理', icon: Folder },
@@ -142,6 +142,7 @@ export default function DashboardLayout() {
   }>
 
   const getCurrentPageTitle = () => {
+    if (location.pathname === '/price-management') return '多维表格'
     const topLevelCurrent = topLevelItems.find(item => item.path === location.pathname)
     if (topLevelCurrent) return topLevelCurrent.label
     for (const group of menuGroups) {

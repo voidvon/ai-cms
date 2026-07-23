@@ -330,7 +330,6 @@ export interface DataTableField {
   field_key: string;
   field_name: string;
   field_type: string;
-  is_primary: number;
   is_deleted?: number;
   sort_order: number;
   settings_json?: string | null;

@@ -1,5 +1,5 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
-import { ensureContentModelsSchema, getContentModelByCode, migratePriceRecordTranslationsToMainTable } from './content-models.mjs';
+import { ensureContentModelsSchema, getContentModelByCode } from './content-models.mjs';
 import { listConfiguredModelFields } from './content-model-fields.mjs';
 import { ensureLanguagesSchema } from './languages.mjs';
 
@@ -128,9 +128,6 @@ export function ensureModelTables(modelCode) {
 
   addColumnIfMissing(translationTableName, 'template_data_json', 'TEXT');
 
-  if (modelCode === 'price_record') {
-    migratePriceRecordTranslationsToMainTable();
-  }
 }
 
 export function getTranslationTableName(modelCode) {

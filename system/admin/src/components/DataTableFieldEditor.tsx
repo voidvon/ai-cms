@@ -1,11 +1,10 @@
 import { useState } from 'react'
-import { ArrowDown, ArrowUp, GripVertical, Plus, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import type { DataTableField } from '@/types'
 
 const FIELD_TYPES = [
@@ -58,6 +57,15 @@ function DataTableFieldEditorContent({
     setDraft((current) => current.map((field) => field.field_key === fieldKey ? { ...field, ...patch } : field))
   }
 
+  const updateOptions = (field: DataTableField, value: string) => {
+    update(field.field_key, {
+      settings: {
+        ...(field.settings || {}),
+        options: value.split(/[，,]/).map((option) => option.trim()).filter(Boolean),
+      },
+    })
+  }
+
   const addField = () => {
     const index = draft.length + 1
     setDraft((current) => [...current, {
@@ -65,13 +73,12 @@ function DataTableFieldEditorContent({
       field_key: `draft-${crypto.randomUUID()}`,
       field_name: `新字段 ${index}`,
       field_type: 'text',
-      is_primary: 0,
       sort_order: current.length * 10,
     }])
   }
 
   const removeField = (field: DataTableField) => {
-    if (field.is_primary === 1) return
+    if (draft.length <= 1) return
     setDraft((current) => current.filter((item) => item.field_key !== field.field_key))
   }
 
@@ -87,46 +94,74 @@ function DataTableFieldEditorContent({
   }
 
   return (
-    <DialogContent className="flex h-[min(760px,90vh)] max-w-3xl flex-col gap-0 p-0">
+    <DialogContent className="flex h-[min(760px,90vh)] max-w-5xl flex-col gap-0 p-0">
         <DialogHeader className="shrink-0 border-b px-6 py-5 pr-14 text-left">
           <DialogTitle>字段设置</DialogTitle>
           <DialogDescription>字段属于当前表格，可自由新增；记录只需任意一个字段有值即可保存。</DialogDescription>
         </DialogHeader>
-        <ScrollArea className="min-h-0 flex-1 px-6 py-4">
-          <div className="space-y-2">
+        <div className="flex shrink-0 items-center justify-between border-b px-6 py-3">
+          <span className="text-sm text-muted-foreground">共 {draft.length} 个字段</span>
+          <Button type="button" size="sm" onClick={addField}><Plus className="size-4" />新增字段</Button>
+        </div>
+        <Table containerClassName="min-h-0 flex-1" className="min-w-[740px] table-fixed">
+          <TableHeader>
+            <TableRow className="sticky top-0 z-10 bg-muted/95 hover:bg-muted/95">
+              <TableHead className="w-12 px-3 text-center">#</TableHead>
+              <TableHead className="w-[24%] px-3">字段名</TableHead>
+              <TableHead className="w-40 px-3">类型</TableHead>
+              <TableHead className="px-3">单选/多选选项</TableHead>
+              <TableHead className="w-36 px-3 text-right">操作</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
             {draft.map((field, index) => (
-              <div key={field.field_key} className="grid gap-3 rounded-md border p-3 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
-                <div className="flex min-w-0 items-center gap-2">
-                  <GripVertical className="size-4 shrink-0 text-muted-foreground" />
-                  <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2">
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">字段名</Label>
-                      <Input value={field.field_name} onChange={(event) => update(field.field_key, { field_name: event.target.value })} />
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs text-muted-foreground">类型</Label>
-                      <Select value={field.field_type} onValueChange={(value) => update(field.field_key, { field_type: value })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>{FIELD_TYPES.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
+              <TableRow key={field.field_key}>
+                <TableCell className="px-3 py-2 text-center text-xs text-muted-foreground">{index + 1}</TableCell>
+                <TableCell className="px-3 py-2">
+                  <Input
+                    className="h-8"
+                    value={field.field_name}
+                    onChange={(event) => update(field.field_key, { field_name: event.target.value })}
+                    aria-label={`第 ${index + 1} 行字段名`}
+                  />
+                </TableCell>
+                <TableCell className="px-3 py-2">
+                  <Select value={field.field_type} onValueChange={(value) => update(field.field_key, { field_type: value })}>
+                    <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                    <SelectContent>{FIELD_TYPES.map(([value, label]) => <SelectItem key={value} value={value}>{label}</SelectItem>)}</SelectContent>
+                  </Select>
+                </TableCell>
+                <TableCell className="px-3 py-2">
+                  {field.field_type === 'select' || field.field_type === 'multi_select' ? (
+                    <Input
+                      className="h-8"
+                      value={getFieldOptions(field).join('，')}
+                      onChange={(event) => updateOptions(field, event.target.value)}
+                      placeholder="使用逗号分隔选项"
+                      aria-label={`${field.field_name}选项`}
+                    />
+                  ) : <span className="text-muted-foreground">-</span>}
+                </TableCell>
+                <TableCell className="px-3 py-2">
+                  <div className="flex justify-end">
+                    <Button type="button" variant="ghost" size="icon" disabled={index === 0} onClick={() => moveField(index, -1)} aria-label="上移字段"><ArrowUp className="size-4" /></Button>
+                    <Button type="button" variant="ghost" size="icon" disabled={index === draft.length - 1} onClick={() => moveField(index, 1)} aria-label="下移字段"><ArrowDown className="size-4" /></Button>
+                    <Button type="button" variant="ghost" size="icon" disabled={draft.length <= 1} onClick={() => removeField(field)} aria-label="删除字段"><Trash2 className="size-4 text-destructive" /></Button>
                   </div>
-                </div>
-                <div className="flex justify-end">
-                  {field.is_primary === 1 ? <span className="mr-2 self-center text-xs text-muted-foreground">主字段</span> : null}
-                  <Button type="button" variant="ghost" size="icon" disabled={field.is_primary === 1} onClick={() => removeField(field)} aria-label="删除字段"><Trash2 className="size-4 text-destructive" /></Button>
-                  <Button type="button" variant="ghost" size="icon" disabled={index === 0} onClick={() => moveField(index, -1)} aria-label="上移字段"><ArrowUp className="size-4" /></Button>
-                  <Button type="button" variant="ghost" size="icon" disabled={index === draft.length - 1} onClick={() => moveField(index, 1)} aria-label="下移字段"><ArrowDown className="size-4" /></Button>
-                </div>
-              </div>
+                </TableCell>
+              </TableRow>
             ))}
-          </div>
-          <Button type="button" variant="outline" className="mt-4" onClick={addField}><Plus className="size-4" />新增字段</Button>
-        </ScrollArea>
+          </TableBody>
+        </Table>
         <DialogFooter className="shrink-0 border-t px-6 py-4">
           <Button type="button" variant="outline" onClick={onClose}>取消</Button>
           <Button type="button" onClick={() => onSave(draft)} disabled={saving}>保存字段</Button>
         </DialogFooter>
       </DialogContent>
   )
+}
+
+function getFieldOptions(field: DataTableField) {
+  const options = field.settings?.options
+  return Array.isArray(options) ? options.map(String).filter(Boolean) : []
 }

@@ -18,6 +18,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { isContentManagementModel } from '@/lib/content-models'
+import { resolveTopicColumns } from '@/lib/topic-columns'
 import { cn } from '@/lib/utils'
 import { toast } from 'sonner'
 import type { Column, ContentModel, ManagedContentItem, TemplateBinding } from '@/types'
@@ -89,7 +91,10 @@ export default function TopicManagementPage() {
   })
 
   const columns = columnsData?.data || []
-  const contentModels = modelsData?.data || []
+  const contentModels = useMemo(
+    () => (modelsData?.data || []).filter(isContentManagementModel),
+    [modelsData?.data],
+  )
   const selectedTheme = useMemo(
     () => (themesData?.data || []).find((item) => item.is_selected === 1) || (themesData?.data || [])[0] || null,
     [themesData?.data],
@@ -575,30 +580,6 @@ export default function TopicManagementPage() {
       />
     </div>
   )
-}
-
-function resolveTopicColumns(columns: Column[]) {
-  const byId = new Map(columns.map((column) => [column.id, column]))
-  const root = columns.find((column) => (
-    Number(column.parent_id || 0) <= 0
-    && String(column.dir_name || '').trim() === 'topics'
-    && String(column.route_path || '').trim() === '/topics/'
-  ))
-  if (!root) {
-    return []
-  }
-
-  return columns.filter((column) => {
-    let current: Column | undefined = column
-    while (current) {
-      if (current.id === root.id) {
-        return true
-      }
-      const parentId: number = Number(current.parent_id || 0)
-      current = parentId > 0 ? byId.get(parentId) : undefined
-    }
-    return false
-  })
 }
 
 function createEmptyLanguageDraft(): TopicLanguageDraft {

@@ -9,6 +9,9 @@ export const dataTablesApi = {
   updateFields: async (columnId: number, fields: Array<Partial<DataTableFieldPayload>>) => {
     const payload = fields.map((field) => {
       const next = { ...field }
+      if (next.settings !== undefined) {
+        delete next.settings_json
+      }
       if (String(next.field_key || '').startsWith('draft-')) {
         delete next.field_key
       }
@@ -39,6 +42,6 @@ export type DataTableFieldPayload = {
   field_key: string
   field_name: string
   field_type: string
-  is_primary?: number
   settings?: Record<string, unknown> | null
+  settings_json?: string | null
 }

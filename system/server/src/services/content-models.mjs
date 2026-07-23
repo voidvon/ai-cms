@@ -20,10 +20,10 @@ const BUILTIN_MODELS = [
     description: '新闻列表和新闻详情'
   },
   {
-    code: 'price_record',
-    name: '价格条目',
-    source_table: 'content_price_record',
-    description: '报价列表下的价格条目'
+    code: 'multidimensional_table',
+    name: '多维表格记录',
+    source_table: 'content_multidimensional_table',
+    description: '多维表格的通用记录模型'
   }
 ];
 
@@ -247,6 +247,24 @@ function ensureBuiltinContentModels() {
 }
 
 function ensureBuiltinModelFields() {
+  upsertConfiguredModelField('multidimensional_table', 'name', {
+    field_label: '名称',
+    field_type: 'text',
+    is_required: 0,
+    is_editable: 1,
+    is_translatable: 0,
+    is_searchable: 1,
+    is_system: 1,
+    sort_order: 10,
+    settings_json: null
+  }, {
+    field_name: 'name',
+    field_label: '名称',
+    field_type: 'text',
+    is_required: 0,
+    sort_order: 10
+  });
+
   upsertConfiguredModelField('product', 'images', {
     field_label: '产品图片',
     field_type: 'images',
@@ -283,212 +301,6 @@ function ensureBuiltinModelFields() {
     sort_order: 35
   });
 
-  const priceRecordFields = [
-    {
-      field_name: 'column_id',
-      field_label: '所属报价列表',
-      field_type: 'number',
-      is_required: 1,
-      is_editable: 0,
-      is_translatable: 0,
-      is_searchable: 0,
-      sort_order: 1
-    },
-    {
-      field_name: 'custom_url',
-      field_label: '自定义文件名',
-      field_type: 'text',
-      is_required: 0,
-      is_editable: 0,
-      is_translatable: 0,
-      is_searchable: 0,
-      sort_order: 2
-    },
-    {
-      field_name: 'code',
-      field_label: '内容编号',
-      field_type: 'text',
-      is_required: 0,
-      is_editable: 0,
-      is_translatable: 0,
-      is_searchable: 0,
-      sort_order: 3
-    },
-    {
-      field_name: 'name',
-      field_label: '名称',
-      field_type: 'text',
-      is_required: 0,
-      is_editable: 1,
-      is_translatable: 0,
-      is_searchable: 1,
-      sort_order: 10
-    },
-    {
-      field_name: 'model',
-      field_label: '型号',
-      field_type: 'text',
-      is_required: 0,
-      is_editable: 1,
-      is_translatable: 0,
-      is_searchable: 1,
-      sort_order: 20
-    },
-    {
-      field_name: 'spec',
-      field_label: '规格',
-      field_type: 'text',
-      is_required: 0,
-      is_editable: 1,
-      is_translatable: 0,
-      is_searchable: 1,
-      sort_order: 30
-    },
-    {
-      field_name: 'diameter',
-      field_label: '口径',
-      field_type: 'text',
-      is_required: 0,
-      is_editable: 1,
-      is_translatable: 0,
-      is_searchable: 0,
-      sort_order: 40
-    },
-    {
-      field_name: 'price',
-      field_label: '价格',
-      field_type: 'number',
-      is_required: 0,
-      is_editable: 1,
-      is_translatable: 0,
-      is_searchable: 0,
-      sort_order: 50
-    },
-    {
-      field_name: 'material_code',
-      field_label: '物料代码',
-      field_type: 'text',
-      is_required: 0,
-      is_editable: 1,
-      is_translatable: 0,
-      is_searchable: 1,
-      sort_order: 60
-    },
-    {
-      field_name: 'category',
-      field_label: '分类',
-      field_type: 'text',
-      is_required: 0,
-      is_editable: 1,
-      is_translatable: 0,
-      is_searchable: 1,
-      sort_order: 70
-    },
-    {
-      field_name: 'description',
-      field_label: '说明',
-      field_type: 'textarea',
-      is_required: 0,
-      is_editable: 1,
-      is_translatable: 0,
-      is_searchable: 0,
-      sort_order: 80
-    },
-    {
-      field_name: 'stock',
-      field_label: '库存',
-      field_type: 'number',
-      is_required: 0,
-      is_editable: 1,
-      is_translatable: 0,
-      is_searchable: 0,
-      sort_order: 90
-    },
-    {
-      field_name: 'reference_no',
-      field_label: '参考编号',
-      field_type: 'text',
-      is_required: 0,
-      is_editable: 1,
-      is_translatable: 0,
-      is_searchable: 1,
-      sort_order: 100
-    },
-    {
-      field_name: 'name_en',
-      field_label: '英文名称',
-      field_type: 'text',
-      is_required: 0,
-      is_editable: 1,
-      is_translatable: 0,
-      is_searchable: 1,
-      sort_order: 110
-    },
-    {
-      field_name: 'material',
-      field_label: '材质',
-      field_type: 'text',
-      is_required: 0,
-      is_editable: 1,
-      is_translatable: 0,
-      is_searchable: 1,
-      sort_order: 120
-    },
-    {
-      field_name: 'is_visible',
-      field_label: '显示状态',
-      field_type: 'boolean',
-      is_required: 0,
-      is_editable: 0,
-      is_translatable: 0,
-      is_searchable: 0,
-      sort_order: 130
-    },
-    {
-      field_name: 'is_featured_home',
-      field_label: '推荐',
-      field_type: 'boolean',
-      is_required: 0,
-      is_editable: 0,
-      is_translatable: 0,
-      is_searchable: 0,
-      sort_order: 140
-    },
-    {
-      field_name: 'sort_order',
-      field_label: '排序',
-      field_type: 'number',
-      is_required: 0,
-      is_editable: 0,
-      is_translatable: 0,
-      is_searchable: 0,
-      sort_order: 150
-    },
-    {
-      field_name: 'created_at',
-      field_label: '创建时间',
-      field_type: 'datetime',
-      is_required: 0,
-      is_editable: 0,
-      is_translatable: 0,
-      is_searchable: 0,
-      sort_order: 160
-    }
-  ];
-
-  priceRecordFields.forEach((field) => {
-    upsertConfiguredModelField('price_record', field.field_name, {
-      field_label: field.field_label,
-      field_type: field.field_type,
-      is_required: field.is_required,
-      is_editable: field.is_editable,
-      is_translatable: field.is_translatable,
-      is_searchable: field.is_searchable,
-      is_system: 1,
-      sort_order: field.sort_order,
-      settings_json: null
-    }, field);
-  });
 
 }
 
@@ -628,54 +440,4 @@ function inferDbTypeFromFieldType(fieldType) {
     return 'TEXT';
   }
   return 'TEXT';
-}
-
-export function migratePriceRecordTranslationsToMainTable() {
-  const tableExists = queryOne(
-    `
-      SELECT name
-      FROM sqlite_master
-      WHERE type = 'table' AND name = 'content_price_record'
-    `
-  );
-  const translationTableExists = queryOne(
-    `
-      SELECT name
-      FROM sqlite_master
-      WHERE type = 'table' AND name = 'content_price_record_translations'
-    `
-  );
-  if (!tableExists || !translationTableExists) {
-    return;
-  }
-
-  execute(
-    `
-      UPDATE content_price_record
-      SET name = (
-        SELECT coalesce(t.name, '')
-        FROM content_price_record_translations t
-        WHERE t.entry_id = content_price_record.id
-        ORDER BY t.id ASC
-        LIMIT 1
-      )
-      WHERE coalesce(name, '') = ''
-        AND EXISTS (
-          SELECT 1
-          FROM content_price_record_translations t
-          WHERE t.entry_id = content_price_record.id
-            AND coalesce(t.name, '') <> ''
-        )
-    `
-  );
-
-  execute(
-    `
-      DELETE FROM content_price_record_translations
-      WHERE entry_id IN (
-        SELECT id
-        FROM content_price_record
-      )
-    `
-  );
 }

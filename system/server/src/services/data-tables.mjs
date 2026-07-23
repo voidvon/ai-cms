@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { getColumnById } from './columns.mjs';
-import { getContentModelById } from './content-models.mjs';
+import { ensureContentModelsSchema, getContentModelById } from './content-models.mjs';
 import { ensureContentModelStorageSchema, getContentTableName } from './content-model-storage.mjs';
 
 const FIELD_TYPES = new Set(['text', 'textarea', 'number', 'currency', 'date', 'datetime', 'boolean', 'select', 'multi_select', 'url']);
@@ -9,6 +9,8 @@ const IMMUTABLE_FIELD_NAMES = new Set(['id', 'column_id', 'created_at', 'updated
 const HIDDEN_DEFAULT_FIELD_NAMES = new Set(['custom_url', 'code', 'is_visible', 'is_featured_home', 'sort_order', 'publish_status']);
 const HIDDEN_DEFAULT_FIELD_TYPES = new Set(['richtext', 'textarea', 'image', 'images', 'attachments']);
 const OPAQUE_FIELD_KEY_PATTERN = /^fld_[0-9a-f]{32}$/;
+const TABLE_MODEL_CODE = 'multidimensional_table';
+const LEGACY_TABLE_MODEL_CODE = 'price_record';
 let schemaEnsured = false;
 
 export function ensureDataTablesSchema() {
@@ -28,7 +30,6 @@ export function ensureDataTablesSchema() {
       field_key TEXT NOT NULL,
       field_name TEXT NOT NULL,
       field_type TEXT NOT NULL DEFAULT 'text',
-      is_primary INTEGER NOT NULL DEFAULT 0,
       is_deleted INTEGER NOT NULL DEFAULT 0,
       sort_order INTEGER NOT NULL DEFAULT 0,
       settings_json TEXT,
@@ -50,7 +51,78 @@ export function ensureDataTablesSchema() {
     CREATE INDEX IF NOT EXISTS idx_data_table_records_table ON data_table_records(table_id, updated_at DESC, id DESC);
   `);
   addColumnIfMissing('data_table_fields', 'source_field_name', 'TEXT');
+  dropColumnIfPresent('data_table_fields', 'is_primary');
   schemaEnsured = true;
+  try {
+    migrateLegacyTableModel();
+  } catch (error) {
+    schemaEnsured = false;
+    throw error;
+  }
+}
+
+export function migrateLegacyTableModel() {
+  ensureContentModelsSchema();
+  const legacyModel = queryOne('SELECT id FROM content_models WHERE code = ?', [LEGACY_TABLE_MODEL_CODE]);
+  const targetModel = queryOne('SELECT id FROM content_models WHERE code = ?', [TABLE_MODEL_CODE]);
+  if (!targetModel) throw new Error('多维表格记录模型不存在，无法迁移旧价格表格');
+
+  if (legacyModel) {
+    migrateLegacyPriceTranslations();
+    const legacyColumns = queryAll('SELECT id FROM columns WHERE content_model_id = ? ORDER BY id ASC', [legacyModel.id]);
+    legacyColumns.forEach((column) => getDataTableByColumn(column.id));
+  }
+
+  const db = getDb();
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    if (legacyModel) {
+      execute('UPDATE columns SET content_model_id = ?, updated_at = CURRENT_TIMESTAMP WHERE content_model_id = ?', [targetModel.id, legacyModel.id]);
+    }
+    execute(`UPDATE columns
+      SET route_path = replace(route_path, '/price-lists/', '/data-tables/'), updated_at = CURRENT_TIMESTAMP
+      WHERE content_model_id = ? AND route_path LIKE '/price-lists/%'`, [targetModel.id]);
+    execute('UPDATE data_tables SET model_code = ?, updated_at = CURRENT_TIMESTAMP WHERE model_code = ?', [TABLE_MODEL_CODE, LEGACY_TABLE_MODEL_CODE]);
+    if (tableExists('content_table_views')) {
+      execute("UPDATE content_table_views SET model_code = ?, updated_at = CURRENT_TIMESTAMP WHERE model_code = ?", [TABLE_MODEL_CODE, LEGACY_TABLE_MODEL_CODE]);
+    }
+    execute(`UPDATE data_table_fields SET source_field_name = NULL WHERE table_id IN (SELECT id FROM data_tables WHERE model_code = ?)`, [TABLE_MODEL_CODE]);
+    execute(`UPDATE data_table_records SET source_record_id = NULL WHERE table_id IN (SELECT id FROM data_tables WHERE model_code = ?)`, [TABLE_MODEL_CODE]);
+    execute('DELETE FROM content_model_fields WHERE model_code = ?', [LEGACY_TABLE_MODEL_CODE]);
+    execute('DELETE FROM content_models WHERE code = ?', [LEGACY_TABLE_MODEL_CODE]);
+    db.exec('DROP TABLE IF EXISTS content_price_record_translations');
+    db.exec('DROP TABLE IF EXISTS content_price_record');
+    db.exec('COMMIT');
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+  return Boolean(legacyModel);
+}
+
+function migrateLegacyPriceTranslations() {
+  if (!tableExists('content_price_record') || !tableExists('content_price_record_translations')) return;
+  const columns = queryAll('PRAGMA table_info(content_price_record)');
+  if (!columns.some((column) => column.name === 'name')) return;
+  execute(`
+    UPDATE content_price_record
+    SET name = (
+      SELECT coalesce(t.name, '')
+      FROM content_price_record_translations t
+      WHERE t.entry_id = content_price_record.id
+      ORDER BY t.id ASC
+      LIMIT 1
+    )
+    WHERE coalesce(name, '') = ''
+      AND EXISTS (
+        SELECT 1 FROM content_price_record_translations t
+        WHERE t.entry_id = content_price_record.id AND coalesce(t.name, '') <> ''
+      )
+  `);
+}
+
+function tableExists(tableName) {
+  return Boolean(queryOne("SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?", [tableName]));
 }
 
 export function getDataTableByColumn(columnId) {
@@ -77,13 +149,13 @@ export function updateDataTableFields(columnId, input = {}) {
       const existing = queryOne('SELECT id FROM data_table_fields WHERE table_id = ? AND field_key = ?', [table.id, field.field_key]);
       if (existing) {
         execute(
-          `UPDATE data_table_fields SET field_name = ?, field_type = ?, is_primary = ?, is_deleted = 0, sort_order = ?, settings_json = ?, updated_at = ? WHERE id = ?`,
-          [field.field_name, field.field_type, field.is_primary, index * 10, field.settings_json, now, existing.id]
+          `UPDATE data_table_fields SET field_name = ?, field_type = ?, is_deleted = 0, sort_order = ?, settings_json = ?, updated_at = ? WHERE id = ?`,
+          [field.field_name, field.field_type, index * 10, field.settings_json, now, existing.id]
         );
       } else {
         execute(
-          `INSERT INTO data_table_fields (table_id, field_key, field_name, field_type, is_primary, sort_order, settings_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [table.id, field.field_key, field.field_name, field.field_type, field.is_primary, index * 10, field.settings_json, now, now]
+          `INSERT INTO data_table_fields (table_id, field_key, field_name, field_type, sort_order, settings_json, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [table.id, field.field_key, field.field_name, field.field_type, index * 10, field.settings_json, now, now]
         );
       }
     });
@@ -209,8 +281,8 @@ function ensureDefaultFields(tableId, model) {
   ));
   fields.forEach((field, index) => {
     execute(
-      `INSERT OR IGNORE INTO data_table_fields (table_id, field_key, field_name, field_type, is_primary, sort_order, settings_json, source_field_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [tableId, createOpaqueFieldKey(), field.field_label || field.field_name, normalizeType(field.field_type), Number(field.field_name === 'name'), index * 10, field.settings_json || null, field.field_name]
+      `INSERT OR IGNORE INTO data_table_fields (table_id, field_key, field_name, field_type, sort_order, settings_json, source_field_name) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [tableId, createOpaqueFieldKey(), field.field_label || field.field_name, normalizeType(field.field_type), index * 10, field.settings_json || null, field.field_name]
     );
   });
 }
@@ -279,7 +351,7 @@ function migrateLegacyRecords(table, context) {
 
 function readTable(tableId, context) {
   const table = queryOne('SELECT id, column_id, model_code, name, created_at, updated_at FROM data_tables WHERE id = ?', [tableId]);
-  const fields = queryAll('SELECT id, field_key, field_name, field_type, is_primary, is_deleted, sort_order, settings_json, source_field_name, created_at, updated_at FROM data_table_fields WHERE table_id = ? AND is_deleted = 0 ORDER BY sort_order ASC, id ASC', [tableId]);
+  const fields = queryAll('SELECT id, field_key, field_name, field_type, is_deleted, sort_order, settings_json, source_field_name, created_at, updated_at FROM data_table_fields WHERE table_id = ? AND is_deleted = 0 ORDER BY sort_order ASC, id ASC', [tableId]);
   return { ...table, column_name: context.column.name, fields: fields.map((field) => ({ ...field, settings: parseJson(field.settings_json) })) };
 }
 
@@ -310,7 +382,7 @@ function normalizeFields(input, tableId) {
     if (seen.has(fieldKey)) throw new Error(`字段重复：${fieldKey}`);
     seen.add(fieldKey);
     const type = normalizeType(field?.field_type);
-    return { table_id: tableId, field_key: fieldKey, field_name: fieldName.slice(0, 100), field_type: type, is_primary: field?.is_primary ? 1 : 0, settings_json: normalizeSettings(field?.settings_json ?? field?.settings) };
+    return { table_id: tableId, field_key: fieldKey, field_name: fieldName.slice(0, 100), field_type: type, settings_json: normalizeSettings(field?.settings_json ?? field?.settings) };
   });
 }
 
@@ -384,5 +456,12 @@ function addColumnIfMissing(tableName, columnName, definition) {
   const columns = queryAll(`PRAGMA table_info(${tableName})`);
   if (!columns.some((column) => column.name === columnName)) {
     getDb().exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
+}
+
+function dropColumnIfPresent(tableName, columnName) {
+  const columns = queryAll(`PRAGMA table_info(${tableName})`);
+  if (columns.some((column) => column.name === columnName)) {
+    getDb().exec(`ALTER TABLE ${tableName} DROP COLUMN ${columnName}`);
   }
 }

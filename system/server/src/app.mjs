@@ -16,6 +16,7 @@ import { createSiteListenerManager } from './site-listener-manager.mjs';
 import { withPortConflictDetails } from './utils/port-diagnostics.mjs';
 import { initializeAiService } from './services/ai/initialize.mjs';
 import { ensureAiModelsSchema } from './services/ai-models.mjs';
+import { ensureDataTablesSchema } from './services/data-tables.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -23,6 +24,7 @@ getDb();
 ensureAdminGroupSchema();
 ensureAccessLogsSchema();
 ensureAiModelsSchema();
+ensureDataTablesSchema();
 
 // 初始化 AI 服务
 try {

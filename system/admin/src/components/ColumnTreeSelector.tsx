@@ -33,6 +33,7 @@ export interface ColumnTreeSelectorProps {
   filter?: (column: Column) => boolean
   getBadgeVariant?: (column: Column) => 'default' | 'secondary' | 'destructive' | 'outline'
   getMetaText?: (column: Column) => ReactNode
+  defaultExpandedIds?: number[]
   emptyText?: string
   className?: string
 }
@@ -45,6 +46,7 @@ export function ColumnTreeSelector({
   filter,
   getBadgeVariant,
   getMetaText,
+  defaultExpandedIds,
   emptyText = '暂无栏目',
   className,
 }: ColumnTreeSelectorProps) {
@@ -62,7 +64,7 @@ export function ColumnTreeSelector({
       <Tree
         items={items}
         value={value || undefined}
-        defaultExpandedIds={tree.map((column) => column.id)}
+        defaultExpandedIds={defaultExpandedIds ?? tree.map((column) => column.id)}
         onValueChange={(item) => item.data && onValueChange?.(item.data)}
         renderAction={renderAction}
       />
