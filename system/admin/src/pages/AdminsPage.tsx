@@ -127,15 +127,17 @@ export default function AdminsPage() {
                       {formatRelativeTime(admin.last_login_at)}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm" onClick={() => handleEdit(admin)}>
-                        编辑
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleChangePassword(admin)}>
-                        修改密码
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={() => handleDelete(admin.id)}>
-                        删除
-                      </Button>
+                      <div className="flex justify-end gap-1">
+                        <Button onClick={() => handleEdit(admin)}>
+                          编辑
+                        </Button>
+                        <Button onClick={() => handleChangePassword(admin)}>
+                          修改密码
+                        </Button>
+                        <Button variant="destructive" onClick={() => handleDelete(admin.id)}>
+                          删除
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))

@@ -321,31 +321,33 @@ export default function ContentModelDataPage({
                       {showSortOrder ? <TableCell>{Number(item.sort_order || 0)}</TableCell> : null}
                       {showUpdatedAt ? <TableCell>{formatDate(item.updated_at || '')}</TableCell> : null}
                       <TableCell className="text-right">
-                        <TableActionButton
-                          onClick={() => handleRegenerate(item)}
-                          disabled={regenerateMutation.isPending}
-                          tooltip="重新生成所有语言的静态页面"
-                          aria-label="刷新静态页面"
-                        >
-                          {regenerateMutation.isPending && regenerateMutation.variables?.id === item.id
-                            ? <Loader2 className="animate-spin" />
-                            : <RefreshCw />}
-                        </TableActionButton>
-                        <TableActionButton
-                          onClick={() => handleEdit(item)}
-                          tooltip="编辑"
-                          aria-label="编辑"
-                        >
-                          <Pencil />
-                        </TableActionButton>
-                        <TableActionButton
-                          variant="destructive"
-                          onClick={() => handleDelete(item)}
-                          tooltip="删除"
-                          aria-label="删除"
-                        >
-                          <Trash2 />
-                        </TableActionButton>
+                        <div className="flex justify-end gap-1">
+                          <TableActionButton
+                            onClick={() => handleRegenerate(item)}
+                            disabled={regenerateMutation.isPending}
+                            tooltip="重新生成所有语言的静态页面"
+                            aria-label="刷新静态页面"
+                          >
+                            {regenerateMutation.isPending && regenerateMutation.variables?.id === item.id
+                              ? <Loader2 className="animate-spin" />
+                              : <RefreshCw />}
+                          </TableActionButton>
+                          <TableActionButton
+                            onClick={() => handleEdit(item)}
+                            tooltip="编辑"
+                            aria-label="编辑"
+                          >
+                            <Pencil />
+                          </TableActionButton>
+                          <TableActionButton
+                            variant="destructive"
+                            onClick={() => handleDelete(item)}
+                            tooltip="删除"
+                            aria-label="删除"
+                          >
+                            <Trash2 />
+                          </TableActionButton>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

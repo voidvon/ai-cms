@@ -144,7 +144,7 @@ function DataTableFieldEditorContent({
                   ) : <span className="text-muted-foreground">-</span>}
                 </TableCell>
                 <TableCell className="px-3 py-2">
-                  <div className="flex justify-end">
+                  <div className="flex justify-end gap-1">
                     <TableActionButton disabled={index === 0} onClick={() => moveField(index, -1)} aria-label="上移字段" tooltip="上移字段"><ArrowUp /></TableActionButton>
                     <TableActionButton disabled={index === draft.length - 1} onClick={() => moveField(index, 1)} aria-label="下移字段" tooltip="下移字段"><ArrowDown /></TableActionButton>
                     <TableActionButton variant="destructive" disabled={draft.length <= 1} onClick={() => removeField(field)} aria-label="删除字段" tooltip="删除字段"><Trash2 /></TableActionButton>

@@ -191,12 +191,10 @@ export default async function documentWorkspaceRoutes(app) {
   app.patch('/document-drafts/:id', {
     onRequest: [requireAuth],
   }, async (request, reply) => {
-    const draft = updateDocumentDraft(request.params.id, {
-      title: request.body?.title,
-      draft_payload: request.body?.draft_payload,
-      payload: request.body?.payload,
-      replace_payload: request.body?.replace_payload,
-    });
+    const draft = updateDocumentDraft(
+      request.params.id,
+      pickDocumentDraftUpdates(request.body)
+    );
     if (!draft) {
       reply.code(404);
       return { success: false, message: '文档草稿不存在' };
@@ -243,6 +241,17 @@ export default async function documentWorkspaceRoutes(app) {
       return { success: false, message: error.message };
     }
   });
+}
+
+export function pickDocumentDraftUpdates(body = {}) {
+  const source = body && typeof body === 'object' && !Array.isArray(body) ? body : {};
+  const updates = {};
+  for (const key of ['title', 'draft_payload', 'payload', 'replace_payload']) {
+    if (Object.prototype.hasOwnProperty.call(source, key) && source[key] !== undefined) {
+      updates[key] = source[key];
+    }
+  }
+  return updates;
 }
 
 function escapeHtml(value) {

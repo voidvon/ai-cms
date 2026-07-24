@@ -68,6 +68,8 @@ export default function AiChatPage() {
   const [renamingDraftTitle, setRenamingDraftTitle] = useState('')
   const [isCompanyManagerOpen, setIsCompanyManagerOpen] = useState(false)
   const [isStampManagerOpen, setIsStampManagerOpen] = useState(false)
+  const [isDocumentToolsOpen, setIsDocumentToolsOpen] = useState(false)
+  const [isMobileDocumentToolsOpen, setIsMobileDocumentToolsOpen] = useState(false)
   const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false)
   const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false)
   const [managedDocumentType, setManagedDocumentType] = useState<DocumentTemplate['document_type'] | null>(null)
@@ -197,6 +199,26 @@ export default function AiChatPage() {
   }, [currentDraft?.id])
 
   useEffect(() => {
+    if (!isDocumentToolsOpen && !isMobileDocumentToolsOpen) {
+      return
+    }
+
+    const closeDocumentTools = () => {
+      setIsDocumentToolsOpen(false)
+      setIsMobileDocumentToolsOpen(false)
+    }
+    const frameDocuments = [
+      previewFrameRef.current?.contentDocument,
+      mobilePreviewFrameRef.current?.contentDocument,
+    ].filter(Boolean) as Document[]
+
+    frameDocuments.forEach((frameDocument) => frameDocument.addEventListener('pointerdown', closeDocumentTools))
+    return () => {
+      frameDocuments.forEach((frameDocument) => frameDocument.removeEventListener('pointerdown', closeDocumentTools))
+    }
+  }, [draftId, isDocumentToolsOpen, isMobileDocumentToolsOpen, isMobilePreviewOpen, previewVersion])
+
+  useEffect(() => {
     const handler = async (event: MessageEvent) => {
       if (event.origin !== window.location.origin) {
         return
@@ -211,7 +233,6 @@ export default function AiChatPage() {
       const nextStamps = Array.isArray(data.stamps) ? data.stamps : []
       await documentWorkspacesApi.updateDraft(currentDraft.id, {
         draft_payload: {
-          ...(currentDraft.draft_payload || {}),
           stamps: nextStamps,
         },
       })
@@ -461,7 +482,6 @@ export default function AiChatPage() {
     const nextStamps = [...currentDraftStamps, nextStamp]
     const response = await documentWorkspacesApi.updateDraft(currentDraft.id, {
       draft_payload: {
-        ...(currentDraft.draft_payload || {}),
         stamps: nextStamps,
       },
     })
@@ -499,14 +519,13 @@ export default function AiChatPage() {
 
     const response = await documentWorkspacesApi.updateDraft(currentDraft.id, {
       draft_payload: {
-        ...(currentDraft.draft_payload || {}),
         [role]: nextParty,
       },
     })
     await queryClient.setQueryData(['document-draft', currentDraft.id], { success: true, data: response.data })
     await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
     setPreviewVersion((value) => value + 1)
-    toast.success(`${slot.label}已填充`)
+    toast.success('公司已填充')
   }
 
   const confirmDeleteDraft = () => {
@@ -843,8 +862,8 @@ export default function AiChatPage() {
                   onLoad={() => syncPreviewStampState()}
                   className="min-h-0 flex-1 bg-transparent"
                 />
-                <div className="pointer-events-none absolute bottom-5 right-5 z-10">
-                  <Popover>
+                <div className="pointer-events-none absolute top-5 right-5 z-10">
+                  <Popover open={isDocumentToolsOpen} onOpenChange={setIsDocumentToolsOpen}>
                     <PopoverTrigger asChild>
                       <Button
                         type="button"
@@ -855,86 +874,59 @@ export default function AiChatPage() {
                         <Settings2 className="h-5 w-5" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent align="end" side="top" className="pointer-events-auto w-[360px] space-y-5 p-4">
+                    <PopoverContent align="end" side="top" className="pointer-events-auto w-[360px] space-y-3 p-4">
                       <div className="space-y-3">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold">公司管理</p>
-                            <p className="text-xs text-muted-foreground">选择公司并填充到当前文档角色。</p>
-                          </div>
-                          <Button type="button" variant="outline" size="sm" onClick={() => setIsCompanyManagerOpen(true)}>
-                            公司管理
-                          </Button>
-                        </div>
-                        <div className="space-y-3">
-                          {companySlots.length > 0 ? companySlots.map((slot) => (
-                            <div key={slot.key} className="space-y-2">
-                              <div className="text-xs font-medium text-muted-foreground">{slot.label}</div>
-                              <div className="flex items-center gap-2">
-                                <Select
-                                  value={selectedCompanyIds[slot.key] || ''}
-                                  onValueChange={(value) => setSelectedCompanyIds((current) => ({ ...current, [slot.key]: value }))}
-                                >
-                                  <SelectTrigger className="flex-1">
-                                    <SelectValue placeholder={`选择${slot.label}`} />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    {companies.map((company) => (
-                                      <SelectItem key={`${slot.key}-${company.id}`} value={String(company.id)}>
-                                        {company.name}
-                                      </SelectItem>
-                                    ))}
-                                  </SelectContent>
-                                </Select>
-                                <Button
-                                  type="button"
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => void handleApplyCompany(slot)}
-                                  disabled={!selectedCompanyIds[slot.key]}
-                                >
-                                  填充
-                                </Button>
-                              </div>
-                            </div>
-                          )) : (
-                            <div className="rounded-lg border border-dashed px-3 py-4 text-xs leading-5 text-muted-foreground">
-                              当前模板还没有配置公司填充位置。
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="space-y-3 border-t pt-4">
-                        <div className="flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold">印章管理</p>
-                            <p className="text-xs text-muted-foreground">添加印章后可直接拖拽，悬停时显示旋转按钮。</p>
-                          </div>
-                          <Button type="button" variant="outline" size="sm" onClick={() => setIsStampManagerOpen(true)}>
-                            <Stamp className="h-4 w-4" />
-                            印章管理
-                          </Button>
-                        </div>
-                        <div className="space-y-2">
-                          <Select value={selectedStampIdToApply} onValueChange={setSelectedStampIdToApply}>
-                            <SelectTrigger className="w-full">
-                              <SelectValue placeholder="选择要盖的章" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {stamps.map((stamp) => (
-                                <SelectItem key={stamp.id} value={String(stamp.id)}>
-                                  {stamp.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <div className="flex items-center gap-2">
-                            <Button type="button" size="sm" onClick={() => void handleApplyStamp()} disabled={!selectedStampIdToApply} className="flex-1">
-                              添加印章
+                        {companySlots.length > 0 ? companySlots.map((slot) => (
+                          <div key={slot.key} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                            <Select
+                              value={selectedCompanyIds[slot.key] || ''}
+                              onValueChange={(value) => setSelectedCompanyIds((current) => ({ ...current, [slot.key]: value }))}
+                            >
+                              <SelectTrigger className="w-full min-w-0 overflow-hidden">
+                                <SelectValue
+                                  className="min-w-0 overflow-hidden"
+                                  placeholder={slot.role === 'seller' ? '选择我方公司' : '选择采购公司'}
+                                />
+                              </SelectTrigger>
+                              <SelectContent className="w-[268px] min-w-[268px] max-w-[268px]">
+                                {companies.map((company) => (
+                                  <SelectItem key={`${slot.key}-${company.id}`} value={String(company.id)}>
+                                    <span className="block w-[220px] truncate" title={company.name}>{company.name}</span>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              type="button"
+                              onClick={() => void handleApplyCompany(slot)}
+                              disabled={!selectedCompanyIds[slot.key]}
+                            >
+                              填充
                             </Button>
                           </div>
-                        </div>
+                        )) : (
+                          <div className="rounded-lg border border-dashed px-3 py-4 text-xs leading-5 text-muted-foreground">
+                            当前模板还没有配置公司填充位置。
+                          </div>
+                        )}
+
+                      <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                        <Select value={selectedStampIdToApply} onValueChange={setSelectedStampIdToApply}>
+                          <SelectTrigger className="w-full min-w-0 overflow-hidden">
+                            <SelectValue className="min-w-0 overflow-hidden" placeholder="选择印章" />
+                          </SelectTrigger>
+                          <SelectContent className="w-[268px] min-w-[268px] max-w-[268px]">
+                            {stamps.map((stamp) => (
+                              <SelectItem key={stamp.id} value={String(stamp.id)}>
+                                {stamp.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <Button type="button" onClick={() => void handleApplyStamp()} disabled={!selectedStampIdToApply}>
+                          添加
+                        </Button>
+                      </div>
                       </div>
                     </PopoverContent>
                   </Popover>
@@ -986,7 +978,7 @@ export default function AiChatPage() {
                 className="min-h-0 flex-1 bg-transparent"
               />
               <div className="pointer-events-none absolute bottom-4 right-4 z-10">
-                <Popover>
+                <Popover open={isMobileDocumentToolsOpen} onOpenChange={setIsMobileDocumentToolsOpen}>
                   <PopoverTrigger asChild>
                     <Button
                       type="button"
@@ -1000,73 +992,50 @@ export default function AiChatPage() {
                   <PopoverContent
                     align="end"
                     side="top"
-                    className="pointer-events-auto max-h-[70vh] w-[min(360px,calc(100vw-2rem))] space-y-5 overflow-y-auto p-4"
+                    className="pointer-events-auto max-h-[70vh] w-[min(360px,calc(100vw-2rem))] space-y-3 overflow-y-auto p-4"
                   >
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold">公司填充</p>
-                          <p className="text-xs text-muted-foreground">选择公司并填充到当前文档角色。</p>
+                      {companySlots.length > 0 ? companySlots.map((slot) => (
+                        <div key={`mobile-${slot.key}`} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+                          <Select
+                            value={selectedCompanyIds[slot.key] || ''}
+                            onValueChange={(value) => setSelectedCompanyIds((current) => ({ ...current, [slot.key]: value }))}
+                          >
+                            <SelectTrigger className="w-full min-w-0 overflow-hidden">
+                              <SelectValue
+                                className="min-w-0 overflow-hidden"
+                                placeholder={slot.role === 'seller' ? '选择我方公司' : '选择采购公司'}
+                              />
+                            </SelectTrigger>
+                            <SelectContent className="max-w-(--anchor-width)">
+                              {companies.map((company) => (
+                                <SelectItem key={`mobile-${slot.key}-${company.id}`} value={String(company.id)}>
+                                  <span className="block max-w-[180px] truncate sm:max-w-[220px]" title={company.name}>{company.name}</span>
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                          <Button
+                            type="button"
+                            onClick={() => void handleApplyCompany(slot)}
+                            disabled={!selectedCompanyIds[slot.key]}
+                          >
+                            填充
+                          </Button>
                         </div>
-                        <Button type="button" variant="outline" size="sm" onClick={() => setIsCompanyManagerOpen(true)}>
-                          公司管理
-                        </Button>
-                      </div>
-                      <div className="space-y-3">
-                        {companySlots.length > 0 ? companySlots.map((slot) => (
-                          <div key={`mobile-${slot.key}`} className="space-y-2">
-                            <div className="text-xs font-medium text-muted-foreground">{slot.label}</div>
-                            <div className="flex items-center gap-2">
-                              <Select
-                                value={selectedCompanyIds[slot.key] || ''}
-                                onValueChange={(value) => setSelectedCompanyIds((current) => ({ ...current, [slot.key]: value }))}
-                              >
-                                <SelectTrigger className="min-w-0 flex-1">
-                                  <SelectValue placeholder={`选择${slot.label}`} />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {companies.map((company) => (
-                                    <SelectItem key={`mobile-${slot.key}-${company.id}`} value={String(company.id)}>
-                                      {company.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => void handleApplyCompany(slot)}
-                                disabled={!selectedCompanyIds[slot.key]}
-                              >
-                                填充
-                              </Button>
-                            </div>
-                          </div>
-                        )) : (
-                          <div className="rounded-lg border border-dashed px-3 py-4 text-xs leading-5 text-muted-foreground">
-                            当前模板还没有配置公司填充位置。
-                          </div>
-                        )}
-                      </div>
+                      )) : (
+                        <div className="rounded-lg border border-dashed px-3 py-4 text-xs leading-5 text-muted-foreground">
+                          当前模板还没有配置公司填充位置。
+                        </div>
+                      )}
                     </div>
 
-                    <div className="space-y-3 border-t pt-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-semibold">印章填充</p>
-                          <p className="text-xs text-muted-foreground">选择印章并添加到当前文档。</p>
-                        </div>
-                        <Button type="button" variant="outline" size="sm" onClick={() => setIsStampManagerOpen(true)}>
-                          <Stamp className="h-4 w-4" />
-                          印章管理
-                        </Button>
-                      </div>
+                    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
                       <Select value={selectedStampIdToApply} onValueChange={setSelectedStampIdToApply}>
-                        <SelectTrigger className="w-full">
-                          <SelectValue placeholder="选择要盖的章" />
+                        <SelectTrigger className="w-full min-w-0 overflow-hidden">
+                          <SelectValue className="min-w-0 overflow-hidden" placeholder="选择印章" />
                         </SelectTrigger>
-                        <SelectContent>
+                        <SelectContent className="max-w-(--anchor-width)">
                           {stamps.map((stamp) => (
                             <SelectItem key={`mobile-stamp-${stamp.id}`} value={String(stamp.id)}>
                               {stamp.name}
@@ -1076,12 +1045,10 @@ export default function AiChatPage() {
                       </Select>
                       <Button
                         type="button"
-                        size="sm"
                         onClick={() => void handleApplyStamp()}
                         disabled={!selectedStampIdToApply}
-                        className="w-full"
                       >
-                        添加印章
+                        添加
                       </Button>
                     </div>
                   </PopoverContent>

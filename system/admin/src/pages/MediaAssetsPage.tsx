@@ -425,46 +425,52 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
                       </TableCell>
                       <TableCell>{formatRelativeTime(item.created_at)}</TableCell>
                       <TableCell className="text-right">
-                        <TableActionButton
-                          asChild
-                          aria-label={`打开 ${item.original_name || item.relative_path}`}
-                          tooltip="打开 URL"
-                        >
-                          <a href={getMediaAssetPublicUrl(item)} target="_blank" rel="noreferrer">
-                            <ExternalLink className="size-4" />
-                          </a>
-                        </TableActionButton>
-                        <TableActionButton
-                          onClick={() => copyText(getMediaAssetPublicUrl(item), '已复制完整 URL')}
-                          aria-label={`复制 ${item.original_name || item.relative_path} 的完整 URL`}
-                          tooltip="复制 URL"
-                        >
-                          <Copy className="size-4" />
-                        </TableActionButton>
-                        <TableActionButton
-                          disabled={!isLocalMediaAsset(item)}
-                          onClick={() => setReplaceTarget(item)}
-                          aria-label={`替换 ${item.original_name || item.relative_path}`}
-                          tooltip={isLocalMediaAsset(item) ? '替换资源' : '原 URL 索引不支持本地替换'}
-                        >
-                          <RefreshCw className="size-4" />
-                        </TableActionButton>
-                        <TableActionButton
-                          disabled={downloadingAssetId === item.id || !isLocalMediaAsset(item)}
-                          onClick={() => downloadAsset(item)}
-                          aria-label={`下载 ${item.original_name || item.relative_path}`}
-                          tooltip={isLocalMediaAsset(item) ? '下载文件' : '原 URL 索引请直接打开 URL'}
-                        >
-                          <Download className="size-4" />
-                        </TableActionButton>
-                        <TableActionButton
-                          variant="destructive"
-                          onClick={() => setDeleteTarget(item)}
-                          aria-label={`删除 ${item.original_name || item.relative_path}`}
-                          tooltip="删除"
-                        >
-                          <Trash2 className="size-4" />
-                        </TableActionButton>
+                        <div className="flex justify-end gap-1">
+                          <TableActionButton
+                            asChild
+                            variant="ghost"
+                            aria-label={`打开 ${item.original_name || item.relative_path}`}
+                            tooltip="打开 URL"
+                          >
+                            <a href={getMediaAssetPublicUrl(item)} target="_blank" rel="noreferrer">
+                              <ExternalLink className="size-4" />
+                            </a>
+                          </TableActionButton>
+                          <TableActionButton
+                            variant="ghost"
+                            onClick={() => copyText(getMediaAssetPublicUrl(item), '已复制完整 URL')}
+                            aria-label={`复制 ${item.original_name || item.relative_path} 的完整 URL`}
+                            tooltip="复制 URL"
+                          >
+                            <Copy className="size-4" />
+                          </TableActionButton>
+                          <TableActionButton
+                            variant="ghost"
+                            disabled={!isLocalMediaAsset(item)}
+                            onClick={() => setReplaceTarget(item)}
+                            aria-label={`替换 ${item.original_name || item.relative_path}`}
+                            tooltip={isLocalMediaAsset(item) ? '替换资源' : '原 URL 索引不支持本地替换'}
+                          >
+                            <RefreshCw className="size-4" />
+                          </TableActionButton>
+                          <TableActionButton
+                            variant="ghost"
+                            disabled={downloadingAssetId === item.id || !isLocalMediaAsset(item)}
+                            onClick={() => downloadAsset(item)}
+                            aria-label={`下载 ${item.original_name || item.relative_path}`}
+                            tooltip={isLocalMediaAsset(item) ? '下载文件' : '原 URL 索引请直接打开 URL'}
+                          >
+                            <Download className="size-4" />
+                          </TableActionButton>
+                          <TableActionButton
+                            variant="destructive"
+                            onClick={() => setDeleteTarget(item)}
+                            aria-label={`删除 ${item.original_name || item.relative_path}`}
+                            tooltip="删除"
+                          >
+                            <Trash2 className="size-4" />
+                          </TableActionButton>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))

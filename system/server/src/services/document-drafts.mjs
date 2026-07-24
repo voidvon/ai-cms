@@ -194,8 +194,7 @@ export function updateDocumentDraft(id, updates = {}) {
     return null;
   }
 
-  const hasPayloadUpdate = Object.prototype.hasOwnProperty.call(updates, 'draft_payload')
-    || Object.prototype.hasOwnProperty.call(updates, 'payload');
+  const hasPayloadUpdate = hasDocumentDraftPayloadUpdate(updates);
   const nextPayload = hasPayloadUpdate
     ? (
       updates.replace_payload
@@ -206,11 +205,7 @@ export function updateDocumentDraft(id, updates = {}) {
   const nextMessages = Array.isArray(updates.messages)
     ? normalizeMessages(updates.messages)
     : existing.messages;
-  const nextTitle = String(
-    Object.prototype.hasOwnProperty.call(updates, 'title')
-      ? updates.title
-      : (hasPayloadUpdate ? (nextPayload.title || existing.title || '') : existing.title)
-  ).trim() || buildDefaultTitle(existing.document_type);
+  const nextTitle = resolveDocumentDraftTitle(existing, updates);
   const nextLanguageCode = String(
     Object.prototype.hasOwnProperty.call(updates, 'language_code')
       ? updates.language_code
@@ -259,6 +254,21 @@ export function updateDocumentDraft(id, updates = {}) {
   );
 
   return getDocumentDraftById(id);
+}
+
+export function hasDocumentDraftPayloadUpdate(updates = {}) {
+  return hasDefinedOwnProperty(updates, 'draft_payload')
+    || hasDefinedOwnProperty(updates, 'payload');
+}
+
+export function resolveDocumentDraftTitle(existing = {}, updates = {}) {
+  return String(
+    hasDefinedOwnProperty(updates, 'title') ? updates.title : existing.title
+  ).trim() || buildDefaultTitle(existing.document_type);
+}
+
+function hasDefinedOwnProperty(value, key) {
+  return Object.prototype.hasOwnProperty.call(value, key) && value[key] !== undefined;
 }
 
 export function appendDocumentDraftMessages(id, ...entries) {
@@ -316,10 +326,10 @@ function resolveDocumentTemplateInput(input) {
   return resolved;
 }
 
-function mergeDraftPayload(basePayload, overridePayload) {
+export function mergeDraftPayload(basePayload, overridePayload) {
   const base = normalizeDraftPayload(basePayload);
-  const override = normalizeDraftPayload(overridePayload);
-  return deepMerge(base, override);
+  const override = isPlainObject(overridePayload) ? overridePayload : {};
+  return normalizeDraftPayload(deepMerge(base, override));
 }
 
 function deepMerge(baseValue, overrideValue) {

@@ -9,8 +9,8 @@ type TableActionButtonProps = ComponentProps<typeof Button> & {
 
 export function TableActionButton({
   tooltip,
-  variant = 'ghost',
-  size = 'icon-sm',
+  variant = 'default',
+  size = 'default',
   type,
   asChild = false,
   ...props

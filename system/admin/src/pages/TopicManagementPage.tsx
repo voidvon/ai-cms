@@ -738,7 +738,6 @@ function RelatedContentPicker({
                     <Button
                       type="button"
                       variant="destructive"
-                      size="sm"
                       onClick={() => onRemove(ref.model, ref.id)}
                     >
                       移除
@@ -850,8 +849,7 @@ function RelatedContentPickerDialog({
                       <TableCell className="text-right">
                         <Button
                           type="button"
-                          variant={added ? 'secondary' : 'outline'}
-                          size="sm"
+                          variant={added ? 'secondary' : 'default'}
                           disabled={added}
                           onClick={() => onAdd(selectedModel.code, item.id)}
                         >

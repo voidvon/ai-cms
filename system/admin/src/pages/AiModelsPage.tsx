@@ -170,8 +170,6 @@ export default function AiModelsPage() {
                     <div className="flex min-w-[310px] items-center justify-end gap-1">
                       <Button
                         type="button"
-                        variant="ghost"
-                        size="sm"
                         disabled={testMutation.isPending}
                         onClick={() => testMutation.mutate(model)}
                       >
@@ -181,8 +179,6 @@ export default function AiModelsPage() {
                       {!model.is_default ? (
                         <Button
                           type="button"
-                          variant="ghost"
-                          size="sm"
                           disabled={!model.is_enabled || setDefaultMutation.isPending}
                           onClick={() => setDefaultMutation.mutate(model.id)}
                         >
@@ -190,7 +186,7 @@ export default function AiModelsPage() {
                           设为默认
                         </Button>
                       ) : null}
-                      <Button type="button" variant="ghost" size="sm" onClick={() => handleEdit(model)}>
+                      <Button type="button" onClick={() => handleEdit(model)}>
                         <Pencil className="mr-1 h-4 w-4" />
                         编辑
                       </Button>
@@ -249,8 +245,6 @@ export default function AiModelsPage() {
                 <div className="flex flex-wrap items-center gap-1 border-t pt-3">
                   <Button
                     type="button"
-                    variant="ghost"
-                    size="sm"
                     disabled={testMutation.isPending}
                     onClick={() => testMutation.mutate(model)}
                   >
@@ -260,8 +254,6 @@ export default function AiModelsPage() {
                   {!model.is_default ? (
                     <Button
                       type="button"
-                      variant="ghost"
-                      size="sm"
                       disabled={!model.is_enabled || setDefaultMutation.isPending}
                       onClick={() => setDefaultMutation.mutate(model.id)}
                     >
@@ -269,7 +261,7 @@ export default function AiModelsPage() {
                       设为默认
                     </Button>
                   ) : null}
-                  <Button type="button" variant="ghost" size="sm" onClick={() => handleEdit(model)}>
+                  <Button type="button" onClick={() => handleEdit(model)}>
                     <Pencil className="mr-1 h-4 w-4" />
                     编辑
                   </Button>

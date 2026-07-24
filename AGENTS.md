@@ -52,6 +52,11 @@
     `system/admin/src/pages/` 放页面，`src/api/` 放接口封装，`src/components/` 放复用组件。
     不要把请求、表单、布局重新耦合进一个大文件。
 
+12. 绝对禁止在功能开发中直接修改 shadcn/ui 组件源码。
+    `system/admin/src/components/ui/` 视为由 shadcn 管理的上游组件目录，不得为页面样式、业务交互或局部兼容直接编辑其中的文件。
+    页面特定调整必须通过调用处的 `className`、页面组件或 `system/admin/src/components/ui/` 之外的包装组件实现。
+    只有用户明确要求升级或重新生成 shadcn 组件时，才允许通过官方 shadcn 更新流程变更该目录；此类更新必须与普通功能改动分开处理并单独验证。
+
 ## Required Workflow
 处理涉及栏目、内容模型、模板、静态生成、站点配置的任务时，默认按以下顺序执行：
 
