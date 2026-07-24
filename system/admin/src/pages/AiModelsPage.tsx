@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, Pencil, Plus, RefreshCw, Star, Trash2 } from 'lucide-react'
 import { aiModelsApi } from '@/api/ai-models'
 import AiModelFormDialog from '@/components/AiModelFormDialog'
+import { TableActionButton } from '@/components/TableActionButton'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -193,16 +194,14 @@ export default function AiModelsPage() {
                         <Pencil className="mr-1 h-4 w-4" />
                         编辑
                       </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
+                      <TableActionButton
                         disabled={Boolean(model.is_default)}
                         onClick={() => setDeletingModel(model)}
                         aria-label={`删除 ${model.name}`}
+                        tooltip={model.is_default ? '默认模型不能删除' : '删除模型'}
                       >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                        <Trash2 />
+                      </TableActionButton>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -274,16 +273,14 @@ export default function AiModelsPage() {
                     <Pencil className="mr-1 h-4 w-4" />
                     编辑
                   </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
+                  <TableActionButton
                     disabled={Boolean(model.is_default)}
                     onClick={() => setDeletingModel(model)}
                     aria-label={`删除 ${model.name}`}
+                    tooltip={model.is_default ? '默认模型不能删除' : '删除模型'}
                   >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                    <Trash2 />
+                  </TableActionButton>
                 </div>
               </div>
             ))}

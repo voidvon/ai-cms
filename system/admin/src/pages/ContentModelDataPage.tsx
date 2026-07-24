@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { DataTablePagination } from '@/components/DataTablePagination'
+import { TableActionButton } from '@/components/TableActionButton'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
@@ -321,36 +322,31 @@ export default function ContentModelDataPage({
                       {showSortOrder ? <TableCell>{Number(item.sort_order || 0)}</TableCell> : null}
                       {showUpdatedAt ? <TableCell>{formatDate(item.updated_at || '')}</TableCell> : null}
                       <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
+                        <TableActionButton
                           onClick={() => handleRegenerate(item)}
                           disabled={regenerateMutation.isPending}
-                          title="重新生成所有语言的静态页面"
+                          tooltip="重新生成所有语言的静态页面"
                           aria-label="刷新静态页面"
                         >
                           {regenerateMutation.isPending && regenerateMutation.variables?.id === item.id
                             ? <Loader2 className="animate-spin" />
                             : <RefreshCw />}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
+                        </TableActionButton>
+                        <TableActionButton
                           onClick={() => handleEdit(item)}
-                          title="编辑"
+                          tooltip="编辑"
                           aria-label="编辑"
                         >
                           <Pencil />
-                        </Button>
-                        <Button
+                        </TableActionButton>
+                        <TableActionButton
                           variant="destructive"
-                          size="icon-sm"
                           onClick={() => handleDelete(item)}
-                          title="删除"
+                          tooltip="删除"
                           aria-label="删除"
                         >
                           <Trash2 />
-                        </Button>
+                        </TableActionButton>
                       </TableCell>
                     </TableRow>
                   ))

@@ -685,6 +685,12 @@ export default function DashboardPage() {
   const total = pagination?.total || 0
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
   const activeFilterSignature = createAdvancedFilterSignature(filters)
+  const normalizedFilterInputs = normalizeAccessLogFilterInputs(filterInputs)
+  const canSaveFilterPreset = !normalizedFilterInputs.error && (
+    normalizedFilterInputs.filters.refererFilters.length
+    + (normalizedFilterInputs.filters.userAgentFilter ? 1 : 0)
+    + (normalizedFilterInputs.filters.statusFilter ? 1 : 0)
+  ) > 0
 
   const clearLogsMutation = useMutation({
     mutationFn: (params: AccessLogFilterParams) => adminApi.clearAccessLogs(params),
@@ -922,7 +928,7 @@ export default function DashboardPage() {
             <PopoverContent
               align="start"
               side="bottom"
-              className="w-[min(820px,calc(100vw-2rem))] space-y-4 p-4"
+              className="w-[min(820px,calc(100vw-2rem))] p-4"
             >
               <div className="space-y-2">
                 <div className="font-medium">筛选访问记录</div>
@@ -1039,7 +1045,10 @@ export default function DashboardPage() {
                             value={filter.field}
                             onValueChange={(value: AccessLogFilterField) => changeAccessLogFilterField(filter.id, value)}
                           >
-                            <SelectTrigger aria-label={`第 ${index + 1} 行筛选字段`}>
+                            <SelectTrigger
+                              className="w-full"
+                              aria-label={`第 ${index + 1} 行筛选字段`}
+                            >
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1068,7 +1077,10 @@ export default function DashboardPage() {
                             value={filter.operator}
                             onValueChange={(value: AccessLogFilterOperator) => updateAccessLogFilter(filter.id, { operator: value })}
                           >
-                            <SelectTrigger aria-label={`第 ${index + 1} 行筛选条件`}>
+                            <SelectTrigger
+                              className="w-full"
+                              aria-label={`第 ${index + 1} 行筛选条件`}
+                            >
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -1095,7 +1107,10 @@ export default function DashboardPage() {
                               value={filter.value}
                               onValueChange={(value: UserAgentKindValue) => updateAccessLogFilter(filter.id, { value })}
                             >
-                              <SelectTrigger aria-label={`第 ${index + 1} 行是否爬虫筛选值`}>
+                              <SelectTrigger
+                                className="w-full"
+                                aria-label={`第 ${index + 1} 行是否爬虫筛选值`}
+                              >
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -1110,7 +1125,10 @@ export default function DashboardPage() {
                               value={filter.value}
                               onValueChange={(value: StatusModeValue) => updateAccessLogFilter(filter.id, { value })}
                             >
-                              <SelectTrigger aria-label={`第 ${index + 1} 行状态筛选值`}>
+                              <SelectTrigger
+                                className="w-full"
+                                aria-label={`第 ${index + 1} 行状态筛选值`}
+                              >
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -1150,24 +1168,25 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={addAccessLogFilter}
-                disabled={filterInputs.length >= 10}
-              >
-                <Plus aria-hidden="true" />
-                添加筛选条件
-              </Button>
               <div className="flex items-center justify-between gap-2 border-t pt-3">
-                <div className="text-xs text-muted-foreground">最多添加 10 条筛选条件</div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-fit"
+                  onClick={addAccessLogFilter}
+                  disabled={filterInputs.length >= 10}
+                >
+                  <Plus aria-hidden="true" />
+                  添加筛选条件
+                </Button>
                 <div className="flex items-center gap-2">
+                  {canSaveFilterPreset ? (
+                    <Button type="button" variant="ghost" onClick={saveAccessLogFilters}>
+                      保存
+                    </Button>
+                  ) : null}
                   <Button type="button" variant="ghost" onClick={clearAccessLogFilters}>
                     清除筛选
-                  </Button>
-                  <Button type="button" onClick={saveAccessLogFilters}>
-                    保存
                   </Button>
                 </div>
               </div>

@@ -29,6 +29,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { DataTablePagination } from '@/components/DataTablePagination'
+import { TableActionButton } from '@/components/TableActionButton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { formatRelativeTime } from '@/lib/datetime'
 import { useIsMobile } from '@/hooks/use-mobile'
@@ -807,16 +808,14 @@ export default function AiChatPage() {
                         <TableCell className="whitespace-nowrap">{getDraftStatusLabel(draft.status)}</TableCell>
                         <TableCell className="whitespace-nowrap text-muted-foreground">{formatRelativeTime(draft.updated_at)}</TableCell>
                         <TableCell className="whitespace-nowrap text-right">
-                          <Button
-                            type="button"
+                          <TableActionButton
                             variant="destructive"
-                            size="icon-sm"
                             onClick={() => setDeleteDraftId(draft.id)}
                             aria-label={`删除文档 ${draft.title || '未命名文档'}`}
-                            title="删除文档"
+                            tooltip="删除文档"
                           >
                             <Trash2 className="size-4" />
-                          </Button>
+                          </TableActionButton>
                         </TableCell>
                       </TableRow>
                     ))}

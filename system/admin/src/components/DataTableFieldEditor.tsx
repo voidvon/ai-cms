@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { ArrowDown, ArrowUp, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { TableActionButton } from '@/components/TableActionButton'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -144,9 +145,9 @@ function DataTableFieldEditorContent({
                 </TableCell>
                 <TableCell className="px-3 py-2">
                   <div className="flex justify-end">
-                    <Button type="button" variant="ghost" size="icon" disabled={index === 0} onClick={() => moveField(index, -1)} aria-label="上移字段"><ArrowUp className="size-4" /></Button>
-                    <Button type="button" variant="ghost" size="icon" disabled={index === draft.length - 1} onClick={() => moveField(index, 1)} aria-label="下移字段"><ArrowDown className="size-4" /></Button>
-                    <Button type="button" variant="ghost" size="icon" disabled={draft.length <= 1} onClick={() => removeField(field)} aria-label="删除字段"><Trash2 className="size-4 text-destructive" /></Button>
+                    <TableActionButton disabled={index === 0} onClick={() => moveField(index, -1)} aria-label="上移字段" tooltip="上移字段"><ArrowUp /></TableActionButton>
+                    <TableActionButton disabled={index === draft.length - 1} onClick={() => moveField(index, 1)} aria-label="下移字段" tooltip="下移字段"><ArrowDown /></TableActionButton>
+                    <TableActionButton variant="destructive" disabled={draft.length <= 1} onClick={() => removeField(field)} aria-label="删除字段" tooltip="删除字段"><Trash2 /></TableActionButton>
                   </div>
                 </TableCell>
               </TableRow>

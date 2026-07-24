@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfigurableDataTable } from '@/components/ConfigurableDataTable'
 import { DataTableFieldEditor } from '@/components/DataTableFieldEditor'
+import { TableActionButton } from '@/components/TableActionButton'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
@@ -705,9 +706,9 @@ function DataRecordsGrid({
           )
         }}
         renderActions={(row) => !row.isDraft && row.id ? (
-          <Button type="button" variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover/configurable-row:opacity-100 group-focus-within/configurable-row:opacity-100" onClick={() => onDeleteRecord({ id: row.id!, fields: row.fields })} aria-label="删除记录">
-            <Trash2 className="size-4 text-destructive" />
-          </Button>
+          <TableActionButton variant="destructive" className="opacity-0 group-hover/configurable-row:opacity-100 group-focus-within/configurable-row:opacity-100" onClick={() => onDeleteRecord({ id: row.id!, fields: row.fields })} aria-label="删除记录" tooltip="删除记录">
+            <Trash2 />
+          </TableActionButton>
         ) : null}
       />
     </div>
