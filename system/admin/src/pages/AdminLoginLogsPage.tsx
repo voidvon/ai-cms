@@ -7,9 +7,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ADMIN_CONFIG } from '@/config'
 import { formatRelativeTime } from '@/lib/datetime'
-
-const PAGE_SIZE = 20
 
 export default function AdminLoginLogsPage() {
   const [page, setPage] = useState(1)
@@ -26,7 +25,7 @@ export default function AdminLoginLogsPage() {
     queryKey: ['admin-login-logs', page, filters.username, filters.ip, filters.status],
     queryFn: () => adminApi.listLoginLogs({
       page,
-      limit: PAGE_SIZE,
+      limit: ADMIN_CONFIG.pagination.pageSize,
       username: filters.username || undefined,
       ip: filters.ip || undefined,
       status: filters.status,
@@ -36,7 +35,7 @@ export default function AdminLoginLogsPage() {
   const items = data?.data?.items || []
   const pagination = data?.data?.pagination
   const total = pagination?.total || 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(total / ADMIN_CONFIG.pagination.pageSize))
 
   const applyFilters = () => {
     setPage(1)

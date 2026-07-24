@@ -12,6 +12,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { DataTablePagination } from '@/components/DataTablePagination'
 import { TableActionButton } from '@/components/TableActionButton'
+import { ADMIN_CONFIG } from '@/config'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import {
@@ -33,8 +34,6 @@ import type { Column, ManagedContentItem } from '@/types'
 import ContentItemFormDialog from '@/components/ContentItemFormDialog'
 
 type ListedContentItem = ManagedContentItem
-
-const PAGE_LIMIT = 20
 
 interface ContentModelDataPageProps {
   initialModelCode?: string
@@ -120,10 +119,10 @@ export default function ContentModelDataPage({
   }, [modelColumnOptions, selectedColumnId])
 
   const { data: itemsData, isLoading: itemsLoading } = useQuery({
-    queryKey: ['content-items', selectedModel?.code || '', 'model-data', selectedColumnId, keyword, page, PAGE_LIMIT, defaultLanguageCode],
+    queryKey: ['content-items', selectedModel?.code || '', 'model-data', selectedColumnId, keyword, page, ADMIN_CONFIG.pagination.pageSize, defaultLanguageCode],
     queryFn: () => contentItemsApi.list<ListedContentItem>(selectedModel!.code, {
       page,
-      limit: PAGE_LIMIT,
+      limit: ADMIN_CONFIG.pagination.pageSize,
       column_id: selectedColumnId !== 'all' ? Number.parseInt(selectedColumnId, 10) : undefined,
       include_descendants: selectedColumnId !== 'all' ? 1 : undefined,
       language: defaultLanguageCode,
@@ -360,7 +359,7 @@ export default function ContentModelDataPage({
               page={pagination.page}
               totalPages={pagination.totalPages}
               total={pagination.total || 0}
-              pageSize={PAGE_LIMIT}
+              pageSize={ADMIN_CONFIG.pagination.pageSize}
               onPageChange={setPage}
             />
           ) : null}

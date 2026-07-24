@@ -29,12 +29,11 @@ import {
 } from '@/components/ui/pagination'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ADMIN_CONFIG } from '@/config'
 import { formatRelativeTime } from '@/lib/datetime'
 import { resolveMediaAssetUrl } from '@/lib/assets'
 import { toast } from 'sonner'
 import type { Language, MediaAsset } from '@/types'
-
-const LIMIT = 50
 
 const MEDIA_PURPOSE_META = {
   product_cover: { label: '产品封面' },
@@ -132,10 +131,10 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
   const isCompactPdfPage = mode === 'pdfs'
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['media-assets', mode, page, LIMIT, effectivePurpose, usage, keyword],
+    queryKey: ['media-assets', mode, page, ADMIN_CONFIG.pagination.pageSize, effectivePurpose, usage, keyword],
     queryFn: () => mediaApi.list({
       page,
-      limit: LIMIT,
+      limit: ADMIN_CONFIG.pagination.pageSize,
       purpose: effectivePurpose,
       usage,
       q: keyword || undefined,

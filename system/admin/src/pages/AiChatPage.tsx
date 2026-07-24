@@ -31,6 +31,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '
 import { DataTablePagination } from '@/components/DataTablePagination'
 import { TableActionButton } from '@/components/TableActionButton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ADMIN_CONFIG } from '@/config'
 import { formatRelativeTime } from '@/lib/datetime'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { toast } from 'sonner'
@@ -49,8 +50,6 @@ type DashboardHeaderContext = {
 
 const DEFAULT_DOCUMENT_PAGE_WIDTH = 794
 const DEFAULT_DOCUMENT_PAGE_PADDING = 38
-const DOCUMENT_PAGE_LIMIT = 20
-
 export default function AiChatPage() {
   const { headerSlotElement, setDocumentTitle, setMainContentPadding } =
     useOutletContext<DashboardHeaderContext>()
@@ -96,7 +95,7 @@ export default function AiChatPage() {
     queryKey: ['document-drafts', documentPage, documentSearch],
     queryFn: () => documentWorkspacesApi.listDrafts({
       page: documentPage,
-      limit: DOCUMENT_PAGE_LIMIT,
+      limit: ADMIN_CONFIG.pagination.pageSize,
       search: documentSearch,
     }),
   })
@@ -828,7 +827,7 @@ export default function AiChatPage() {
                   page={draftsPagination.page}
                   totalPages={draftsPagination.totalPages}
                   total={draftsPagination.total}
-                  pageSize={DOCUMENT_PAGE_LIMIT}
+                  pageSize={ADMIN_CONFIG.pagination.pageSize}
                   onPageChange={setDocumentPage}
                 />
               ) : null}

@@ -21,10 +21,10 @@ import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/h
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { ADMIN_CONFIG } from '@/config'
 import { formatRelativeTime } from '@/lib/datetime'
 import { toast } from 'sonner'
 
-const PAGE_SIZE = 20
 const FILTER_INPUT_DEBOUNCE_MS = 300
 const DASHBOARD_FILTER_STORAGE_KEY = 'ai-cms:dashboard:access-log-filters:v4'
 const SAVED_FILTER_PRESETS_STORAGE_KEY = 'ai-cms:dashboard:saved-access-log-filters:v4'
@@ -673,7 +673,7 @@ export default function DashboardPage() {
     queryFn: () => adminApi.listAccessLogs({
       ...accessLogFilterParams,
       page,
-      limit: PAGE_SIZE,
+      limit: ADMIN_CONFIG.pagination.pageSize,
     }),
   })
 
@@ -683,7 +683,7 @@ export default function DashboardPage() {
   const metrics = summary?.metrics
   const topPages = summary?.top_pages || []
   const total = pagination?.total || 0
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE))
+  const totalPages = Math.max(1, Math.ceil(total / ADMIN_CONFIG.pagination.pageSize))
   const activeFilterSignature = createAdvancedFilterSignature(filters)
   const normalizedFilterInputs = normalizeAccessLogFilterInputs(filterInputs)
   const canSaveFilterPreset = !normalizedFilterInputs.error && (
