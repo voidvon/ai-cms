@@ -928,7 +928,7 @@ export default function DashboardPage() {
             <PopoverContent
               align="start"
               side="bottom"
-              className="w-[min(820px,calc(100vw-2rem))] p-4"
+              className="w-[min(584px,calc(100vw-2rem))] p-4"
             >
               <div className="space-y-2">
                 <div className="font-medium">筛选访问记录</div>
@@ -1037,8 +1037,8 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2">
                       <div
                         className={`grid min-w-0 flex-1 gap-2 ${filterShowsValueControl(filter)
-                          ? 'md:grid-cols-[180px_220px_minmax(220px,1fr)]'
-                          : 'md:grid-cols-[180px_220px]'}`}
+                          ? 'md:w-[506px] md:flex-none md:grid-cols-[180px_130px_180px]'
+                          : 'md:w-[318px] md:flex-none md:grid-cols-[180px_130px]'}`}
                       >
                         <div>
                           <Select
@@ -1168,7 +1168,7 @@ export default function DashboardPage() {
                   </div>
                 ))}
               </div>
-              <div className="flex items-center justify-between gap-2 border-t pt-3">
+              <div className="flex items-center justify-between gap-2">
                 <Button
                   type="button"
                   variant="ghost"
