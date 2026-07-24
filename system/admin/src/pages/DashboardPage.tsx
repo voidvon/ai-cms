@@ -928,7 +928,7 @@ export default function DashboardPage() {
             <PopoverContent
               align="start"
               side="bottom"
-              className="w-[min(584px,calc(100vw-2rem))] p-4"
+              className="w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] p-4 md:w-max"
             >
               <div className="space-y-2">
                 <div className="font-medium">筛选访问记录</div>
@@ -1031,14 +1031,14 @@ export default function DashboardPage() {
                   </div>
                 ) : null}
               </div>
-              <div className="-ml-1.5 max-h-[min(60vh,520px)] space-y-2 overflow-y-auto p-1.5">
+              <div className="max-h-[min(60vh,520px)] space-y-2 overflow-y-auto">
                 {filterInputs.map((filter, index) => (
                   <div key={filter.id}>
                     <div className="flex items-center gap-2">
                       <div
-                        className={`grid min-w-0 flex-1 gap-2 ${filterShowsValueControl(filter)
-                          ? 'md:w-[506px] md:flex-none md:grid-cols-[180px_130px_180px]'
-                          : 'md:w-[318px] md:flex-none md:grid-cols-[180px_130px]'}`}
+                        className={`grid min-w-0 flex-1 gap-2 md:w-max md:flex-none ${filterShowsValueControl(filter)
+                          ? 'md:grid-cols-[180px_130px_180px]'
+                          : 'md:grid-cols-[180px_130px]'}`}
                       >
                         <div>
                           <Select
