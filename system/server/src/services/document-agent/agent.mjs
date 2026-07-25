@@ -15,6 +15,57 @@ export function createDocumentWorkspaceAgent() {
       '给用户的回复要简洁、直接，并说明你刚刚做了什么或下一步缺什么。',
       '如果已更新草稿，回复中要明确提示已同步到文档预览。',
     ].join('\n'),
+    modelSettings: {
+      reasoning: {
+        summary: 'auto',
+      },
+    },
+    toolUseBehavior: finishAfterDocumentMutation,
     tools: createDocumentAgentTools(),
   });
+}
+
+export function finishAfterDocumentMutation(_context, toolResults) {
+  const mutationResults = toolResults.filter((result) => getMutationResult(result.output));
+  if (mutationResults.length === 0) {
+    return {
+      isFinalOutput: false,
+      isInterrupted: undefined,
+    };
+  }
+
+  const summaries = mutationResults
+    .map((result) => getMutationSummary(result.output))
+    .filter(Boolean);
+  const detail = summaries.length > 0
+    ? `：${Array.from(new Set(summaries)).join('；')}`
+    : '';
+
+  return {
+    isFinalOutput: true,
+    isInterrupted: undefined,
+    finalOutput: `文档已更新并同步到预览${detail}。`,
+  };
+}
+
+function getMutationSummary(output) {
+  return String(getMutationResult(output)?.summary || '').trim();
+}
+
+function getMutationResult(output) {
+  const parsed = typeof output === 'string' ? safeParseJson(output) : output;
+  return parsed
+    && typeof parsed === 'object'
+    && !Array.isArray(parsed)
+    && parsed.document_updated === true
+    ? parsed
+    : null;
+}
+
+function safeParseJson(value) {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
 }

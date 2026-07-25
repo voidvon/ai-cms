@@ -42,6 +42,8 @@ export async function startDocumentAgentRun({ draftId, message, user = null }) {
   );
   const streamed = await runAiAgent(agent, String(message || '').trim(), {
     stream: true,
+    maxTurns: 4,
+    signal: AbortSignal.timeout(90_000),
     session,
     context: {
       user,

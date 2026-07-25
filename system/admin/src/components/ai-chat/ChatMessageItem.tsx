@@ -79,12 +79,12 @@ export function ChatMessageItem({
 }: ChatMessageItemProps) {
   const normalizedText = String(text || "").trim();
   const isAssistant = role === "assistant";
-  const shouldShowPending = isAssistant && pending && !normalizedText;
   const displayParts = Array.isArray(metadata?.displayParts) ? metadata.displayParts : [];
   const reasoningParts = parts.filter(isChatReasoningPart);
   const toolParts = parts.filter(isChatToolPart);
   const sourceParts = parts.filter(isChatSourcePart);
   const reasoningText = reasoningParts.map((part) => part.text || "").join("\n").trim();
+  const shouldShowPending = isAssistant && pending && !normalizedText && !reasoningText;
   const isReasoningStreaming = reasoningParts.some(
     (part) => part.state === "streaming"
   );
@@ -174,7 +174,7 @@ export function ChatMessageItem({
 
       {isAssistant && reasoningText ? (
         <Reasoning defaultOpen={isReasoningStreaming} isStreaming={isReasoningStreaming}>
-          <ReasoningTrigger />
+          <ReasoningTrigger getThinkingMessage={getReasoningStatusLabel} />
           <ReasoningContent>{reasoningText}</ReasoningContent>
         </Reasoning>
       ) : null}
@@ -223,6 +223,12 @@ export function ChatMessageItem({
         : null}
     </Message>
   );
+}
+
+function getReasoningStatusLabel(isStreaming: boolean, duration?: number) {
+  if (isStreaming) return <Shimmer duration={1}>正在思考...</Shimmer>;
+  if (duration === undefined) return <span>思考摘要</span>;
+  return <span>已思考 {duration} 秒</span>;
 }
 
 async function fetchImageDownloadBlob(primaryUrl: string, relativePath: string) {

@@ -5,7 +5,9 @@ import {
   finalizeDocumentAgentRun,
   startDocumentAgentRun,
 } from '../../services/document-agent/orchestrator.mjs';
+import { getReasoningSummaryDelta } from '../../services/document-agent/stream-events.mjs';
 import { assertAiServicePermission } from '../../services/ai/query-service.mjs';
+import { assertAiRunCompleted } from '../../services/ai/runtime.mjs';
 
 async function parseBody(request) {
   if (request.body && typeof request.body === 'object') {
@@ -73,6 +75,12 @@ export default async function documentAgentRoutes(app) {
       });
 
       for await (const event of started.result) {
+        const reasoningDelta = getReasoningSummaryDelta(event);
+        if (reasoningDelta) {
+          writeSseEvent(reply, 'reasoning_delta', { delta: reasoningDelta });
+          continue;
+        }
+
         if (event.type === 'raw_model_stream_event' && event.data?.type === 'output_text_delta') {
           const delta = String(event.data.delta || '');
           if (delta) {
@@ -92,6 +100,7 @@ export default async function documentAgentRoutes(app) {
           }
           if (event.name === 'tool_output') {
             writeSseEvent(reply, 'tool_output', {
+              toolName: event.item?.rawItem?.name || event.item?.rawItem?.call_id || 'tool',
               item: event.item?.toJSON?.() || null,
             });
             continue;
@@ -100,6 +109,7 @@ export default async function documentAgentRoutes(app) {
       }
 
       await started.result.completed;
+      assertAiRunCompleted(started.result);
       const finalText = String(started.result.finalOutput || assistantText || '').trim();
       finalizeDocumentAgentRun({
         draftId,

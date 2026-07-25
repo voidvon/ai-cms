@@ -9,6 +9,10 @@ export interface DocumentAgentTextDeltaEvent {
   delta: string
 }
 
+export interface DocumentAgentReasoningDeltaEvent {
+  delta: string
+}
+
 export interface DocumentAgentToolEvent {
   toolName?: string
   item?: unknown
@@ -29,6 +33,7 @@ export interface DocumentAgentErrorEvent {
 export interface DocumentAgentStreamHandlers {
   onStarted?: (event: DocumentAgentStartedEvent) => void
   onTextDelta?: (event: DocumentAgentTextDeltaEvent) => void
+  onReasoningDelta?: (event: DocumentAgentReasoningDeltaEvent) => void
   onToolCalled?: (event: DocumentAgentToolEvent) => void
   onToolOutput?: (event: DocumentAgentToolEvent) => void
   onDraftUpdated?: (event: { draft: any; missing_fields: string[] }) => void
@@ -98,6 +103,10 @@ export const documentAgentApi = {
       }
       if (eventName === 'text_delta') {
         handlers.onTextDelta?.(payload)
+        return
+      }
+      if (eventName === 'reasoning_delta') {
+        handlers.onReasoningDelta?.(payload)
         return
       }
       if (eventName === 'tool_called') {

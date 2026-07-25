@@ -5,7 +5,7 @@ import { capabilityRegistry, toolRegistry } from '../../services/ai/core/index.m
 import { getAiDataSourceStatus } from '../../services/ai/data-source-registry.mjs';
 import { searchAiMentions } from '../../services/ai/query-service.mjs';
 import { buildAiMentionContext } from '../../services/ai/mention-context.mjs';
-import { getAiRuntimeConfig } from '../../services/ai/runtime.mjs';
+import { assertAiRunCompleted, getAiRuntimeConfig } from '../../services/ai/runtime.mjs';
 import { formatAiUserError } from '../../services/ai/error-message.mjs';
 import {
   loadLatestGeneratedImageContext,
@@ -487,6 +487,7 @@ export default async function aiRoutes(app) {
         }
 
         await streamed.result.completed;
+        assertAiRunCompleted(streamed.result);
         const generatedImages = [
           ...(uploadedImageContext?.generated_images || []),
           ...(latestGeneratedImage?.generated_images || []),

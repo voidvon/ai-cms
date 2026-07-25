@@ -367,6 +367,7 @@ function safeParseToolJson(value, fieldName) {
 function compactMutationResult(result, details = {}) {
   return {
     ok: true,
+    document_updated: true,
     summary: String(details.summary || '文档已更新'),
     ...(Array.isArray(details.updated_fields)
       ? { updated_fields: details.updated_fields.filter((field) => field !== 'clearExistingItems') }

@@ -82,6 +82,7 @@ export default function AiChatPage() {
   const [streamState, setStreamState] = useState<DocumentAgentDraftStreamState>({
     isStreaming: false,
     assistantText: '',
+    reasoningText: '',
     toolActivities: [],
   })
   const draftId = String(searchParams.get('draft') || '').trim()
@@ -189,6 +190,7 @@ export default function AiChatPage() {
     setStreamState({
       isStreaming: false,
       assistantText: '',
+      reasoningText: '',
       toolActivities: [],
     })
     setPreviewVersion((value) => value + 1)
@@ -279,6 +281,7 @@ export default function AiChatPage() {
           setStreamState({
             isStreaming: true,
             assistantText: '',
+            reasoningText: '',
             toolActivities: [],
           })
         },
@@ -286,6 +289,12 @@ export default function AiChatPage() {
           setStreamState((current) => ({
             ...current,
             assistantText: `${current.assistantText}${String(delta || '')}`,
+          }))
+        },
+        onReasoningDelta: ({ delta }) => {
+          setStreamState((current) => ({
+            ...current,
+            reasoningText: `${current.reasoningText}${String(delta || '')}`,
           }))
         },
         onToolCalled: (event) => {
@@ -318,11 +327,12 @@ export default function AiChatPage() {
       if (!response?.draft?.id) {
         return
       }
-      setStreamState({
+      setStreamState((current) => ({
         isStreaming: false,
         assistantText: '',
+        reasoningText: current.reasoningText,
         toolActivities: [],
-      })
+      }))
       setPreviewVersion((value) => value + 1)
       await queryClient.invalidateQueries({ queryKey: ['document-companies'] })
       await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
@@ -332,6 +342,7 @@ export default function AiChatPage() {
       setStreamState({
         isStreaming: false,
         assistantText: '',
+        reasoningText: '',
         toolActivities: [],
       })
       toast.error(error?.message || error?.response?.data?.message || 'AI 文档助手执行失败')
@@ -385,7 +396,7 @@ export default function AiChatPage() {
       return []
     }
 
-    const baseMessages = currentDraft.messages.length === 0
+    const baseMessages: ChatWorkspaceShellMessage[] = currentDraft.messages.length === 0
       ? [{
           id: 'document-assistant-welcome',
           role: 'assistant' as const,
@@ -402,12 +413,23 @@ export default function AiChatPage() {
         id: `streaming-${currentDraft.id}`,
         role: 'assistant',
         text: streamState.assistantText,
+        parts: createDocumentReasoningParts(streamState.reasoningText, true),
+        streaming: true,
         pending: !streamState.assistantText,
+        pendingLabel: getDocumentAgentPendingLabel(streamState.toolActivities),
       })
+    } else if (streamState.reasoningText) {
+      const lastAssistantIndex = findLastAssistantMessageIndex(baseMessages)
+      if (lastAssistantIndex >= 0) {
+        baseMessages[lastAssistantIndex] = {
+          ...baseMessages[lastAssistantIndex],
+          parts: createDocumentReasoningParts(streamState.reasoningText, false),
+        }
+      }
     }
 
     return baseMessages
-  }, [currentDraft, streamState.assistantText, streamState.isStreaming])
+  }, [currentDraft, streamState])
 
   useEffect(() => {
     if (!currentDraft?.id) {
@@ -1128,6 +1150,80 @@ function getDraftDocumentNumber(draft?: DocumentDraft | null) {
   const payload = draft?.draft_payload || {}
   const fieldName = draft?.document_type === 'contract' ? 'contractNumber' : 'quoteNumber'
   return String(payload[fieldName] || '').trim()
+}
+
+function createDocumentReasoningParts(
+  reasoningText: string,
+  isStreaming: boolean,
+): ChatWorkspaceShellMessage['parts'] {
+  const text = String(reasoningText || '').trim()
+  if (!text) {
+    return undefined
+  }
+
+  return [{
+    type: 'reasoning',
+    text,
+    state: isStreaming ? 'streaming' : 'done',
+  }]
+}
+
+function findLastAssistantMessageIndex(messages: ChatWorkspaceShellMessage[]) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (messages[index]?.role === 'assistant') {
+      return index
+    }
+  }
+  return -1
+}
+
+function getDocumentAgentPendingLabel(
+  activities: DocumentAgentDraftStreamState['toolActivities'],
+) {
+  const latestActivity = activities[activities.length - 1]
+  if (!latestActivity) {
+    return 'AI 正在分析文档...'
+  }
+  if (latestActivity.type === 'tool_output') {
+    return '文档操作已完成，正在继续处理...'
+  }
+
+  const toolName = String(latestActivity.toolName || '').trim()
+  const summary = getDocumentToolSummary(latestActivity.item)
+  if (summary) {
+    return `正在${summary}...`
+  }
+
+  const labels: Record<string, string> = {
+    get_document_workspace_context: '正在读取文档上下文...',
+    set_document_customer: '正在更新客户信息...',
+    set_document_seller: '正在更新我方信息...',
+    replace_document_items: '正在更新文档明细...',
+    set_document_terms: '正在更新文档条款...',
+    apply_document_patch: '正在更新文档...',
+  }
+  return labels[toolName] || '正在更新文档...'
+}
+
+function getDocumentToolSummary(item: unknown) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) {
+    return ''
+  }
+  const source = item as Record<string, unknown>
+  const rawItem = source.rawItem && typeof source.rawItem === 'object' && !Array.isArray(source.rawItem)
+    ? source.rawItem as Record<string, unknown>
+    : null
+  const argumentsJson = rawItem?.arguments
+  if (typeof argumentsJson !== 'string' || !argumentsJson.trim()) {
+    return ''
+  }
+
+  try {
+    const parsed = JSON.parse(argumentsJson)
+    return String(parsed?.summary || '').trim()
+  } catch {
+    return ''
+  }
 }
 
 function getDraftCustomerName(draft?: DocumentDraft | null) {

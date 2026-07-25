@@ -3,7 +3,7 @@ import { Agent, Runner, tool } from '@openai/agents';
 import { OpenAIProvider } from '@openai/agents-openai';
 import { z } from 'zod';
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
-import { createResponsesWireFetch } from './ai/responses-wire-adapter.mjs';
+import { createEventSourcedResponsesFetch } from './ai/responses-event-stream.mjs';
 
 const PROVIDER_OPENAI_RESPONSES = 'openai_responses';
 const REASONING_EFFORTS = new Set(['low', 'medium', 'high']);
@@ -287,11 +287,16 @@ export async function testAiModelConnection(id) {
     const streamed = await runner.run(agent, 'Run the Responses API protocol probe now.', {
       stream: true,
       maxTurns: 3,
+      signal: AbortSignal.timeout(90_000),
     });
     for await (const event of streamed) {
       void event;
     }
     await streamed.completed;
+
+    if (streamed.cancelled) {
+      throw new Error('Responses 流式请求超时');
+    }
 
     if (!toolCalled) {
       throw new Error('模型没有完成标准函数工具调用');
@@ -315,23 +320,38 @@ export async function testAiModelConnection(id) {
     };
   } catch (error) {
     const message = `Responses 协议验证失败：${getErrorMessage(error)}`;
+    const verifiedAt = row.responses_verified_at && isTransientResponsesTestError(error)
+      ? row.responses_verified_at
+      : null;
     execute(`
       UPDATE ai_models
-      SET responses_verified_at = NULL, responses_verification_error = ?, updated_at = ?
+      SET responses_verified_at = ?, responses_verification_error = ?, updated_at = ?
       WHERE id = ?
-    `, [message.slice(0, 4000), new Date().toISOString(), normalizeId(id)]);
+    `, [verifiedAt, message.slice(0, 4000), new Date().toISOString(), normalizeId(id)]);
     throw new Error(message, { cause: error });
   } finally {
     await provider.close();
   }
 }
 
+function isTransientResponsesTestError(error) {
+  const message = getErrorMessage(error).toLowerCase();
+  return message.includes('超时')
+    || message.includes('timeout')
+    || message.includes('timed out')
+    || message.includes('abort')
+    || message.includes('rate limit')
+    || message.includes('fetch failed')
+    || /\b(429|502|503|504)\b/.test(message)
+    || /\b(econnreset|econnrefused|enotfound|etimedout)\b/.test(message);
+}
+
 export function createOpenAIClient(config) {
   return new OpenAI({
     apiKey: config.api_key,
     ...(config.base_url ? { baseURL: config.base_url } : {}),
+    fetch: createEventSourcedResponsesFetch(),
     timeout: 120_000,
-    fetch: createResponsesWireFetch(),
   });
 }
 

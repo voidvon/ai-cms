@@ -1,12 +1,13 @@
 import OpenAI from 'openai';
-import { Agent, run, setDefaultOpenAIClient } from '@openai/agents';
+import { Agent, Runner, setDefaultOpenAIClient } from '@openai/agents';
 import { setDefaultModelProvider } from '@openai/agents-core';
 import { OpenAIProvider } from '@openai/agents-openai';
 import { getDefaultAiModelRuntimeConfig } from '../ai-models.mjs';
-import { createResponsesWireFetch } from './responses-wire-adapter.mjs';
+import { createEventSourcedResponsesFetch } from './responses-event-stream.mjs';
 
 let openaiClient = null;
 let openaiProvider = null;
+let openaiRunner = null;
 let runtimeConfigSignature = '';
 
 export function assertAiConfig() {
@@ -42,12 +43,34 @@ export function createAiAgent(config) {
   });
 }
 
-export function runAiAgent(agent, input, options) {
-  const modelProvider = getOpenAIModelProvider();
-  return run(agent, input, {
+export async function runAiAgent(agent, input, options) {
+  const runner = getOpenAIRunner();
+  const shouldReturnStream = options?.stream === true;
+  const streamed = await runner.run(agent, input, {
     ...(options || {}),
-    modelProvider,
+    stream: true,
   });
+
+  if (shouldReturnStream) {
+    return streamed;
+  }
+
+  for await (const event of streamed) {
+    void event;
+  }
+  await streamed.completed;
+  assertAiRunCompleted(streamed);
+  return streamed;
+}
+
+export function assertAiRunCompleted(result) {
+  if (!result?.cancelled) {
+    return;
+  }
+
+  const error = new Error('AI 响应超时，请稍后重试');
+  error.statusCode = 504;
+  throw error;
 }
 
 export function getOpenAIClient() {
@@ -63,12 +86,17 @@ export function getOpenAIModelProvider() {
   return openaiProvider;
 }
 
+function getOpenAIRunner() {
+  getOpenAIClient();
+  return openaiRunner;
+}
+
 function initializeOpenAIRuntime(config) {
   openaiClient = new OpenAI({
     apiKey: config.api_key,
     ...(config.base_url ? { baseURL: config.base_url } : {}),
+    fetch: createEventSourcedResponsesFetch(),
     timeout: 120_000,
-    fetch: createResponsesWireFetch(),
   });
   setDefaultOpenAIClient(openaiClient);
 
@@ -78,6 +106,10 @@ function initializeOpenAIRuntime(config) {
     strictFeatureValidation: true,
     useResponsesWebSocket: false,
     cacheResponsesWebSocketModels: false,
+  });
+  openaiRunner = new Runner({
+    modelProvider: openaiProvider,
+    tracingDisabled: true,
   });
 
   runtimeConfigSignature = buildRuntimeConfigSignature(config);

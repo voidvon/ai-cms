@@ -864,6 +864,7 @@ export interface DocumentDraftConversationState {
 export interface DocumentAgentDraftStreamState {
   isStreaming: boolean;
   assistantText: string;
+  reasoningText: string;
   toolActivities: Array<{
     type: 'tool_called' | 'tool_output';
     toolName?: string;
