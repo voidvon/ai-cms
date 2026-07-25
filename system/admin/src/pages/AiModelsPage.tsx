@@ -62,8 +62,9 @@ export default function AiModelsPage() {
 
   const testMutation = useMutation({
     mutationFn: (model: AiModelConfig) => aiModelsApi.test(model.id),
-    onSuccess: (response, model) => {
-      toast.success(`${model.name} 连接成功，耗时 ${response.data?.duration_ms || 0} ms`)
+    onSuccess: async (response, model) => {
+      await refresh()
+      toast.success(`${model.name} Responses 流式工具调用验证通过，耗时 ${response.data?.duration_ms || 0} ms`)
     },
     onError: (error: unknown) => toast.error(getApiErrorMessage(error, '模型连接测试失败')),
   })
@@ -103,7 +104,7 @@ export default function AiModelsPage() {
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <CardTitle>AI 模型管理</CardTitle>
-              <CardDescription>动态配置 OpenAI 兼容接口、默认模型、图片模型和思考程度。</CardDescription>
+              <CardDescription>动态配置 OpenAI Responses API、默认模型、图片模型和思考程度。</CardDescription>
             </div>
             <div className="flex items-center gap-2">
               <Button type="button" variant="outline" size="icon" onClick={() => void modelsQuery.refetch()} aria-label="刷新模型列表">
@@ -142,6 +143,9 @@ export default function AiModelsPage() {
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{model.name}</span>
                       {model.is_default ? <Badge>默认</Badge> : null}
+                      <Badge variant={model.responses_verified_at ? 'secondary' : 'outline'}>
+                        {model.responses_verified_at ? 'Responses 已测试' : '未测试'}
+                      </Badge>
                     </div>
                     <div className="mt-1 max-w-[320px] truncate font-mono text-xs text-muted-foreground">
                       {model.base_url || 'OpenAI 官方接口'}
@@ -218,6 +222,9 @@ export default function AiModelsPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className="font-medium">{model.name}</span>
                       {model.is_default ? <Badge>默认</Badge> : null}
+                      <Badge variant={model.responses_verified_at ? 'secondary' : 'outline'}>
+                        {model.responses_verified_at ? 'Responses 已测试' : '未测试'}
+                      </Badge>
                     </div>
                     <div className="mt-1 break-all font-mono text-xs text-muted-foreground">
                       {model.base_url || 'OpenAI 官方接口'}

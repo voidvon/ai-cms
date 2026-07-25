@@ -66,7 +66,7 @@ export default function AiModelFormDialog({ open, onOpenChange, model }: Props) 
 
       const payload = {
         name: form.name.trim(),
-        provider: 'openai_compatible' as const,
+        provider: 'openai_responses' as const,
         base_url: form.base_url.trim(),
         api_key: form.api_key.trim(),
         model: form.model.trim(),
@@ -97,7 +97,7 @@ export default function AiModelFormDialog({ open, onOpenChange, model }: Props) 
         <DialogHeader>
           <DialogTitle>{isEditing ? '编辑模型配置' : '新增模型配置'}</DialogTitle>
           <DialogDescription>
-            配置 OpenAI 兼容接口、默认文本模型、图片模型和思考程度。
+            配置 OpenAI Responses API、默认文本模型、图片模型和思考程度。
           </DialogDescription>
         </DialogHeader>
 
@@ -114,7 +114,7 @@ export default function AiModelFormDialog({ open, onOpenChange, model }: Props) 
           </div>
           <div className="space-y-2">
             <Label htmlFor="ai-model-provider">接口协议</Label>
-            <Input id="ai-model-provider" value="OpenAI 兼容接口" disabled />
+            <Input id="ai-model-provider" value="OpenAI Responses API" disabled />
           </div>
 
           <div className="space-y-2 sm:col-span-2">
@@ -221,6 +221,7 @@ export default function AiModelFormDialog({ open, onOpenChange, model }: Props) 
               />
             </div>
           ) : null}
+
         </div>
 
         <DialogFooter>

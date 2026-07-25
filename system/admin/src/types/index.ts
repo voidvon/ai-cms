@@ -658,11 +658,13 @@ export interface AiCapabilities {
 export interface AiModelConfig {
   id: number;
   name: string;
-  provider: 'openai_compatible';
+  provider: 'openai_responses';
   base_url: string;
   model: string;
   image_model: string;
   reasoning_effort: 'low' | 'medium' | 'high';
+  responses_verified_at: string;
+  responses_verification_error: string;
   is_enabled: number;
   is_default: number;
   has_api_key: boolean;
@@ -674,6 +676,10 @@ export interface AiModelConfig {
 export interface AiModelConnectionTest {
   ok: boolean;
   model: string;
+  protocol: 'responses';
+  streaming: boolean;
+  tool_call: boolean;
+  verified_at: string;
   duration_ms: number;
 }
 

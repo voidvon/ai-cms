@@ -3,7 +3,7 @@ import type { AiModelConfig, AiModelConnectionTest, ApiResponse } from '@/types'
 
 export type AiModelPayload = {
   name?: string
-  provider?: 'openai_compatible'
+  provider?: 'openai_responses'
   base_url?: string
   api_key?: string
   model?: string

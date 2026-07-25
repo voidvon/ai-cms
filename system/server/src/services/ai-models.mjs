@@ -1,7 +1,11 @@
 import OpenAI from 'openai';
+import { Agent, Runner, tool } from '@openai/agents';
+import { OpenAIProvider } from '@openai/agents-openai';
+import { z } from 'zod';
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
+import { createResponsesWireFetch } from './ai/responses-wire-adapter.mjs';
 
-const PROVIDER_OPENAI_COMPATIBLE = 'openai_compatible';
+const PROVIDER_OPENAI_RESPONSES = 'openai_responses';
 const REASONING_EFFORTS = new Set(['low', 'medium', 'high']);
 
 let schemaEnsured = false;
@@ -15,12 +19,14 @@ export function ensureAiModelsSchema() {
     CREATE TABLE IF NOT EXISTS ai_models (
       id INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
-      provider TEXT NOT NULL DEFAULT '${PROVIDER_OPENAI_COMPATIBLE}',
+      provider TEXT NOT NULL DEFAULT '${PROVIDER_OPENAI_RESPONSES}',
       base_url TEXT NOT NULL DEFAULT '',
       api_key TEXT NOT NULL,
       model TEXT NOT NULL,
       image_model TEXT NOT NULL DEFAULT '',
       reasoning_effort TEXT NOT NULL DEFAULT 'medium',
+      responses_verified_at TEXT,
+      responses_verification_error TEXT NOT NULL DEFAULT '',
       is_enabled INTEGER NOT NULL DEFAULT 1,
       is_default INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -31,6 +37,12 @@ export function ensureAiModelsSchema() {
     ON ai_models(is_default)
     WHERE is_default = 1;
   `);
+  addAiModelsColumnIfMissing('responses_verified_at', 'TEXT');
+  addAiModelsColumnIfMissing('responses_verification_error', "TEXT NOT NULL DEFAULT ''");
+  execute(
+    "UPDATE ai_models SET provider = ? WHERE provider = 'openai_compatible'",
+    [PROVIDER_OPENAI_RESPONSES]
+  );
 
   schemaEnsured = true;
 }
@@ -130,6 +142,11 @@ export function updateAiModel(id, input) {
   }
 
   const now = new Date().toISOString();
+  const connectionChanged = existing.base_url !== payload.base_url
+    || existing.model !== payload.model
+    || Boolean(String(input?.api_key || '').trim() && existing.api_key !== payload.api_key);
+  const responsesVerifiedAt = connectionChanged ? null : existing.responses_verified_at;
+  const responsesVerificationError = connectionChanged ? '' : existing.responses_verification_error;
   getDb().exec('BEGIN');
   try {
     if (Boolean(input?.is_default)) {
@@ -146,6 +163,8 @@ export function updateAiModel(id, input) {
         model = ?,
         image_model = ?,
         reasoning_effort = ?,
+        responses_verified_at = ?,
+        responses_verification_error = ?,
         is_enabled = ?,
         is_default = ?,
         updated_at = ?
@@ -158,6 +177,8 @@ export function updateAiModel(id, input) {
       payload.model,
       payload.image_model,
       payload.reasoning_effort,
+      responsesVerifiedAt,
+      responsesVerificationError,
       payload.is_enabled,
       shouldBeDefault ? 1 : 0,
       now,
@@ -182,7 +203,6 @@ export function setDefaultAiModel(id) {
   if (Number(existing.is_enabled || 0) !== 1) {
     throw new Error('请先启用该模型，再设为默认模型');
   }
-
   const now = new Date().toISOString();
   getDb().exec('BEGIN');
   try {
@@ -221,26 +241,102 @@ export async function testAiModelConnection(id) {
 
   const config = toRuntimeAiModel(row);
   const client = createOpenAIClient(config);
+  const provider = new OpenAIProvider({
+    openAIClient: client,
+    useResponses: true,
+    strictFeatureValidation: true,
+    useResponsesWebSocket: false,
+    cacheResponsesWebSocketModels: false,
+  });
   const startedAt = Date.now();
-  const model = await client.models.retrieve(config.model);
+  let toolCalled = false;
 
-  return {
-    ok: true,
-    model: model?.id || config.model,
-    duration_ms: Date.now() - startedAt,
-  };
+  const protocolProbe = tool({
+    name: 'responses_protocol_probe',
+    description: '验证 Responses API 的函数调用和函数结果回传能力。',
+    parameters: z.object({
+      value: z.string(),
+    }),
+    async execute(input) {
+      toolCalled = true;
+      return { ok: input.value === 'ok' };
+    },
+  });
+
+  const agent = new Agent({
+    name: 'Responses Protocol Probe',
+    model: config.model,
+    instructions: [
+      'Call responses_protocol_probe exactly once with {"value":"ok"}.',
+      'After the tool result, reply with exactly OK.',
+    ].join('\n'),
+    tools: [protocolProbe],
+    modelSettings: {
+      store: false,
+      reasoning: {
+        effort: config.reasoning_effort,
+      },
+    },
+  });
+  const runner = new Runner({
+    modelProvider: provider,
+    tracingDisabled: true,
+  });
+
+  try {
+    const streamed = await runner.run(agent, 'Run the Responses API protocol probe now.', {
+      stream: true,
+      maxTurns: 3,
+    });
+    for await (const event of streamed) {
+      void event;
+    }
+    await streamed.completed;
+
+    if (!toolCalled) {
+      throw new Error('模型没有完成标准函数工具调用');
+    }
+
+    const verifiedAt = new Date().toISOString();
+    execute(`
+      UPDATE ai_models
+      SET responses_verified_at = ?, responses_verification_error = '', updated_at = ?
+      WHERE id = ?
+    `, [verifiedAt, verifiedAt, normalizeId(id)]);
+
+    return {
+      ok: true,
+      model: config.model,
+      protocol: 'responses',
+      streaming: true,
+      tool_call: true,
+      verified_at: verifiedAt,
+      duration_ms: Date.now() - startedAt,
+    };
+  } catch (error) {
+    const message = `Responses 协议验证失败：${getErrorMessage(error)}`;
+    execute(`
+      UPDATE ai_models
+      SET responses_verified_at = NULL, responses_verification_error = ?, updated_at = ?
+      WHERE id = ?
+    `, [message.slice(0, 4000), new Date().toISOString(), normalizeId(id)]);
+    throw new Error(message, { cause: error });
+  } finally {
+    await provider.close();
+  }
 }
 
 export function createOpenAIClient(config) {
   return new OpenAI({
     apiKey: config.api_key,
     ...(config.base_url ? { baseURL: config.base_url } : {}),
+    fetch: createResponsesWireFetch(),
   });
 }
 
 function normalizeAiModelInput(input, options = {}) {
   const name = String(input?.name || '').trim();
-  const provider = String(input?.provider || PROVIDER_OPENAI_COMPATIBLE).trim().toLowerCase();
+  const provider = String(input?.provider || PROVIDER_OPENAI_RESPONSES).trim().toLowerCase();
   const baseUrl = normalizeBaseUrl(input?.base_url);
   const model = String(input?.model || '').trim();
   const imageModel = String(input?.image_model || '').trim();
@@ -251,8 +347,8 @@ function normalizeAiModelInput(input, options = {}) {
   if (!name) {
     throw new Error('请输入配置名称');
   }
-  if (provider !== PROVIDER_OPENAI_COMPATIBLE) {
-    throw new Error('当前仅支持 OpenAI 兼容接口');
+  if (provider !== PROVIDER_OPENAI_RESPONSES) {
+    throw new Error('当前仅支持 OpenAI Responses API 兼容接口');
   }
   if (!model) {
     throw new Error('请输入模型名称');
@@ -304,6 +400,8 @@ function toPublicAiModel(row) {
     model: row.model,
     image_model: row.image_model || '',
     reasoning_effort: row.reasoning_effort,
+    responses_verified_at: row.responses_verified_at || '',
+    responses_verification_error: row.responses_verification_error || '',
     is_enabled: Number(row.is_enabled || 0),
     is_default: Number(row.is_default || 0),
     has_api_key: Boolean(row.api_key),
@@ -337,4 +435,19 @@ function normalizeId(value) {
     throw new Error('模型配置 ID 无效');
   }
   return id;
+}
+
+function getErrorMessage(error) {
+  if (error instanceof Error && error.message) {
+    return error.message;
+  }
+  return String(error || '未知错误');
+}
+
+function addAiModelsColumnIfMissing(columnName, definition) {
+  const columns = queryAll('PRAGMA table_info(ai_models)');
+  if (columns.some((column) => column.name === columnName)) {
+    return;
+  }
+  getDb().exec(`ALTER TABLE ai_models ADD COLUMN ${columnName} ${definition}`);
 }

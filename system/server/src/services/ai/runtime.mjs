@@ -3,14 +3,10 @@ import { Agent, run, setDefaultOpenAIClient } from '@openai/agents';
 import { setDefaultModelProvider } from '@openai/agents-core';
 import { OpenAIProvider } from '@openai/agents-openai';
 import { getDefaultAiModelRuntimeConfig } from '../ai-models.mjs';
-import {
-  normalizeModelResponse,
-  reconcileResponsesStream,
-} from './responses-stream-compatibility.mjs';
+import { createResponsesWireFetch } from './responses-wire-adapter.mjs';
 
 let openaiClient = null;
 let openaiProvider = null;
-let normalizedOpenAIProvider = null;
 let runtimeConfigSignature = '';
 
 export function assertAiConfig() {
@@ -64,16 +60,14 @@ export function getOpenAIClient() {
 
 export function getOpenAIModelProvider() {
   getOpenAIClient();
-  if (!normalizedOpenAIProvider) {
-    normalizedOpenAIProvider = createFlyapiResponsesCompatibilityProvider(openaiProvider);
-  }
-  return normalizedOpenAIProvider;
+  return openaiProvider;
 }
 
 function initializeOpenAIRuntime(config) {
   openaiClient = new OpenAI({
     apiKey: config.api_key,
     ...(config.base_url ? { baseURL: config.base_url } : {}),
+    fetch: createResponsesWireFetch(),
   });
   setDefaultOpenAIClient(openaiClient);
 
@@ -85,43 +79,10 @@ function initializeOpenAIRuntime(config) {
     cacheResponsesWebSocketModels: false,
   });
 
-  normalizedOpenAIProvider = createFlyapiResponsesCompatibilityProvider(openaiProvider);
   runtimeConfigSignature = buildRuntimeConfigSignature(config);
-  setDefaultModelProvider(normalizedOpenAIProvider);
+  setDefaultModelProvider(openaiProvider);
 }
 
 function buildRuntimeConfigSignature(config) {
   return [config.id, config.updated_at, config.base_url, config.api_key, config.model].join('|');
-}
-
-function createFlyapiResponsesCompatibilityProvider(provider) {
-  return {
-    name: 'flyapi-responses-compatibility-provider',
-    async getModel(modelName) {
-      const model = await provider.getModel(modelName);
-      return createFlyapiResponsesCompatibilityModel(model);
-    },
-    async close() {
-      if (typeof provider.close === 'function') {
-        await provider.close();
-      }
-    },
-  };
-}
-
-function createFlyapiResponsesCompatibilityModel(model) {
-  return {
-    async getResponse(request) {
-      return normalizeModelResponse(await model.getResponse(request));
-    },
-    async *getStreamedResponse(request) {
-      yield* reconcileResponsesStream(model.getStreamedResponse(request));
-    },
-    async getRetryAdvice(args) {
-      if (typeof model.getRetryAdvice !== 'function') {
-        return undefined;
-      }
-      return model.getRetryAdvice(args);
-    },
-  };
 }
