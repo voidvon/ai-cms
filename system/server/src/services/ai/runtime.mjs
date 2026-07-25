@@ -3,7 +3,10 @@ import { Agent, run, setDefaultOpenAIClient } from '@openai/agents';
 import { setDefaultModelProvider } from '@openai/agents-core';
 import { OpenAIProvider } from '@openai/agents-openai';
 import { getDefaultAiModelRuntimeConfig } from '../ai-models.mjs';
-import { reconcileResponsesStream } from './responses-stream-compatibility.mjs';
+import {
+  normalizeModelResponse,
+  reconcileResponsesStream,
+} from './responses-stream-compatibility.mjs';
 
 let openaiClient = null;
 let openaiProvider = null;
@@ -109,7 +112,7 @@ function createFlyapiResponsesCompatibilityProvider(provider) {
 function createFlyapiResponsesCompatibilityModel(model) {
   return {
     async getResponse(request) {
-      return model.getResponse(request);
+      return normalizeModelResponse(await model.getResponse(request));
     },
     async *getStreamedResponse(request) {
       yield* reconcileResponsesStream(model.getStreamedResponse(request));

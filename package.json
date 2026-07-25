@@ -7,7 +7,6 @@
     "mcp"
   ],
   "scripts": {
-    "postinstall": "node scripts/patch-openai-agents-core-status.mjs",
     "start": "node server.mjs",
     "dev": "node scripts/dev.mjs",
     "dev:server": "npm --prefix system/server run dev",

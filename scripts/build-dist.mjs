@@ -17,8 +17,6 @@ async function main() {
 
   await copyFile('server.mjs');
   await writeDistPackageJson();
-  await copyDeployScripts();
-
   await copyServer();
   await copyShared();
   await copyAdminDist();
@@ -100,10 +98,6 @@ async function copyServer() {
   await copyDir('system/server/views');
   await copyDir('system/server/import');
   await copyDir('system/server/README.md');
-}
-
-async function copyDeployScripts() {
-  await copyFile('scripts/patch-openai-agents-core-status.mjs');
 }
 
 async function copyShared() {

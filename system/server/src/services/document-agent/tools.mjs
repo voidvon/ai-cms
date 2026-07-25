@@ -25,14 +25,19 @@ export function createDocumentAgentTools() {
         name: 'get_document_workspace_context',
         description: '读取当前文档草稿、缺失字段、最近消息和模板上下文。',
         parameters: z.object({}),
+        isEnabled: ({ runContext }) => {
+          const context = getAgentExecutionContext(runContext);
+          return !context.workspaceContextRead;
+        },
         async execute(_, runContext) {
           const context = getAgentExecutionContext(runContext);
           const snapshot = buildDocumentAgentContext(context.draftId);
+          context.workspaceContextRead = true;
           return {
-            draft: snapshot.draft,
-            template: snapshot.template,
+            draft: compactDraftContext(snapshot.draft),
+            template: compactTemplateContext(snapshot.template),
             missing_fields: snapshot.missingFields,
-            recent_messages: snapshot.messages.slice(-12),
+            recent_messages: snapshot.messages.slice(-8).map(compactMessageContext),
           };
         },
       })
@@ -229,7 +234,12 @@ function wrapAuditedTool(baseTool) {
     strict: baseTool.strict,
     deferLoading: baseTool.deferLoading,
     needsApproval: baseTool.needsApproval,
-    isEnabled: baseTool.isEnabled,
+    isEnabled: async ({ runContext, agent }) => {
+      if (typeof baseTool.isEnabled !== 'function') {
+        return baseTool.isEnabled !== false;
+      }
+      return baseTool.isEnabled(runContext, agent);
+    },
     timeoutMs: baseTool.timeoutMs,
     timeoutBehavior: baseTool.timeoutBehavior,
     timeoutErrorFunction: baseTool.timeoutErrorFunction,
@@ -261,6 +271,44 @@ function wrapAuditedTool(baseTool) {
       }
     },
   });
+}
+
+function compactDraftContext(draft) {
+  return {
+    id: draft.id,
+    document_type: draft.document_type,
+    document_template_id: draft.document_template_id,
+    template_id: draft.template_id,
+    title: draft.title,
+    language_code: draft.language_code,
+    status: draft.status,
+    draft_payload: draft.draft_payload,
+    updated_at: draft.updated_at,
+  };
+}
+
+function compactTemplateContext(template) {
+  if (!template) {
+    return null;
+  }
+  return {
+    id: template.id,
+    key: template.key,
+    name: template.name,
+    description: template.description,
+    document_type: template.document_type,
+    template_id: template.template_id,
+    template_code: template.template_code,
+    template_name: template.template_name,
+  };
+}
+
+function compactMessageContext(message) {
+  return {
+    role: message.role,
+    text: String(message.content?.text || ''),
+    created_at: message.created_at,
+  };
 }
 
 function getAgentExecutionContext(runContext) {

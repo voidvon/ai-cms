@@ -5,7 +5,6 @@
   "type": "module",
   "description": "Fastify + SQLite server for the legacy static site migration.",
   "scripts": {
-    "postinstall": "node ../../scripts/patch-openai-agents-core-status.mjs",
     "start": "node src/server.mjs",
     "dev": "node ../../scripts/dev-server.mjs",
     "db:init": "node scripts/init-db.mjs",
@@ -34,6 +33,8 @@
     "@fastify/sensible": "^6.0.4",
     "@fastify/static": "^9.1.3",
     "@openai/agents": "^0.12.0",
+    "@openai/agents-core": "^0.12.1",
+    "@openai/agents-openai": "^0.12.1",
     "ai": "^7.0.7",
     "esbuild": "^0.27.0",
     "fastify": "^5.8.5",

@@ -35,7 +35,11 @@ export async function startDocumentAgentRun({ draftId, message, user = null }) {
   });
 
   const agent = createDocumentWorkspaceAgent();
-  const session = createDocumentAgentSession(conversation.id, conversation.session_key);
+  const session = createDocumentAgentSession(
+    conversation.id,
+    conversation.session_key,
+    userMessage.id,
+  );
   const streamed = await runAiAgent(agent, String(message || '').trim(), {
     stream: true,
     session,
@@ -87,8 +91,9 @@ export function finalizeDocumentAgentRun({
   return assistantMessage;
 }
 
-function createDocumentAgentSession(conversationId, sessionKey) {
+function createDocumentAgentSession(conversationId, sessionKey, currentUserMessageId) {
   const historyItems = getConversationMessages(conversationId)
+    .filter((entry) => entry.id !== currentUserMessageId)
     .filter((entry) => entry.role === 'user' || entry.role === 'assistant')
     .map((entry) => {
       const text = String(entry.content?.text || '').trim();

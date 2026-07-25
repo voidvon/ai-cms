@@ -4,7 +4,22 @@ export async function* reconcileResponsesStream(stream) {
   for await (const event of stream) {
     collectCompletedOutputItem(event, completedOutputItems);
     yield normalizeResponsesStreamEvent(event, Array.from(completedOutputItems.values()));
+
+    if (event?.type === 'response_done') {
+      completedOutputItems.clear();
+    }
   }
+}
+
+export function normalizeModelResponse(response) {
+  if (!response || !Array.isArray(response.output)) {
+    return response;
+  }
+
+  return {
+    ...response,
+    output: response.output.map((item) => normalizeResponseOutputItem(item)),
+  };
 }
 
 export function normalizeResponsesStreamEvent(event, completedRawOutputItems = []) {
@@ -20,10 +35,10 @@ export function normalizeResponsesStreamEvent(event, completedRawOutputItems = [
 
   return {
     ...event,
-    response: {
+    response: normalizeModelResponse({
       ...event.response,
-      output: output.map((item) => normalizeResponseOutputItem(item)),
-    },
+      output,
+    }),
   };
 }
 
@@ -135,22 +150,38 @@ function convertRawMessageContentItem(item) {
 }
 
 function normalizeResponseOutputItem(item) {
-  if (item?.type === 'message' && item.role === 'assistant') {
-    return normalizeOutputItemStatus(item);
+  if (item?.type === 'apply_patch_call') {
+    return normalizeStatusWithAllowedValues(item, new Set(['in_progress', 'completed']), 'completed');
   }
-  if (item?.type === 'function_call' || item?.type === 'hosted_tool_call') {
-    return normalizeOutputItemStatus(item);
+  if (item?.type === 'apply_patch_call_output') {
+    return normalizeStatusWithAllowedValues(item, new Set(['completed', 'failed']), 'completed');
+  }
+  if (item && typeof item === 'object' && Object.hasOwn(item, 'status')) {
+    return normalizeLifecycleStatus(item);
   }
   return item;
 }
 
-function normalizeOutputItemStatus(item) {
-  if (item.status === 'in_progress' || item.status === 'completed' || item.status === 'incomplete') {
+function normalizeLifecycleStatus(item) {
+  return normalizeStatusWithAllowedValues(
+    item,
+    new Set(['in_progress', 'completed', 'incomplete']),
+    String(item?.status || '').trim() === 'failed' ? 'incomplete' : 'completed',
+  );
+}
+
+function normalizeStatusWithAllowedValues(item, allowedValues, fallbackStatus) {
+  if (!item || typeof item !== 'object') {
     return item;
   }
+
+  if (allowedValues.has(item.status)) {
+    return item;
+  }
+
   return {
     ...item,
-    status: 'completed',
+    status: fallbackStatus,
   };
 }
 
