@@ -139,7 +139,7 @@ async function performUpdate() {
 
     try {
       const npmRuntime = await prepareNpmInstallRuntime();
-      await execFileAsync(resolveNpmCommand(), ['install', '--legacy-peer-deps', '--no-audit', '--no-fund'], {
+      await execFileAsync(resolveNpmCommand(), getNpmInstallArgs(), {
         cwd: PROJECT_ROOT,
         env: createNpmInstallEnvironment(process.env, npmRuntime),
         maxBuffer: 20 * 1024 * 1024,
@@ -327,8 +327,14 @@ async function validateArchiveEntries(archivePath, expectedBaseName) {
 async function validateExtractedRelease(payloadRoot, expectedVersion) {
   const release = JSON.parse(await fs.readFile(path.join(payloadRoot, 'RELEASE.json'), 'utf8'));
   const pkg = JSON.parse(await fs.readFile(path.join(payloadRoot, 'package.json'), 'utf8'));
+  const packageLock = JSON.parse(await fs.readFile(path.join(payloadRoot, 'package-lock.json'), 'utf8'));
 
-  if (normalizeReleaseVersion(release.version) !== expectedVersion || pkg.name !== 'ai-cms') {
+  if (
+    normalizeReleaseVersion(release.version) !== expectedVersion
+    || pkg.name !== 'ai-cms'
+    || packageLock.name !== pkg.name
+    || Number(packageLock.lockfileVersion || 0) < 2
+  ) {
     throw new Error('发布包身份或版本信息不匹配');
   }
 }
@@ -546,6 +552,10 @@ export function createNpmInstallEnvironment(sourceEnv, runtime) {
     NPM_CONFIG_GLOBALCONFIG: runtime.globalConfigPath,
     NPM_CONFIG_UPDATE_NOTIFIER: 'false'
   };
+}
+
+export function getNpmInstallArgs() {
+  return ['ci', '--omit=dev', '--legacy-peer-deps', '--no-audit', '--no-fund'];
 }
 
 function formatCommandError(error) {

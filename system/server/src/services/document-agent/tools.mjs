@@ -59,7 +59,7 @@ export function createDocumentAgentTools() {
         }),
         async execute(input, runContext) {
           const context = getAgentExecutionContext(runContext);
-          return setDocumentPartyMutation({
+          const result = setDocumentPartyMutation({
             draftId: context.draftId,
             runId: context.runId,
             role: 'customer',
@@ -67,6 +67,10 @@ export function createDocumentAgentTools() {
             summary: input.summary,
             syncConversationId: context.conversationId,
             user: context.user,
+          });
+          return compactMutationResult(result, {
+            summary: input.summary,
+            customer: input.customer,
           });
         },
       })
@@ -88,7 +92,7 @@ export function createDocumentAgentTools() {
         }),
         async execute(input, runContext) {
           const context = getAgentExecutionContext(runContext);
-          return setDocumentPartyMutation({
+          const result = setDocumentPartyMutation({
             draftId: context.draftId,
             runId: context.runId,
             role: 'seller',
@@ -96,6 +100,10 @@ export function createDocumentAgentTools() {
             summary: input.summary,
             syncConversationId: context.conversationId,
             user: context.user,
+          });
+          return compactMutationResult(result, {
+            summary: input.summary,
+            seller: input.seller,
           });
         },
       })
@@ -129,7 +137,7 @@ export function createDocumentAgentTools() {
         }),
         async execute(input, runContext) {
           const context = getAgentExecutionContext(runContext);
-          return replaceDocumentItemsMutation({
+          const result = replaceDocumentItemsMutation({
             draftId: context.draftId,
             runId: context.runId,
             items: input.items,
@@ -138,6 +146,11 @@ export function createDocumentAgentTools() {
             summary: input.summary,
             syncConversationId: context.conversationId,
             user: context.user,
+          });
+          return compactMutationResult(result, {
+            summary: input.summary,
+            items: input.items,
+            pricing: input.pricing,
           });
         },
       })
@@ -160,13 +173,17 @@ export function createDocumentAgentTools() {
         }),
         async execute(input, runContext) {
           const context = getAgentExecutionContext(runContext);
-          return setDocumentTermsMutation({
+          const result = setDocumentTermsMutation({
             draftId: context.draftId,
             runId: context.runId,
             terms: input.terms,
             summary: input.summary,
             syncConversationId: context.conversationId,
             user: context.user,
+          });
+          return compactMutationResult(result, {
+            summary: input.summary,
+            terms: input.terms,
           });
         },
       })
@@ -188,13 +205,17 @@ export function createDocumentAgentTools() {
         }),
         async execute(input, runContext) {
           const context = getAgentExecutionContext(runContext);
-          return setDocumentPricingMutation({
+          const result = setDocumentPricingMutation({
             draftId: context.draftId,
             runId: context.runId,
             pricing: input.pricing,
             summary: input.summary,
             syncConversationId: context.conversationId,
             user: context.user,
+          });
+          return compactMutationResult(result, {
+            summary: input.summary,
+            pricing: input.pricing,
           });
         },
       })
@@ -210,13 +231,17 @@ export function createDocumentAgentTools() {
         async execute(input, runContext) {
           const context = getAgentExecutionContext(runContext);
           const patch = safeParseToolJson(input.patch_json, 'apply_document_patch.patch_json');
-          return applyDocumentPatchMutation({
+          const result = applyDocumentPatchMutation({
             draftId: context.draftId,
             runId: context.runId,
             patch,
             summary: input.summary,
             syncConversationId: context.conversationId,
             user: context.user,
+          });
+          return compactMutationResult(result, {
+            summary: input.summary,
+            updated_fields: Object.keys(patch),
           });
         },
       })
@@ -337,4 +362,20 @@ function safeParseToolJson(value, fieldName) {
   }
 
   return parsed;
+}
+
+function compactMutationResult(result, details = {}) {
+  return {
+    ok: true,
+    summary: String(details.summary || '文档已更新'),
+    ...(Array.isArray(details.updated_fields)
+      ? { updated_fields: details.updated_fields.filter((field) => field !== 'clearExistingItems') }
+      : {}),
+    ...(details.customer ? { customer: details.customer } : {}),
+    ...(details.seller ? { seller: details.seller } : {}),
+    ...(details.items ? { items: details.items } : {}),
+    ...(details.terms ? { terms: details.terms } : {}),
+    ...(details.pricing ? { pricing: details.pricing } : {}),
+    missing_fields: Array.isArray(result?.missingFields) ? result.missingFields : [],
+  };
 }

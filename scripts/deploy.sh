@@ -403,7 +403,7 @@ ensure_runtime_permissions() {
     fi
   done
 
-  # 后台在线更新需要覆盖程序文件并执行 npm install。
+  # 后台在线更新需要覆盖程序文件并按根目录 lockfile 安装依赖。
   for application_path in \
     "${app_dir}/server.mjs" \
     "${app_dir}/package.json" \
@@ -498,12 +498,16 @@ install_npm_dependencies_if_needed() {
   previous_hash="$(cat "${stamp_file}" 2>/dev/null || true)"
 
   if [ "${current_hash}" = "${previous_hash}" ] && [ -d "${package_dir}/node_modules" ]; then
-    printf '[部署] %s 依赖未变化，跳过 npm install。\n' "${label}"
+    printf '[部署] %s 依赖未变化，跳过 npm ci。\n' "${label}"
     return 0
   fi
 
   printf '[部署] 正在安装 %s 依赖...\n' "${label}"
-  npm --prefix "${package_dir}" install --omit=dev --legacy-peer-deps --no-audit --no-fund
+  if [ ! -f "${package_dir}/package-lock.json" ]; then
+    printf '[部署] %s 缺少 package-lock.json，拒绝执行非确定性依赖安装。\n' "${label}" >&2
+    exit 1
+  fi
+  npm --prefix "${package_dir}" ci --omit=dev --legacy-peer-deps --no-audit --no-fund
   printf '%s\n' "${current_hash}" > "${stamp_file}"
 }
 
@@ -516,8 +520,7 @@ if [ -f .env.production ]; then
   set +a
 fi
 
-install_npm_dependencies_if_needed "${APP_DIR}/system/server" "system-server-deps" "服务端"
-install_npm_dependencies_if_needed "${APP_DIR}/system/admin" "system-admin-deps" "后台前端"
+install_npm_dependencies_if_needed "${APP_DIR}" "root-deps" "运行时"
 
 if [ "${DEPLOY_RUNTIME_MANAGER:-bt-manual}" = "bt" ]; then
   if [ "${DEPLOY_UPLOAD_DB:-0}" = "1" ]; then

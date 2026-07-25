@@ -8,12 +8,23 @@ import test from 'node:test';
 import {
   compareReleaseVersions,
   createNpmInstallEnvironment,
+  getNpmInstallArgs,
   isFormalReleaseMetadata,
   isProtectedUpdatePath,
   isUpdateableBuildMetadata,
   normalizeReleaseVersion,
   scheduleRequiredRestart
 } from '../src/services/system-updates.mjs';
+
+test('在线更新严格按照发布包 lockfile 安装生产依赖', () => {
+  assert.deepEqual(getNpmInstallArgs(), [
+    'ci',
+    '--omit=dev',
+    '--legacy-peer-deps',
+    '--no-audit',
+    '--no-fund'
+  ]);
+});
 
 test('在线更新使用独立 npm 缓存并隔离宿主机遗留配置', () => {
   const env = createNpmInstallEnvironment({

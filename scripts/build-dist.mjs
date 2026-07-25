@@ -21,6 +21,7 @@ async function main() {
   await copyShared();
   await copyAdminDist();
   await copyAdminSiteSource();
+  await writeDistPackageLock();
   await copyPublicAssets();
   await createRuntimeDirs();
   await writeReleaseMetadata();
@@ -164,6 +165,21 @@ async function writeDistPackageJson() {
   );
 }
 
+async function writeDistPackageLock() {
+  await copyFile('package-lock.json');
+  execFileSync('npm', [
+    'install',
+    '--package-lock-only',
+    '--legacy-peer-deps',
+    '--ignore-scripts',
+    '--no-audit',
+    '--no-fund',
+  ], {
+    cwd: distRoot,
+    stdio: 'ignore',
+  });
+}
+
 async function writeReleaseMetadata() {
   const metadata = {
     version: releaseVersion,
@@ -190,7 +206,7 @@ async function writeDeployReadme() {
 ## 服务器部署步骤
 
 \`\`\`bash
-npm install --legacy-peer-deps --no-audit --no-fund
+npm ci --omit=dev --legacy-peer-deps --no-audit --no-fund
 npm run build:site
 PORT=1231 HOST=0.0.0.0 NODE_ENV=production npm start
 \`\`\`

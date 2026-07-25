@@ -67,6 +67,7 @@ function initializeOpenAIRuntime(config) {
   openaiClient = new OpenAI({
     apiKey: config.api_key,
     ...(config.base_url ? { baseURL: config.base_url } : {}),
+    timeout: 120_000,
     fetch: createResponsesWireFetch(),
   });
   setDefaultOpenAIClient(openaiClient);
