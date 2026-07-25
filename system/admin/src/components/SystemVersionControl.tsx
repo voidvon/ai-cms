@@ -33,6 +33,16 @@ export default function SystemVersionControl() {
     },
   })
 
+  const refreshMutation = useMutation({
+    mutationFn: () => adminApi.getSystemVersion(true),
+    onSuccess: (response) => {
+      queryClient.setQueryData(['system-version'], response)
+    },
+    onError: (error: unknown) => {
+      toast.error(resolveApiErrorMessage(error, '检查版本失败'))
+    },
+  })
+
   const restartMutation = useMutation({
     mutationFn: adminApi.restartSystem,
     onSuccess: (response) => {
@@ -49,6 +59,7 @@ export default function SystemVersionControl() {
   const isUpdating = updateMutation.isPending || Boolean(status?.update_in_progress)
   const isRestarting = restartMutation.isPending
   const isBusy = isUpdating || isRestarting
+  const isChecking = versionQuery.isFetching || refreshMutation.isPending
   const canInstall = Boolean(status?.has_update && status?.can_update && !isBusy)
   const canRestart = Boolean(status?.can_restart && !isBusy)
 
@@ -114,12 +125,12 @@ export default function SystemVersionControl() {
               variant="ghost"
               size="icon-sm"
               className="size-7 shrink-0"
-              onClick={() => void versionQuery.refetch()}
-              disabled={versionQuery.isFetching || isBusy}
+              onClick={() => refreshMutation.mutate()}
+              disabled={isChecking || isBusy}
               aria-label="重新检查版本"
               title="重新检查版本"
             >
-              <RefreshCw className={versionQuery.isFetching ? 'animate-spin' : ''} />
+              <RefreshCw className={isChecking ? 'animate-spin' : ''} />
             </Button>
           </div>
 

@@ -221,12 +221,17 @@ async function readCurrentVersion() {
 }
 
 async function getLatestRelease(options = {}) {
-  if (!options.force && releaseCache && Date.now() - releaseCache.cachedAt < RELEASE_CACHE_TTL_MS) {
+  const force = Boolean(options.force);
+  if (!force && releaseCache && Date.now() - releaseCache.cachedAt < RELEASE_CACHE_TTL_MS) {
     return releaseCache.release;
   }
 
   const response = await githubFetch(`${GITHUB_API_BASE}/repos/${RELEASE_REPOSITORY}/releases/latest`, {
-    headers: { Accept: 'application/vnd.github+json' }
+    headers: {
+      Accept: 'application/vnd.github+json',
+      ...(force ? { 'Cache-Control': 'no-cache' } : {})
+    },
+    cache: force ? 'no-store' : 'default'
   });
 
   if (!response.ok) {

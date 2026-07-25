@@ -160,7 +160,8 @@ export default async function adminApiRoutes(app) {
 
   app.get('/admin/system-version', {
     onRequest: [requireAuth]
-  }, async (request) => {
+  }, async (request, reply) => {
+    reply.header('Cache-Control', 'private, no-store, max-age=0');
     const data = await getSystemVersionStatus({
       force: request.query?.refresh === '1'
     });
