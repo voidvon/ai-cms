@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createEventSourcedResponsesFetch,
+  createResponsesStreamState,
   reconcileResponsesStreamEvent,
 } from '../src/services/ai/responses-event-stream.mjs';
 
 test('rebuilds terminal output from completed output-item events', () => {
-  const completedItems = new Map();
+  const streamState = createResponsesStreamState();
   const functionCall = {
     type: 'function_call',
     status: 'completed',
@@ -19,26 +20,21 @@ test('rebuilds terminal output from completed output-item events', () => {
     type: 'response.output_item.done',
     output_index: 0,
     item: functionCall,
-  }, completedItems);
+  }, streamState);
 
   const terminal = reconcileResponsesStreamEvent({
     type: 'response.completed',
     response: {
       status: 'completed',
-      output: [{
-        type: 'function_call',
-        call_id: 'call-1',
-        name: 'probe',
-        arguments: '{"value":"ok"}',
-      }],
+      output: null,
     },
-  }, completedItems);
+  }, streamState);
 
   assert.deepEqual(terminal.response.output, [functionCall]);
 });
 
 test('preserves complete message content instead of guessing missing fields', () => {
-  const completedItems = new Map([[0, {
+  const completedMessage = {
     type: 'message',
     status: 'completed',
     role: 'assistant',
@@ -48,7 +44,9 @@ test('preserves complete message content instead of guessing missing fields', ()
       annotations: [],
       logprobs: [],
     }],
-  }]]);
+  };
+  const streamState = createResponsesStreamState();
+  streamState.completedItems.set(0, completedMessage);
 
   const terminal = reconcileResponsesStreamEvent({
     type: 'response.completed',
@@ -60,9 +58,33 @@ test('preserves complete message content instead of guessing missing fields', ()
         content: [{ type: 'output_text', text: 'OK' }],
       }],
     },
-  }, completedItems);
+  }, streamState);
 
-  assert.deepEqual(terminal.response.output, [...completedItems.values()]);
+  assert.deepEqual(terminal.response.output, [completedMessage]);
+});
+
+test('synthesizes text output only from streamed events', () => {
+  const streamState = createResponsesStreamState();
+  reconcileResponsesStreamEvent({
+    type: 'response.output_item.added',
+    output_index: 0,
+    item: { id: 'msg-1', type: 'message', role: 'assistant', status: 'in_progress', content: [] },
+  }, streamState);
+  reconcileResponsesStreamEvent({ type: 'response.output_text.delta', delta: 'O' }, streamState);
+  reconcileResponsesStreamEvent({ type: 'response.output_text.delta', delta: 'K' }, streamState);
+
+  const terminal = reconcileResponsesStreamEvent({
+    type: 'response.completed',
+    response: { status: 'completed', output: null },
+  }, streamState);
+
+  assert.deepEqual(terminal.response.output, [{
+    id: 'msg-1',
+    type: 'message',
+    role: 'assistant',
+    status: 'completed',
+    content: [{ type: 'output_text', text: 'OK', annotations: [], logprobs: [] }],
+  }]);
 });
 
 test('reconciles chunked SSE streams and leaves other endpoints untouched', async () => {

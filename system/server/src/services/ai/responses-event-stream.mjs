@@ -24,13 +24,41 @@ export function createEventSourcedResponsesFetch(baseFetch = globalThis.fetch) {
   };
 }
 
-export function reconcileResponsesStreamEvent(event, completedItems) {
+export function createResponsesStreamState() {
+  return {
+    addedItems: new Map(),
+    completedItems: new Map(),
+    textDeltas: [],
+    hasFunctionCall: false,
+  };
+}
+
+export function reconcileResponsesStreamEvent(event, state) {
   if (!event || typeof event !== 'object') {
     return event;
   }
 
   if (event.type === 'response.created') {
-    completedItems.clear();
+    state.addedItems.clear();
+    state.completedItems.clear();
+    state.textDeltas.length = 0;
+    state.hasFunctionCall = false;
+    return event;
+  }
+
+  if (event.type === 'response.output_item.added'
+    && Number.isInteger(event.output_index)
+    && event.item
+    && typeof event.item === 'object') {
+    state.addedItems.set(event.output_index, event.item);
+    if (event.item.type === 'function_call' || event.item.type === 'custom_tool_call') {
+      state.hasFunctionCall = true;
+    }
+    return event;
+  }
+
+  if (event.type === 'response.output_text.delta' && typeof event.delta === 'string') {
+    state.textDeltas.push(event.delta);
     return event;
   }
 
@@ -38,23 +66,20 @@ export function reconcileResponsesStreamEvent(event, completedItems) {
     && Number.isInteger(event.output_index)
     && event.item
     && typeof event.item === 'object') {
-    completedItems.set(event.output_index, event.item);
+    state.completedItems.set(event.output_index, event.item);
+    if (event.item.type === 'function_call' || event.item.type === 'custom_tool_call') {
+      state.hasFunctionCall = true;
+    }
     return event;
   }
 
   if (!TERMINAL_EVENT_TYPES.has(event.type)
     || !event.response
-    || typeof event.response !== 'object'
-    || completedItems.size === 0) {
+    || typeof event.response !== 'object') {
     return event;
   }
 
-  const terminalOutput = Array.isArray(event.response.output) ? event.response.output : [];
-  const highestCompletedIndex = Math.max(...completedItems.keys());
-  const outputLength = Math.max(terminalOutput.length, highestCompletedIndex + 1);
-  const output = Array.from({ length: outputLength }, (_, index) => (
-    completedItems.get(index) ?? terminalOutput[index]
-  )).filter((item) => item !== undefined);
+  const output = buildEventSourcedOutput(state);
 
   return {
     ...event,
@@ -65,21 +90,50 @@ export function reconcileResponsesStreamEvent(event, completedItems) {
   };
 }
 
+function buildEventSourcedOutput(state) {
+  if (state.completedItems.size > 0) {
+    return [...state.completedItems.entries()]
+      .sort(([left], [right]) => left - right)
+      .map(([, item]) => item);
+  }
+
+  if (state.textDeltas.length === 0 || state.hasFunctionCall) {
+    return [];
+  }
+
+  const messageSeed = [...state.addedItems.entries()]
+    .sort(([left], [right]) => left - right)
+    .map(([, item]) => item)
+    .find((item) => item?.type === 'message') || {};
+  return [{
+    ...messageSeed,
+    type: 'message',
+    role: messageSeed.role || 'assistant',
+    status: 'completed',
+    content: [{
+      type: 'output_text',
+      text: state.textDeltas.join(''),
+      annotations: [],
+      logprobs: [],
+    }],
+  }];
+}
+
 function wrapResponsesEventStream(response) {
   const decoder = new TextDecoder();
   const encoder = new TextEncoder();
-  const completedItems = new Map();
+  const streamState = createResponsesStreamState();
   let buffer = '';
 
   const body = response.body.pipeThrough(new TransformStream({
     transform(chunk, controller) {
       buffer += decoder.decode(chunk, { stream: true });
-      buffer = emitCompleteEventBlocks(buffer, controller, encoder, completedItems);
+      buffer = emitCompleteEventBlocks(buffer, controller, encoder, streamState);
     },
     flush(controller) {
       buffer += decoder.decode();
       if (buffer) {
-        controller.enqueue(encoder.encode(reconcileEventBlock(buffer, completedItems)));
+        controller.enqueue(encoder.encode(reconcileEventBlock(buffer, streamState)));
       }
     },
   }));
@@ -94,7 +148,7 @@ function wrapResponsesEventStream(response) {
   });
 }
 
-function emitCompleteEventBlocks(input, controller, encoder, completedItems) {
+function emitCompleteEventBlocks(input, controller, encoder, streamState) {
   let remaining = input;
   while (true) {
     const separator = /\r?\n\r?\n/.exec(remaining);
@@ -105,11 +159,11 @@ function emitCompleteEventBlocks(input, controller, encoder, completedItems) {
     const end = separator.index + separator[0].length;
     const block = remaining.slice(0, end);
     remaining = remaining.slice(end);
-    controller.enqueue(encoder.encode(reconcileEventBlock(block, completedItems)));
+    controller.enqueue(encoder.encode(reconcileEventBlock(block, streamState)));
   }
 }
 
-function reconcileEventBlock(block, completedItems) {
+function reconcileEventBlock(block, streamState) {
   const lines = block.split(/\r?\n/);
   const dataLineIndexes = [];
   const dataParts = [];
@@ -132,7 +186,7 @@ function reconcileEventBlock(block, completedItems) {
     return block;
   }
 
-  const reconciled = reconcileResponsesStreamEvent(event, completedItems);
+  const reconciled = reconcileResponsesStreamEvent(event, streamState);
   if (reconciled === event) {
     return block;
   }
