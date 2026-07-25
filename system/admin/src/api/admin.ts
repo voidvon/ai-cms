@@ -34,6 +34,7 @@ export type SystemVersionStatus = {
   update_in_progress: boolean
   auto_restart: boolean
   can_update: boolean
+  can_restart: boolean
 }
 
 export type SystemUpdateResult = {
@@ -45,6 +46,11 @@ export type SystemUpdateResult = {
   restart_required: boolean
   restarting: boolean
   backup_directory?: string
+}
+
+export type SystemRestartResult = {
+  message: string
+  restarting: boolean
 }
 
 export const adminApi = {
@@ -61,6 +67,15 @@ export const adminApi = {
       '/admin/system-version/update',
       {},
       { timeout: 15 * 60 * 1000 },
+    )
+    return response.data
+  },
+
+  restartSystem: async () => {
+    const response = await apiClient.post<ApiResponse<SystemRestartResult>>(
+      '/admin/system-version/restart',
+      {},
+      { timeout: 30 * 1000 },
     )
     return response.data
   },

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ExternalLink, LoaderCircle, RefreshCw } from 'lucide-react'
+import { ExternalLink, LoaderCircle, Power, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { adminApi } from '@/api/admin'
@@ -33,10 +33,29 @@ export default function SystemVersionControl() {
     },
   })
 
+  const restartMutation = useMutation({
+    mutationFn: adminApi.restartSystem,
+    onSuccess: (response) => {
+      toast.success(response.data?.message || '系统正在重启')
+      window.setTimeout(() => window.location.reload(), 5000)
+    },
+    onError: (error: unknown) => {
+      toast.error(resolveApiErrorMessage(error, '系统重启失败'))
+    },
+  })
+
   const currentVersion = status?.current_version ? `v${status.current_version}` : 'v…'
   const latestVersion = status?.latest_version ? `v${status.latest_version}` : '暂不可用'
   const isUpdating = updateMutation.isPending || Boolean(status?.update_in_progress)
-  const canInstall = Boolean(status?.has_update && status?.can_update && !isUpdating)
+  const isRestarting = restartMutation.isPending
+  const isBusy = isUpdating || isRestarting
+  const canInstall = Boolean(status?.has_update && status?.can_update && !isBusy)
+  const canRestart = Boolean(status?.can_restart && !isBusy)
+
+  const handleRestart = () => {
+    if (!window.confirm('确定要重启系统吗？重启期间后台将短暂断开。')) return
+    restartMutation.mutate()
+  }
 
   return (
     <Popover
@@ -96,7 +115,7 @@ export default function SystemVersionControl() {
               size="icon-sm"
               className="size-7 shrink-0"
               onClick={() => void versionQuery.refetch()}
-              disabled={versionQuery.isFetching || isUpdating}
+              disabled={versionQuery.isFetching || isBusy}
               aria-label="重新检查版本"
               title="重新检查版本"
             >
@@ -126,6 +145,16 @@ export default function SystemVersionControl() {
           >
             {isUpdating ? <LoaderCircle className="animate-spin" /> : null}
             {getUpdateButtonLabel(status, isUpdating)}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-2 w-full"
+            onClick={handleRestart}
+            disabled={!canRestart}
+          >
+            {isRestarting ? <LoaderCircle className="animate-spin" /> : <Power />}
+            {isRestarting ? '正在重启…' : status?.can_restart ? '重启系统' : '无系统重启权限'}
           </Button>
           {status?.has_update && status.can_update ? (
             <p className="mt-2 text-center text-[11px] text-muted-foreground">

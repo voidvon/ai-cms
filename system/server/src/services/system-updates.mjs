@@ -26,6 +26,7 @@ const PROTECTED_TOP_LEVEL = new Set([
 
 let releaseCache = null;
 let updatePromise = null;
+let restartScheduled = false;
 
 export async function getSystemVersionStatus(options = {}) {
   const current = await readCurrentVersion();
@@ -153,7 +154,7 @@ async function performUpdate() {
     }
 
     releaseCache = null;
-    await scheduleRequiredRestart();
+    await scheduleSystemRestartOnce();
 
     return {
       updated: true,
@@ -168,6 +169,20 @@ async function performUpdate() {
   } finally {
     await fs.rm(tempRoot, { recursive: true, force: true });
   }
+}
+
+export async function requestSystemRestart(options = {}) {
+  if (updatePromise) {
+    const error = new Error('系统更新正在执行，暂时不能单独重启');
+    error.code = 'UPDATE_IN_PROGRESS';
+    throw error;
+  }
+
+  await scheduleSystemRestartOnce(options);
+  return {
+    message: '系统正在重启，后台将短暂断开',
+    restarting: true
+  };
 }
 
 async function readCurrentVersion() {
@@ -514,6 +529,23 @@ exec "$node_bin" "$project_root/server.mjs" >> "$log_file" 2>&1
         // 进程已经退出时无需重复终止。
       }
     }, 1500).unref();
+  }
+}
+
+async function scheduleSystemRestartOnce(options = {}) {
+  if (restartScheduled) {
+    const error = new Error('系统重启已安排，请勿重复提交');
+    error.code = 'RESTART_IN_PROGRESS';
+    throw error;
+  }
+
+  restartScheduled = true;
+  try {
+    const scheduleRestart = options.scheduleRestart || scheduleRequiredRestart;
+    await scheduleRestart(options.restartOptions);
+  } catch (error) {
+    restartScheduled = false;
+    throw error;
   }
 }
 

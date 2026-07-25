@@ -13,8 +13,22 @@ import {
   isProtectedUpdatePath,
   isUpdateableBuildMetadata,
   normalizeReleaseVersion,
+  requestSystemRestart,
   scheduleRequiredRestart
 } from '../src/services/system-updates.mjs';
+
+test('手动重启通过统一重启调度器执行', async () => {
+  let scheduled = 0;
+  const result = await requestSystemRestart({
+    scheduleRestart: async () => {
+      scheduled += 1;
+    }
+  });
+
+  assert.equal(scheduled, 1);
+  assert.equal(result.restarting, true);
+  assert.match(result.message, /正在重启/);
+});
 
 test('在线更新严格按照发布包 lockfile 安装生产依赖', () => {
   assert.deepEqual(getNpmInstallArgs(), [

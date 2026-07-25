@@ -18,7 +18,8 @@ import {
 } from '../../services/admins.mjs';
 import {
   getSystemVersionStatus,
-  installLatestSystemRelease
+  installLatestSystemRelease,
+  requestSystemRestart
 } from '../../services/system-updates.mjs';
 
 export default async function adminApiRoutes(app) {
@@ -168,7 +169,8 @@ export default async function adminApiRoutes(app) {
       data: {
         ...data,
         can_update: data.update_supported
-          && hasAdminPermission(request.adminUser.permission_flags, '15')
+          && hasAdminPermission(request.adminUser.permission_flags, '15'),
+        can_restart: hasAdminPermission(request.adminUser.permission_flags, '15')
       }
     };
   });
@@ -188,6 +190,25 @@ export default async function adminApiRoutes(app) {
         success: false,
         error_code: error.code || 'SYSTEM_UPDATE_FAILED',
         message: error.message || '系统更新失败'
+      });
+    }
+  });
+
+  app.post('/admin/system-version/restart', {
+    onRequest: [requireAuth, requireSameOrigin, requireSystemUpdate]
+  }, async (request, reply) => {
+    try {
+      const data = await requestSystemRestart();
+      return reply.code(202).send({ success: true, data, message: data.message });
+    } catch (error) {
+      if (error.code === 'UPDATE_IN_PROGRESS' || error.code === 'RESTART_IN_PROGRESS') {
+        return reply.code(409).send({ success: false, message: error.message });
+      }
+      request.log.error({ err: error }, 'system restart failed');
+      return reply.code(500).send({
+        success: false,
+        error_code: error.code || 'SYSTEM_RESTART_FAILED',
+        message: error.message || '系统重启失败'
       });
     }
   });
