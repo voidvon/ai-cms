@@ -1,5 +1,5 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
-import { createTemplate, ensureTemplatesSchema, getTemplateById, listTemplates, publishTemplate, updateTemplate } from './templates.mjs';
+import { createTemplate, ensureTemplatesSchema, getTemplateById, listTemplates, publishTemplate } from './templates.mjs';
 import { getSelectedTemplateVariant } from './template-variants.mjs';
 
 let schemaEnsured = false;
@@ -262,24 +262,6 @@ function ensureThemeDocumentTemplates(themeId) {
       publishTemplate(template.id, '初始化默认文档模板');
       template = getTemplateById(template.id);
       templatesByCode.set(definition.template_code, template);
-    } else {
-      const needsSync =
-        String(template.tsx_source || '') !== definition.template_source
-        || String(template.css_source || '') !== definition.css_source
-        || String(template.published_tsx_source || '') !== definition.template_source
-        || String(template.published_css_source || '') !== definition.css_source;
-
-      if (needsSync) {
-        updateTemplate(template.id, {
-          ...template,
-          tsx_source: definition.template_source,
-          css_source: definition.css_source,
-          sort_order: definition.sort_order,
-        });
-        publishTemplate(template.id, '同步默认文档模板');
-        template = getTemplateById(template.id);
-        templatesByCode.set(definition.template_code, template);
-      }
     }
 
     upsertDocumentTemplateMetadata(normalizedThemeId, definition, template.id);
@@ -601,6 +583,8 @@ function buildQuoteTemplateSource() {
   return `
 export default function QuoteTemplate(props) {
   const draft = props?.draft || {};
+  const editableField = props?.editableField || (() => ({}));
+  const editableItem = props?.editableItem || ((index) => ({ itemId: 'filler-' + index, createItem: true }));
   const customer = draft.customer || {};
   const seller = draft.seller || {};
   const pricing = draft.pricing || {};
@@ -615,32 +599,39 @@ export default function QuoteTemplate(props) {
   const customerName = customer.company || customer.name || '-';
   const sellerName = seller.company || 'Spirax Sarco';
   const remarkText = terms.remarks || '本报价单所列价格、交期及商务条件以双方最终确认版本为准。';
-  const minimumBodyRows = Math.max(9, items.length);
-  const fillerRows = Array.from({ length: Math.max(0, minimumBodyRows - items.length) });
+  const configuredRowCount = Number(draft.meta?.quoteTableRowCount);
+  const minimumBodyRows = Math.max(
+    items.length,
+    Number.isFinite(configuredRowCount) && configuredRowCount >= 0 ? Math.floor(configuredRowCount) : 8,
+  );
+  const fillerRows = Array.from(
+    { length: Math.max(0, minimumBodyRows - items.length) },
+    (_, index) => editableItem(index),
+  );
   const formatMoney = (value) => {
     const number = Number(value);
     if (!Number.isFinite(number)) return '-';
     return number.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   };
   const buyerFields = [
-    ['公司', customerName],
-    ['联系人', customer.contact || '-'],
-    ['电话', customer.phone || '-'],
-    ['邮箱', customer.email || '-'],
-    ['地址', customer.address || '-'],
+    ['公司', 'customer.company', customer.company, customerName],
+    ['联系人', 'customer.contact', customer.contact, customer.contact || '-'],
+    ['电话', 'customer.phone', customer.phone, customer.phone || '-'],
+    ['邮箱', 'customer.email', customer.email, customer.email || '-'],
+    ['地址', 'customer.address', customer.address, customer.address || '-', 'multiline'],
   ];
   const sellerFields = [
-    ['公司', sellerName],
-    ['联系人', seller.contact || '-'],
-    ['电话', seller.phone || '-'],
-    ['邮箱', seller.email || '-'],
-    ['地址', seller.address || '-'],
+    ['公司', 'seller.company', seller.company, sellerName],
+    ['联系人', 'seller.contact', seller.contact, seller.contact || '-'],
+    ['电话', 'seller.phone', seller.phone, seller.phone || '-'],
+    ['邮箱', 'seller.email', seller.email, seller.email || '-'],
+    ['地址', 'seller.address', seller.address, seller.address || '-', 'multiline'],
   ];
   const termFields = [
-    ['交期', terms.delivery || '-'],
-    ['付款方式', terms.payment || '30%预付款，发货前70%'],
-    ['有效期', terms.validity || '有效期 30 天'],
-    ['备注', terms.extraNotes || '-'],
+    ['交期', 'terms.delivery', terms.delivery, terms.delivery || '-', 'multiline'],
+    ['付款方式', 'terms.payment', terms.payment, terms.payment || '30%预付款，发货前70%', 'multiline'],
+    ['有效期', 'terms.validity', terms.validity, terms.validity || '有效期 30 天'],
+    ['备注', 'terms.remarks', terms.remarks, terms.remarks || '-', 'multiline'],
   ];
 
   function IconWrap(props) {
@@ -808,7 +799,7 @@ export default function QuoteTemplate(props) {
         {props.rows.map((entry, index) => (
           <div key={entry[0] + '-' + index} className="quote-info-list__row">
             <dt>{entry[0]}</dt>
-            <dd>{entry[1]}</dd>
+            <dd {...editableField(entry[1], entry[2], { mode: entry[4] || '' })}>{entry[3]}</dd>
           </div>
         ))}
       </dl>
@@ -840,7 +831,7 @@ export default function QuoteTemplate(props) {
               </div>
               <div className="quote-hero__titles">
                 <p className="quote-hero__en">QUOTATION</p>
-                <p className="quote-hero__cn">{draft.title || '报价单'}</p>
+                <p className="quote-hero__cn" {...editableField('title', draft.title)}>{draft.title || '报价单'}</p>
                 <span className="quote-hero__underline" aria-hidden="true" />
               </div>
             </div>
@@ -861,12 +852,12 @@ export default function QuoteTemplate(props) {
               <div className="quote-meta-card__row">
                 <span className="quote-meta-card__icon"><MetaIconCurrency /></span>
                 <span className="quote-meta-card__label">币种</span>
-                <strong className="quote-meta-card__value">{pricing.currency || 'CNY'}</strong>
+                <strong className="quote-meta-card__value" {...editableField('pricing.currency', pricing.currency)}>{pricing.currency || 'CNY'}</strong>
               </div>
               <div className="quote-meta-card__row">
                 <span className="quote-meta-card__icon"><MetaIconClock /></span>
                 <span className="quote-meta-card__label">有效期</span>
-                <strong className="quote-meta-card__value">{terms.validity || '有效期 30 天'}</strong>
+                <strong className="quote-meta-card__value" {...editableField('terms.validity', terms.validity)}>{terms.validity || '有效期 30 天'}</strong>
               </div>
             </aside>
           </header>
@@ -905,20 +896,20 @@ export default function QuoteTemplate(props) {
                 <tbody>
                   {items.map((item, index) => (
                     <tr key={item.id || (item.model || 'item') + '-' + index}>
-                      <td>{item.model || item.sku || '-'}</td>
-                      <td>{item.description || item.notes || '-'}</td>
-                      <td>{item.qty || 0}{item.unit ? ' ' + item.unit : ''}</td>
-                      <td>{formatMoney(item.unitPrice)}</td>
-                      <td>{formatMoney(item.amount)}</td>
+                      <td {...editableField('items.model', item.model, { itemId: item.id })}>{item.model || item.sku || '-'}</td>
+                      <td {...editableField('items.description', item.description, { itemId: item.id, mode: 'multiline' })}>{item.description || item.notes || '-'}</td>
+                      <td {...editableField('items.quantity', item.qty || 0, { itemId: item.id })}>{item.qty || 0}</td>
+                      <td {...editableField('items.unitPrice', item.unitPrice, { itemId: item.id })}>{formatMoney(item.unitPrice)}</td>
+                      <td data-document-calculated="item.amount" data-document-item-id={item.id}>{formatMoney(item.amount)}</td>
                     </tr>
                   ))}
-                  {fillerRows.map((_, index) => (
-                    <tr key={'filler-' + index} className="quote-table__filler-row">
-                      <td>&nbsp;</td>
-                      <td>&nbsp;</td>
-                      <td>&nbsp;</td>
-                      <td>&nbsp;</td>
-                      <td>&nbsp;</td>
+                  {fillerRows.map((item, index) => (
+                    <tr key={item.itemId || 'filler-' + index} className="quote-table__filler-row">
+                      <td {...editableField('items.model', '', item)}>&nbsp;</td>
+                      <td {...editableField('items.description', '', { ...item, mode: 'multiline' })}>&nbsp;</td>
+                      <td {...editableField('items.quantity', '', item)}>&nbsp;</td>
+                      <td {...editableField('items.unitPrice', '', item)}>&nbsp;</td>
+                      <td data-document-calculated="item.amount" data-document-item-id={item.itemId}>&nbsp;</td>
                     </tr>
                   ))}
                 </tbody>
@@ -937,7 +928,7 @@ export default function QuoteTemplate(props) {
                   ) : null}
                   <tr className="quote-table__total-row">
                     <td colSpan={4}>总金额 / TOTAL</td>
-                    <td>{formatMoney(total)}</td>
+                    <td data-document-calculated="pricing.total">{formatMoney(total)}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -952,7 +943,7 @@ export default function QuoteTemplate(props) {
             <article className="quote-panel quote-panel--remarks">
               <SectionTitle cn="报价说明" en="REMARKS" icon={<IconRemarks />} />
               <div className="quote-remarks">
-                <p>{remarkText}</p>
+                <p {...editableField('terms.remarks', terms.remarks, { mode: 'multiline' })}>{remarkText}</p>
                 <img className="quote-remarks__art" src="data:image/jpeg;base64,${QUOTE_REMARKS_BG_BASE64}" alt="" />
               </div>
             </article>
@@ -960,7 +951,7 @@ export default function QuoteTemplate(props) {
 
           <footer className="quote-footer">
             <div className="quote-footer__left">
-              <p><span className="quote-footer__icon"><IconUser /></span><span>Prepared by {seller.contact || sellerName}</span></p>
+              <p><span className="quote-footer__icon"><IconUser /></span><span>Prepared by <span {...editableField('seller.contact', seller.contact)}>{seller.contact || sellerName}</span></span></p>
             </div>
           </footer>
         </div>
@@ -978,28 +969,28 @@ function buildEnglishQuoteTemplateSource() {
     ["const quoteNumber = draft.quoteNumber || '待生成';", "const quoteNumber = draft.quoteNumber || 'PENDING';"],
     ["const remarkText = terms.remarks || '本报价单所列价格、交期及商务条件以双方最终确认版本为准。';", "const remarkText = terms.remarks || 'Prices, lead times and commercial terms in this quotation are subject to the final confirmed version agreed by both parties.';"],
     ["return number.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });", "return number.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });"],
-    ["['公司', customerName],", "['Company', customerName],"],
-    ["['联系人', customer.contact || '-'],", "['Contact', customer.contact || '-'],"],
-    ["['电话', customer.phone || '-'],", "['Phone', customer.phone || '-'],"],
-    ["['邮箱', customer.email || '-'],", "['Email', customer.email || '-'],"],
-    ["['地址', customer.address || '-'],", "['Address', customer.address || '-'],"],
-    ["['公司', sellerName],", "['Company', sellerName],"],
-    ["['联系人', seller.contact || '-'],", "['Contact', seller.contact || '-'],"],
-    ["['电话', seller.phone || '-'],", "['Phone', seller.phone || '-'],"],
-    ["['邮箱', seller.email || '-'],", "['Email', seller.email || '-'],"],
-    ["['地址', seller.address || '-'],", "['Address', seller.address || '-'],"],
-    ["['交期', terms.delivery || '-'],", "['Lead Time', terms.delivery || '-'],"],
-    ["['付款方式', terms.payment || '30%预付款，发货前70%'],", "['Payment Terms', terms.payment || '30% advance payment, 70% before shipment'],"],
-    ["['有效期', terms.validity || '有效期 30 天'],", "['Validity', terms.validity || 'Valid for 30 days'],"],
-    ["['备注', terms.extraNotes || '-'],", "['Notes', terms.extraNotes || '-'],"],
+    ["['公司', 'customer.company', customer.company, customerName],", "['Company', 'customer.company', customer.company, customerName],"],
+    ["['联系人', 'customer.contact', customer.contact, customer.contact || '-'],", "['Contact', 'customer.contact', customer.contact, customer.contact || '-'],"],
+    ["['电话', 'customer.phone', customer.phone, customer.phone || '-'],", "['Phone', 'customer.phone', customer.phone, customer.phone || '-'],"],
+    ["['邮箱', 'customer.email', customer.email, customer.email || '-'],", "['Email', 'customer.email', customer.email, customer.email || '-'],"],
+    ["['地址', 'customer.address', customer.address, customer.address || '-', 'multiline'],", "['Address', 'customer.address', customer.address, customer.address || '-', 'multiline'],"],
+    ["['公司', 'seller.company', seller.company, sellerName],", "['Company', 'seller.company', seller.company, sellerName],"],
+    ["['联系人', 'seller.contact', seller.contact, seller.contact || '-'],", "['Contact', 'seller.contact', seller.contact, seller.contact || '-'],"],
+    ["['电话', 'seller.phone', seller.phone, seller.phone || '-'],", "['Phone', 'seller.phone', seller.phone, seller.phone || '-'],"],
+    ["['邮箱', 'seller.email', seller.email, seller.email || '-'],", "['Email', 'seller.email', seller.email, seller.email || '-'],"],
+    ["['地址', 'seller.address', seller.address, seller.address || '-', 'multiline'],", "['Address', 'seller.address', seller.address, seller.address || '-', 'multiline'],"],
+    ["['交期', 'terms.delivery', terms.delivery, terms.delivery || '-', 'multiline'],", "['Lead Time', 'terms.delivery', terms.delivery, terms.delivery || '-', 'multiline'],"],
+    ["['付款方式', 'terms.payment', terms.payment, terms.payment || '30%预付款，发货前70%', 'multiline'],", "['Payment Terms', 'terms.payment', terms.payment, terms.payment || '30% advance payment, 70% before shipment', 'multiline'],"],
+    ["['有效期', 'terms.validity', terms.validity, terms.validity || '有效期 30 天'],", "['Validity', 'terms.validity', terms.validity, terms.validity || 'Valid for 30 days'],"],
+    ["['备注', 'terms.remarks', terms.remarks, terms.remarks || '-', 'multiline'],", "['Notes', 'terms.remarks', terms.remarks, terms.remarks || '-', 'multiline'],"],
     ['<html lang="zh-CN">', '<html lang="en">'],
     ["<title>{draft.title || '报价单'}</title>", "<title>{draft.title || 'Quotation'}</title>"],
-    ["<p className=\"quote-hero__cn\">{draft.title || '报价单'}</p>", "<p className=\"quote-hero__cn\">{draft.title || 'Quotation'}</p>"],
+    ["<p className=\"quote-hero__cn\" {...editableField('title', draft.title)}>{draft.title || '报价单'}</p>", "<p className=\"quote-hero__cn\" {...editableField('title', draft.title)}>{draft.title || 'Quotation'}</p>"],
     ['<span className="quote-meta-card__label">报价编号</span>', '<span className="quote-meta-card__label">Quote No.</span>'],
     ['<span className="quote-meta-card__label">发布日期</span>', '<span className="quote-meta-card__label">Issue Date</span>'],
     ['<span className="quote-meta-card__label">币种</span>', '<span className="quote-meta-card__label">Currency</span>'],
     ['<span className="quote-meta-card__label">有效期</span>', '<span className="quote-meta-card__label">Validity</span>'],
-    ['<strong className="quote-meta-card__value">{terms.validity || \'有效期 30 天\'}</strong>', '<strong className="quote-meta-card__value">{terms.validity || \'Valid for 30 days\'}</strong>'],
+    ['<strong className="quote-meta-card__value" {...editableField(\'terms.validity\', terms.validity)}>{terms.validity || \'有效期 30 天\'}</strong>', '<strong className="quote-meta-card__value" {...editableField(\'terms.validity\', terms.validity)}>{terms.validity || \'Valid for 30 days\'}</strong>'],
     ['<SectionTitle cn="客户信息" en="BUYER INFORMATION" icon={<IconUser />} />', '<SectionTitle cn="Customer Information" en="" icon={<IconUser />} />'],
     ['<SectionTitle cn="销售方信息" en="SELLER INFORMATION" icon={<IconCompany />} />', '<SectionTitle cn="Seller Information" en="" icon={<IconCompany />} />'],
     ['<SectionTitle className="quote-section-title--plain" cn="报价明细" en="QUOTATION ITEMS" icon={<IconFile />} trailing={<span>共 {items.length} 项</span>} />', '<SectionTitle className="quote-section-title--plain" cn="Quotation Items" en="" icon={<IconFile />} trailing={<span>{items.length} items</span>} />'],
@@ -1581,6 +1572,7 @@ function buildContractTemplateSource() {
   return [
     'export default function ContractTemplate(props) {',
     '  const draft = props?.draft || {};',
+    '  const editableField = props?.editableField || (() => ({}));',
     '  const customer = draft.customer || {};',
     '  const seller = draft.seller || {};',
     '  const pricing = draft.pricing || {};',
@@ -1596,11 +1588,11 @@ function buildContractTemplateSource() {
     '    { title: "一、合同主体", content: `买方：${customer.company || customer.name || "-"}；卖方：${seller.company || "-"}` },',
     '    { title: "二、标的物", content: items.length > 0 ? items.map((item, index) => `${index + 1}. ${item.model || item.sku || "-"} / 数量 ${item.qty || 0}${item.unit ? item.unit : ""} / 金额 ${formatMoney(item.amount)}`).join("\\n") : "待在右侧 AI 对话中补充产品明细。" },',
     '    { title: "三、价款与结算", content: `币种：${pricing.currency || "CNY"}；总金额：${formatMoney(pricing.total)}；付款方式：${terms.payment || "-"}` },',
-    '    { title: "四、交付与验收", content: terms.delivery || "-" },',
-    '    { title: "五、质保与售后", content: terms.warranty || "-" },',
-    '    { title: "六、违约责任", content: terms.breachLiability || "-" },',
-    '    { title: "七、争议解决", content: terms.disputeResolution || "-" },',
-    '    { title: "八、补充说明", content: terms.remarks || "-" },',
+    '    { title: "四、交付与验收", path: "terms.delivery", value: terms.delivery, content: terms.delivery || "-" },',
+    '    { title: "五、质保与售后", path: "terms.warranty", value: terms.warranty, content: terms.warranty || "-" },',
+    '    { title: "六、违约责任", path: "terms.breachLiability", value: terms.breachLiability, content: terms.breachLiability || "-" },',
+    '    { title: "七、争议解决", path: "terms.disputeResolution", value: terms.disputeResolution, content: terms.disputeResolution || "-" },',
+    '    { title: "八、补充说明", path: "terms.remarks", value: terms.remarks, content: terms.remarks || "-" },',
     '  ];',
     '  return (',
     '    <html lang="zh-CN">',
@@ -1613,26 +1605,26 @@ function buildContractTemplateSource() {
     '        <div className="contract-shell">',
     '          <header className="contract-header">',
     '            <p className="contract-kicker">Sales Contract</p>',
-    '            <h1>{draft.title || "销售合同"}</h1>',
+    '            <h1 {...editableField("title", draft.title)}>{draft.title || "销售合同"}</h1>',
     '            <div className="contract-meta">',
-    '              <span>合同编号：{draft.contractNumber || "-"}</span>',
-    '              <span>币种：{pricing.currency || "CNY"}</span>',
+    '              <span>合同编号：<span {...editableField("contractNumber", draft.contractNumber)}>{draft.contractNumber || "-"}</span></span>',
+    '              <span>币种：<span {...editableField("pricing.currency", pricing.currency)}>{pricing.currency || "CNY"}</span></span>',
     '            </div>',
     '          </header>',
     '          <section className="contract-party-grid">',
     '            <article className="contract-box">',
     '              <h2>买方信息</h2>',
-    '              <p><strong>{customer.company || customer.name || "-"}</strong></p>',
-    '              <p>联系人：{customer.contact || "-"}</p>',
-    '              <p>电话：{customer.phone || "-"}</p>',
-    '              <p>地址：{customer.address || "-"}</p>',
+    '              <p><strong {...editableField("customer.company", customer.company)}>{customer.company || customer.name || "-"}</strong></p>',
+    '              <p>联系人：<span {...editableField("customer.contact", customer.contact)}>{customer.contact || "-"}</span></p>',
+    '              <p>电话：<span {...editableField("customer.phone", customer.phone)}>{customer.phone || "-"}</span></p>',
+    '              <p>地址：<span {...editableField("customer.address", customer.address, { mode: "multiline" })}>{customer.address || "-"}</span></p>',
     '            </article>',
     '            <article className="contract-box">',
     '              <h2>卖方信息</h2>',
-    '              <p><strong>{seller.company || "-"}</strong></p>',
-    '              <p>联系人：{seller.contact || "-"}</p>',
-    '              <p>电话：{seller.phone || "-"}</p>',
-    '              <p>地址：{seller.address || "-"}</p>',
+    '              <p><strong {...editableField("seller.company", seller.company)}>{seller.company || "-"}</strong></p>',
+    '              <p>联系人：<span {...editableField("seller.contact", seller.contact)}>{seller.contact || "-"}</span></p>',
+    '              <p>电话：<span {...editableField("seller.phone", seller.phone)}>{seller.phone || "-"}</span></p>',
+    '              <p>地址：<span {...editableField("seller.address", seller.address, { mode: "multiline" })}>{seller.address || "-"}</span></p>',
     '            </article>',
     '          </section>',
     '          <section className="contract-section">',
@@ -1642,9 +1634,9 @@ function buildContractTemplateSource() {
     '              <tbody>',
     '                {items.length > 0 ? items.map((item, index) => (',
     '                  <tr key={item.id || `${item.model || "item"}-${index}`}>',
-    '                    <td>{item.model || item.sku || "-"}</td>',
-    '                    <td>{item.description || item.notes || "-"}</td>',
-    '                    <td>{item.qty || 0}{item.unit ? ` ${item.unit}` : ""}</td>',
+    '                    <td {...editableField("items.model", item.model, { itemId: item.id })}>{item.model || item.sku || "-"}</td>',
+    '                    <td {...editableField("items.description", item.description, { itemId: item.id, mode: "multiline" })}>{item.description || item.notes || "-"}</td>',
+    '                    <td><span {...editableField("items.qty", item.qty, { itemId: item.id })}>{item.qty || 0}</span>{item.unit ? <> <span {...editableField("items.unit", item.unit, { itemId: item.id })}>{item.unit}</span></> : null}</td>',
     '                    <td>{formatMoney(item.amount)}</td>',
     '                  </tr>',
     '                )) : <tr><td colSpan={4} className="contract-empty">待补充合同产品明细</td></tr>}',
@@ -1655,16 +1647,16 @@ function buildContractTemplateSource() {
     '            {sections.map((section) => (',
     '              <article className="contract-clause" key={section.title}>',
     '                <h3>{section.title}</h3>',
-    '                <p>{section.content}</p>',
+    '                <p {...(section.path ? editableField(section.path, section.value, { mode: "multiline" }) : {})}>{section.content}</p>',
     '              </article>',
     '            ))}',
     '          </section>',
     '          <section className="contract-signature-grid">',
     '            <div className="contract-signature-box">',
-    '              <p>卖方签署：{signatures.sellerSigner || "________________"}</p>',
+    '              <p>卖方签署：<span {...editableField("signatures.sellerSigner", signatures.sellerSigner)}>{signatures.sellerSigner || "________________"}</span></p>',
     '            </div>',
     '            <div className="contract-signature-box">',
-    '              <p>买方签署：{signatures.buyerSigner || "________________"}</p>',
+    '              <p>买方签署：<span {...editableField("signatures.buyerSigner", signatures.buyerSigner)}>{signatures.buyerSigner || "________________"}</span></p>',
     '            </div>',
     '          </section>',
     '        </div>',

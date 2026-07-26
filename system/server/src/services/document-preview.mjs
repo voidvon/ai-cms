@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { getTemplateById } from './templates.mjs';
 import { getDocumentDraftById } from './document-drafts.mjs';
 import { buildDocumentPaginationCss, buildDocumentPaginationScript } from './document-pagination.mjs';
@@ -5,6 +7,11 @@ import { getSiteConfig } from './site.mjs';
 import { normalizeRuntimeAssetText, resolveRuntimeAssetUrl } from './uploads.mjs';
 import { renderTsxTemplate } from '../tsx-template-renderer.mjs';
 import { getTsxTemplateStyleAsset } from '../tsx-template-styles.mjs';
+
+export function resolveDocumentFieldEditingValue(rawValue, renderedValue) {
+  const normalizedRawValue = String(rawValue ?? '');
+  return normalizedRawValue === '' ? String(renderedValue ?? '') : normalizedRawValue;
+}
 
 export function renderDocumentDraftPreview(draftId) {
   const draft = getDocumentDraftById(draftId);
@@ -22,8 +29,17 @@ export function renderDocumentDraftPreview(draftId) {
   }
 
   const siteConfig = getSiteConfig();
+  const editableItems = new Map();
   const html = renderTsxTemplate(template.tsx_source || '', {
     draft: draft.draft_payload,
+    editableField: buildEditableFieldAttributes,
+    editableItem: (index) => {
+      const key = String(index ?? '');
+      if (!editableItems.has(key)) {
+        editableItems.set(key, { itemId: randomUUID(), createItem: true });
+      }
+      return editableItems.get(key);
+    },
     workspace: {
       id: draft.id,
       title: draft.title,
@@ -78,13 +94,31 @@ function injectPreviewDocumentShell(html, cssText, draft, siteConfig = null) {
   const scriptTag = buildDocumentPaginationScript();
   const draftContextScriptTag = buildDocumentPreviewDraftContextScript(draft, siteConfig);
   const stampScriptTag = buildDocumentStampPreviewScript();
+  const editingScriptTag = buildDocumentEditingPreviewScript();
 
   if (/<\/head>/i.test(normalizedHtml)) {
     const withHead = normalizedHtml.replace(/<\/head>/i, `${styleTag}\n</head>`);
-    return withHead.replace(/<\/body>/i, `${scriptTag}\n${draftContextScriptTag}\n${stampScriptTag}\n</body>`);
+    return withHead.replace(/<\/body>/i, `${scriptTag}\n${draftContextScriptTag}\n${stampScriptTag}\n${editingScriptTag}\n</body>`);
   }
 
-  return `${styleTag}\n${normalizedHtml}\n${scriptTag}\n${draftContextScriptTag}\n${stampScriptTag}`;
+  return `${styleTag}\n${normalizedHtml}\n${scriptTag}\n${draftContextScriptTag}\n${stampScriptTag}\n${editingScriptTag}`;
+}
+
+export function buildEditableFieldAttributes(path, value, options = {}) {
+  const normalizedPath = String(path || '').trim();
+  if (!normalizedPath) {
+    return {};
+  }
+  const mode = String(options.mode || '').trim();
+  const itemId = String(options.itemId || options.item_id || '').trim();
+  const createItem = options.createItem === true || options.create_item === true;
+  return {
+    'data-document-field': normalizedPath,
+    'data-document-value': String(value ?? ''),
+    ...(itemId ? { 'data-document-item-id': itemId } : {}),
+    ...(createItem ? { 'data-document-create-item': 'true' } : {}),
+    ...(mode ? { 'data-document-field-mode': mode } : {}),
+  };
 }
 
 function buildDocumentPreviewDraftContextScript(draft, siteConfig = null) {
@@ -135,12 +169,255 @@ function previewBaseCss() {
     '.doc-stamp-item:hover .doc-stamp-item__rotate, .doc-stamp-item:hover .doc-stamp-item__remove, .doc-stamp-item--active .doc-stamp-item__rotate, .doc-stamp-item--active .doc-stamp-item__remove { opacity: 1; visibility: visible; }',
     '.doc-stamp-item__rotate::before { content: "↻"; }',
     '.doc-stamp-item__remove::before { content: "×"; }',
+    'html[data-document-editing="true"] [data-document-field] { cursor: text; border-radius: 2px; outline: 1px dashed transparent; outline-offset: 2px; transition: outline-color 120ms ease, background-color 120ms ease; }',
+    'html[data-document-editing="true"] [data-document-field]:hover { outline-color: rgba(37, 99, 235, 0.55); background: rgba(219, 234, 254, 0.32); }',
+    'html[data-document-editing="true"] [data-document-field]:focus { outline: 2px solid rgba(37, 99, 235, 0.9); background: rgba(219, 234, 254, 0.5); }',
+    'html[data-document-editing="true"] [data-document-create-item="true"] { color: inherit !important; }',
+    '[data-document-item-row] > td:last-child { position: relative; }',
+    'html[data-document-editing="true"] [data-document-item-row] > td:last-child { padding-right: 38px !important; }',
+    '.document-item-delete { position: absolute; top: 50%; right: 5px; width: 28px; height: 28px; padding: 0; transform: translateY(-50%); border: 1px solid #dc2626; border-radius: 4px; background: #fff; color: #b91c1c; display: inline-flex; align-items: center; justify-content: center; font-size: 0; cursor: pointer; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity 120ms ease, background-color 120ms ease; box-shadow: 0 2px 8px rgba(127, 29, 29, 0.2); z-index: 20; }',
+    '.document-item-delete__icon { display: grid; width: 100%; height: 100%; place-items: center; font: 700 18px/1 Arial, sans-serif; transform: translateY(-1px); pointer-events: none; }',
+    '.document-item-delete:hover { background: #fee2e2; }',
+    'html[data-document-editing="true"] .document-item-delete--visible, html[data-document-editing="true"] .document-item-delete:focus-visible { opacity: 1; visibility: visible; pointer-events: auto; }',
     '@media print {',
     '  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }',
     '  .doc-stamp-anchor, .doc-stamp-layer { position: absolute; inset: 0; pointer-events: none; overflow: visible; }',
     '  .doc-stamp-item { break-inside: avoid; page-break-inside: avoid; }',
-    '  .doc-stamp-item__rotate, .doc-stamp-item__remove { display: none !important; }',
+    '  .doc-stamp-item__rotate, .doc-stamp-item__remove, .document-item-delete { display: none !important; }',
+    '  [data-document-field] { outline: none !important; background: transparent !important; }',
     '}',
+  ].join('\n');
+}
+
+function buildDocumentEditingPreviewScript() {
+  return [
+    '<script data-document-preview="editing">',
+    '(function () {',
+    '  const rawDraft = window.__DOCUMENT_PREVIEW_DRAFT__ || {};',
+    '  const fieldSelector = "[data-document-field]";',
+    '  let editing = false;',
+    '  let activeOriginalValue = null;',
+    '  function getFieldElement(target) {',
+    '    return target && typeof target.closest === "function" ? target.closest(fieldSelector) : null;',
+    '  }',
+    '  function getFieldIdentity(element) {',
+    '    return {',
+    '      path: String(element?.dataset?.documentField || ""),',
+    '      itemId: String(element?.dataset?.documentItemId || ""),',
+    '      createItem: element?.dataset?.documentCreateItem === "true",',
+    '    };',
+    '  }',
+    '  function getRawValue(element) {',
+    '    return String(element?.dataset?.documentValue || "");',
+    '  }',
+    '  function getEditedValue(element) {',
+    '    return String(element?.textContent || "").replace(/\\r\\n/g, "\\n").trim();',
+    '  }',
+    `  const resolveInitialValue = ${resolveDocumentFieldEditingValue.toString()};`,
+    '  function getInitialEditingValue(element) {',
+    '    return resolveInitialValue(getRawValue(element), getEditedValue(element));',
+    '  }',
+    '  function matchesIdentity(element, identity) {',
+    '    const current = getFieldIdentity(element);',
+    '    return current.path === identity.path && current.itemId === identity.itemId;',
+    '  }',
+    '  function syncMatchingFields(source, value) {',
+    '    const identity = getFieldIdentity(source);',
+    '    document.querySelectorAll(fieldSelector).forEach((element) => {',
+    '      if (element !== source && matchesIdentity(element, identity)) element.textContent = value;',
+    '    });',
+    '  }',
+    '  function parseEditableNumber(value) {',
+    '    const normalized = String(value || "")',
+    '      .replace(/[\u200B-\u200D\uFEFF]/g, "")',
+    '      .replace(/[０-９]/g, (digit) => String(digit.charCodeAt(0) - 0xFF10))',
+    '      .replace(/[，,\\s]/g, "")',
+    '      .replace(/．/g, ".")',
+    '      .trim();',
+    '    if (!normalized) return null;',
+    '    const number = Number(normalized);',
+    '    return Number.isFinite(number) ? number : null;',
+    '  }',
+    '  function formatCalculatedMoney(value) {',
+    '    return Number(value || 0).toLocaleString(document.documentElement.lang === "en" ? "en-US" : "zh-CN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });',
+    '  }',
+    '  function getItemFieldValue(itemId, path) {',
+    '    const fields = Array.from(document.querySelectorAll(fieldSelector));',
+    '    const field = fields.find((element) => {',
+    '      const identity = getFieldIdentity(element);',
+    '      return identity.itemId === itemId && identity.path === path;',
+    '    });',
+    '    return field ? getEditedValue(field) : "";',
+    '  }',
+    '  function updateCalculatedValues() {',
+    '    let subtotal = 0;',
+    '    Array.from(document.querySelectorAll("[data-document-calculated]")).filter((element) => element.dataset.documentCalculated === "item.amount").forEach((element) => {',
+    '      const itemId = String(element.dataset.documentItemId || "");',
+    '      const quantity = parseEditableNumber(getItemFieldValue(itemId, "items.quantity"));',
+    '      const unitPrice = parseEditableNumber(getItemFieldValue(itemId, "items.unitPrice"));',
+    '      if (quantity == null || unitPrice == null) {',
+    '        element.textContent = quantity == null && unitPrice == null ? "\u00a0" : formatCalculatedMoney(0);',
+    '        return;',
+    '      }',
+    '      const amount = quantity * unitPrice;',
+    '      subtotal += amount;',
+    '      element.textContent = formatCalculatedMoney(amount);',
+    '    });',
+    '    const pricing = rawDraft.pricing || {};',
+    '    const shippingFee = parseEditableNumber(pricing.shippingFee) || 0;',
+    '    const taxAmount = parseEditableNumber(pricing.taxAmount) || 0;',
+    '    Array.from(document.querySelectorAll("[data-document-calculated]")).filter((element) => element.dataset.documentCalculated === "pricing.total").forEach((element) => {',
+    '      element.textContent = formatCalculatedMoney(subtotal + shippingFee + taxAmount);',
+    '    });',
+    '  }',
+    '  function ensureItemDeleteButtons() {',
+    '    const rowsByItemId = new Map();',
+    '    document.querySelectorAll(fieldSelector).forEach((field) => {',
+    '      const identity = getFieldIdentity(field);',
+    '      if (!identity.path.startsWith("items.") || !identity.itemId) return;',
+    '      const row = field.closest("tr");',
+    '      if (row && !rowsByItemId.has(identity.itemId)) rowsByItemId.set(identity.itemId, { row, placeholder: identity.createItem });',
+    '    });',
+    '    rowsByItemId.forEach((entry, itemId) => {',
+    '      const row = entry.row;',
+    '      row.dataset.documentItemRow = itemId;',
+    '      row.dataset.documentPlaceholderRow = entry.placeholder ? "true" : "false";',
+    '      if (row.querySelector(".document-item-delete")) return;',
+    '      const targetCell = row.querySelector("td:last-child");',
+    '      if (!targetCell) return;',
+    '      const button = document.createElement("button");',
+    '      button.type = "button";',
+    '      button.className = "document-item-delete";',
+    '      button.setAttribute("contenteditable", "false");',
+    '      button.setAttribute("aria-label", document.documentElement.lang.startsWith("en") ? "Delete row" : "删除此行");',
+    '      button.title = document.documentElement.lang.startsWith("en") ? "Delete row" : "删除此行";',
+    '      const icon = document.createElement("span");',
+    '      icon.className = "document-item-delete__icon";',
+    '      icon.setAttribute("aria-hidden", "true");',
+    '      icon.textContent = "×";',
+    '      button.appendChild(icon);',
+    '      targetCell.appendChild(button);',
+    '    });',
+    '  }',
+    '  function removeItemRows(itemId) {',
+    '    document.querySelectorAll("[data-document-item-row]").forEach((row) => {',
+    '      if (String(row.dataset.documentItemRow || "") === itemId) row.remove();',
+    '    });',
+    '    updateCalculatedValues();',
+    '  }',
+    '  function setEditing(nextEditing) {',
+    '    const wasEditing = editing;',
+    '    const activeField = getFieldElement(document.activeElement);',
+    '    if (!nextEditing && activeField) activeField.blur();',
+    '    editing = Boolean(nextEditing);',
+    '    document.documentElement.dataset.documentEditing = editing ? "true" : "false";',
+    '    document.querySelectorAll(fieldSelector).forEach((element) => {',
+    '      element.setAttribute("contenteditable", editing ? "plaintext-only" : "false");',
+    '      element.setAttribute("spellcheck", editing ? "true" : "false");',
+    '      if (editing) element.setAttribute("tabindex", "0"); else element.removeAttribute("tabindex");',
+    '    });',
+    '    if (wasEditing && !editing) {',
+    '      window.parent.postMessage({ type: "document-preview-editing-finished", draftId: String(rawDraft.id || "") }, window.location.origin);',
+    '    }',
+    '  }',
+    '  function dispatchChange(element) {',
+    '    const identity = getFieldIdentity(element);',
+    '    if (!identity.path) return;',
+    '    const value = getEditedValue(element);',
+    '    const previousValue = activeOriginalValue == null ? getRawValue(element) : activeOriginalValue;',
+    '    activeOriginalValue = null;',
+    '    if (value === previousValue) return;',
+    '    element.dataset.documentValue = value;',
+    '    syncMatchingFields(element, value);',
+    '    window.parent.postMessage({',
+    '      type: "document-preview-field-change",',
+    '      draftId: String(rawDraft.id || ""),',
+    '      change: { path: identity.path, itemId: identity.itemId, createItem: identity.createItem, value },',
+    '    }, window.location.origin);',
+    '  }',
+    '  window.addEventListener("message", (event) => {',
+    '    if (event.origin !== window.location.origin) return;',
+    '    const data = event.data || {};',
+    '    if (data.type === "document-preview-set-editing") setEditing(true);',
+    '  });',
+    '  document.addEventListener("focusin", (event) => {',
+    '    const element = getFieldElement(event.target);',
+    '    if (!editing || !element) return;',
+    '    activeOriginalValue = getInitialEditingValue(element);',
+    '    element.textContent = activeOriginalValue;',
+    '  });',
+    '  document.addEventListener("input", (event) => {',
+    '    const element = getFieldElement(event.target);',
+    '    if (!editing || !element) return;',
+    '    syncMatchingFields(element, getEditedValue(element));',
+    '    if (element.dataset.documentField === "items.quantity" || element.dataset.documentField === "items.unitPrice") updateCalculatedValues();',
+    '  });',
+    '  document.addEventListener("keydown", (event) => {',
+    '    const element = getFieldElement(event.target);',
+    '    if (!editing || !element) return;',
+    '    if (event.key === "Escape") {',
+    '      event.preventDefault();',
+    '      const value = activeOriginalValue == null ? getRawValue(element) : activeOriginalValue;',
+    '      element.textContent = value;',
+    '      syncMatchingFields(element, value);',
+    '      activeOriginalValue = null;',
+    '      element.blur();',
+    '      return;',
+    '    }',
+    '    if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s") {',
+    '      event.preventDefault();',
+    '      element.blur();',
+    '      return;',
+    '    }',
+    '    if (event.key === "Enter" && element.dataset.documentFieldMode !== "multiline") {',
+    '      event.preventDefault();',
+    '      element.blur();',
+    '    }',
+    '  });',
+    '  document.addEventListener("paste", (event) => {',
+    '    const element = getFieldElement(event.target);',
+    '    if (!editing || !element) return;',
+    '    event.preventDefault();',
+    '    const text = String(event.clipboardData?.getData("text/plain") || "");',
+    '    document.execCommand("insertText", false, text);',
+    '  });',
+    '  document.addEventListener("mouseover", (event) => {',
+    '    const row = event.target && typeof event.target.closest === "function" ? event.target.closest("[data-document-item-row]") : null;',
+    '    row?.querySelector(".document-item-delete")?.classList.add("document-item-delete--visible");',
+    '  });',
+    '  document.addEventListener("mouseout", (event) => {',
+    '    const row = event.target && typeof event.target.closest === "function" ? event.target.closest("[data-document-item-row]") : null;',
+    '    if (!row || (event.relatedTarget && row.contains(event.relatedTarget))) return;',
+    '    row.querySelector(".document-item-delete")?.classList.remove("document-item-delete--visible");',
+    '  });',
+    '  document.addEventListener("mousedown", (event) => {',
+    '    if (event.target && typeof event.target.closest === "function" && event.target.closest(".document-item-delete")) event.preventDefault();',
+    '  });',
+    '  document.addEventListener("click", (event) => {',
+    '    const button = event.target && typeof event.target.closest === "function" ? event.target.closest(".document-item-delete") : null;',
+    '    if (!button) return;',
+    '    event.preventDefault();',
+    '    event.stopPropagation();',
+    '    const itemId = String(button.closest("[data-document-item-row]")?.dataset?.documentItemRow || "");',
+    '    const placeholder = button.closest("[data-document-item-row]")?.dataset?.documentPlaceholderRow === "true";',
+    '    if (!itemId) return;',
+    '    const prompt = document.documentElement.lang.startsWith("en") ? "Delete this row?" : "确定删除这一行？";',
+    '    if (!window.confirm(prompt)) return;',
+    '    button.disabled = true;',
+    '    window.parent.postMessage({ type: "document-preview-item-delete", draftId: String(rawDraft.id || ""), itemId, placeholder }, window.location.origin);',
+    '    removeItemRows(itemId);',
+    '  });',
+    '  document.addEventListener("focusout", (event) => {',
+    '    const element = getFieldElement(event.target);',
+    '    if (!element) return;',
+    '    dispatchChange(element);',
+    '  });',
+    '  window.addEventListener("document-preview-layout-change", function () { ensureItemDeleteButtons(); setEditing(true); });',
+    '  ensureItemDeleteButtons();',
+    '  updateCalculatedValues();',
+    '  setEditing(true);',
+    '})();',
+    '</script>',
   ].join('\n');
 }
 

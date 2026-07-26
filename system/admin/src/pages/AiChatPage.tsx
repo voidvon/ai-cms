@@ -2,12 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Chat, useChat } from '@ai-sdk/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Building2, Check, Eye, FileCog, FilePlus2, FileSignature, Pencil, RefreshCw, Search, Settings2, Stamp, Trash2, X } from 'lucide-react'
+import { useDefaultLayout } from 'react-resizable-panels'
+import { ArrowLeft, Building2, Check, Eye, FileCog, FilePlus2, FileSignature, Pencil, RefreshCw, Search, Settings2, Stamp, Trash2, X } from 'lucide-react'
 import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { documentWorkspacesApi } from '@/api/document-workspaces'
 import { createDocumentAgentChatTransport } from '@/api/document-agent'
-import { AiConversationComposer } from '@/components/ai-chat/AiConversationComposer'
-import { ChatWorkspaceShell, type ChatWorkspaceShellMessage } from '@/components/ai-chat/ChatWorkspaceShell'
+import {
+  AiChatPanel,
+  type AiChatPanelMessage,
+} from '@/components/ai-chat/AiChatPanel'
+import { AI_CHAT_PANEL_CONFIGS } from '@/components/ai-chat/ai-chat-panel-config'
 import { DocumentCompanyManagerDialog } from '@/components/DocumentCompanyManagerDialog'
 import { DocumentStampManagerDialog } from '@/components/DocumentStampManagerDialog'
 import { DocumentTemplateCompanySlotsDialog } from '@/components/DocumentTemplateCompanySlotsDialog'
@@ -59,16 +63,28 @@ type DocumentToolActivity = {
 
 const DEFAULT_DOCUMENT_PAGE_WIDTH = 794
 const DEFAULT_DOCUMENT_PAGE_PADDING = 38
+const AI_DOCS_PANEL_LAYOUT_STORAGE_ID = 'ai-docs-workspace-layout'
+const AI_DOCS_PANEL_IDS = ['document-preview', 'document-conversation']
 export default function AiChatPage() {
   const { headerSlotElement, setDocumentTitle, setMainContentPadding } =
     useOutletContext<DashboardHeaderContext>()
   const [searchParams, setSearchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const isMobile = useIsMobile(1024)
+  const { defaultLayout: workspaceDefaultLayout, onLayoutChanged: handleWorkspaceLayoutChanged } = useDefaultLayout({
+    id: AI_DOCS_PANEL_LAYOUT_STORAGE_ID,
+    panelIds: AI_DOCS_PANEL_IDS,
+    storage: window.localStorage,
+    onlySaveAfterUserInteractions: true,
+  })
   const previewFrameRef = useRef<HTMLIFrameElement | null>(null)
   const mobilePreviewFrameRef = useRef<HTMLIFrameElement | null>(null)
   const titleInputRef = useRef<HTMLInputElement | null>(null)
+  const sentInitialMessageDraftIdRef = useRef('')
+  const previewFieldSaveQueueRef = useRef<Promise<void>>(Promise.resolve())
+  const previewFieldSaveCountRef = useRef(0)
   const [previewVersion, setPreviewVersion] = useState(0)
+  const [, setIsPreviewFieldSaving] = useState(false)
   const [deleteDraftId, setDeleteDraftId] = useState<string>('')
   const [companySlotsTemplate, setCompanySlotsTemplate] = useState<DocumentTemplate | null>(null)
   const [isEditingTitle, setIsEditingTitle] = useState(false)
@@ -81,8 +97,10 @@ export default function AiChatPage() {
   const [isMobileDocumentToolsOpen, setIsMobileDocumentToolsOpen] = useState(false)
   const [isMobilePreviewOpen, setIsMobilePreviewOpen] = useState(false)
   const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false)
+  const [pendingTemplate, setPendingTemplate] = useState<DocumentTemplate | null>(null)
+  const [pendingInitialMessage, setPendingInitialMessage] = useState('')
+  const [queuedInitialMessage, setQueuedInitialMessage] = useState<{ draftId: string; text: string } | null>(null)
   const [managedDocumentType, setManagedDocumentType] = useState<DocumentTemplate['document_type'] | null>(null)
-  const [creatingTemplateId, setCreatingTemplateId] = useState<number | null>(null)
   const [documentPage, setDocumentPage] = useState(1)
   const [documentSearchInput, setDocumentSearchInput] = useState('')
   const [documentSearch, setDocumentSearch] = useState('')
@@ -205,9 +223,26 @@ export default function AiChatPage() {
     }, 180)
   }
 
+  const syncPreviewEditingState = () => {
+    const postEditingState = (frame: HTMLIFrameElement | null) => {
+      frame?.contentWindow?.postMessage({
+        type: 'document-preview-set-editing',
+        enabled: true,
+      }, window.location.origin)
+    }
+
+    postEditingState(previewFrameRef.current)
+    postEditingState(mobilePreviewFrameRef.current)
+  }
+
+  const syncPreviewState = () => {
+    syncPreviewStampState()
+    syncPreviewEditingState()
+  }
+
   useEffect(() => {
-    setDocumentTitle(previewHeaderTitle || '文档列表')
-  }, [previewHeaderTitle, setDocumentTitle])
+    setDocumentTitle(previewHeaderTitle || pendingTemplate?.name || '文档列表')
+  }, [pendingTemplate?.name, previewHeaderTitle, setDocumentTitle])
 
   useEffect(() => {
     setMainContentPadding(false)
@@ -243,6 +278,18 @@ export default function AiChatPage() {
     setDocumentToolActivities([])
     setPreviewVersion((value) => value + 1)
   }, [draftId])
+
+  useEffect(() => {
+    const postEditingState = (frame: HTMLIFrameElement | null) => {
+      frame?.contentWindow?.postMessage({
+        type: 'document-preview-set-editing',
+        enabled: true,
+      }, window.location.origin)
+    }
+
+    postEditingState(previewFrameRef.current)
+    postEditingState(mobilePreviewFrameRef.current)
+  }, [isMobilePreviewOpen, previewVersion])
 
   useEffect(() => {
     if (isDocumentChatStreaming) {
@@ -286,20 +333,101 @@ export default function AiChatPage() {
         return
       }
       const data = event.data || {}
-      if (data.type !== 'document-preview-stamps-change') {
+      const isKnownPreviewWindow = event.source === previewFrameRef.current?.contentWindow
+        || event.source === mobilePreviewFrameRef.current?.contentWindow
+      if (!isKnownPreviewWindow) {
         return
       }
       if (!currentDraft?.id || data.draftId !== currentDraft.id) {
         return
       }
-      const nextStamps = Array.isArray(data.stamps) ? data.stamps : []
-      await documentWorkspacesApi.updateDraft(currentDraft.id, {
-        draft_payload: {
-          stamps: nextStamps,
-        },
-      })
-      await queryClient.invalidateQueries({ queryKey: ['document-draft', currentDraft.id] })
-      await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
+
+      if (data.type === 'document-preview-editing-finished') {
+        void previewFieldSaveQueueRef.current.finally(() => {
+          setPreviewVersion((value) => value + 1)
+        })
+        return
+      }
+
+      if (data.type === 'document-preview-stamps-change') {
+        const nextStamps = Array.isArray(data.stamps) ? data.stamps : []
+        await documentWorkspacesApi.updateDraft(currentDraft.id, {
+          draft_payload: {
+            stamps: nextStamps,
+          },
+        })
+        await queryClient.invalidateQueries({ queryKey: ['document-draft', currentDraft.id] })
+        await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
+        return
+      }
+
+      if (data.type === 'document-preview-item-delete') {
+        const itemId = String(data.itemId || '').trim()
+        const placeholder = data.placeholder === true
+        if (!itemId) {
+          return
+        }
+
+        previewFieldSaveCountRef.current += 1
+        setIsPreviewFieldSaving(true)
+        previewFieldSaveQueueRef.current = previewFieldSaveQueueRef.current
+          .catch(() => undefined)
+          .then(async () => {
+            const response = await documentWorkspacesApi.deleteDraftItem(currentDraft.id, itemId, { placeholder })
+            if (response.data) {
+              queryClient.setQueryData(['document-draft', currentDraft.id], response)
+            }
+            await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
+            setPreviewVersion((value) => value + 1)
+          })
+          .catch((error) => {
+            toast.error(getDocumentErrorMessage(error, '删除表格行失败'))
+            setPreviewVersion((value) => value + 1)
+          })
+          .finally(() => {
+            previewFieldSaveCountRef.current = Math.max(previewFieldSaveCountRef.current - 1, 0)
+            if (previewFieldSaveCountRef.current === 0) {
+              setIsPreviewFieldSaving(false)
+            }
+          })
+        return
+      }
+
+      if (data.type !== 'document-preview-field-change') {
+        return
+      }
+
+      const change = data.change && typeof data.change === 'object' ? data.change : null
+      const path = String(change?.path || '').trim()
+      if (!path) {
+        return
+      }
+
+      previewFieldSaveCountRef.current += 1
+      setIsPreviewFieldSaving(true)
+      previewFieldSaveQueueRef.current = previewFieldSaveQueueRef.current
+        .catch(() => undefined)
+        .then(async () => {
+          const response = await documentWorkspacesApi.updateDraftFields(currentDraft.id, [{
+            path,
+            itemId: String(change?.itemId || '').trim() || undefined,
+            createItem: change?.createItem === true,
+            value: change?.value == null ? '' : String(change.value),
+          }])
+          if (response.data) {
+            queryClient.setQueryData(['document-draft', currentDraft.id], response)
+          }
+          await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
+        })
+        .catch((error) => {
+          toast.error(getDocumentErrorMessage(error, '保存文档字段失败'))
+        })
+        .finally(() => {
+          previewFieldSaveCountRef.current = Math.max(previewFieldSaveCountRef.current - 1, 0)
+          if (previewFieldSaveCountRef.current === 0) {
+            setIsPreviewFieldSaving(false)
+          }
+        })
     }
 
     window.addEventListener('message', handler)
@@ -307,7 +435,7 @@ export default function AiChatPage() {
   }, [currentDraft, queryClient])
 
   const createDraftMutation = useMutation({
-    mutationFn: async (template: DocumentTemplate) => {
+    mutationFn: async ({ template }: { template: DocumentTemplate; message: string }) => {
       const defaultTitle = String(template.default_payload?.title || '').trim()
       return documentWorkspacesApi.createDraft({
         document_type: template.document_type,
@@ -317,19 +445,18 @@ export default function AiChatPage() {
           || (template.document_type === 'quote' ? '报价单' : '销售合同'),
       })
     },
-    onSuccess: async (response) => {
+    onSuccess: async (response, variables) => {
       const nextDraft = response.data
-      setCreatingTemplateId(null)
       if (!nextDraft) {
         return
       }
-      setIsTemplatePickerOpen(false)
+      setQueuedInitialMessage({ draftId: nextDraft.id, text: variables.message })
       setDraftSearchParam(nextDraft.id)
       await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
       await queryClient.invalidateQueries({ queryKey: ['document-draft', nextDraft.id] })
     },
     onError: (error: unknown) => {
-      setCreatingTemplateId(null)
+      setPendingInitialMessage('')
       toast.error(getDocumentErrorMessage(error, '创建文档失败'))
     },
   })
@@ -376,10 +503,31 @@ export default function AiChatPage() {
 
   const previewUrl = currentDraft ? `${documentWorkspacesApi.getPreviewUrl(currentDraft.id)}?v=${previewVersion}` : ''
 
-  const conversationMessages = useMemo<ChatWorkspaceShellMessage[]>(() => {
+  const conversationMessages = useMemo<AiChatPanelMessage[]>(() => {
+    if (!currentDraft && !pendingTemplate) {
+      return []
+    }
+
+    if (!currentDraft && pendingTemplate) {
+      const messages: AiChatPanelMessage[] = [{
+        id: 'document-assistant-welcome-pending',
+        role: 'assistant',
+        text: `已选择${pendingTemplate.name}。请告诉我客户名称、产品型号、数量或主要条款，我会在收到消息后创建${DOCUMENT_TYPE_LABELS[pendingTemplate.document_type]}。`,
+      }]
+      if (pendingInitialMessage) {
+        messages.push({
+          id: 'document-user-message-pending',
+          role: 'user',
+          text: pendingInitialMessage,
+        })
+      }
+      return messages
+    }
+
     if (!currentDraft) {
       return []
     }
+    const activeDraft = currentDraft
 
     const chatMessages = documentChatMessages
       .filter((message) => message.role === 'user' || message.role === 'assistant')
@@ -389,11 +537,11 @@ export default function AiChatPage() {
         text: getDocumentChatMessageText(message),
         parts: message.parts,
       }))
-    const baseMessages: ChatWorkspaceShellMessage[] = chatMessages.length === 0
+    const baseMessages: AiChatPanelMessage[] = chatMessages.length === 0
       ? [{
           id: 'document-assistant-welcome',
           role: 'assistant' as const,
-          text: `当前已进入${DOCUMENT_TYPE_LABELS[currentDraft.document_type]}工作台。你可以先告诉我客户名称、产品型号和数量，我会先补齐基础草稿。`,
+          text: `当前已进入${DOCUMENT_TYPE_LABELS[activeDraft.document_type]}工作台。你可以先告诉我客户名称、产品型号和数量，我会先补齐基础草稿。`,
         }]
       : chatMessages
 
@@ -402,7 +550,7 @@ export default function AiChatPage() {
       const lastUserIndex = baseMessages.findLastIndex((message) => message.role === 'user')
       if (lastAssistantIndex < lastUserIndex) {
         baseMessages.push({
-          id: `document-assistant-pending-${currentDraft.id}`,
+          id: `document-assistant-pending-${activeDraft.id}`,
           role: 'assistant',
           text: '',
           streaming: true,
@@ -421,7 +569,28 @@ export default function AiChatPage() {
     }
 
     return baseMessages
-  }, [currentDraft, documentChatMessages, documentToolActivities, isDocumentChatStreaming])
+  }, [currentDraft, documentChatMessages, documentToolActivities, isDocumentChatStreaming, pendingInitialMessage, pendingTemplate])
+
+  useEffect(() => {
+    if (
+      !queuedInitialMessage
+      || currentDraft?.id !== queuedInitialMessage.draftId
+      || isDocumentChatStreaming
+      || sentInitialMessageDraftIdRef.current === queuedInitialMessage.draftId
+    ) {
+      return
+    }
+
+    sentInitialMessageDraftIdRef.current = queuedInitialMessage.draftId
+    const message = queuedInitialMessage.text
+    queueMicrotask(() => {
+      setQueuedInitialMessage(null)
+      setPendingInitialMessage('')
+      setPendingTemplate(null)
+      setDocumentToolActivities([])
+      void documentChat.sendMessage({ text: message })
+    })
+  }, [currentDraft?.id, documentChat, isDocumentChatStreaming, queuedInitialMessage])
 
   useEffect(() => {
     if (!currentDraft?.id) {
@@ -431,8 +600,10 @@ export default function AiChatPage() {
   }, [currentDraft?.id, currentDraftStamps, previewVersion])
 
   const handleTemplateSelect = (template: DocumentTemplate) => {
-    setCreatingTemplateId(template.id)
-    createDraftMutation.mutate(template)
+    setPendingTemplate(template)
+    setPendingInitialMessage('')
+    setQueuedInitialMessage(null)
+    setIsTemplatePickerOpen(false)
   }
 
   const handleDraftSelect = async (nextDraftId: string) => {
@@ -445,9 +616,19 @@ export default function AiChatPage() {
 
   const handleSubmit = async ({ text }: { text?: string }) => {
     const value = String(text || '').trim()
-    if (!value || !currentDraft?.id || isDocumentChatStreaming) {
+    if (!value || isDocumentChatStreaming || createDraftMutation.isPending) {
       return
     }
+
+    if (!currentDraft?.id) {
+      if (!pendingTemplate) {
+        return
+      }
+      setPendingInitialMessage(value)
+      createDraftMutation.mutate({ template: pendingTemplate, message: value })
+      return
+    }
+
     setDocumentToolActivities([])
     await documentChat.sendMessage({ text: value })
   }
@@ -665,6 +846,24 @@ export default function AiChatPage() {
         </div>
       </div>
     </div>
+  ) : pendingTemplate ? (
+    <div className="flex min-w-0 items-center gap-2">
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        onClick={() => {
+          setPendingTemplate(null)
+          setPendingInitialMessage('')
+        }}
+        disabled={createDraftMutation.isPending}
+        aria-label="返回文档列表"
+        title="返回文档列表"
+      >
+        <ArrowLeft className="size-4" />
+      </Button>
+      <div className="min-w-0 truncate text-sm font-medium">{pendingTemplate.name}</div>
+    </div>
   ) : (
     <div className="hidden min-w-0 items-center justify-between gap-3 lg:flex">
       <div className="truncate text-sm font-medium">文档列表</div>
@@ -681,24 +880,14 @@ export default function AiChatPage() {
     </div>
   )
 
-  const chatWorkspaceSection = currentDraft ? (
+  const chatWorkspaceSection = currentDraft || pendingTemplate ? (
     <section className="flex h-full min-h-0 flex-col bg-background">
-      <ChatWorkspaceShell
-        layout="stacked"
+      <AiChatPanel
+        config={AI_CHAT_PANEL_CONFIGS.document}
         messages={conversationMessages}
-        composer={(
-          <AiConversationComposer
-            placeholder="问问 AI"
-            availableTools={[]}
-            selectedToolNames={[]}
-            enableTools={false}
-            enableMentions={false}
-            submitDisabled={isDocumentChatStreaming}
-            submitStatus={isDocumentChatStreaming ? 'submitted' : 'ready'}
-            onToolSelectionChange={() => {}}
-            onSubmit={(payload) => void handleSubmit({ text: payload.text })}
-          />
-        )}
+        isSubmitting={isDocumentChatStreaming || createDraftMutation.isPending}
+        onStop={() => void documentChat.stop()}
+        onSubmit={(payload) => void handleSubmit({ text: payload.text })}
       />
     </section>
   ) : null
@@ -708,7 +897,7 @@ export default function AiChatPage() {
       {headerSlotElement ? createPortal(headerContent, headerSlotElement) : null}
       <Card className="flex h-full min-h-0 flex-col overflow-hidden rounded-none border-0 py-0 shadow-none">
         <CardContent className="min-h-0 flex-1 overflow-hidden p-0">
-          {!currentDraft ? (
+          {!currentDraft && !pendingTemplate ? (
             <div className="flex h-full min-h-0 flex-col bg-background p-4">
               <AdminDataTable
                 fill
@@ -881,9 +1070,17 @@ export default function AiChatPage() {
                 ))}
               </AdminDataTable>
             </div>
+          ) : !currentDraft ? (
+            chatWorkspaceSection
           ) : (
             isMobile ? chatWorkspaceSection : (
-              <ResizablePanelGroup orientation="horizontal" className="h-full min-h-0">
+              <ResizablePanelGroup
+                id={AI_DOCS_PANEL_LAYOUT_STORAGE_ID}
+                orientation="horizontal"
+                defaultLayout={workspaceDefaultLayout}
+                onLayoutChanged={handleWorkspaceLayoutChanged}
+                className="h-full min-h-0"
+              >
                 <ResizablePanel id="document-preview" defaultSize="65" minSize="45">
                 <section className="relative flex h-full min-h-0 flex-col">
                 <iframe
@@ -891,10 +1088,10 @@ export default function AiChatPage() {
                   key={`desktop-${previewUrl}`}
                   src={!isMobile ? previewUrl : undefined}
                   title="文档预览"
-                  onLoad={() => syncPreviewStampState()}
+                  onLoad={syncPreviewState}
                   className="min-h-0 flex-1 bg-transparent"
                 />
-                <div className="pointer-events-none absolute top-5 right-5 z-10">
+                <div className="pointer-events-none absolute top-5 right-5 z-10 flex items-center gap-2">
                   <Popover open={isDocumentToolsOpen} onOpenChange={setIsDocumentToolsOpen}>
                     <PopoverTrigger asChild>
                       <Button
@@ -994,10 +1191,10 @@ export default function AiChatPage() {
                 key={`mobile-${previewUrl}`}
                 src={isMobilePreviewOpen ? previewUrl : undefined}
                 title="移动端文档预览"
-                onLoad={() => syncPreviewStampState()}
+                  onLoad={syncPreviewState}
                 className="min-h-0 flex-1 bg-transparent"
               />
-              <div className="pointer-events-none absolute bottom-4 right-4 z-10">
+              <div className="pointer-events-none absolute bottom-4 right-4 z-10 flex items-center gap-2">
                 <Popover open={isMobileDocumentToolsOpen} onOpenChange={setIsMobileDocumentToolsOpen}>
                   <PopoverTrigger asChild>
                     <Button
@@ -1098,14 +1295,9 @@ export default function AiChatPage() {
 
       <DocumentTemplatePickerDialog
         open={isTemplatePickerOpen}
-        onOpenChange={(open) => {
-          if (!createDraftMutation.isPending) {
-            setIsTemplatePickerOpen(open)
-          }
-        }}
+        onOpenChange={setIsTemplatePickerOpen}
         templates={templates}
         isLoading={isTemplatesLoading}
-        creatingTemplateId={creatingTemplateId}
         onSelect={handleTemplateSelect}
       />
       {managedDocumentType ? (

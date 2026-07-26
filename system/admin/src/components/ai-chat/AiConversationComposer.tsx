@@ -23,7 +23,7 @@ import { resolveMediaAssetUrl } from '@/lib/assets'
 import { toast } from 'sonner'
 import type { AiGeneratedImage, AiMentionItem, AiToolDefinition, MediaAsset } from '@/types'
 
-type ComposerSubmitPayload = {
+export type AiConversationComposerSubmitPayload = {
   text: string
   mentions: AiMentionItem[]
   toolNames: string[]
@@ -45,7 +45,7 @@ type ComposerProps = {
   submitDisabled?: boolean
   submitStatus?: 'ready' | 'submitted'
   onStop?: () => void
-  onSubmit: (payload: ComposerSubmitPayload) => void
+  onSubmit: (payload: AiConversationComposerSubmitPayload) => void
   onToolSelectionChange: (toolNames: string[]) => void
 }
 

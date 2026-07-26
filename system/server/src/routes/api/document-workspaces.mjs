@@ -5,6 +5,7 @@ import { createDocumentCompany, deleteDocumentCompany, listDocumentCompanies, up
 import { createDocumentStamp, deleteDocumentStamp, listDocumentStamps, updateDocumentStamp } from '../../services/document-stamps.mjs';
 import { renderDocumentDraftPreview } from '../../services/document-preview.mjs';
 import { listDocumentTemplates, updateDocumentTemplateMetadata } from '../../services/document-templates.mjs';
+import { deleteDocumentDraftItem, updateDocumentDraftFields } from '../../services/document-field-updates.mjs';
 
 export default async function documentWorkspaceRoutes(app) {
   app.get('/document-templates', {
@@ -200,6 +201,40 @@ export default async function documentWorkspaceRoutes(app) {
       return { success: false, message: '文档草稿不存在' };
     }
     return { success: true, data: draft };
+  });
+
+  app.patch('/document-drafts/:id/fields', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      const draft = updateDocumentDraftFields(request.params.id, request.body || {});
+      if (!draft) {
+        reply.code(404);
+        return { success: false, message: '文档草稿不存在' };
+      }
+      return { success: true, data: draft };
+    } catch (error) {
+      reply.code(error.statusCode || 400);
+      return { success: false, message: error.message };
+    }
+  });
+
+  app.delete('/document-drafts/:id/items/:itemId', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      const draft = deleteDocumentDraftItem(request.params.id, request.params.itemId, {
+        placeholder: request.query?.placeholder === 'true' || request.query?.placeholder === '1',
+      });
+      if (!draft) {
+        reply.code(404);
+        return { success: false, message: '文档草稿不存在' };
+      }
+      return { success: true, data: draft };
+    } catch (error) {
+      reply.code(error.statusCode || 400);
+      return { success: false, message: error.message };
+    }
   });
 
   app.delete('/document-drafts/:id', {

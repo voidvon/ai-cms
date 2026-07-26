@@ -62,7 +62,22 @@ import {
 } from '@/components/ui/breadcrumb'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/ui/button'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import SystemVersionControl from '@/components/SystemVersionControl'
+
+const SIDEBAR_OPEN_STORAGE_KEY = 'admin.sidebar.open'
+
+function getInitialSidebarOpen() {
+  try {
+    return window.localStorage.getItem(SIDEBAR_OPEN_STORAGE_KEY) !== 'false'
+  } catch {
+    return true
+  }
+}
+
+function clearLegacySidebarCookie() {
+  document.cookie = 'sidebar_state=; path=/; max-age=0; SameSite=Lax'
+}
 
 export default function DashboardLayout() {
   const navigate = useNavigate()
@@ -71,6 +86,7 @@ export default function DashboardLayout() {
   const [headerSlotElement, setHeaderSlotElement] = useState<HTMLDivElement | null>(null)
   const [documentTitleOverride, setDocumentTitleOverride] = useState<string>('')
   const [hasMainContentPadding, setHasMainContentPadding] = useState(true)
+  const [isSidebarOpen, setIsSidebarOpen] = useState(getInitialSidebarOpen)
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['currentUser'],
@@ -182,6 +198,23 @@ export default function DashboardLayout() {
     document.title = currentDocumentTitle
   }, [currentDocumentTitle])
 
+  useEffect(() => {
+    clearLegacySidebarCookie()
+  }, [])
+
+  const handleSidebarOpenChange = (open: boolean) => {
+    setIsSidebarOpen(open)
+
+    try {
+      window.localStorage.setItem(SIDEBAR_OPEN_STORAGE_KEY, String(open))
+    } catch {
+      // Keep the in-memory state when browser storage is unavailable.
+    }
+
+    // SidebarProvider still writes its upstream compatibility cookie after this callback.
+    queueMicrotask(clearLegacySidebarCookie)
+  }
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -195,7 +228,12 @@ export default function DashboardLayout() {
   }
 
   return (
-    <SidebarProvider className="h-svh overflow-hidden [&_[data-slot=sidebar-container]]:ease-in-out [&_[data-slot=sidebar-gap]]:ease-in-out">
+    <SidebarProvider
+      open={isSidebarOpen}
+      onOpenChange={handleSidebarOpenChange}
+      className="h-svh overflow-hidden [&_[data-slot=sidebar-container]]:ease-in-out [&_[data-slot=sidebar-gap]]:ease-in-out"
+    >
+      <TooltipProvider delay={0}>
       <Sidebar collapsible="icon">
         <SidebarHeader className="overflow-hidden">
           <div className="flex w-[calc(var(--sidebar-width)-1rem)] items-center gap-2 px-2 py-2 transition-[padding] duration-200 ease-in-out group-data-[collapsible=icon]:px-0">
@@ -343,6 +381,7 @@ export default function DashboardLayout() {
           />
         </main>
       </SidebarInset>
+      </TooltipProvider>
     </SidebarProvider>
   )
 }

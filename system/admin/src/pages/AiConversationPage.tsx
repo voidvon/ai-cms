@@ -6,8 +6,12 @@ import { MessageSquarePlus, RefreshCw, Trash2 } from 'lucide-react'
 import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { createAiChatTransport } from '@/api/ai-chat'
 import { aiApi } from '@/api/ai'
-import { AiConversationComposer, type AiConversationDisplayPart } from '@/components/ai-chat/AiConversationComposer'
-import { ChatWorkspaceShell, type ChatWorkspaceShellMessage } from '@/components/ai-chat/ChatWorkspaceShell'
+import { type AiConversationDisplayPart } from '@/components/ai-chat/AiConversationComposer'
+import {
+  AiChatPanel,
+  type AiChatPanelMessage,
+} from '@/components/ai-chat/AiChatPanel'
+import { AI_CHAT_PANEL_CONFIGS } from '@/components/ai-chat/ai-chat-panel-config'
 import { Button } from '@/components/ui/button'
 import { toast } from 'sonner'
 import type {
@@ -39,7 +43,7 @@ function createConversationId() {
   return `ai-chat-${Date.now()}`
 }
 
-function toShellMessages(messages: any[]): ChatWorkspaceShellMessage[] {
+function toShellMessages(messages: any[]): AiChatPanelMessage[] {
   return messages.map((message) => {
     const text = extractMessageText(message.parts) || String(message.text || message.content?.text || '')
     return {
@@ -102,7 +106,7 @@ function normalizeChatMessageMetadata(metadata: unknown, contentImages?: unknown
   }
 }
 
-function toConversationView(record: AiConversationRecord, messages: ChatWorkspaceShellMessage[] = []): ConversationView {
+function toConversationView(record: AiConversationRecord, messages: AiChatPanelMessage[] = []): ConversationView {
   return {
     id: record.id,
     title: record.title || '新对话',
@@ -303,7 +307,7 @@ export default function AiConversationPage() {
     }
   }, [activeConversationId, initialChatMessages, isChatStreaming])
 
-  const shellMessages = useMemo<ChatWorkspaceShellMessage[]>(() => {
+  const shellMessages = useMemo<AiChatPanelMessage[]>(() => {
     const messages = toShellMessages(chat.messages as any[])
     if (!isChatStreaming) {
       return messages
@@ -492,50 +496,16 @@ export default function AiConversationPage() {
   return (
     <>
       {headerSlotElement ? createPortal(headerContent, headerSlotElement) : null}
-      <ChatWorkspaceShell
+      <AiChatPanel
+        config={AI_CHAT_PANEL_CONFIGS.conversation}
         messages={shellMessages}
-        sidebarPosition="left"
-        emptyTitle="开始新的 AI 对话"
-        emptyDescription="可以直接对话，也可以描述你想生成的图片。"
         sidebar={sidebar}
-        statusBadges={[
-          { key: 'capability', label: `能力：${activeCapabilityLabel}` },
-          { key: 'tool-mode', label: 'Agent 自动工具', tone: 'secondary' },
-          capabilitiesResponse?.data?.model ? {
-            key: 'model',
-            label: `模型：${capabilitiesResponse.data.model_config_name || capabilitiesResponse.data.model}`,
-            tone: 'secondary',
-          } : null,
-          capabilitiesResponse?.data?.reasoning_effort ? {
-            key: 'reasoning-effort',
-            label: `思考：${formatReasoningEffort(capabilitiesResponse.data.reasoning_effort)}`,
-            tone: 'secondary',
-          } : null,
-        ].filter(Boolean) as Array<{ key: string; label: string; tone?: 'default' | 'outline' | 'secondary' }>}
-        composer={(
-          <AiConversationComposer
-            placeholder="问问AI，或描述你想生成的图片。"
-            availableTools={[]}
-            selectedToolNames={[]}
-            enableTools={false}
-            submitDisabled={isCreatingConversation || chat.status === 'submitted' || chat.status === 'streaming'}
-            submitStatus={isCreatingConversation || chat.status === 'submitted' || chat.status === 'streaming' ? 'submitted' : 'ready'}
-            onStop={() => chat.stop()}
-            onToolSelectionChange={() => {}}
-            onSubmit={handleComposerSubmit}
-          />
-        )}
+        isSubmitting={isCreatingConversation || isChatStreaming}
+        onStop={() => void chat.stop()}
+        onSubmit={handleComposerSubmit}
       />
     </>
   )
-}
-
-function formatReasoningEffort(value: 'low' | 'medium' | 'high') {
-  return {
-    low: '低',
-    medium: '中',
-    high: '高',
-  }[value]
 }
 
 function formatConversationTime(value?: string) {

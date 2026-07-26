@@ -26,16 +26,18 @@ export interface ChatWorkspaceShellMessage {
   pendingLabel?: string
 }
 
+export type ChatWorkspaceStatusBadge = {
+  key: string
+  label: string
+  tone?: 'default' | 'outline' | 'secondary'
+}
+
 interface ChatWorkspaceShellProps {
   messages: ChatWorkspaceShellMessage[]
   emptyTitle?: string
   emptyDescription?: string
   sidebar?: ReactNode
-  statusBadges?: Array<{
-    key: string
-    label: string
-    tone?: 'default' | 'outline' | 'secondary'
-  }>
+  statusBadges?: ChatWorkspaceStatusBadge[]
   composer: ReactNode
   className?: string
   children?: ReactNode

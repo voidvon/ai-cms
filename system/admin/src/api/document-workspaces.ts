@@ -132,6 +132,27 @@ export const documentWorkspacesApi = {
     return response.data
   },
 
+  updateDraftFields: async (id: string, changes: Array<{
+    path: string
+    value: string | number | null
+    itemId?: string
+    createItem?: boolean
+  }>) => {
+    const response = await apiClient.patch<ApiResponse<DocumentDraft>>(
+      `/document-drafts/${encodeURIComponent(id)}/fields`,
+      { changes }
+    )
+    return response.data
+  },
+
+  deleteDraftItem: async (id: string, itemId: string, options?: { placeholder?: boolean }) => {
+    const response = await apiClient.delete<ApiResponse<DocumentDraft>>(
+      `/document-drafts/${encodeURIComponent(id)}/items/${encodeURIComponent(itemId)}`,
+      { params: options?.placeholder ? { placeholder: 'true' } : {} }
+    )
+    return response.data
+  },
+
   deleteDraft: async (id: string) => {
     const response = await apiClient.delete<ApiResponse<{ deleted: boolean; id: string }>>(
       `/document-drafts/${encodeURIComponent(id)}`
