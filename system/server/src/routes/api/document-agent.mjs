@@ -1,3 +1,4 @@
+import { createUIMessageStream, pipeUIMessageStreamToResponse } from 'ai';
 import { requireAuth } from '../../middleware/auth.mjs';
 import { getDocumentDraftById } from '../../services/document-drafts.mjs';
 import { buildDocumentAgentContext } from '../../services/document-agent/context.mjs';
@@ -16,9 +17,27 @@ async function parseBody(request) {
   return {};
 }
 
-function writeSseEvent(reply, eventName, payload) {
-  reply.raw.write(`event: ${eventName}\n`);
-  reply.raw.write(`data: ${JSON.stringify(payload)}\n\n`);
+function getLastUserMessageText(messages = []) {
+  const lastUserMessage = [...messages].reverse().find((entry) => entry?.role === 'user');
+  if (!lastUserMessage || !Array.isArray(lastUserMessage.parts)) {
+    return '';
+  }
+
+  return lastUserMessage.parts
+    .filter((part) => part?.type === 'text')
+    .map((part) => String(part.text || ''))
+    .join('')
+    .trim();
+}
+
+function getDocumentToolActivity(event) {
+  const item = event?.item?.toJSON?.() || null;
+  const rawItem = event?.item?.rawItem || {};
+  return {
+    type: event?.name === 'tool_output' ? 'tool_output' : 'tool_called',
+    toolName: rawItem.name || rawItem.call_id || 'tool',
+    item,
+  };
 }
 
 export default async function documentAgentRoutes(app) {
@@ -34,7 +53,8 @@ export default async function documentAgentRoutes(app) {
 
     const body = await parseBody(request);
     const draftId = String(request.params?.id || '').trim();
-    const message = String(body.message || '').trim();
+    const originalMessages = Array.isArray(body.messages) ? body.messages : [];
+    const message = String(body.message || getLastUserMessageText(originalMessages)).trim();
 
     if (!draftId) {
       reply.code(400);
@@ -52,102 +72,121 @@ export default async function documentAgentRoutes(app) {
       return { success: false, message: '文档草稿不存在' };
     }
 
+    const stream = createUIMessageStream({
+      originalMessages,
+      onError: (error) => error?.message || 'AI 文档助手执行失败',
+      execute: async ({ writer }) => {
+        const textPartId = `document-text-${Date.now()}`;
+        const reasoningPartId = `document-reasoning-${Date.now()}`;
+        let assistantText = '';
+        let started = null;
+        let textStarted = false;
+        let reasoningStarted = false;
+
+        writer.write({ type: 'start' });
+
+        try {
+          started = await startDocumentAgentRun({
+            draftId,
+            message,
+            user: request.adminUser,
+          });
+
+          writer.write({
+            type: 'data-document-run',
+            data: {
+              draftId,
+              conversationId: started.conversation.id,
+              runId: started.run.id,
+              model: started.run.model,
+            },
+            transient: true,
+          });
+
+          for await (const event of started.result) {
+            const reasoningDelta = getReasoningSummaryDelta(event);
+            if (reasoningDelta) {
+              if (!reasoningStarted) {
+                writer.write({ type: 'reasoning-start', id: reasoningPartId });
+                reasoningStarted = true;
+              }
+              writer.write({ type: 'reasoning-delta', id: reasoningPartId, delta: reasoningDelta });
+              continue;
+            }
+
+            if (event.type === 'raw_model_stream_event' && event.data?.type === 'output_text_delta') {
+              const delta = String(event.data.delta || '');
+              if (delta) {
+                if (!textStarted) {
+                  writer.write({ type: 'text-start', id: textPartId });
+                  textStarted = true;
+                }
+                assistantText += delta;
+                writer.write({ type: 'text-delta', id: textPartId, delta });
+              }
+              continue;
+            }
+
+            if (event.type === 'run_item_stream_event' && (event.name === 'tool_called' || event.name === 'tool_output')) {
+              writer.write({
+                type: 'data-document-tool-activity',
+                data: getDocumentToolActivity(event),
+                transient: true,
+              });
+            }
+          }
+
+          await started.result.completed;
+          assertAiRunCompleted(started.result);
+          const finalText = String(started.result.finalOutput || assistantText || '').trim();
+          if (!textStarted && finalText) {
+            writer.write({ type: 'text-start', id: textPartId });
+            writer.write({ type: 'text-delta', id: textPartId, delta: finalText });
+            textStarted = true;
+          }
+
+          if (reasoningStarted) {
+            writer.write({ type: 'reasoning-end', id: reasoningPartId });
+          }
+          if (textStarted) {
+            writer.write({ type: 'text-end', id: textPartId });
+          }
+
+          finalizeDocumentAgentRun({
+            draftId,
+            conversationId: started.conversation.id,
+            runId: started.run.id,
+            assistantText: finalText,
+          });
+
+          const latest = buildDocumentAgentContext(draftId);
+          writer.write({
+            type: 'data-document-draft',
+            data: {
+              draft: latest.draft,
+              missingFields: latest.missingFields,
+            },
+            transient: true,
+          });
+          writer.write({ type: 'finish', finishReason: 'stop' });
+        } catch (error) {
+          if (started) {
+            finalizeDocumentAgentRun({
+              draftId,
+              conversationId: started.conversation.id,
+              runId: started.run.id,
+              assistantText: assistantText || 'AI 文档助手执行失败。',
+              status: 'failed',
+              errorMessage: error?.message || 'document agent run failed',
+            });
+          }
+          throw error;
+        }
+      },
+    });
+
     reply.hijack();
-    reply.raw.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
-    reply.raw.setHeader('Cache-Control', 'no-cache, no-transform');
-    reply.raw.setHeader('Connection', 'keep-alive');
-
-    let assistantText = '';
-    let started = null;
-
-    try {
-      started = await startDocumentAgentRun({
-        draftId,
-        message,
-        user: request.adminUser,
-      });
-
-      writeSseEvent(reply, 'started', {
-        draftId,
-        conversationId: started.conversation.id,
-        runId: started.run.id,
-        model: started.run.model,
-      });
-
-      for await (const event of started.result) {
-        const reasoningDelta = getReasoningSummaryDelta(event);
-        if (reasoningDelta) {
-          writeSseEvent(reply, 'reasoning_delta', { delta: reasoningDelta });
-          continue;
-        }
-
-        if (event.type === 'raw_model_stream_event' && event.data?.type === 'output_text_delta') {
-          const delta = String(event.data.delta || '');
-          if (delta) {
-            assistantText += delta;
-            writeSseEvent(reply, 'text_delta', { delta });
-          }
-          continue;
-        }
-
-        if (event.type === 'run_item_stream_event') {
-          if (event.name === 'tool_called') {
-            writeSseEvent(reply, 'tool_called', {
-              toolName: event.item?.rawItem?.name || event.item?.rawItem?.call_id || 'tool',
-              item: event.item?.toJSON?.() || null,
-            });
-            continue;
-          }
-          if (event.name === 'tool_output') {
-            writeSseEvent(reply, 'tool_output', {
-              toolName: event.item?.rawItem?.name || event.item?.rawItem?.call_id || 'tool',
-              item: event.item?.toJSON?.() || null,
-            });
-            continue;
-          }
-        }
-      }
-
-      await started.result.completed;
-      assertAiRunCompleted(started.result);
-      const finalText = String(started.result.finalOutput || assistantText || '').trim();
-      finalizeDocumentAgentRun({
-        draftId,
-        conversationId: started.conversation.id,
-        runId: started.run.id,
-        assistantText: finalText,
-      });
-
-      const latest = buildDocumentAgentContext(draftId);
-      writeSseEvent(reply, 'draft_updated', {
-        draft: latest.draft,
-        missing_fields: latest.missingFields,
-      });
-      writeSseEvent(reply, 'completed', {
-        assistant_message: finalText,
-        draft: latest.draft,
-        missing_fields: latest.missingFields,
-        suggested_questions: [],
-      });
-    } catch (error) {
-      if (started) {
-        finalizeDocumentAgentRun({
-          draftId,
-          conversationId: started.conversation.id,
-          runId: started.run.id,
-          assistantText: assistantText || 'AI 文档助手执行失败。',
-          status: 'failed',
-          errorMessage: error?.message || 'document agent run failed',
-        });
-      }
-      writeSseEvent(reply, 'error', {
-        success: false,
-        message: error?.message || 'AI 文档助手执行失败',
-      });
-    } finally {
-      reply.raw.end();
-    }
-
+    pipeUIMessageStreamToResponse({ response: reply.raw, stream });
     return reply;
   });
 }

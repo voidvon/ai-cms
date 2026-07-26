@@ -10,11 +10,11 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { DataTablePagination } from '@/components/DataTablePagination'
+import { AdminDataTable } from '@/components/AdminDataTable'
 import { TableActionButton } from '@/components/TableActionButton'
 import { ADMIN_CONFIG } from '@/config'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TableCell, TableHead, TableRow } from '@/components/ui/table'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -233,7 +233,10 @@ export default function ContentModelDataPage({
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
+          <AdminDataTable
+            fill
+            toolbar={(
+              <>
             <Button className="shrink-0" onClick={handleCreate}>{createButtonLabel}</Button>
 
             {!lockModelSelection ? (
@@ -276,37 +279,34 @@ export default function ContentModelDataPage({
                 <Search className="size-4" />
               </Button>
             </form>
-          </div>
-
-            <Table containerClassName="min-h-0 flex-1 rounded border">
-              <TableHeader className="sticky top-0 z-10 bg-background">
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>{titleFieldLabel}</TableHead>
-                  {showCode ? <TableHead>{getFieldLabel(fieldMap, 'code', '编号')}</TableHead> : null}
-                  <TableHead>栏目</TableHead>
-                  {showFeatured ? <TableHead>{getFieldLabel(fieldMap, 'is_featured_home', '推荐')}</TableHead> : null}
-                  {showVisibility ? <TableHead>{getFieldLabel(fieldMap, 'is_visible', '显示状态')}</TableHead> : null}
-                  {showSortOrder ? <TableHead>{getFieldLabel(fieldMap, 'sort_order', '排序')}</TableHead> : null}
-                  {showUpdatedAt ? <TableHead>更新时间</TableHead> : null}
-                  <TableHead className="text-right">操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {itemsLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={resolveColumnCount({ showCode, showFeatured, showVisibility, showSortOrder, showUpdatedAt })} className="text-center">
-                      加载中...
-                    </TableCell>
-                  </TableRow>
-                ) : items.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={resolveColumnCount({ showCode, showFeatured, showVisibility, showSortOrder, showUpdatedAt })} className="text-center">
-                      暂无内容
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  items.map((item) => (
+              </>
+            )}
+            columns={(
+              <>
+                <TableHead>ID</TableHead>
+                <TableHead>{titleFieldLabel}</TableHead>
+                {showCode ? <TableHead>{getFieldLabel(fieldMap, 'code', '编号')}</TableHead> : null}
+                <TableHead>栏目</TableHead>
+                {showFeatured ? <TableHead>{getFieldLabel(fieldMap, 'is_featured_home', '推荐')}</TableHead> : null}
+                {showVisibility ? <TableHead>{getFieldLabel(fieldMap, 'is_visible', '显示状态')}</TableHead> : null}
+                {showSortOrder ? <TableHead>{getFieldLabel(fieldMap, 'sort_order', '排序')}</TableHead> : null}
+                {showUpdatedAt ? <TableHead>更新时间</TableHead> : null}
+                <TableHead className="text-right">操作</TableHead>
+              </>
+            )}
+            columnCount={resolveColumnCount({ showCode, showFeatured, showVisibility, showSortOrder, showUpdatedAt })}
+            isLoading={itemsLoading}
+            isEmpty={items.length === 0}
+            emptyMessage="暂无内容"
+            pagination={pagination ? {
+              page: pagination.page,
+              totalPages: pagination.totalPages,
+              total: pagination.total || 0,
+              pageSize: ADMIN_CONFIG.pagination.pageSize,
+              onPageChange: setPage,
+            } : null}
+          >
+            {items.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell>{item.id}</TableCell>
                       <TableCell className="font-medium">{resolveContentItemName(item)}</TableCell>
@@ -350,21 +350,8 @@ export default function ContentModelDataPage({
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-
-          {pagination ? (
-            <DataTablePagination
-              className="shrink-0"
-              page={pagination.page}
-              totalPages={pagination.totalPages}
-              total={pagination.total || 0}
-              pageSize={ADMIN_CONFIG.pagination.pageSize}
-              onPageChange={setPage}
-            />
-          ) : null}
+            ))}
+          </AdminDataTable>
       </div>
 
       <AlertDialog open={Boolean(deleteTarget)} onOpenChange={(open) => { if (!open) setDeleteTarget(null) }}>

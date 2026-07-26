@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { adminApi } from '@/api/admin'
 import { Button } from '@/components/ui/button'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { AdminDataTable } from '@/components/AdminDataTable'
+import { TableCell, TableHead, TableRow } from '@/components/ui/table'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   AlertDialog,
@@ -74,51 +75,38 @@ export default function AdminsPage() {
     }
   }
 
-  if (isLoading) {
-    return <div>加载中...</div>
-  }
-
-  if (error) {
-    return <div>加载失败: {(error as Error).message}</div>
-  }
-
   const admins = data?.data || []
 
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div>
-              <CardTitle>管理员</CardTitle>
-              <CardDescription>共 {admins.length} 条记录</CardDescription>
-            </div>
-            <div className="flex items-center gap-2">
-              <AdminGroupsDialog />
-              <Button onClick={handleAdd}>添加管理员</Button>
-            </div>
-          </div>
+          <CardTitle>管理员</CardTitle>
+          <CardDescription>共 {admins.length} 条记录</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
+          <AdminDataTable
+            toolbar={(
+              <>
+              <AdminGroupsDialog />
+              <Button onClick={handleAdd}>添加管理员</Button>
+              </>
+            )}
+            columns={(
+              <>
                 <TableHead>ID</TableHead>
                 <TableHead>用户名</TableHead>
                 <TableHead>用户组</TableHead>
                 <TableHead>上次登录</TableHead>
                 <TableHead className="text-right">操作</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {admins.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="text-center">
-                    暂无数据
-                  </TableCell>
-                </TableRow>
-              ) : (
-                admins.map((admin) => (
+              </>
+            )}
+            columnCount={5}
+            isLoading={isLoading}
+            isEmpty={admins.length === 0}
+            error={error ? `加载失败: ${(error as Error).message}` : null}
+          >
+            {admins.map((admin) => (
                   <TableRow key={admin.id}>
                     <TableCell>{admin.id}</TableCell>
                     <TableCell className="font-medium">{admin.username}</TableCell>
@@ -140,10 +128,8 @@ export default function AdminsPage() {
                       </div>
                     </TableCell>
                   </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+            ))}
+          </AdminDataTable>
         </CardContent>
       </Card>
 

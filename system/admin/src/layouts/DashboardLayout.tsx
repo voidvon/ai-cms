@@ -5,25 +5,34 @@ import { authApi } from '@/api/auth'
 import {
   ArrowLeft,
   Bot,
+  Boxes,
+  BrainCircuit,
   Cpu,
   ChevronDown,
-  Folder,
-  FileText,
+  Database,
+  FilePenLine,
+  FileType2,
+  FolderTree,
   Globe,
-  Image,
+  History,
   Languages,
   LayoutDashboard,
-  ListChecks,
-  ListOrdered,
   LogOut,
-  Map,
   Moon,
+  Network,
+  Paintbrush,
   Palette,
+  PanelsTopLeft,
+  Paperclip,
   RefreshCw,
   Replace,
   Settings2,
   Shield,
   Sun,
+  TableProperties,
+  Tags,
+  UserCog,
+  Wrench,
   type LucideIcon,
 } from 'lucide-react'
 import { useTheme } from 'next-themes'
@@ -89,13 +98,13 @@ export default function DashboardLayout() {
   const topLevelItems = [
     { path: '/dashboard', label: '仪表盘', icon: LayoutDashboard },
     { path: '/ai', label: 'AI 对话', icon: Bot },
-    { path: '/ai-docs', label: 'AI 文档', icon: FileText },
-    { path: '/multidimensional-tables', label: '多维表格', icon: ListOrdered },
-    { path: '/content-model-data', label: '信息管理', icon: FileText },
-    { path: '/topics', label: '专题管理', icon: FileText },
-    { path: '/columns', label: '栏目管理', icon: Folder },
-    { path: '/pdf-assets', label: 'PDF', icon: FileText },
-    { path: '/media-assets', label: '附件', icon: Image },
+    { path: '/ai-docs', label: 'AI 文档', icon: FilePenLine },
+    { path: '/multidimensional-tables', label: '多维表格', icon: TableProperties },
+    { path: '/content-model-data', label: '信息管理', icon: Database },
+    { path: '/topics', label: '专题管理', icon: Tags },
+    { path: '/columns', label: '栏目管理', icon: FolderTree },
+    { path: '/pdf-assets', label: 'PDF', icon: FileType2 },
+    { path: '/media-assets', label: '附件', icon: Paperclip },
   ] satisfies MenuItem[]
 
   const menuGroups = [
@@ -103,8 +112,8 @@ export default function DashboardLayout() {
       label: '模板',
       icon: Palette,
       items: [
-        { path: '/themes', label: '主题管理', icon: Palette },
-        { path: '/content-models', label: '数据模型', icon: Settings2 },
+        { path: '/themes', label: '主题管理', icon: Paintbrush },
+        { path: '/content-models', label: '数据模型', icon: Boxes },
       ]
     },
     {
@@ -112,17 +121,17 @@ export default function DashboardLayout() {
       icon: Globe,
       items: [
         { path: '/languages', label: '多语言', icon: Languages },
-        { path: '/site-config', label: '全站配置', icon: Globe },
+        { path: '/site-config', label: '全站配置', icon: Settings2 },
         { path: '/static-gen', label: '静态生成', icon: RefreshCw },
       ]
     },
     {
       label: '工具',
-      icon: Bot,
+      icon: Wrench,
       items: [
         { path: '/bulk-replace', label: '批量替换', icon: Replace },
-        { path: '/sitemap-diagnostics', label: 'Sitemap', icon: Map },
-        { path: '/llms-diagnostics', label: 'LLMS', icon: Bot },
+        { path: '/sitemap-diagnostics', label: 'Sitemap', icon: Network },
+        { path: '/llms-diagnostics', label: 'LLMS', icon: BrainCircuit },
       ]
     },
     {
@@ -130,8 +139,8 @@ export default function DashboardLayout() {
       icon: Shield,
       items: [
         { path: '/ai-models', label: '模型管理', icon: Cpu },
-        { path: '/admins', label: '管理员', icon: Shield },
-        { path: '/admin-login-logs', label: '登录日志', icon: ListChecks },
+        { path: '/admins', label: '管理员', icon: UserCog },
+        { path: '/admin-login-logs', label: '登录日志', icon: History },
       ]
     }
   ] satisfies Array<{
@@ -186,15 +195,25 @@ export default function DashboardLayout() {
   }
 
   return (
-    <SidebarProvider className="h-svh overflow-hidden">
-      <Sidebar>
-        <SidebarHeader>
-          <div className="px-2 py-2">
-            <div className="flex items-center gap-1.5">
-              <h1 className="text-lg font-semibold">管理后台</h1>
-              <SystemVersionControl />
+    <SidebarProvider className="h-svh overflow-hidden [&_[data-slot=sidebar-container]]:ease-in-out [&_[data-slot=sidebar-gap]]:ease-in-out">
+      <Sidebar collapsible="icon">
+        <SidebarHeader className="overflow-hidden">
+          <div className="flex w-[calc(var(--sidebar-width)-1rem)] items-center gap-2 px-2 py-2 transition-[padding] duration-200 ease-in-out group-data-[collapsible=icon]:px-0">
+            <SidebarMenuButton
+              onClick={() => navigate('/dashboard')}
+              aria-label="管理后台"
+              tooltip="管理后台"
+              className="w-8 shrink-0 justify-center"
+            >
+              <PanelsTopLeft className="size-4" />
+            </SidebarMenuButton>
+            <div className="min-w-0 whitespace-nowrap opacity-100 transition-opacity duration-150 ease-linear group-data-[collapsible=icon]:pointer-events-none group-data-[collapsible=icon]:opacity-0">
+              <div className="flex items-center gap-1.5">
+                <h1 className="truncate text-lg font-semibold">管理后台</h1>
+                <SystemVersionControl />
+              </div>
+              <p className="truncate text-sm text-muted-foreground">欢迎, {user.data?.username}</p>
             </div>
-            <p className="text-sm text-muted-foreground">欢迎, {user.data?.username}</p>
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -207,6 +226,7 @@ export default function DashboardLayout() {
                       onClick={() => navigate(item.path)}
                       isActive={location.pathname === item.path}
                       closeOnMobileClick
+                      tooltip={item.label}
                     >
                       <item.icon />
                       <span>{item.label}</span>
@@ -216,7 +236,15 @@ export default function DashboardLayout() {
                 {menuGroups.map((group) => (
                   <Collapsible key={group.label} defaultOpen className="group/collapsible">
                     <SidebarMenuItem>
-                      <CollapsibleTrigger render={<SidebarMenuButton className="w-full" />}>
+                      <CollapsibleTrigger
+                        render={(
+                          <SidebarMenuButton
+                            className="w-full"
+                            isActive={group.items.some((item) => item.path === location.pathname)}
+                            tooltip={group.label}
+                          />
+                        )}
+                      >
                         <group.icon />
                         <span>{group.label}</span>
                         <ChevronDown className="ml-auto transition-transform group-data-open/collapsible:rotate-180" />
@@ -246,28 +274,28 @@ export default function DashboardLayout() {
         </SidebarContent>
         <SidebarFooter className="gap-0 p-0">
           <SidebarSeparator />
-          <div className="flex items-center gap-2 px-4 py-3">
-            <div className="min-w-0 truncate text-sm text-muted-foreground">
+          <div className="relative h-14 shrink-0 overflow-hidden transition-[height] duration-200 ease-in-out group-data-[collapsible=icon]:h-[5.5rem]">
+            <div className="absolute inset-y-0 left-4 flex max-w-[calc(100%-6.5rem)] items-center truncate text-sm text-muted-foreground opacity-100 transition-opacity duration-150 ease-linear group-data-[collapsible=icon]:pointer-events-none group-data-[collapsible=icon]:opacity-0">
               {user.data?.username}
             </div>
-            <div className="ml-auto flex items-center gap-1">
-              <SidebarMenuButton
-                onClick={handleToggleTheme}
-                aria-label={isDarkMode ? '切换到白天模式' : '切换到黑夜模式'}
-                className="h-8 w-8 justify-center p-0"
-              >
-                {isDarkMode ? <Sun /> : <Moon />}
-                <span className="sr-only">{isDarkMode ? '白天模式' : '黑夜模式'}</span>
-              </SidebarMenuButton>
-              <SidebarMenuButton
-                onClick={handleLogout}
-                aria-label="退出登录"
-                className="h-8 w-8 justify-center p-0"
-              >
-                <LogOut />
-                <span className="sr-only">退出登录</span>
-              </SidebarMenuButton>
-            </div>
+            <SidebarMenuButton
+              onClick={handleToggleTheme}
+              aria-label={isDarkMode ? '切换到白天模式' : '切换到黑夜模式'}
+              className="absolute right-12 top-3 h-8 w-8 justify-center p-0 transition-[right,top] duration-200 ease-in-out group-data-[collapsible=icon]:right-2"
+              tooltip={isDarkMode ? '切换到白天模式' : '切换到黑夜模式'}
+            >
+              {isDarkMode ? <Sun /> : <Moon />}
+              <span className="sr-only">{isDarkMode ? '白天模式' : '黑夜模式'}</span>
+            </SidebarMenuButton>
+            <SidebarMenuButton
+              onClick={handleLogout}
+              aria-label="退出登录"
+              className="absolute right-2 top-3 h-8 w-8 justify-center p-0 transition-[right,top] duration-200 ease-in-out group-data-[collapsible=icon]:top-12"
+              tooltip="退出登录"
+            >
+              <LogOut />
+              <span className="sr-only">退出登录</span>
+            </SidebarMenuButton>
           </div>
         </SidebarFooter>
       </Sidebar>

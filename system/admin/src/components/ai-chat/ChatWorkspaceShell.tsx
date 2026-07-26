@@ -1,13 +1,16 @@
 import type { ReactNode } from 'react'
 import { Bot } from 'lucide-react'
 import {
-  Conversation,
-  ConversationContent,
-  ConversationEmptyState,
-  ConversationScrollButton,
-} from '@/components/ai-elements/conversation'
+  MessageScroller,
+  MessageScrollerButton,
+  MessageScrollerContent,
+  MessageScrollerItem,
+  MessageScrollerProvider,
+  MessageScrollerViewport,
+} from '@/components/ui/message-scroller'
 import { ChatMessageItem, type ChatMessageMetadata } from '@/components/ai-chat/ChatMessageItem'
 import { Badge } from '@/components/ui/badge'
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from '@/components/ui/empty'
 import { cn } from '@/lib/utils'
 import type { UIMessage } from 'ai'
 
@@ -61,43 +64,52 @@ export function ChatWorkspaceShell({
           : 'border-b lg:border-b-0 lg:border-r'
         : ''
     )}>
-        <div className="border-b bg-background/95 px-4 py-3 backdrop-blur">
-          <div className="flex flex-wrap items-center gap-2">
-            {statusBadges.map((badge) => (
-              <Badge key={badge.key} variant={badge.tone || 'outline'}>
-                {badge.label}
-              </Badge>
-            ))}
+        {statusBadges.length > 0 ? (
+          <div className="border-b bg-background/95 px-4 py-3 backdrop-blur">
+            <div className="flex flex-wrap items-center gap-2">
+              {statusBadges.map((badge) => (
+                <Badge key={badge.key} variant={badge.tone || 'outline'}>
+                  {badge.label}
+                </Badge>
+              ))}
+            </div>
           </div>
-        </div>
+        ) : null}
 
-        <Conversation className="min-h-0 flex-1 bg-muted/10">
-          <ConversationContent className="gap-5 px-4 py-5">
-            {layout === 'stacked' && sidebar ? sidebar : null}
-            {messages.length === 0 ? (
-              <ConversationEmptyState
-                title={emptyTitle}
-                description={emptyDescription}
-                icon={<Bot className="h-5 w-5" />}
-              />
-            ) : (
-              messages.map((message) => (
-                <ChatMessageItem
-                  key={message.id}
-                  role={message.role}
-                  text={message.text}
-                  parts={message.parts}
-                  metadata={message.metadata}
-                  streaming={message.streaming}
-                  pending={message.pending}
-                  error={message.error}
-                  pendingLabel={message.pendingLabel}
-                />
-              ))
-            )}
-          </ConversationContent>
-          <ConversationScrollButton />
-        </Conversation>
+        <MessageScrollerProvider autoScroll>
+          <MessageScroller className="min-h-0 flex-1 bg-muted/10">
+            <MessageScrollerViewport>
+              <MessageScrollerContent className="gap-5 px-4 py-5">
+                {layout === 'stacked' && sidebar ? sidebar : null}
+                {messages.length === 0 ? (
+                  <Empty>
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon"><Bot /></EmptyMedia>
+                      <EmptyTitle>{emptyTitle}</EmptyTitle>
+                      <EmptyDescription>{emptyDescription}</EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                ) : (
+                  messages.map((message) => (
+                    <MessageScrollerItem key={message.id} messageId={message.id}>
+                      <ChatMessageItem
+                        role={message.role}
+                        text={message.text}
+                        parts={message.parts}
+                        metadata={message.metadata}
+                        streaming={message.streaming}
+                        pending={message.pending}
+                        error={message.error}
+                        pendingLabel={message.pendingLabel}
+                      />
+                    </MessageScrollerItem>
+                  ))
+                )}
+              </MessageScrollerContent>
+            </MessageScrollerViewport>
+            <MessageScrollerButton direction="end" className="rounded-full shadow-sm" />
+          </MessageScroller>
+        </MessageScrollerProvider>
 
         <div className="shrink-0 border-t bg-background/95 px-4 py-4 backdrop-blur">
           {children}

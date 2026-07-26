@@ -357,30 +357,28 @@ export default function MultidimensionalTablesPage() {
           </CardContent>
         </Card>
 
-        <Card className="flex min-h-0 flex-col overflow-hidden">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Input
-                value={recordSearch}
-                onChange={(event) => setRecordSearch(event.target.value)}
-                placeholder="搜索记录..."
-                disabled={!selectedColumn}
-                className="w-[180px]"
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="icon"
-                disabled={!dataTable}
-                onClick={() => setFieldEditorOpen(true)}
-                aria-label="表格字段设置"
-                title="表格字段设置"
-              >
-                <Settings2 className="size-4" />
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent className="min-h-0 flex-1 overflow-hidden">
+        <div className="flex min-h-0 flex-col overflow-hidden">
+          <div className="mb-4 flex items-center gap-2">
+            <Input
+              value={recordSearch}
+              onChange={(event) => setRecordSearch(event.target.value)}
+              placeholder="搜索记录..."
+              disabled={!selectedColumn}
+              className="w-[180px]"
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              disabled={!dataTable}
+              onClick={() => setFieldEditorOpen(true)}
+              aria-label="表格字段设置"
+              title="表格字段设置"
+            >
+              <Settings2 className="size-4" />
+            </Button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-hidden">
             {!selectedColumn ? (
               <div className="rounded border border-dashed px-4 py-10 text-center text-sm text-muted-foreground">
                 请选择或新建一个表格。
@@ -399,8 +397,8 @@ export default function MultidimensionalTablesPage() {
                 }}
               />
             )}
-          </CardContent>
-        </Card>
+          </div>
+        </div>
       </div>
 
       <Sheet open={mobileListDrawerOpen} onOpenChange={setMobileListDrawerOpen}>

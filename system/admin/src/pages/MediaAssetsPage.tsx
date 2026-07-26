@@ -16,19 +16,13 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { AdminDataTable } from '@/components/AdminDataTable'
 import { TableActionButton } from '@/components/TableActionButton'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import {
-  Pagination,
-  PaginationContent,
-  PaginationEllipsis,
-  PaginationItem,
-  PaginationLink,
-} from '@/components/ui/pagination'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TableCell, TableHead, TableRow } from '@/components/ui/table'
 import { ADMIN_CONFIG } from '@/config'
 import { formatRelativeTime } from '@/lib/datetime'
 import { resolveMediaAssetUrl } from '@/lib/assets'
@@ -254,21 +248,16 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
     }
   }
 
-  if (isLoading) {
-    return <div>加载中...</div>
-  }
-
-  if (error) {
-    return <div>加载失败: {(error as Error).message}</div>
-  }
-
   const items: MediaAsset[] = data?.items || []
   const pagination = data?.pagination
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <AdminDataTable
+          fill
+          toolbar={(
+            <>
             <Button type="button" onClick={() => setUploadDialogOpen(true)}>
               <FileUp className="size-4" />
               {config.uploadButton}
@@ -323,36 +312,37 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
                 <Search className="size-4" />
               </Button>
             </form>
-
-            <div className="text-sm text-muted-foreground">
-              共 {pagination?.total || 0} 条
-            </div>
-        </div>
-        <Table containerClassName="min-h-0 flex-1 rounded-md border">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>ID</TableHead>
-                  <TableHead>类型</TableHead>
-                  {showLanguageColumn ? <TableHead>标题</TableHead> : null}
-                  {showLanguageColumn ? <TableHead>编号</TableHead> : null}
-                  {!showLanguageColumn ? <TableHead>文件名</TableHead> : null}
-                  <TableHead>大小</TableHead>
-                  {showLanguageColumn ? <TableHead>语言</TableHead> : null}
-                  <TableHead>使用位置</TableHead>
-                  <TableHead>来源</TableHead>
-                  <TableHead>创建时间</TableHead>
-                  <TableHead className="text-right">操作</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={showLanguageColumn ? 10 : 8} className="text-center">
-                      {config.emptyLabel}
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  items.map((item) => (
+            </>
+          )}
+          columns={(
+            <>
+              <TableHead>ID</TableHead>
+              <TableHead>类型</TableHead>
+              {showLanguageColumn ? <TableHead>标题</TableHead> : null}
+              {showLanguageColumn ? <TableHead>编号</TableHead> : null}
+              {!showLanguageColumn ? <TableHead>文件名</TableHead> : null}
+              <TableHead>大小</TableHead>
+              {showLanguageColumn ? <TableHead>语言</TableHead> : null}
+              <TableHead>使用位置</TableHead>
+              <TableHead>来源</TableHead>
+              <TableHead>创建时间</TableHead>
+              <TableHead className="text-right">操作</TableHead>
+            </>
+          )}
+          columnCount={showLanguageColumn ? 10 : 8}
+          isLoading={isLoading}
+          isEmpty={items.length === 0}
+          error={error ? `加载失败: ${(error as Error).message}` : null}
+          emptyMessage={config.emptyLabel}
+          pagination={pagination ? {
+            page: pagination.page,
+            totalPages: pagination.totalPages,
+            total: pagination.total || 0,
+            pageSize: ADMIN_CONFIG.pagination.pageSize,
+            onPageChange: setPage,
+          } : null}
+        >
+          {items.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell>{item.id}</TableCell>
                       <TableCell className={showLanguageColumn ? 'whitespace-nowrap' : undefined}>
@@ -473,74 +463,8 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-        </Table>
-
-          {pagination && (
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-sm text-muted-foreground">
-                第 {pagination.page} / {pagination.totalPages} 页
-              </div>
-              {pagination.totalPages > 1 && (
-                <Pagination className="mx-0 w-auto justify-end">
-                  <PaginationContent>
-                    <PaginationItem>
-                      <PaginationLink
-                        href="#"
-                        size="default"
-                        className={pagination.page === 1 ? 'pointer-events-none opacity-50' : ''}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          if (pagination.page > 1) {
-                            setPage(pagination.page - 1)
-                          }
-                        }}
-                      >
-                        上一页
-                      </PaginationLink>
-                    </PaginationItem>
-                    {buildPaginationItems(pagination.page, pagination.totalPages).map((item, index) => (
-                      item === 'ellipsis' ? (
-                        <PaginationItem key={`ellipsis-${index}`}>
-                          <PaginationEllipsis />
-                        </PaginationItem>
-                      ) : (
-                        <PaginationItem key={item}>
-                          <PaginationLink
-                            href="#"
-                            isActive={item === pagination.page}
-                            onClick={(event) => {
-                              event.preventDefault()
-                              setPage(item)
-                            }}
-                          >
-                            {item}
-                          </PaginationLink>
-                        </PaginationItem>
-                      )
-                    ))}
-                    <PaginationItem>
-                      <PaginationLink
-                        href="#"
-                        size="default"
-                        className={pagination.page === pagination.totalPages ? 'pointer-events-none opacity-50' : ''}
-                        onClick={(event) => {
-                          event.preventDefault()
-                          if (pagination.page < pagination.totalPages) {
-                            setPage(pagination.page + 1)
-                          }
-                        }}
-                      >
-                        下一页
-                      </PaginationLink>
-                    </PaginationItem>
-                  </PaginationContent>
-                </Pagination>
-              )}
-            </div>
-          )}
+          ))}
+        </AdminDataTable>
       </div>
 
       <Dialog
@@ -704,39 +628,36 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
             <DialogTitle>使用位置</DialogTitle>
             <DialogDescription>{usageAsset?.relative_path}</DialogDescription>
           </DialogHeader>
-          <div className="max-h-[55vh] overflow-auto rounded border">
-            {usageAsset?.usage_references?.length ? (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>位置</TableHead>
-                    <TableHead>表</TableHead>
-                    <TableHead>字段</TableHead>
-                    <TableHead>ID</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {usageAsset.usage_references.map((reference, index) => (
-                    <TableRow key={`${reference.table}-${reference.field}-${reference.record_id || reference.entry_id || index}`}>
-                      <TableCell className="max-w-[260px]">
-                        <div className="truncate font-medium">{reference.label || '-'}</div>
-                        {reference.model_name ? (
-                          <div className="text-xs text-muted-foreground">{reference.model_name}</div>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{reference.table}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{reference.field}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">
-                        {reference.entry_id ? `entry ${reference.entry_id}` : reference.record_id || '-'}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            ) : (
-              <div className="p-6 text-center text-sm text-muted-foreground">未记录使用位置</div>
+          <AdminDataTable
+            columns={(
+              <>
+                <TableHead>位置</TableHead>
+                <TableHead>表</TableHead>
+                <TableHead>字段</TableHead>
+                <TableHead>ID</TableHead>
+              </>
             )}
-          </div>
+            columnCount={4}
+            isEmpty={!usageAsset?.usage_references?.length}
+            emptyMessage="未记录使用位置"
+            tableContainerClassName="max-h-[55vh]"
+          >
+            {usageAsset?.usage_references?.map((reference, index) => (
+              <TableRow key={`${reference.table}-${reference.field}-${reference.record_id || reference.entry_id || index}`}>
+                <TableCell className="max-w-[260px]">
+                  <div className="truncate font-medium">{reference.label || '-'}</div>
+                  {reference.model_name ? (
+                    <div className="text-xs text-muted-foreground">{reference.model_name}</div>
+                  ) : null}
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">{reference.table}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">{reference.field}</TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {reference.entry_id ? `entry ${reference.entry_id}` : reference.record_id || '-'}
+                </TableCell>
+              </TableRow>
+            ))}
+          </AdminDataTable>
         </DialogContent>
       </Dialog>
 
@@ -812,29 +733,4 @@ function formatFileSize(size: number) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
-
-function buildPaginationItems(currentPage: number, totalPages: number): Array<number | 'ellipsis'> {
-  if (totalPages <= 7) {
-    return Array.from({ length: totalPages }, (_, index) => index + 1)
-  }
-
-  const items: Array<number | 'ellipsis'> = [1]
-  const start = Math.max(2, currentPage - 1)
-  const end = Math.min(totalPages - 1, currentPage + 1)
-
-  if (start > 2) {
-    items.push('ellipsis')
-  }
-
-  for (let page = start; page <= end; page += 1) {
-    items.push(page)
-  }
-
-  if (end < totalPages - 1) {
-    items.push('ellipsis')
-  }
-
-  items.push(totalPages)
-  return items
 }

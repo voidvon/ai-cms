@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Chat, useChat } from '@ai-sdk/react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Eye, FileCog, FilePlus2, FileSignature, Pencil, RefreshCw, Search, Settings2, Stamp, Trash2, X } from 'lucide-react'
+import { Building2, Check, Eye, FileCog, FilePlus2, FileSignature, Pencil, RefreshCw, Search, Settings2, Stamp, Trash2, X } from 'lucide-react'
 import { useOutletContext, useSearchParams } from 'react-router-dom'
 import { documentWorkspacesApi } from '@/api/document-workspaces'
-import { documentAgentApi } from '@/api/document-agent'
+import { createDocumentAgentChatTransport } from '@/api/document-agent'
 import { AiConversationComposer } from '@/components/ai-chat/AiConversationComposer'
 import { ChatWorkspaceShell, type ChatWorkspaceShellMessage } from '@/components/ai-chat/ChatWorkspaceShell'
 import { DocumentCompanyManagerDialog } from '@/components/DocumentCompanyManagerDialog'
@@ -27,15 +28,17 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
-import { DataTablePagination } from '@/components/DataTablePagination'
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { Sheet, SheetClose, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
+import { AdminDataTable } from '@/components/AdminDataTable'
 import { TableActionButton } from '@/components/TableActionButton'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TableCell, TableHead, TableRow } from '@/components/ui/table'
 import { ADMIN_CONFIG } from '@/config'
 import { formatRelativeTime } from '@/lib/datetime'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { toast } from 'sonner'
-import type { DocumentAgentDraftStreamState, DocumentCompany, DocumentCompanySlot, DocumentDraft, DocumentDraftStampPlacement, DocumentStamp, DocumentTemplate } from '@/types'
+import type { DocumentCompany, DocumentCompanySlot, DocumentDraft, DocumentDraftStampPlacement, DocumentStamp, DocumentTemplate } from '@/types'
+import type { UIMessage } from 'ai'
 
 const DOCUMENT_TYPE_LABELS: Record<'quote' | 'contract', string> = {
   quote: '报价单',
@@ -46,6 +49,12 @@ type DashboardHeaderContext = {
   headerSlotElement: HTMLDivElement | null
   setDocumentTitle: (value: string) => void
   setMainContentPadding: (enabled: boolean) => void
+}
+
+type DocumentToolActivity = {
+  type: 'tool_called' | 'tool_output'
+  toolName?: string
+  item?: unknown
 }
 
 const DEFAULT_DOCUMENT_PAGE_WIDTH = 794
@@ -79,12 +88,7 @@ export default function AiChatPage() {
   const [documentSearch, setDocumentSearch] = useState('')
   const [selectedCompanyIds, setSelectedCompanyIds] = useState<Record<string, string>>({})
   const [selectedStampIdToApply, setSelectedStampIdToApply] = useState<string>('')
-  const [streamState, setStreamState] = useState<DocumentAgentDraftStreamState>({
-    isStreaming: false,
-    assistantText: '',
-    reasoningText: '',
-    toolActivities: [],
-  })
+  const [documentToolActivities, setDocumentToolActivities] = useState<DocumentToolActivity[]>([])
   const draftId = String(searchParams.get('draft') || '').trim()
 
   const { data: templatesData, isLoading: isTemplatesLoading } = useQuery({
@@ -125,6 +129,55 @@ export default function AiChatPage() {
   })
 
   const currentDraft = draftQuery.data?.data || null
+  const initialDocumentChatMessages = useMemo(
+    () => toDocumentChatMessages(currentDraft),
+    [currentDraft],
+  )
+  const documentChatTransport = useMemo(
+    () => createDocumentAgentChatTransport(draftId),
+    [draftId],
+  )
+  const documentChatInstance = useMemo(() => new Chat({
+    id: draftId || 'document-assistant-idle',
+    transport: documentChatTransport,
+    messages: [],
+    onData: (dataPart) => {
+      if (dataPart.type === 'data-document-tool-activity') {
+        const activity = normalizeDocumentToolActivity(dataPart.data)
+        if (activity) {
+          setDocumentToolActivities((current) => [...current, activity])
+        }
+        return
+      }
+
+      if (dataPart.type === 'data-document-draft') {
+        const nextDraft = getDocumentDraftFromDataPart(dataPart.data)
+        if (!nextDraft || nextDraft.id !== draftId) {
+          return
+        }
+        queryClient.setQueryData(['document-draft', draftId], { success: true, data: nextDraft })
+        setPreviewVersion((value) => value + 1)
+      }
+    },
+    onError: (error) => {
+      setDocumentToolActivities([])
+      toast.error(error.message || 'AI 文档助手执行失败')
+    },
+    onFinish: () => {
+      setDocumentToolActivities([])
+      setPreviewVersion((value) => value + 1)
+      void queryClient.invalidateQueries({ queryKey: ['document-companies'] })
+      void queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
+      void queryClient.invalidateQueries({ queryKey: ['document-draft', draftId] })
+    },
+  }), [documentChatTransport, draftId, queryClient])
+  const documentChat = useChat({
+    chat: documentChatInstance,
+    experimental_throttle: 0,
+  })
+  const isDocumentChatStreaming = documentChat.status === 'submitted' || documentChat.status === 'streaming'
+  const documentChatMessages = documentChat.messages
+  const setDocumentChatMessages = documentChat.setMessages
   const previewHeaderTitle = currentDraft
     ? getDraftDocumentNumber(currentDraft) || currentDraft.title || '未命名文档'
     : ''
@@ -187,14 +240,21 @@ export default function AiChatPage() {
 
   useEffect(() => {
     setIsMobilePreviewOpen(false)
-    setStreamState({
-      isStreaming: false,
-      assistantText: '',
-      reasoningText: '',
-      toolActivities: [],
-    })
+    setDocumentToolActivities([])
     setPreviewVersion((value) => value + 1)
   }, [draftId])
+
+  useEffect(() => {
+    if (isDocumentChatStreaming) {
+      return
+    }
+
+    const currentSignature = getDocumentChatMessagesSignature(documentChatMessages)
+    const nextSignature = getDocumentChatMessagesSignature(initialDocumentChatMessages)
+    if (currentSignature !== nextSignature) {
+      setDocumentChatMessages(initialDocumentChatMessages)
+    }
+  }, [documentChatMessages, initialDocumentChatMessages, isDocumentChatStreaming, setDocumentChatMessages])
 
   useEffect(() => {
     setSelectedCompanyIds({})
@@ -274,81 +334,6 @@ export default function AiChatPage() {
     },
   })
 
-  const sendMessageMutation = useMutation({
-    mutationFn: async ({ id, message }: { id: string; message: string }) => {
-      return documentAgentApi.streamDraftMessage(id, message, {
-        onStarted: () => {
-          setStreamState({
-            isStreaming: true,
-            assistantText: '',
-            reasoningText: '',
-            toolActivities: [],
-          })
-        },
-        onTextDelta: ({ delta }) => {
-          setStreamState((current) => ({
-            ...current,
-            assistantText: `${current.assistantText}${String(delta || '')}`,
-          }))
-        },
-        onReasoningDelta: ({ delta }) => {
-          setStreamState((current) => ({
-            ...current,
-            reasoningText: `${current.reasoningText}${String(delta || '')}`,
-          }))
-        },
-        onToolCalled: (event) => {
-          setStreamState((current) => ({
-            ...current,
-            toolActivities: [...current.toolActivities, {
-              type: 'tool_called',
-              toolName: event.toolName,
-              item: event.item,
-            }],
-          }))
-        },
-        onToolOutput: (event) => {
-          setStreamState((current) => ({
-            ...current,
-            toolActivities: [...current.toolActivities, {
-              type: 'tool_output',
-              toolName: event.toolName,
-              item: event.item,
-            }],
-          }))
-        },
-        onDraftUpdated: ({ draft }) => {
-          void queryClient.setQueryData(['document-draft', id], { success: true, data: draft })
-          setPreviewVersion((value) => value + 1)
-        },
-      })
-    },
-    onSuccess: async (response) => {
-      if (!response?.draft?.id) {
-        return
-      }
-      setStreamState((current) => ({
-        isStreaming: false,
-        assistantText: '',
-        reasoningText: current.reasoningText,
-        toolActivities: [],
-      }))
-      setPreviewVersion((value) => value + 1)
-      await queryClient.invalidateQueries({ queryKey: ['document-companies'] })
-      await queryClient.invalidateQueries({ queryKey: ['document-drafts'] })
-      await queryClient.setQueryData(['document-draft', response.draft.id], { success: true, data: response.draft })
-    },
-    onError: (error: any) => {
-      setStreamState({
-        isStreaming: false,
-        assistantText: '',
-        reasoningText: '',
-        toolActivities: [],
-      })
-      toast.error(error?.message || error?.response?.data?.message || 'AI 文档助手执行失败')
-    },
-  })
-
   const deleteDraftMutation = useMutation({
     mutationFn: async (id: string) => {
       return documentWorkspacesApi.deleteDraft(id)
@@ -396,40 +381,47 @@ export default function AiChatPage() {
       return []
     }
 
-    const baseMessages: ChatWorkspaceShellMessage[] = currentDraft.messages.length === 0
+    const chatMessages = documentChatMessages
+      .filter((message) => message.role === 'user' || message.role === 'assistant')
+      .map((message) => ({
+        id: message.id,
+        role: message.role as 'user' | 'assistant',
+        text: getDocumentChatMessageText(message),
+        parts: message.parts,
+      }))
+    const baseMessages: ChatWorkspaceShellMessage[] = chatMessages.length === 0
       ? [{
           id: 'document-assistant-welcome',
           role: 'assistant' as const,
           text: `当前已进入${DOCUMENT_TYPE_LABELS[currentDraft.document_type]}工作台。你可以先告诉我客户名称、产品型号和数量，我会先补齐基础草稿。`,
         }]
-      : currentDraft.messages.map((message, index) => ({
-          id: `${message.created_at}-${index}`,
-          role: message.role,
-          text: message.text,
-        }))
+      : chatMessages
 
-    if (streamState.isStreaming) {
-      baseMessages.push({
-        id: `streaming-${currentDraft.id}`,
-        role: 'assistant',
-        text: streamState.assistantText,
-        parts: createDocumentReasoningParts(streamState.reasoningText, true),
-        streaming: true,
-        pending: !streamState.assistantText,
-        pendingLabel: getDocumentAgentPendingLabel(streamState.toolActivities),
-      })
-    } else if (streamState.reasoningText) {
-      const lastAssistantIndex = findLastAssistantMessageIndex(baseMessages)
-      if (lastAssistantIndex >= 0) {
+    if (isDocumentChatStreaming) {
+      const lastAssistantIndex = baseMessages.findLastIndex((message) => message.role === 'assistant')
+      const lastUserIndex = baseMessages.findLastIndex((message) => message.role === 'user')
+      if (lastAssistantIndex < lastUserIndex) {
+        baseMessages.push({
+          id: `document-assistant-pending-${currentDraft.id}`,
+          role: 'assistant',
+          text: '',
+          streaming: true,
+          pending: true,
+          pendingLabel: getDocumentAgentPendingLabel(documentToolActivities),
+        })
+      } else if (lastAssistantIndex >= 0) {
+        const message = baseMessages[lastAssistantIndex]
         baseMessages[lastAssistantIndex] = {
-          ...baseMessages[lastAssistantIndex],
-          parts: createDocumentReasoningParts(streamState.reasoningText, false),
+          ...message,
+          streaming: true,
+          pending: !message.text?.trim(),
+          pendingLabel: getDocumentAgentPendingLabel(documentToolActivities),
         }
       }
     }
 
     return baseMessages
-  }, [currentDraft, streamState])
+  }, [currentDraft, documentChatMessages, documentToolActivities, isDocumentChatStreaming])
 
   useEffect(() => {
     if (!currentDraft?.id) {
@@ -453,13 +445,11 @@ export default function AiChatPage() {
 
   const handleSubmit = async ({ text }: { text?: string }) => {
     const value = String(text || '').trim()
-    if (!value || !currentDraft?.id) {
+    if (!value || !currentDraft?.id || isDocumentChatStreaming) {
       return
     }
-    await sendMessageMutation.mutateAsync({
-      id: currentDraft.id,
-      message: value,
-    })
+    setDocumentToolActivities([])
+    await documentChat.sendMessage({ text: value })
   }
 
   const handlePrintCurrentDraft = () => {
@@ -616,7 +606,7 @@ export default function AiChatPage() {
   const headerContent = currentDraft ? (
     <div className="min-w-0">
       <div className="flex items-center justify-end lg:hidden">
-        <Button type="button" variant="outline" size="sm" onClick={() => setIsMobilePreviewOpen(true)}>
+        <Button type="button" variant="outline" className="shrink-0" onClick={() => setIsMobilePreviewOpen(true)}>
           <Eye className="size-4" />
           预览
         </Button>
@@ -628,7 +618,7 @@ export default function AiChatPage() {
               <p className="truncate text-sm font-medium">{previewHeaderTitle}</p>
             </div>
             <div className="flex justify-end">
-              <Button type="button" variant="outline" size="sm" onClick={handlePrintCurrentDraft}>
+              <Button type="button" variant="outline" className="shrink-0" onClick={handlePrintCurrentDraft}>
                 导出
               </Button>
             </div>
@@ -691,14 +681,39 @@ export default function AiChatPage() {
     </div>
   )
 
+  const chatWorkspaceSection = currentDraft ? (
+    <section className="flex h-full min-h-0 flex-col bg-background">
+      <ChatWorkspaceShell
+        layout="stacked"
+        messages={conversationMessages}
+        composer={(
+          <AiConversationComposer
+            placeholder="问问 AI"
+            availableTools={[]}
+            selectedToolNames={[]}
+            enableTools={false}
+            enableMentions={false}
+            submitDisabled={isDocumentChatStreaming}
+            submitStatus={isDocumentChatStreaming ? 'submitted' : 'ready'}
+            onToolSelectionChange={() => {}}
+            onSubmit={(payload) => void handleSubmit({ text: payload.text })}
+          />
+        )}
+      />
+    </section>
+  ) : null
+
   return (
     <div className="h-full">
       {headerSlotElement ? createPortal(headerContent, headerSlotElement) : null}
-      <Card className="flex h-full min-h-0 flex-col overflow-hidden rounded-none border-0 shadow-none">
+      <Card className="flex h-full min-h-0 flex-col overflow-hidden rounded-none border-0 py-0 shadow-none">
         <CardContent className="min-h-0 flex-1 overflow-hidden p-0">
           {!currentDraft ? (
-            <div className="flex h-full min-h-0 flex-col bg-background p-4 sm:p-6">
-              <div className="mb-4 flex h-10 shrink-0 flex-nowrap items-center gap-2 overflow-x-auto overscroll-x-contain">
+            <div className="flex h-full min-h-0 flex-col bg-background p-4">
+              <AdminDataTable
+                fill
+                toolbar={(
+                  <>
                 <Button type="button" className="shrink-0" onClick={() => setIsTemplatePickerOpen(true)}>
                   <FilePlus2 className="size-4" />
                   添加文档
@@ -731,46 +746,51 @@ export default function AiChatPage() {
                   合同管理
                 </Button>
                 <Button type="button" variant="outline" className="shrink-0" onClick={() => setIsCompanyManagerOpen(true)}>
+                  <Building2 className="size-4" />
                   公司管理
                 </Button>
                 <Button type="button" variant="outline" className="shrink-0" onClick={() => setIsStampManagerOpen(true)}>
                   <Stamp className="size-4" />
                   印章管理
                 </Button>
-              </div>
-
-              <div className="min-h-0 flex-1 overflow-hidden rounded-lg border">
-                <Table containerClassName="h-full min-h-0">
-                  <TableHeader className="sticky top-0 z-10 bg-background">
-                    <TableRow>
-                      <TableHead className="min-w-[240px]">文档名称</TableHead>
-                      <TableHead className="whitespace-nowrap">文档编号</TableHead>
-                      <TableHead className="whitespace-nowrap">类型</TableHead>
-                      <TableHead className="min-w-[160px]">客户</TableHead>
-                      <TableHead className="whitespace-nowrap">状态</TableHead>
-                      <TableHead className="whitespace-nowrap">更新时间</TableHead>
-                      <TableHead className="whitespace-nowrap text-right">操作</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {draftsQuery.isLoading ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">正在加载文档...</TableCell>
-                      </TableRow>
-                    ) : recentDrafts.length === 0 ? (
-                      <TableRow>
-                        <TableCell colSpan={7} className="h-48 text-center">
-                          <div className="flex flex-col items-center gap-3 text-muted-foreground">
-                            <FilePlus2 className="size-8" />
-                            <div>
-                              <div className="font-medium text-foreground">{documentSearch ? '没有匹配的文档' : '还没有文档'}</div>
-                              <div className="mt-1 text-sm">{documentSearch ? '请尝试其它名称关键词。' : '点击“添加文档”并选择模板开始创建。'}</div>
-                            </div>
-                            {!documentSearch ? <Button type="button" size="sm" onClick={() => setIsTemplatePickerOpen(true)}>添加文档</Button> : null}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ) : recentDrafts.map((draft) => (
+                  </>
+                )}
+                columns={(
+                  <>
+                    <TableHead className="min-w-[240px]">文档名称</TableHead>
+                    <TableHead>文档编号</TableHead>
+                    <TableHead>类型</TableHead>
+                    <TableHead className="min-w-[160px]">客户</TableHead>
+                    <TableHead>状态</TableHead>
+                    <TableHead>更新时间</TableHead>
+                    <TableHead className="text-right">操作</TableHead>
+                  </>
+                )}
+                columnCount={7}
+                isLoading={draftsQuery.isLoading}
+                isEmpty={recentDrafts.length === 0}
+                error={draftsQuery.error ? `加载失败: ${draftsQuery.error.message}` : null}
+                loadingMessage="正在加载文档..."
+                emptyMessage={(
+                  <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                    <FilePlus2 className="size-8" />
+                    <div>
+                      <div className="font-medium text-foreground">{documentSearch ? '没有匹配的文档' : '还没有文档'}</div>
+                      <div className="mt-1 text-sm">{documentSearch ? '请尝试其它名称关键词。' : '点击“添加文档”并选择模板开始创建。'}</div>
+                    </div>
+                    {!documentSearch ? <Button type="button" size="sm" onClick={() => setIsTemplatePickerOpen(true)}>添加文档</Button> : null}
+                  </div>
+                )}
+                stateCellClassName="h-48"
+                pagination={draftsPagination ? {
+                  page: draftsPagination.page,
+                  totalPages: draftsPagination.totalPages,
+                  total: draftsPagination.total,
+                  pageSize: ADMIN_CONFIG.pagination.pageSize,
+                  onPageChange: setDocumentPage,
+                } : null}
+              >
+                {recentDrafts.map((draft) => (
                       <TableRow key={draft.id}>
                         <TableCell className="max-w-[320px]">
                           {renamingDraftId === draft.id ? (
@@ -858,24 +878,14 @@ export default function AiChatPage() {
                           </TableActionButton>
                         </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-              {draftsPagination ? (
-                <DataTablePagination
-                  className="mt-3"
-                  page={draftsPagination.page}
-                  totalPages={draftsPagination.totalPages}
-                  total={draftsPagination.total}
-                  pageSize={ADMIN_CONFIG.pagination.pageSize}
-                  onPageChange={setDocumentPage}
-                />
-              ) : null}
+                ))}
+              </AdminDataTable>
             </div>
           ) : (
-            <div className="grid h-full min-h-0 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px]">
-                <section className="relative hidden h-full min-h-0 flex-col border-r lg:flex">
+            isMobile ? chatWorkspaceSection : (
+              <ResizablePanelGroup orientation="horizontal" className="h-full min-h-0">
+                <ResizablePanel id="document-preview" defaultSize="65" minSize="45">
+                <section className="relative flex h-full min-h-0 flex-col">
                 <iframe
                   ref={previewFrameRef}
                   key={`desktop-${previewUrl}`}
@@ -902,7 +912,7 @@ export default function AiChatPage() {
                           <div key={slot.key} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
                             <Select
                               value={selectedCompanyIds[slot.key] || ''}
-                              onValueChange={(value) => setSelectedCompanyIds((current) => ({ ...current, [slot.key]: value }))}
+                              onValueChange={(value) => setSelectedCompanyIds((current) => ({ ...current, [slot.key]: value || '' }))}
                             >
                               <SelectTrigger className="w-full min-w-0 overflow-hidden">
                                 <SelectValue
@@ -933,7 +943,7 @@ export default function AiChatPage() {
                         )}
 
                       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                        <Select value={selectedStampIdToApply} onValueChange={setSelectedStampIdToApply}>
+                        <Select value={selectedStampIdToApply} onValueChange={(value) => setSelectedStampIdToApply(value || '')}>
                           <SelectTrigger className="w-full min-w-0 overflow-hidden">
                             <SelectValue className="min-w-0 overflow-hidden" placeholder="选择印章" />
                           </SelectTrigger>
@@ -954,40 +964,28 @@ export default function AiChatPage() {
                   </Popover>
                 </div>
                 </section>
-
-                <section className="flex h-full min-h-0 flex-col bg-background">
-                  <ChatWorkspaceShell
-                    layout="stacked"
-                    messages={conversationMessages}
-                    statusBadges={[
-                      { key: 'template', label: `模板：${currentDraft.document_template_name}` },
-                      { key: 'type', label: DOCUMENT_TYPE_LABELS[currentDraft.document_type], tone: 'secondary' },
-                    ]}
-                    composer={(
-                      <AiConversationComposer
-                        placeholder={`例如：客户是上海某工厂，${currentDraft.document_type === 'quote' ? '报价' : '合同'}里先加入 BSA2T-25 两台，含税，交期两周`}
-                        availableTools={[]}
-                        selectedToolNames={[]}
-                        enableTools={false}
-                        enableMentions={false}
-                        submitDisabled={sendMessageMutation.isPending}
-                        submitStatus={sendMessageMutation.isPending ? 'submitted' : 'ready'}
-                        onToolSelectionChange={() => {}}
-                        onSubmit={(payload) => void handleSubmit({ text: payload.text })}
-                      />
-                    )}
-                  />
-                </section>
-            </div>
+                </ResizablePanel>
+                <ResizableHandle withHandle />
+                <ResizablePanel id="document-conversation" defaultSize="35" minSize="360px" maxSize="55">
+                  {chatWorkspaceSection}
+                </ResizablePanel>
+              </ResizablePanelGroup>
+            )
           )}
         </CardContent>
       </Card>
 
       {isMobile && currentDraft ? (
         <Sheet open={isMobilePreviewOpen} onOpenChange={setIsMobilePreviewOpen}>
-          <SheetContent side="right" className="flex h-full w-screen max-w-none flex-col gap-0 p-0 sm:max-w-none">
-            <SheetHeader className="h-14 shrink-0 justify-center border-b px-4 pr-14 text-left">
-              <SheetTitle className="truncate text-base">{previewHeaderTitle || '文档预览'}</SheetTitle>
+          <SheetContent side="right" showCloseButton={false} className="!inset-0 !h-dvh !w-dvw !max-w-none !border-0 flex flex-col gap-0 p-0">
+            <SheetHeader className="h-[42px] shrink-0 flex-row items-center justify-between gap-3 border-b px-3 py-0 text-left">
+              <SheetTitle className="min-w-0 flex-1 truncate text-base">{previewHeaderTitle || '文档预览'}</SheetTitle>
+              <SheetClose
+                aria-label="关闭预览"
+                render={<Button type="button" variant="ghost" size="icon-sm" className="shrink-0" />}
+              >
+                <X className="size-4" />
+              </SheetClose>
               <SheetDescription className="sr-only">当前文档的移动端预览</SheetDescription>
             </SheetHeader>
             <div className="relative flex min-h-0 flex-1">
@@ -1021,7 +1019,7 @@ export default function AiChatPage() {
                         <div key={`mobile-${slot.key}`} className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
                           <Select
                             value={selectedCompanyIds[slot.key] || ''}
-                            onValueChange={(value) => setSelectedCompanyIds((current) => ({ ...current, [slot.key]: value }))}
+                            onValueChange={(value) => setSelectedCompanyIds((current) => ({ ...current, [slot.key]: value || '' }))}
                           >
                             <SelectTrigger className="w-full min-w-0 overflow-hidden">
                               <SelectValue
@@ -1053,7 +1051,7 @@ export default function AiChatPage() {
                     </div>
 
                     <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
-                      <Select value={selectedStampIdToApply} onValueChange={setSelectedStampIdToApply}>
+                  <Select value={selectedStampIdToApply} onValueChange={(value) => setSelectedStampIdToApply(value || '')}>
                         <SelectTrigger className="w-full min-w-0 overflow-hidden">
                           <SelectValue className="min-w-0 overflow-hidden" placeholder="选择印章" />
                         </SelectTrigger>
@@ -1152,33 +1150,64 @@ function getDraftDocumentNumber(draft?: DocumentDraft | null) {
   return String(payload[fieldName] || '').trim()
 }
 
-function createDocumentReasoningParts(
-  reasoningText: string,
-  isStreaming: boolean,
-): ChatWorkspaceShellMessage['parts'] {
-  const text = String(reasoningText || '').trim()
-  if (!text) {
-    return undefined
+function toDocumentChatMessages(draft?: DocumentDraft | null): UIMessage[] {
+  if (!draft) {
+    return []
   }
 
-  return [{
-    type: 'reasoning',
-    text,
-    state: isStreaming ? 'streaming' : 'done',
-  }]
+  return draft.messages.map((message, index) => ({
+    id: `${draft.id}-${message.created_at}-${index}`,
+    role: message.role,
+    parts: [{ type: 'text', text: message.text }],
+  }))
 }
 
-function findLastAssistantMessageIndex(messages: ChatWorkspaceShellMessage[]) {
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    if (messages[index]?.role === 'assistant') {
-      return index
-    }
+function getDocumentChatMessageText(message: UIMessage) {
+  return message.parts
+    .filter((part) => part.type === 'text')
+    .map((part) => part.text)
+    .join('')
+}
+
+function getDocumentChatMessagesSignature(messages: UIMessage[]) {
+  return messages
+    .filter((message) => message.role === 'user' || message.role === 'assistant')
+    .map((message) => `${message.role}:${getDocumentChatMessageText(message)}`)
+    .join('|')
+}
+
+function normalizeDocumentToolActivity(value: unknown): DocumentToolActivity | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
   }
-  return -1
+
+  const activity = value as Record<string, unknown>
+  if (activity.type !== 'tool_called' && activity.type !== 'tool_output') {
+    return null
+  }
+
+  return {
+    type: activity.type,
+    toolName: String(activity.toolName || '').trim() || undefined,
+    item: activity.item,
+  }
+}
+
+function getDocumentDraftFromDataPart(value: unknown): DocumentDraft | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+
+  const draft = (value as { draft?: unknown }).draft
+  if (!draft || typeof draft !== 'object' || Array.isArray(draft)) {
+    return null
+  }
+
+  return draft as DocumentDraft
 }
 
 function getDocumentAgentPendingLabel(
-  activities: DocumentAgentDraftStreamState['toolActivities'],
+  activities: DocumentToolActivity[],
 ) {
   const latestActivity = activities[activities.length - 1]
   if (!latestActivity) {

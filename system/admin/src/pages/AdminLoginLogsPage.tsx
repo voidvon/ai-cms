@@ -1,12 +1,13 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { adminApi } from '@/api/admin'
+import { AdminDataTable } from '@/components/AdminDataTable'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { TableCell, TableHead, TableRow } from '@/components/ui/table'
 import { ADMIN_CONFIG } from '@/config'
 import { formatRelativeTime } from '@/lib/datetime'
 
@@ -54,7 +55,9 @@ export default function AdminLoginLogsPage() {
           <CardDescription>记录后台登录的用户名、IP、结果与时间</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-center gap-3">
+          <AdminDataTable
+            toolbar={(
+              <>
             <Input
               className="w-[220px]"
               value={usernameInput}
@@ -82,31 +85,31 @@ export default function AdminLoginLogsPage() {
             </Select>
             <Button onClick={applyFilters}>查询</Button>
             <Button variant="outline" onClick={() => void refetch()}>刷新</Button>
-          </div>
-
-          {isLoading ? <div>加载中...</div> : null}
-          {error ? <div>加载失败: {(error as Error).message}</div> : null}
-
-          {!isLoading && !error ? (
-            <div className="space-y-3">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-[220px]">时间</TableHead>
-                    <TableHead>用户名</TableHead>
-                    <TableHead className="w-[180px]">IP</TableHead>
-                    <TableHead className="w-[120px]">结果</TableHead>
-                    <TableHead>说明</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {items.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="text-center">
-                        暂无登录日志
-                      </TableCell>
-                    </TableRow>
-                  ) : items.map((item) => (
+              </>
+            )}
+            columns={(
+              <>
+                <TableHead className="w-[220px]">时间</TableHead>
+                <TableHead>用户名</TableHead>
+                <TableHead className="w-[180px]">IP</TableHead>
+                <TableHead className="w-[120px]">结果</TableHead>
+                <TableHead>说明</TableHead>
+              </>
+            )}
+            columnCount={5}
+            isLoading={isLoading}
+            isEmpty={items.length === 0}
+            error={error ? `加载失败: ${(error as Error).message}` : null}
+            emptyMessage="暂无登录日志"
+            pagination={pagination ? {
+              page,
+              totalPages,
+              total,
+              pageSize: ADMIN_CONFIG.pagination.pageSize,
+              onPageChange: setPage,
+            } : null}
+          >
+            {items.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="whitespace-nowrap">
                         {formatRelativeTime(item.created_at)}
@@ -120,35 +123,8 @@ export default function AdminLoginLogsPage() {
                       </TableCell>
                       <TableCell>{getFailureReasonLabel(item.failure_code)}</TableCell>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-
-              <div className="flex items-center justify-between gap-3 text-sm text-muted-foreground">
-                <div>
-                  第 {page} / {totalPages} 页，共 {total} 条
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage((current) => Math.max(1, current - 1))}
-                    disabled={page <= 1}
-                  >
-                    上一页
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
-                    disabled={page >= totalPages}
-                  >
-                    下一页
-                  </Button>
-                </div>
-              </div>
-            </div>
-          ) : null}
+            ))}
+          </AdminDataTable>
         </CardContent>
       </Card>
     </div>

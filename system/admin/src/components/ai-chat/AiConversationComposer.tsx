@@ -4,10 +4,21 @@ import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
 import { mergeAttributes, Node } from '@tiptap/core'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
-import { ArrowUp, Hash, ImagePlus, Loader2, Square, Wrench, X } from 'lucide-react'
+import { ArrowUp, Hash, ImagePlus, Square, Wrench, X } from 'lucide-react'
 import { aiApi } from '@/api/ai'
 import { mediaApi } from '@/api/media'
 import { Badge } from '@/components/ui/badge'
+import {
+  Attachment,
+  AttachmentAction,
+  AttachmentActions,
+  AttachmentGroup,
+  AttachmentMedia,
+  AttachmentTitle,
+} from '@/components/ui/attachment'
+import { InputGroup, InputGroupAddon, InputGroupButton } from '@/components/ui/input-group'
+import { Item, ItemActions, ItemContent, ItemDescription, ItemTitle } from '@/components/ui/item'
+import { Spinner } from '@/components/ui/spinner'
 import { resolveMediaAssetUrl } from '@/lib/assets'
 import { toast } from 'sonner'
 import type { AiGeneratedImage, AiMentionItem, AiToolDefinition, MediaAsset } from '@/types'
@@ -404,8 +415,7 @@ export function AiConversationComposer({
         listItem: false,
         codeBlock: false,
         horizontalRule: false,
-        hardBreak: true,
-        history: true,
+        undoRedo: {},
       }),
       Placeholder.configure({
         placeholder,
@@ -779,23 +789,24 @@ export function AiConversationComposer({
             <Wrench className="h-3.5 w-3.5" />
             `/工具`
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1" role="listbox" aria-label="工具列表">
             {filteredTools.length > 0 ? filteredTools.map((tool, index) => (
-              <button
+              <Item
                 key={tool.name}
-                type="button"
+                render={<button type="button" />}
+                variant={index === activeCommandIndex ? 'muted' : 'default'}
+                size="sm"
                 onMouseDown={(event) => {
                   event.preventDefault()
                   handleAddTool(tool)
                 }}
-                className={`flex w-full items-start justify-between rounded-xl px-3 py-2 text-left transition hover:bg-muted/40 ${index === activeCommandIndex ? 'bg-muted/40' : ''}`}
               >
-                <div className="min-w-0">
-                  <div className="text-sm font-medium">{tool.name}</div>
-                  <div className="line-clamp-2 text-xs leading-5 text-muted-foreground">{tool.description}</div>
-                </div>
-                <Badge variant="outline" className="ml-3 shrink-0">{tool.category}</Badge>
-              </button>
+                <ItemContent>
+                  <ItemTitle>{tool.name}</ItemTitle>
+                  <ItemDescription>{tool.description}</ItemDescription>
+                </ItemContent>
+                <ItemActions><Badge variant="outline">{tool.category}</Badge></ItemActions>
+              </Item>
             )) : (
               <div className="px-3 py-2 text-sm text-muted-foreground">没有匹配到可用工具。</div>
             )}
@@ -809,49 +820,47 @@ export function AiConversationComposer({
             <Hash className="h-3.5 w-3.5" />
             {mentionMatch.mentionType ? `@${MENTION_TYPE_TO_LABEL[mentionMatch.mentionType]} 搜索` : '@选择引用类型'}
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1" role="listbox" aria-label="引用列表">
             {!mentionMatch.mentionType ? MENTION_CATEGORIES.map((category, index) => (
-              <button
+              <Item
                 key={category.type}
-                type="button"
+                render={<button type="button" />}
+                variant={index === activeMentionCategoryIndex ? 'muted' : 'default'}
+                size="sm"
                 onMouseDown={(event) => {
                   event.preventDefault()
                   handleSelectMentionCategory(category)
                 }}
-                className={`flex w-full items-start justify-between rounded-xl px-3 py-2 text-left transition hover:bg-muted/40 ${index === activeMentionCategoryIndex ? 'bg-muted/40' : ''}`}
               >
-                <div className="min-w-0">
-                  <div className="text-sm font-medium">{category.label}</div>
-                  <div className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-                    {category.description}
-                  </div>
-                </div>
-                <Badge variant="outline" className="ml-3 shrink-0">@{category.label}</Badge>
-              </button>
+                <ItemContent>
+                  <ItemTitle>{category.label}</ItemTitle>
+                  <ItemDescription>{category.description}</ItemDescription>
+                </ItemContent>
+                <ItemActions><Badge variant="outline">@{category.label}</Badge></ItemActions>
+              </Item>
             )) : isMentionLoading ? (
               <div className="px-3 py-2 text-sm text-muted-foreground">搜索中...</div>
             ) : !mentionMatch.query.trim() ? (
               <div className="px-3 py-2 text-sm text-muted-foreground">
                 继续输入关键词搜索{MENTION_TYPE_TO_LABEL[mentionMatch.mentionType]}。
               </div>
-            ) : mentionItems.length > 0 ? mentionItems.map((item, index) => (
-              <button
-                key={`${item.type}-${item.id}`}
-                type="button"
+            ) : mentionItems.length > 0 ? mentionItems.map((mention, index) => (
+              <Item
+                key={`${mention.type}-${mention.id}`}
+                render={<button type="button" />}
+                variant={index === activeMentionIndex ? 'muted' : 'default'}
+                size="sm"
                 onMouseDown={(event) => {
                   event.preventDefault()
-                  handleSelectMention(item)
+                  handleSelectMention(mention)
                 }}
-                className={`flex w-full items-start justify-between rounded-xl px-3 py-2 text-left transition hover:bg-muted/40 ${index === activeMentionIndex ? 'bg-muted/40' : ''}`}
               >
-                <div className="min-w-0">
-                  <div className="text-sm font-medium">{item.title}</div>
-                  <div className="line-clamp-2 text-xs leading-5 text-muted-foreground">
-                    {item.subtitle || item.summary || MENTION_TYPE_TO_LABEL[item.type]}
-                  </div>
-                </div>
-                <Badge variant="outline" className="ml-3 shrink-0">{MENTION_TYPE_TO_LABEL[item.type]}</Badge>
-              </button>
+                <ItemContent>
+                  <ItemTitle>{mention.title}</ItemTitle>
+                  <ItemDescription>{mention.subtitle || mention.summary || MENTION_TYPE_TO_LABEL[mention.type]}</ItemDescription>
+                </ItemContent>
+                <ItemActions><Badge variant="outline">{MENTION_TYPE_TO_LABEL[mention.type]}</Badge></ItemActions>
+              </Item>
             )) : (
               <div className="px-3 py-2 text-sm text-muted-foreground">
                 没有匹配到{MENTION_TYPE_TO_LABEL[mentionMatch.mentionType]}。
@@ -861,56 +870,63 @@ export function AiConversationComposer({
         </div>
       ) : null}
 
-      <div className="overflow-hidden rounded-[32px] border bg-background shadow-sm transition focus-within:border-primary/40 focus-within:shadow-md">
+      <InputGroup className="h-auto min-h-14 flex-col items-stretch overflow-hidden rounded-[32px] bg-background shadow-sm transition focus-within:border-primary/40 focus-within:shadow-md">
         {attachedImages.length > 0 ? (
-          <div className="grid grid-cols-4 gap-2 border-b px-4 py-3 sm:grid-cols-6">
+          <InputGroupAddon align="block-start" className="block border-b px-4 py-3">
+          <AttachmentGroup className="grid grid-cols-4 overflow-visible py-0 sm:grid-cols-6">
             {attachedImages.map((asset) => (
-              <div key={asset.id} className="group relative aspect-square overflow-hidden rounded-md border bg-muted/20">
-                <img src={resolveMediaAssetUrl(asset)} alt={asset.original_name || '上传图片'} className="h-full w-full object-cover" />
-                <button
-                  type="button"
+              <Attachment key={asset.id} orientation="vertical" size="xs" className="w-full">
+                <AttachmentMedia variant="image" className="w-full p-0">
+                  <img src={resolveMediaAssetUrl(asset)} alt={asset.original_name || '上传图片'} />
+                </AttachmentMedia>
+                <AttachmentTitle className="sr-only">{asset.original_name || '上传图片'}</AttachmentTitle>
+                <AttachmentActions>
+                <AttachmentAction
                   onClick={() => setAttachedImages((current) => current.filter((item) => item.id !== asset.id))}
-                  className="absolute right-1 top-1 flex h-6 w-6 items-center justify-center rounded-md bg-background/90 opacity-0 shadow-sm transition group-hover:opacity-100 focus:opacity-100"
                   aria-label="移除图片"
                   title="移除图片"
                 >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              </div>
+                  <X />
+                </AttachmentAction>
+                </AttachmentActions>
+              </Attachment>
             ))}
-          </div>
+          </AttachmentGroup>
+          </InputGroupAddon>
         ) : null}
-        <div className="relative">
+        <div className="relative w-full" data-slot="input-group-control">
           <input ref={imageInputRef} type="file" accept="image/*" multiple className="hidden" onChange={handleImageSelection} />
-          <button
-            type="button"
+          <InputGroupButton
             onClick={() => imageInputRef.current?.click()}
             disabled={submitDisabled || isUploadingImages || attachedImages.length >= 8}
-            className="absolute left-3 top-1/2 z-10 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full text-muted-foreground transition hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40"
+            size="icon-sm"
+            className="absolute left-3 top-1/2 z-10 size-10 -translate-y-1/2 rounded-full"
             aria-label="上传图片"
             title="上传图片"
           >
-            {isUploadingImages ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
-          </button>
+            {isUploadingImages ? <Spinner /> : <ImagePlus />}
+          </InputGroupButton>
           <div className="ai-conversation-tiptap">
             <EditorContent editor={editor} />
           </div>
           {showActionButton ? (
-            <button
-              type="button"
+            <InputGroupButton
               onClick={isSubmitting ? onStop : handleSubmit}
-              className="absolute right-3 top-1/2 inline-flex h-10 w-10 -translate-y-1/2 items-center justify-center rounded-full bg-foreground text-background transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+              size="icon-sm"
+              variant="default"
+              className="absolute right-3 top-1/2 size-10 -translate-y-1/2 rounded-full"
               disabled={isSubmitting ? !onStop : submitDisabled || isUploadingImages || !hasContent}
               aria-label={isSubmitting ? '停止生成' : '发送消息'}
             >
-              {isSubmitting ? <Square className="h-4 w-4 fill-current" /> : <ArrowUp className="h-4 w-4" />}
-            </button>
+              {isSubmitting ? <Square className="fill-current" /> : <ArrowUp />}
+            </InputGroupButton>
           ) : null}
         </div>
-      </div>
+      </InputGroup>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        {enableTools ? selectedToolNames.map((toolName) => (
+      {enableTools && selectedToolNames.length > 0 ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {selectedToolNames.map((toolName) => (
           <Badge key={toolName} variant="secondary" className="gap-1 rounded-full pl-2 pr-1">
             <Wrench className="h-3 w-3" />
             {toolName}
@@ -923,8 +939,9 @@ export function AiConversationComposer({
               <X className="h-3 w-3" />
             </button>
           </Badge>
-        )) : null}
-      </div>
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }

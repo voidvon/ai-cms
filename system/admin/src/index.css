@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "./typeset.css";
 @config "../tailwind.config.js";
 
 @layer base {
@@ -320,11 +321,14 @@
 
   .ai-conversation-tiptap .tiptap {
     display: grid;
-    align-content: center;
+    align-content: safe center;
     min-height: 64px;
+    max-height: calc(5 * 1.45em + 1.5rem);
     padding: 0.75rem 4.25rem;
     font-size: 14px;
     line-height: 1.45;
+    overflow-y: auto;
+    scroll-padding-block: 0.75rem;
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
@@ -334,7 +338,7 @@
     float: left;
     height: 0;
     pointer-events: none;
-    color: hsl(var(--muted-foreground));
+    color: var(--muted-foreground);
     font-style: normal;
   }
 

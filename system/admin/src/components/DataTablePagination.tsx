@@ -7,7 +7,7 @@ import {
   PaginationLink,
 } from '@/components/ui/pagination'
 
-type Props = {
+export type DataTablePaginationProps = {
   page: number
   totalPages: number
   total: number
@@ -23,7 +23,7 @@ export function DataTablePagination({
   pageSize,
   onPageChange,
   className,
-}: Props) {
+}: DataTablePaginationProps) {
   if (totalPages <= 1 && total === 0) {
     return (
       <div className={cn('text-sm text-muted-foreground', className)}>
