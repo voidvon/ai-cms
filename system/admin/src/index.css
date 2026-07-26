@@ -82,6 +82,37 @@
 }
 
 @layer components {
+  @keyframes sidebar-tree-chevron-open {
+    from {
+      transform: translateZ(0) rotate(0deg);
+    }
+    to {
+      transform: translateZ(0) rotate(90deg);
+    }
+  }
+
+  @keyframes sidebar-tree-chevron-close {
+    from {
+      transform: translateZ(0) rotate(90deg);
+    }
+    to {
+      transform: translateZ(0) rotate(0deg);
+    }
+  }
+
+  .sidebar-tree-expand-trigger .sidebar-tree-expand-icon {
+    transform: translateZ(0) rotate(0deg);
+    transform-origin: center;
+    backface-visibility: hidden;
+    will-change: transform;
+    animation: sidebar-tree-chevron-close 320ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .sidebar-tree-expand-trigger[data-panel-open] .sidebar-tree-expand-icon {
+    transform: translateZ(0) rotate(90deg);
+    animation-name: sidebar-tree-chevron-open;
+  }
+
   .rich-text-editor {
     @apply overflow-hidden rounded-md border border-input bg-background;
   }

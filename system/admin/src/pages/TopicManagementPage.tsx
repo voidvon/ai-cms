@@ -7,13 +7,18 @@ import { contentItemsApi } from '@/api/content-items'
 import { languagesApi } from '@/api/languages'
 import { topicProfilesApi, type TopicProfile, type TopicProfilePayload } from '@/api/topic-profiles'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ColumnTreeSelector } from '@/components/ColumnTreeSelector'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import RichTextEditor from '@/components/RichTextEditor'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarGroupContent,
+} from '@/components/ui/sidebar'
+import { SidebarTreeMenu, type SidebarTreeMenuItem } from '@/components/SidebarTreeMenu'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Textarea } from '@/components/ui/textarea'
@@ -34,6 +39,11 @@ interface RelatedContentRef {
 interface TopicLanguageDraft {
   name: string
   profile: TopicProfilePayload
+}
+
+interface TopicColumnTreeNode {
+  column: Column
+  children: TopicColumnTreeNode[]
 }
 
 const EMPTY_PROFILE: TopicProfilePayload = {
@@ -134,7 +144,6 @@ export default function TopicManagementPage() {
       profile.updated_at,
     ]))),
   ])
-  const defaultProfilesByColumnId = profileMapsByLanguage.get(defaultLanguageCode) || new Map<number, TopicProfile>()
   const selectedColumn = selectedColumnId
     ? topicColumns.find((column) => column.id === Number.parseInt(selectedColumnId, 10)) || null
     : null
@@ -369,35 +378,11 @@ export default function TopicManagementPage() {
   return (
     <div className="h-[calc(100vh-6rem)] min-h-0">
       <div className="grid h-full min-h-0 gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <Card className="flex min-h-0 flex-col">
-          <CardHeader className="shrink-0">
-            <CardTitle className="text-base">专题栏目</CardTitle>
-            <CardDescription>来自热门系列栏目树。</CardDescription>
-          </CardHeader>
-              <CardContent className="min-h-0 flex-1 overflow-auto">
-                <ColumnTreeSelector
-                  columns={topicColumns}
-                  value={selectedColumnId ? Number.parseInt(selectedColumnId, 10) : undefined}
-                  onValueChange={(column) => setSelectedColumnId(String(column.id))}
-                  emptyText="未找到 `/topics/` 热门系列栏目树。"
-                  className="min-h-0"
-                  getBadgeVariant={(column) => {
-                    const profile = defaultProfilesByColumnId.get(column.id)
-                    if (!profile) {
-                      return 'outline'
-                    }
-                    return profile.publish_status === 'published' ? 'default' : 'secondary'
-                  }}
-                  getMetaText={(column) => (
-                    <>
-                      <span>ID {column.id}</span>
-                      <span>{column.route_path || '-'}</span>
-                      <span>{resolveTopicStatusLabel(defaultProfilesByColumnId.get(column.id)?.publish_status)}</span>
-                    </>
-                  )}
-                />
-              </CardContent>
-        </Card>
+        <TopicSidebar
+          columns={topicColumns}
+          selectedColumnId={selectedColumnId}
+          onSelect={(column) => setSelectedColumnId(String(column.id))}
+        />
 
         <div className="flex min-h-0 flex-col">
           <div className={cn('min-h-0 flex-1 overflow-auto', fillEditorHeight ? 'flex flex-col gap-4' : 'space-y-4')}>
@@ -692,6 +677,81 @@ async function saveTopicTemplateBinding({
   })
 }
 
+function TopicSidebar({
+  columns,
+  selectedColumnId,
+  onSelect,
+}: {
+  columns: Column[]
+  selectedColumnId: string
+  onSelect: (column: Column) => void
+}) {
+  const columnTree = useMemo(() => buildTopicColumnTree(columns), [columns])
+  const items = columnTree.map((node) => toTopicSidebarItem(node, selectedColumnId, onSelect))
+
+  return (
+    <Sidebar collapsible="none" className="min-h-0 w-full overflow-hidden bg-transparent">
+      <SidebarContent>
+        <SidebarGroup className="p-0">
+          <SidebarGroupContent>
+            {items.length === 0 ? (
+              <p className="px-2 py-3 text-sm text-muted-foreground">暂无专题</p>
+            ) : (
+              <SidebarTreeMenu items={items} />
+            )}
+          </SidebarGroupContent>
+        </SidebarGroup>
+      </SidebarContent>
+    </Sidebar>
+  )
+}
+
+function buildTopicColumnTree(columns: Column[]): TopicColumnTreeNode[] {
+  const nodes = new Map<number, TopicColumnTreeNode>()
+  const roots: TopicColumnTreeNode[] = []
+
+  for (const column of columns) {
+    nodes.set(column.id, { column, children: [] })
+  }
+
+  for (const node of nodes.values()) {
+    const parent = nodes.get(Number(node.column.parent_id || 0))
+    if (parent) {
+      parent.children.push(node)
+    } else {
+      roots.push(node)
+    }
+  }
+
+  const sortNodes = (items: TopicColumnTreeNode[]) => {
+    items.sort((left, right) => compareTopicColumns(left.column, right.column))
+    items.forEach((item) => sortNodes(item.children))
+  }
+  sortNodes(roots)
+  return roots
+}
+
+function toTopicSidebarItem(
+  node: TopicColumnTreeNode,
+  selectedColumnId: string,
+  onSelect: (column: Column) => void,
+): SidebarTreeMenuItem {
+  return {
+    id: node.column.id,
+    label: node.column.name || '未命名专题',
+    active: selectedColumnId === String(node.column.id),
+    onSelect: () => onSelect(node.column),
+    defaultOpen: true,
+    className: 'h-9',
+    children: node.children.map((child) => toTopicSidebarItem(child, selectedColumnId, onSelect)),
+  }
+}
+
+function compareTopicColumns(left: Column, right: Column) {
+  const sortOrderDifference = Number(left.sort_order || 0) - Number(right.sort_order || 0)
+  return sortOrderDifference || left.id - right.id
+}
+
 function RelatedContentPicker({
   models,
   selectedRefs,
@@ -880,10 +940,6 @@ function profileToForm(profile: TopicProfile | null, { ignoreFallback = false } 
     publish_status: profile.publish_status === 'published' ? 'published' : 'draft',
     sort_order: Number(profile.sort_order || 0),
   }
-}
-
-function resolveTopicStatusLabel(status?: string) {
-  return status === 'published' ? '已发布' : '草稿'
 }
 
 function buildTopicOpenUrl(column: Column, language: { site?: { path_prefix?: string | null } | null } | null) {

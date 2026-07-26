@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Ellipsis, Pencil, Plus, Trash2 } from 'lucide-react'
 import { templateVariantsApi, templatesApi } from '@/api/advanced'
@@ -16,13 +16,19 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import {
+  SidebarTreeMenu,
+  type SidebarTreeMenuItem,
+  type SidebarTreeMenuMoveParams,
+} from '@/components/SidebarTreeMenu'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent } from '@/components/ui/sidebar'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Tree, type TreeItemData, type TreeMoveParams } from '@/components/ui/tree'
+import { type TreeItemData } from '@/components/ui/tree'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { TemplateCodeEditor } from '@/components/TemplateCodeEditor'
 import { TemplateVariableReference } from '@/components/TemplateVariableReference'
@@ -172,7 +178,6 @@ export default function TemplateVariantsPage() {
     () => templates.filter((item) => item.type === 'component'),
     [selectedTheme, templates],
   )
-  const resolvedThemeComponentCount = themeComponentTemplates.length
   const homeTemplates = useMemo(
     () => themeTemplatesByType.home,
     [themeTemplatesByType],
@@ -203,12 +208,7 @@ export default function TemplateVariantsPage() {
     const createTemplateLeaf = (template: Template) => {
       return {
         id: `template:${template.id}`,
-        label: (
-          <div className="min-w-0">
-            <div className="truncate">{template.name}</div>
-            <div className="truncate text-xs text-muted-foreground">{template.code}</div>
-          </div>
-        ),
+        label: template.name,
         data: {
           kind: 'template' as const,
           template,
@@ -220,12 +220,7 @@ export default function TemplateVariantsPage() {
       primaryHomeTemplate
         ? {
             id: `template:${primaryHomeTemplate.id}`,
-            label: (
-              <div className="min-w-0">
-                <div className="truncate">首页模板</div>
-                <div className="truncate text-xs text-muted-foreground">{primaryHomeTemplate.code}</div>
-              </div>
-            ),
+            label: primaryHomeTemplate.name,
             data: {
               kind: 'template' as const,
               template: primaryHomeTemplate,
@@ -241,12 +236,7 @@ export default function TemplateVariantsPage() {
       primaryNotFoundTemplate
         ? {
             id: `template:${primaryNotFoundTemplate.id}`,
-            label: (
-              <div className="min-w-0">
-                <div className="truncate">404模板</div>
-                <div className="truncate text-xs text-muted-foreground">{primaryNotFoundTemplate.code}</div>
-              </div>
-            ),
+            label: primaryNotFoundTemplate.name,
             data: {
               kind: 'template' as const,
               template: primaryNotFoundTemplate,
@@ -648,22 +638,15 @@ export default function TemplateVariantsPage() {
     }
   }
 
-  const canDragTreeItem = (item: TreeItemData<TemplateLibraryNode>, parent: TreeItemData<TemplateLibraryNode> | null) => {
-    if (!parent || item.data?.kind !== 'template') {
-      return false
-    }
-    return Boolean(parent.data?.kind === 'group' && parent.children && parent.children.length > 1)
-  }
-
-  const handleTemplateTreeMove = ({ parent, fromIndex, toIndex, siblingItems }: TreeMoveParams<TemplateLibraryNode>) => {
-    const templateType = parent?.data?.templateType
+  const handleTemplateTreeMove = ({ parent, fromIndex, toIndex, siblingItems }: SidebarTreeMenuMoveParams) => {
+    const templateType = String(parent?.id || '').replace('group:', '') as Template['type']
     if (!templateType || fromIndex === toIndex) {
       return
     }
 
     const orderedIds = siblingItems
-      .map((entry) => entry.data?.template?.id || null)
-      .filter((id): id is number => id != null)
+      .map((entry) => Number.parseInt(String(entry.id).replace('template:', ''), 10))
+      .filter((id) => Number.isFinite(id))
 
     const [movedId] = orderedIds.splice(fromIndex, 1)
     orderedIds.splice(toIndex, 0, movedId)
@@ -692,7 +675,7 @@ export default function TemplateVariantsPage() {
     const createTarget = data.kind === 'group' ? data.templateType || null : null
 
     return (
-      <div className="mr-1 opacity-0 transition-opacity group-hover/tree-item:opacity-100 focus-within:opacity-100">
+      <div className="opacity-0 transition-opacity group-hover/sidebar-tree-row:opacity-100 focus-within:opacity-100">
         {canCreate && createTarget ? (
           <Button
             type="button"
@@ -759,6 +742,13 @@ export default function TemplateVariantsPage() {
     )
   }
 
+  const sidebarTemplateItems = templateLibraryItems.map((item) => toTemplateSidebarItem(
+    item,
+    selectedTreeValue,
+    handleSelectLibraryItem,
+    renderTreeAction,
+  ))
+
   if (isLoading || isThemesLoading) {
     return <div>加载中...</div>
   }
@@ -766,104 +756,72 @@ export default function TemplateVariantsPage() {
   return (
     <div className="flex h-full min-h-0 flex-col gap-4 overflow-hidden">
       <div className="grid min-h-0 flex-1 gap-4 overflow-hidden lg:grid-cols-[320px_minmax(0,1fr)]">
-        <Card className="flex min-h-0 flex-col overflow-hidden">
-          <CardHeader className="shrink-0">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center gap-2">
-                  <TooltipProvider delayDuration={150}>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          type="button"
-                          size="icon"
-                          className="rounded-full"
-                          onClick={() => createThemeMutation.mutate()}
-                          disabled={createThemeMutation.isPending}
-                          aria-label="新增主题"
-                        >
-                          <Plus className="size-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>新增主题</TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                  <Select
-                    value={selectedTheme ? String(selectedTheme.id) : undefined}
-                    onValueChange={(value) => {
-                      if (value === '__delete_current_theme__') {
-                        setDeleteThemeDialogOpen(true)
-                        return
-                      }
-                      const nextId = Number(value)
-                      if (!Number.isNaN(nextId) && nextId !== selectedTheme?.id) {
-                        selectThemeMutation.mutate(nextId)
-                      }
-                    }}
+        <div className="flex min-h-0 flex-col overflow-hidden">
+          <div className="flex items-center gap-2 pb-2">
+            <Select
+              value={selectedTheme ? String(selectedTheme.id) : undefined}
+              onValueChange={(value) => {
+                if (value === '__delete_current_theme__') {
+                  setDeleteThemeDialogOpen(true)
+                  return
+                }
+                const nextId = Number(value)
+                if (!Number.isNaN(nextId) && nextId !== selectedTheme?.id) {
+                  selectThemeMutation.mutate(nextId)
+                }
+              }}
+            >
+              <SelectTrigger className="min-w-0 flex-1">
+                <SelectValue placeholder="选择主题" />
+              </SelectTrigger>
+              <SelectContent>
+                {themes.map((theme) => (
+                  <SelectItem key={theme.id} value={String(theme.id)}>
+                    {theme.template_name}
+                  </SelectItem>
+                ))}
+                <SelectSeparator />
+                <SelectItem
+                  value="__delete_current_theme__"
+                  disabled={!selectedTheme || themes.length <= 1}
+                  className="text-destructive focus:text-destructive"
+                >
+                  删除当前主题
+                </SelectItem>
+              </SelectContent>
+            </Select>
+            <TooltipProvider delayDuration={150}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => createThemeMutation.mutate()}
+                    disabled={createThemeMutation.isPending}
+                    aria-label="新增主题"
                   >
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="选择主题" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {themes.map((theme) => (
-                        <SelectItem key={theme.id} value={String(theme.id)}>
-                          {theme.template_name}
-                        </SelectItem>
-                      ))}
-                      <SelectSeparator />
-                      <SelectItem
-                        value="__delete_current_theme__"
-                        disabled={!selectedTheme || themes.length <= 1}
-                        className="text-destructive focus:text-destructive"
-                      >
-                        删除当前主题
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="min-h-0 flex-1 overflow-auto">
-            <Tree
-              items={templateLibraryItems}
-              value={selectedTreeValue}
-              defaultExpandedIds={['group:list', 'group:content', 'group:not_found', 'group:topic', 'group:component']}
-              onValueChange={handleSelectLibraryItem}
-              renderAction={renderTreeAction}
-              canDrag={canDragTreeItem}
-              onItemMove={handleTemplateTreeMove}
-              className="pr-1"
-            />
-            <div className="mt-4 space-y-3 rounded border p-3">
-              <div className="flex items-center justify-between gap-2">
-                <div>
-                  <div className="text-sm font-medium">主题组件模板</div>
-                  <div className="text-xs text-muted-foreground">
-                    当前主题组件模板 {themeComponentTemplates.length} 个，运行时可用组件 {resolvedThemeComponentCount} 个。
-                  </div>
-                </div>
-              </div>
-              {themeComponentTemplates.length > 0 ? (
-                <div className="space-y-2">
-                  {themeComponentTemplates.map((template) => (
-                    <div key={template.id} className="rounded bg-muted/50 px-2 py-1.5 text-sm">
-                      <div className="min-w-0">
-                        <div className="truncate font-medium">{template.name}</div>
-                        <div className="truncate text-xs text-muted-foreground">{template.code}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-            {themeComponentTemplates.length === 0 ? (
-              <div className="mt-4 rounded border border-dashed p-3 text-sm text-muted-foreground">
-                还没有组件模板，可新建布局、容器、按钮、导航等公共片段。
-              </div>
-            ) : null}
-          </CardContent>
-        </Card>
+                    <Plus className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>新增主题</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
+          <Sidebar collapsible="none" className="min-h-0 w-full overflow-hidden bg-transparent">
+            <SidebarContent>
+              <SidebarGroup className="p-0">
+                <SidebarGroupContent>
+                  <SidebarTreeMenu
+                    items={sidebarTemplateItems}
+                    canDrag={(item, parent) => Boolean(parent && item.id.toString().startsWith('template:') && (parent.children?.length || 0) > 1)}
+                    onItemMove={handleTemplateTreeMove}
+                  />
+                </SidebarGroupContent>
+              </SidebarGroup>
+            </SidebarContent>
+          </Sidebar>
+        </div>
 
         <Card className="flex min-h-0 flex-col overflow-hidden">
           <CardHeader className="shrink-0">
@@ -1123,6 +1081,26 @@ export default function TemplateVariantsPage() {
       </Dialog>
     </div>
   )
+}
+
+function toTemplateSidebarItem(
+  item: TreeItemData<TemplateLibraryNode>,
+  selectedValue: string | number | undefined,
+  onSelect: (item: TreeItemData<TemplateLibraryNode>) => void,
+  renderAction: (item: TreeItemData<TemplateLibraryNode>) => ReactNode,
+): SidebarTreeMenuItem {
+  const isGroup = item.data?.kind === 'group'
+  return {
+    id: item.id,
+    label: typeof item.label === 'string' ? item.label : item.data?.template?.name || '未命名模板',
+    active: selectedValue === item.id,
+    onSelect: isGroup ? undefined : () => onSelect(item),
+    expandOnly: isGroup,
+    defaultOpen: isGroup,
+    className: 'h-9',
+    action: renderAction(item),
+    children: item.children?.map((child) => toTemplateSidebarItem(child, selectedValue, onSelect, renderAction)),
+  }
 }
 
 function buildNewThemePayload(baseTheme: TemplateVariant | null, nextIndex: number): Partial<TemplateVariant> {

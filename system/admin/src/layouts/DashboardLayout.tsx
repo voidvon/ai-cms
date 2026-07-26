@@ -8,7 +8,6 @@ import {
   Boxes,
   BrainCircuit,
   Cpu,
-  ChevronDown,
   Database,
   FilePenLine,
   FileType2,
@@ -43,12 +42,7 @@ import {
   SidebarGroup,
   SidebarGroupContent,
   SidebarHeader,
-  SidebarMenu,
   SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarMenuSub,
-  SidebarMenuSubItem,
-  SidebarMenuSubButton,
   SidebarProvider,
   SidebarInset,
   SidebarSeparator,
@@ -60,9 +54,9 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
 } from '@/components/ui/breadcrumb'
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/ui/button'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { SidebarTreeMenu, type SidebarTreeMenuItem } from '@/components/SidebarTreeMenu'
 import SystemVersionControl from '@/components/SystemVersionControl'
 
 const SIDEBAR_OPEN_STORAGE_KEY = 'admin.sidebar.open'
@@ -165,6 +159,33 @@ export default function DashboardLayout() {
     items: MenuItem[]
   }>
 
+  const sidebarTreeItems: SidebarTreeMenuItem[] = [
+    ...topLevelItems.map((item) => ({
+      id: item.path,
+      label: item.label,
+      icon: item.icon,
+      active: location.pathname === item.path,
+      onSelect: () => navigate(item.path),
+      closeOnMobileClick: true,
+      tooltip: item.label,
+    })),
+    ...menuGroups.map((group) => ({
+      id: `group:${group.label}`,
+      label: group.label,
+      icon: group.icon,
+      defaultOpen: true,
+      tooltip: group.label,
+      children: group.items.map((item) => ({
+        id: item.path,
+        label: item.label,
+        icon: item.icon,
+        active: location.pathname === item.path,
+        onSelect: () => navigate(item.path),
+        closeOnMobileClick: true,
+      })),
+    })),
+  ]
+
   const getCurrentPageTitle = () => {
     if (location.pathname === '/price-management') return '多维表格'
     const topLevelCurrent = topLevelItems.find(item => item.path === location.pathname)
@@ -257,56 +278,7 @@ export default function DashboardLayout() {
         <SidebarContent>
           <SidebarGroup>
             <SidebarGroupContent>
-              <SidebarMenu>
-                {topLevelItems.map((item) => (
-                  <SidebarMenuItem key={item.path}>
-                    <SidebarMenuButton
-                      onClick={() => navigate(item.path)}
-                      isActive={location.pathname === item.path}
-                      closeOnMobileClick
-                      tooltip={item.label}
-                    >
-                      <item.icon />
-                      <span>{item.label}</span>
-                    </SidebarMenuButton>
-                  </SidebarMenuItem>
-                ))}
-                {menuGroups.map((group) => (
-                  <Collapsible key={group.label} defaultOpen className="group/collapsible">
-                    <SidebarMenuItem>
-                      <CollapsibleTrigger
-                        render={(
-                          <SidebarMenuButton
-                            className="w-full"
-                            isActive={group.items.some((item) => item.path === location.pathname)}
-                            tooltip={group.label}
-                          />
-                        )}
-                      >
-                        <group.icon />
-                        <span>{group.label}</span>
-                        <ChevronDown className="ml-auto transition-transform group-data-open/collapsible:rotate-180" />
-                      </CollapsibleTrigger>
-                      <CollapsibleContent>
-                        <SidebarMenuSub>
-                          {group.items.map((item) => (
-                            <SidebarMenuSubItem key={item.path}>
-                              <SidebarMenuSubButton
-                                onClick={() => navigate(item.path)}
-                                isActive={location.pathname === item.path}
-                                closeOnMobileClick
-                              >
-                                <item.icon />
-                                <span>{item.label}</span>
-                              </SidebarMenuSubButton>
-                            </SidebarMenuSubItem>
-                          ))}
-                        </SidebarMenuSub>
-                      </CollapsibleContent>
-                    </SidebarMenuItem>
-                  </Collapsible>
-                ))}
-              </SidebarMenu>
+              <SidebarTreeMenu items={sidebarTreeItems} />
             </SidebarGroupContent>
           </SidebarGroup>
         </SidebarContent>

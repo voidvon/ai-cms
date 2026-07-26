@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type ReactNode } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { contentModelsApi, templateVariantsApi, templatesApi } from '@/api/advanced'
@@ -6,14 +6,13 @@ import { columnNodesApi } from '@/api/column-nodes'
 import { columnsApi } from '@/api/columns'
 import { languagesApi } from '@/api/languages'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { ColumnTreeSelector } from '@/components/ColumnTreeSelector'
+import { SidebarTreeMenu, type SidebarTreeMenuItem } from '@/components/SidebarTreeMenu'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { type TreeItemData } from '@/components/ui/tree'
+import { Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent } from '@/components/ui/sidebar'
 import { Ellipsis, Plus, Trash2 } from 'lucide-react'
 import {
   AlertDialog,
@@ -56,6 +55,11 @@ interface RootColumnNodeForm {
 }
 
 type ManualColumnKind = 'link' | 'single'
+interface ManagedColumnTreeNode {
+  column: Column
+  children: ManagedColumnTreeNode[]
+}
+
 const COLUMN_KIND_META: Record<'node' | ManualColumnKind, { createLabel: string }> = {
   node: {
     createLabel: '新增栏目',
@@ -316,7 +320,7 @@ export default function ColumnsPage() {
   const listTemplates = templates.filter((template: Template) => template.type === 'list')
   const contentTemplates = templates.filter((template: Template) => template.type === 'content')
   const singleTemplates = templates.filter((template: Template) => template.type === 'single')
-  const handleSelectColumn = (column: TreeItemData<Column>) => {
+  const handleSelectColumn = (column: Column) => {
     setSearchParams({ columnId: String(column.id) })
   }
 
@@ -407,12 +411,7 @@ export default function ColumnsPage() {
     deleteNodeMutation.mutate({ rootColumnId: deletingNodeTarget.rootColumnId, id: deletingNodeTarget.id })
   }
 
-  const renderColumnTreeAction = (item: TreeItemData<Column>) => {
-    const column = item.data
-    if (!column) {
-      return null
-    }
-
+  const renderColumnTreeAction = (column: Column) => {
     const nodeTarget = getColumnNodeTarget(column)
     const canEditManualColumn = isEditableManualColumn(column)
     const hasActions = canEditManualColumn || Boolean(nodeTarget)
@@ -424,7 +423,7 @@ export default function ColumnsPage() {
             type="button"
             variant="ghost"
             size="icon"
-            className="h-7 w-7 shrink-0 opacity-0 transition-opacity group-hover/tree-item:opacity-100 group-focus-within/tree-item:opacity-100 data-[state=open]:opacity-100"
+            className="size-7 shrink-0 opacity-0 transition-opacity group-hover/sidebar-tree-row:opacity-100 group-focus-within/sidebar-tree-row:opacity-100 data-[state=open]:opacity-100"
             aria-label={`${column.name}栏目设置`}
             onClick={(event) => event.stopPropagation()}
           >
@@ -473,15 +472,28 @@ export default function ColumnsPage() {
   }
 
   const renderColumnTree = () => {
+    const tree = buildManagedColumnTree(managedColumns)
+    const items = tree.map((node) => toColumnSidebarItem(
+      node,
+      selectedColumn?.id || 0,
+      handleSelectColumn,
+      renderColumnTreeAction,
+    ))
+
     return (
-      <ColumnTreeSelector
-        columns={managedColumns}
-        value={selectedColumn?.id}
-        defaultExpandedIds={[]}
-        onValueChange={(column) => handleSelectColumn({ id: column.id, data: column, label: column.name })}
-        renderAction={renderColumnTreeAction}
-        getMetaText={(column) => <span>ID {column.id}</span>}
-      />
+      <Sidebar collapsible="none" className="min-h-0 w-full overflow-hidden bg-transparent">
+        <SidebarContent>
+          <SidebarGroup className="p-0">
+            <SidebarGroupContent>
+              {items.length === 0 ? (
+                <p className="px-2 py-3 text-sm text-muted-foreground">暂无栏目</p>
+              ) : (
+                <SidebarTreeMenu items={items} />
+              )}
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+      </Sidebar>
     )
   }
 
@@ -518,44 +530,38 @@ export default function ColumnsPage() {
 
   return (
     <div className="grid h-full min-h-0 gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
-      <Card className="flex min-h-0 flex-col overflow-hidden">
-        <CardHeader>
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <CardTitle>栏目</CardTitle>
-              <CardDescription>选择左侧栏目后编辑栏目配置</CardDescription>
-            </div>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button type="button" variant="outline" size="icon" aria-label="新增栏目">
-                  <Plus className="size-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onSelect={() => setRootNodeDialogOpen(true)}>
-                  <Plus className="size-4" />
-                  {COLUMN_KIND_META.node.createLabel}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleCreateManualColumn('link')}>
-                  <Plus className="size-4" />
-                  {COLUMN_KIND_META.link.createLabel}
-                </DropdownMenuItem>
-                <DropdownMenuItem onSelect={() => handleCreateManualColumn('single')}>
-                  <Plus className="size-4" />
-                  {COLUMN_KIND_META.single.createLabel}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </CardHeader>
-        <CardContent className="min-h-0 flex-1 overflow-y-auto">
+      <div className="flex min-h-0 flex-col overflow-hidden">
+        <div className="flex justify-end pb-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button type="button" variant="outline" size="icon" aria-label="新增栏目">
+                <Plus className="size-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onSelect={() => setRootNodeDialogOpen(true)}>
+                <Plus className="size-4" />
+                {COLUMN_KIND_META.node.createLabel}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleCreateManualColumn('link')}>
+                <Plus className="size-4" />
+                {COLUMN_KIND_META.link.createLabel}
+              </DropdownMenuItem>
+              <DropdownMenuItem onSelect={() => handleCreateManualColumn('single')}>
+                <Plus className="size-4" />
+                {COLUMN_KIND_META.single.createLabel}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {columnsLoading ? (
             <div className="text-sm text-muted-foreground">加载中...</div>
           ) : (
             renderColumnTree()
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       <div className="min-h-0 overflow-y-auto pr-1">
         {!selectedColumn ? (
@@ -805,6 +811,55 @@ async function saveRequiredTemplateBinding(
     template_type: templateType,
     template_id: Number(templateId),
   })
+}
+
+function buildManagedColumnTree(columns: Column[]): ManagedColumnTreeNode[] {
+  const nodes = new Map<number, ManagedColumnTreeNode>()
+  const roots: ManagedColumnTreeNode[] = []
+
+  for (const column of columns) {
+    if (column.column_type === 'list' || column.column_type === 'link' || column.column_type === 'single') {
+      nodes.set(column.id, { column, children: [] })
+    }
+  }
+
+  for (const node of nodes.values()) {
+    const parent = nodes.get(Number(node.column.parent_id || 0))
+    if (parent) {
+      parent.children.push(node)
+    } else {
+      roots.push(node)
+    }
+  }
+
+  sortManagedColumnTree(roots)
+  return roots
+}
+
+function sortManagedColumnTree(nodes: ManagedColumnTreeNode[]) {
+  nodes.sort((left, right) => {
+    const sortOrderDifference = Number(left.column.sort_order || 0) - Number(right.column.sort_order || 0)
+    return sortOrderDifference || left.column.id - right.column.id
+  })
+  nodes.forEach((node) => sortManagedColumnTree(node.children))
+}
+
+function toColumnSidebarItem(
+  node: ManagedColumnTreeNode,
+  selectedColumnId: number,
+  onSelect: (column: Column) => void,
+  renderAction: (column: Column) => ReactNode,
+): SidebarTreeMenuItem {
+  return {
+    id: node.column.id,
+    label: node.column.name || '未命名栏目',
+    active: selectedColumnId === node.column.id,
+    onSelect: () => onSelect(node.column),
+    defaultOpen: true,
+    className: 'h-9',
+    action: renderAction(node.column),
+    children: node.children.map((child) => toColumnSidebarItem(child, selectedColumnId, onSelect, renderAction)),
+  }
 }
 
 async function deleteTemplateBindingIfExists(
