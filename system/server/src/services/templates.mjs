@@ -938,9 +938,9 @@ function buildTemplatePreviewProps(template, previewContext = {}) {
     const managedContentItems = getPreviewManagedContentItems(8, managedRootColumn);
     const pagination = buildPreviewPaginationData(buildPreviewColumnUrl(columnNode, new Map(), site), {
       pageNumber: 2,
-      pageCount: 8,
+      pageCount: 6,
       totalRecords: 108,
-      pageSize: 14
+      pageSize: 18
     });
     return {
       ...props,
@@ -1499,9 +1499,9 @@ function buildPreviewPaginationHrefs(publicUrl, pageNumber = 2, pageCount = 8) {
 
 function buildPreviewPaginationData(publicUrl, {
   pageNumber = 2,
-  pageCount = 8,
+  pageCount = 6,
   totalRecords = 108,
-  pageSize = 14
+  pageSize = 18
 } = {}) {
   const hrefs = buildPreviewPaginationHrefs(publicUrl, pageNumber, pageCount);
   return {

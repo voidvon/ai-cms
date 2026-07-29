@@ -22,7 +22,7 @@ import {
 import { ensureContentItemsSchema, listContentItems } from './content-items.mjs';
 import { escapeHtml } from '../utils/html.mjs';
 
-const MANAGED_LIST_PAGE_SIZE = 14;
+const MANAGED_LIST_PAGE_SIZE = 18;
 const NEWS_LIST_PAGE_SIZE = 6;
 const SITEMAP_CHUNK_SIZE = 1000;
 

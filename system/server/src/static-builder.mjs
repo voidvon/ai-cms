@@ -59,7 +59,7 @@ import {
 } from './services/seo-meta.mjs';
 
 const DEFAULT_OUTPUT_ROOT = CONTENT_ROOT;
-const MANAGED_LIST_PAGE_SIZE = 14;
+const MANAGED_LIST_PAGE_SIZE = 18;
 const DEFAULT_NEWS_LIST_PAGE_SIZE = 6;
 
 // 全局分类目录映射，在静态生成时填充
