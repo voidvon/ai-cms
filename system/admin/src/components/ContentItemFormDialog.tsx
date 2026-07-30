@@ -422,7 +422,19 @@ export default function ContentItemFormDialog({
                       <ImagesUploadField
                         id="images"
                         value={Array.isArray(baseData.images) ? baseData.images as string[] : []}
-                        onChange={(images) => setBaseData({ ...baseData, images })}
+                        onChange={(images) => setBaseData((previous) => {
+                          const currentPrimaryImage = String(previous.primary_image || '').trim()
+                          return {
+                            ...previous,
+                            images,
+                            primary_image: images.includes(currentPrimaryImage) ? currentPrimaryImage : images[0] || '',
+                          }
+                        })}
+                        primaryImage={String(baseData.primary_image || '')}
+                        onPrimaryImageChange={(primaryImage) => setBaseData((previous) => ({
+                          ...previous,
+                          primary_image: primaryImage,
+                        }))}
                         purpose={capabilities.primaryImagePurpose}
                         placeholder={`请输入${capabilities.primaryImageFieldLabel}路径`}
                       />
@@ -1050,6 +1062,7 @@ function createEmptyBaseData(defaultColumnId?: number) {
     custom_url: '',
     picture: '',
     images: [] as string[],
+    primary_image: '',
     spec_options_json: [] as string[],
     is_featured_home: 0,
     is_visible: 1,
@@ -1059,12 +1072,16 @@ function createEmptyBaseData(defaultColumnId?: number) {
 }
 
 function createBaseDataFromItem(item: ContentItem) {
+  const images = Array.isArray(item.images) ? item.images : []
+  const primaryImage = images.includes(item.primary_image || '') ? item.primary_image || '' : images[0] || ''
+
   return {
     code: item.code || '',
     column_id: item.column_id || undefined,
     custom_url: item.custom_url || '',
-    picture: item.primary_image || '',
-    images: Array.isArray(item.images) ? item.images : [],
+    picture: primaryImage,
+    images,
+    primary_image: primaryImage,
     spec_options_json: Array.isArray(item.spec_options) ? item.spec_options : [],
     is_featured_home: item.is_featured_home || 0,
     is_visible: item.is_visible || 1,
