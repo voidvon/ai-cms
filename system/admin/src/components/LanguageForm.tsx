@@ -98,11 +98,13 @@ export default function LanguageForm({
       toast.error('请输入兜底语言的网站名称')
       return
     }
-    if (formData.site.site_mode === 'standalone' && !isRootStandaloneSite) {
+    if (formData.site.site_mode === 'standalone') {
       if (!formData.site.host.trim()) {
         toast.error('独立站点必须填写正式域名')
         return
       }
+    }
+    if (formData.site.site_mode === 'standalone' && !isRootStandaloneSite) {
       if (!formData.site.access_port.trim()) {
         toast.error('独立站点必须填写访问端口')
         return
@@ -154,7 +156,9 @@ export default function LanguageForm({
           <Label>后台管理语言</Label>
           <Select
             value={String(formData.is_default)}
-            onValueChange={(value) => setFormData({ ...formData, is_default: Number.parseInt(value, 10) })}
+            onValueChange={(value) => {
+              if (value !== null) setFormData({ ...formData, is_default: Number.parseInt(value, 10) })
+            }}
           >
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -168,7 +172,9 @@ export default function LanguageForm({
           <Label>多语言兜底语言</Label>
           <Select
             value={String(formData.is_fallback)}
-            onValueChange={(value) => setFormData({ ...formData, is_fallback: Number.parseInt(value, 10) })}
+            onValueChange={(value) => {
+              if (value !== null) setFormData({ ...formData, is_fallback: Number.parseInt(value, 10) })
+            }}
           >
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -182,7 +188,9 @@ export default function LanguageForm({
           <Label>启用状态</Label>
           <Select
             value={String(formData.is_enabled)}
-            onValueChange={(value) => setFormData({ ...formData, is_enabled: Number.parseInt(value, 10) })}
+            onValueChange={(value) => {
+              if (value !== null) setFormData({ ...formData, is_enabled: Number.parseInt(value, 10) })
+            }}
           >
             <SelectTrigger><SelectValue /></SelectTrigger>
             <SelectContent>
@@ -203,15 +211,18 @@ export default function LanguageForm({
             <Label>站点模式</Label>
             <Select
               value={formData.site.site_mode}
-              onValueChange={(value: 'subdir' | 'standalone') => {
+              onValueChange={(value) => {
+                if (value === null) return
                 setFormData({
                   ...formData,
                   site: {
                     ...formData.site,
                     site_mode: value,
                     path_prefix: value === 'standalone' ? '/' : formData.site.path_prefix || '/',
+                    host: value === 'standalone' ? formData.site.host : '',
                     access_port: value === 'standalone' ? formData.site.access_port : '',
                     bind_host: value === 'standalone' ? (formData.site.bind_host || DEFAULT_BIND_HOST) : DEFAULT_BIND_HOST,
+                    is_primary: value === 'standalone' ? formData.site.is_primary : 0,
                   },
                 })
               }}
@@ -224,20 +235,48 @@ export default function LanguageForm({
             </Select>
           </div>
           <div className="space-y-2">
-            <Label htmlFor="language_host">{formData.site.site_mode === 'standalone' && !isRootStandaloneSite ? '独立域名 *' : '独立域名'}</Label>
-            <Input
-              id="language_host"
-              required={formData.site.site_mode === 'standalone' && !isRootStandaloneSite}
-              value={formData.site.host}
-              onChange={(event) => setFormData({ ...formData, site: { ...formData.site, host: event.target.value } })}
-              placeholder={formData.site.site_mode === 'standalone' ? 'ru.example.com' : '可留空'}
-            />
-            {formData.site.site_mode === 'standalone' && !isRootStandaloneSite ? (
+            <Label>主站点</Label>
+            <Select
+              disabled={formData.site.site_mode !== 'standalone'}
+              value={String(formData.site.is_primary)}
+              onValueChange={(value) => {
+                if (value === null) return
+                setFormData({
+                  ...formData,
+                  is_enabled: value === '1' ? 1 : formData.is_enabled,
+                  site: { ...formData.site, is_primary: Number.parseInt(value, 10) },
+                })
+              }}
+            >
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1">是</SelectItem>
+                <SelectItem value="0">否</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">子目录站点继承主站点域名；切换主站时会自动取消原主站。</p>
+          </div>
+          {formData.site.site_mode === 'standalone' ? (
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="language_host">独立域名 *</Label>
+              <Input
+                id="language_host"
+                required
+                value={formData.site.host}
+                onChange={(event) => setFormData({ ...formData, site: { ...formData.site, host: event.target.value } })}
+                placeholder="www.example.com"
+              />
               <p className="text-xs text-muted-foreground">
                 独立站点必须填写正式访问域名，sitemap、robots、llms 和 canonical 会基于这个域名生成。
               </p>
-            ) : null}
-          </div>
+            </div>
+          ) : (
+            <div className="space-y-2 md:col-span-2">
+              <Label>访问域名</Label>
+              <Input value="继承主站点域名" readOnly />
+              <p className="text-xs text-muted-foreground">最终地址由主站点域名和当前子目录前缀自动组成。</p>
+            </div>
+          )}
         </div>
 
         {formData.site.site_mode === 'subdir' ? (
@@ -324,7 +363,7 @@ function createEmptyFormData(mode: 'create' | 'edit' = 'create') {
       site_mode: defaultSiteMode as 'subdir' | 'standalone',
       access_port: '',
       bind_host: DEFAULT_BIND_HOST,
-      is_primary: 1,
+      is_primary: 0,
     },
   }
 }
@@ -349,7 +388,7 @@ function createFormData(language: Language | undefined, mode: 'create' | 'edit')
       site_mode: language.site?.site_mode || 'subdir',
       access_port: language.site?.access_port ? String(language.site.access_port) : '',
       bind_host: language.site?.bind_host || DEFAULT_BIND_HOST,
-      is_primary: language.site?.is_primary ?? 1,
+      is_primary: language.site?.is_primary ?? 0,
     },
   }
 }

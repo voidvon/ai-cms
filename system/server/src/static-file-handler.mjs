@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { ADMIN_DIST_ROOT, CONTENT_ROOT, MIME_TYPES, PROJECT_ROOT, PUBLIC_ROOT, UPLOADS_ROOT } from './config.mjs';
 import { getLanguageById, listLanguages } from './services/languages.mjs';
-import { getSiteConfig } from './services/site.mjs';
+import { getSiteConfig, resolveLanguageSiteBaseUrlFromLanguages } from './services/site.mjs';
 import { normalizeLegacyAssetText } from './services/uploads.mjs';
 
 const ADMIN_DEV_SERVER_URL = normalizeDevServerUrl(process.env.ADMIN_DEV_SERVER_URL);
@@ -17,6 +17,19 @@ export async function serveStatic(request, reply, options = {}) {
 
   if (isDisabledStaticPath(rewrittenPathname)) {
     return false;
+  }
+
+  const languageSiteRedirect = isStaticMethod(request.method)
+    ? resolveCrossHostLanguageRedirect({
+        hostname: resolveRequestHostname(request),
+        pathname: rewrittenPathname,
+        search: getSearch(request.url),
+        languages: listLanguages()
+      })
+    : '';
+  if (languageSiteRedirect) {
+    reply.redirect(languageSiteRedirect, 308);
+    return true;
   }
 
   if (rewrittenPathname === '/admin' || rewrittenPathname.startsWith('/admin/')) {
@@ -34,7 +47,7 @@ export async function serveStatic(request, reply, options = {}) {
     contentRoot
   });
   if (directoryRedirectLocation) {
-    reply.redirect(301, directoryRedirectLocation);
+    reply.redirect(directoryRedirectLocation, 301);
     return true;
   }
 
@@ -237,6 +250,70 @@ function getSearch(url) {
   return normalized.slice(queryIndex);
 }
 
+export function resolveCrossHostLanguageRedirect({ hostname, pathname, search = '', languages = [] } = {}) {
+  const requestHostname = String(hostname || '').trim().toLowerCase();
+  const normalizedPathname = String(pathname || '/').trim() || '/';
+  if (!requestHostname || !normalizedPathname.startsWith('/')) {
+    return '';
+  }
+
+  const currentStandaloneSite = languages.find((language) => (
+    Number(language?.is_enabled || 0) === 1
+    && language?.site?.site_mode === 'standalone'
+    && normalizeConfiguredHostname(language?.site?.host) === requestHostname
+  ));
+  if (!currentStandaloneSite) {
+    return '';
+  }
+
+  const targetLanguage = languages.find((language) => {
+    if (Number(language?.is_enabled || 0) !== 1 || language?.site?.site_mode !== 'subdir') {
+      return false;
+    }
+    const prefix = normalizeLanguagePathPrefix(language?.site?.path_prefix);
+    return prefix !== '/' && (normalizedPathname === prefix || normalizedPathname.startsWith(`${prefix}/`));
+  });
+  if (!targetLanguage) {
+    return '';
+  }
+
+  const targetBaseUrl = resolveLanguageSiteBaseUrlFromLanguages(targetLanguage.code, languages);
+  if (!targetBaseUrl) {
+    return '';
+  }
+
+  try {
+    const target = new URL(targetBaseUrl);
+    if (target.hostname.toLowerCase() === requestHostname) {
+      return '';
+    }
+    return `${target.origin}${normalizedPathname}${String(search || '')}`;
+  } catch {
+    return '';
+  }
+}
+
+function normalizeConfiguredHostname(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized) {
+    return '';
+  }
+  try {
+    return new URL(/^https?:\/\//i.test(normalized) ? normalized : `https://${normalized}`).hostname.toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function normalizeLanguagePathPrefix(value) {
+  const normalized = String(value || '').trim();
+  if (!normalized || normalized === '/') {
+    return '/';
+  }
+  const withLeadingSlash = normalized.startsWith('/') ? normalized : `/${normalized}`;
+  return withLeadingSlash.replace(/\/+$/g, '');
+}
+
 function isUnsafePath(pathname) {
   return path.normalize(pathname).includes('..');
 }
@@ -404,7 +481,8 @@ function createDevelopmentHtmlAssetRewriter(request) {
 }
 
 function resolveRequestHostname(request) {
-  const hostHeader = String(request.headers.host || '').trim();
+  const forwardedHost = String(request.headers['x-forwarded-host'] || '').split(',')[0].trim();
+  const hostHeader = forwardedHost || String(request.headers.host || '').trim();
   if (!hostHeader) {
     return '';
   }

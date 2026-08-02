@@ -2051,10 +2051,7 @@ function buildLanguageSwitcherData(templateContext) {
       return normalizeInteger(left?.id, 0) - normalizeInteger(right?.id, 0);
     })
     .map((language) => {
-      const baseUrl = resolveLanguageSitePublicBaseUrl(
-        language.code,
-        templateContext?.site?.base_web_url || templateContext?.site?.web_url || ''
-      );
+      const baseUrl = resolveLanguageSitePublicBaseUrl(language.code);
       const href = buildLanguageSwitcherHref(baseUrl, pagePath, language);
       return {
         code: language.code,

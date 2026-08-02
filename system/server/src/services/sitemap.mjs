@@ -55,7 +55,7 @@ function listManagedColumnItems(rootColumn, { languageCode = null, visibleOnly =
 
 export function buildSitemap({ outputRoot, generatedAt = new Date().toISOString(), languageCode = null } = {}) {
   const site = getSiteConfig(languageCode);
-  const siteUrl = normalizeSiteUrl(site.resolved_web_url || site.web_url);
+  const siteUrl = normalizeSiteUrl(site.resolved_web_url);
 
   if (!siteUrl) {
     return {
@@ -129,7 +129,7 @@ function staticOutputExists(outputRoot, absoluteUrl, siteUrl) {
 
 export function getSitemapDiagnostics({ generatedAt = new Date().toISOString(), languageCode = null } = {}) {
   const site = getSiteConfig(languageCode);
-  const siteUrl = normalizeSiteUrl(site.resolved_web_url || site.web_url);
+  const siteUrl = normalizeSiteUrl(site.resolved_web_url);
   const urls = siteUrl ? collectSitemapEntries({ siteUrl, generatedAt, languageCode }) : [];
   const chunks = chunkEntries(urls, SITEMAP_CHUNK_SIZE);
   const columns = listColumns({ languageCode });
@@ -139,7 +139,7 @@ export function getSitemapDiagnostics({ generatedAt = new Date().toISOString(), 
   const pageTreeColumns = pageTreeRoot ? listColumnNodesByRoot(pageTreeRoot.id, { languageCode }) : [];
   return {
     generated_at: generatedAt,
-    site_url: site.resolved_web_url || site.web_url || '',
+    site_url: site.resolved_web_url || '',
     normalized_site_url: siteUrl,
     total_urls: urls.length,
     chunk_size: SITEMAP_CHUNK_SIZE,

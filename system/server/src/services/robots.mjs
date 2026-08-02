@@ -4,7 +4,7 @@ import { getSiteConfig } from './site.mjs';
 
 export function buildRobotsTxt({ outputRoot, languageCode = null } = {}) {
   const site = getSiteConfig(languageCode);
-  const siteUrl = normalizeSiteUrl(site.resolved_web_url || site.web_url);
+  const siteUrl = normalizeSiteUrl(site.resolved_web_url);
   const lines = ['User-agent: *', 'Allow: /'];
 
   if (siteUrl) {

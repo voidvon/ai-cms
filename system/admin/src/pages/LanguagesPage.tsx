@@ -136,6 +136,7 @@ export default function LanguagesPage() {
                         <span className="truncate text-sm font-medium">{language.name}</span>
                         {language.is_default ? <Badge className="shrink-0">后台</Badge> : null}
                         {language.is_fallback ? <Badge variant="outline" className="shrink-0">兜底</Badge> : null}
+                        {language.site?.is_primary ? <Badge variant="outline" className="shrink-0">主站</Badge> : null}
                         {!language.is_enabled ? <Badge variant="secondary" className="shrink-0">停用</Badge> : null}
                       </span>
                       <span className="mt-1 block truncate text-xs text-muted-foreground">
@@ -162,7 +163,7 @@ export default function LanguagesPage() {
                   {isCreating ? '配置语言标识、多站点模式和发布目录。' : `编辑 ${selectedLanguage?.code || ''} 的语言和部署设置。`}
                 </CardDescription>
               </div>
-              {selectedLanguage && !selectedLanguage.is_default && !selectedLanguage.is_fallback ? (
+              {selectedLanguage && !selectedLanguage.is_default && !selectedLanguage.is_fallback && !selectedLanguage.site?.is_primary ? (
                 <Button
                   type="button"
                   size="icon"

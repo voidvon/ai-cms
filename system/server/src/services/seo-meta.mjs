@@ -18,7 +18,7 @@ export function buildSeoMeta({
   site
 }) {
   const siteConfig = site || {};
-  const baseUrl = normalizeBaseUrl(siteConfig.resolved_web_url || siteConfig.web_url);
+  const baseUrl = normalizeBaseUrl(siteConfig.resolved_web_url);
   const canonicalPath = normalizeSiteScopedPagePath(siteConfig, normalizeIndexDocumentUrl(url));
   const canonicalUrl = toAbsoluteUrl(canonicalPath, baseUrl, siteConfig) || baseUrl || '/';
   const siteName = siteConfig.web_name || siteConfig.company_name || '';
@@ -60,12 +60,11 @@ export function buildSeoMeta({
 
 export function buildHreflangLinks(site, options = {}) {
   const pagePath = normalizeSiteScopedPagePath(site, normalizeIndexDocumentUrl(options?.url || '/'));
-  const fallbackBaseUrl = normalizeBaseUrl(site?.base_web_url || site?.web_url);
   const hreflangConfig = site?.template_data?.seo?.hreflang || {};
   const links = [];
 
   for (const language of listLanguages().filter((item) => Number(item?.is_enabled || 0) === 1)) {
-    const baseUrl = resolveLanguageSitePublicBaseUrl(language.code, fallbackBaseUrl);
+    const baseUrl = resolveLanguageSitePublicBaseUrl(language.code);
     const hreflang = resolveConfiguredHreflangCode(language, hreflangConfig);
     if (!baseUrl || !hreflang) {
       continue;
@@ -77,7 +76,7 @@ export function buildHreflangLinks(site, options = {}) {
   }
 
   const currentLanguage = normalizeHreflangCode(resolveSiteLanguageSignal(site));
-  const currentBaseUrl = normalizeBaseUrl(site?.resolved_web_url || site?.web_url);
+  const currentBaseUrl = normalizeBaseUrl(site?.resolved_web_url);
   if (links.length === 0 && currentBaseUrl) {
     links.push({
       lang: currentLanguage || 'x-default',
@@ -86,13 +85,14 @@ export function buildHreflangLinks(site, options = {}) {
   }
 
   const configuredDefaultLanguageCode = String(hreflangConfig?.xDefaultLanguage || hreflangConfig?.x_default_language || '').trim();
-  const defaultLanguage = listLanguages().find((item) => (
+  const languages = listLanguages();
+  const defaultLanguage = languages.find((item) => (
     configuredDefaultLanguageCode
       ? item.code === configuredDefaultLanguageCode
-      : Number(item?.is_default || 0) === 1
+      : Number(item?.site?.is_primary || 0) === 1
   ));
   const defaultBaseUrl = defaultLanguage
-    ? resolveLanguageSitePublicBaseUrl(defaultLanguage.code, fallbackBaseUrl)
+    ? resolveLanguageSitePublicBaseUrl(defaultLanguage.code)
     : currentBaseUrl;
   if (defaultBaseUrl) {
     links.push({
@@ -105,7 +105,7 @@ export function buildHreflangLinks(site, options = {}) {
 }
 
 export function buildJsonLdOrganization(site) {
-  const baseUrl = normalizeBaseUrl(site?.resolved_web_url || site?.web_url);
+  const baseUrl = normalizeBaseUrl(site?.resolved_web_url);
   const organizationConfig = site?.template_data?.seo?.organization || {};
   const organizationName = organizationConfig.name || site?.company_name || site?.web_name || '';
   const legalName = organizationConfig.legalName || organizationConfig.legal_name || '';
@@ -140,7 +140,7 @@ export function buildJsonLdOrganization(site) {
 }
 
 export function buildJsonLdPageGraph({ site, page, seoMeta, existingJsonLd, breadcrumbs, pageType, schemaType, image, description } = {}) {
-  const baseUrl = normalizeBaseUrl(site?.resolved_web_url || site?.web_url);
+  const baseUrl = normalizeBaseUrl(site?.resolved_web_url);
   const canonicalUrl = normalizeAbsoluteUrl(seoMeta?.basic?.canonical)
     || toAbsoluteUrl(page?.url, baseUrl)
     || baseUrl
@@ -229,7 +229,7 @@ export function buildJsonLdPageGraph({ site, page, seoMeta, existingJsonLd, brea
 }
 
 export function buildJsonLdStructuredContent(content, site, options = {}) {
-  const baseUrl = normalizeBaseUrl(site?.resolved_web_url || site?.web_url);
+  const baseUrl = normalizeBaseUrl(site?.resolved_web_url);
   const imageValue = content?.photo_url || content?.primary_image || null;
   const imageUrl = toAbsoluteUrl(imageValue, baseUrl, site);
   const organizationName = site?.company_name || site?.web_name || '';
@@ -269,7 +269,7 @@ export function buildJsonLdBreadcrumbList(items, options = {}) {
 }
 
 export function buildJsonLdSectionEntry(entry, site, options = {}) {
-  const baseUrl = normalizeBaseUrl(site?.resolved_web_url || site?.web_url);
+  const baseUrl = normalizeBaseUrl(site?.resolved_web_url);
   const imageValue = entry?.photo_url || entry?.picture || entry?.primary_image || null;
   const imageUrl = toAbsoluteUrl(imageValue, baseUrl, site);
   const organizationName = site?.company_name || site?.web_name || '';

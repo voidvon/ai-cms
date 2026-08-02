@@ -673,7 +673,7 @@ function resolveMediaAssetPublicUrl(item, siteConfig = null) {
     return resolveRuntimeAssetUrl(relativePath, siteConfig);
   }
   if (isOriginalPdfAsset(item) && relativePath.startsWith('/')) {
-    const baseUrl = String(siteConfig?.assets_public_base_url || siteConfig?.web_url || '').trim().replace(/\/+$/g, '');
+    const baseUrl = String(siteConfig?.assets_public_base_url || siteConfig?.resolved_web_url || '').trim().replace(/\/+$/g, '');
     return baseUrl ? `${baseUrl}${relativePath}` : relativePath;
   }
   return relativePath;

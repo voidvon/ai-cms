@@ -28,7 +28,6 @@ const SITE_TRANSLATABLE_FIELDS = [
 
 const SITE_REQUIRED_BASE_COLUMNS = [
   'web_name',
-  'web_url',
   'company_name',
   'company_address',
   'postal_code',
@@ -85,12 +84,13 @@ export function getSiteConfig(languageCode = null, options = {}) {
     } : {})
   };
 
-  const siteUrl = resolveSiteBaseUrl(output, selectedLanguage.code);
+  const siteUrl = resolveSiteBaseUrl(selectedLanguage.code);
+  const primarySiteUrl = resolvePrimaryLanguageSiteBaseUrl();
   return {
     ...output,
     template_data: parseSiteTemplateDataJson(output.template_data_json),
-    base_web_url: normalizeAbsoluteUrl(base.web_url) || '',
-    web_url: siteUrl || output.web_url || '',
+    base_web_url: primarySiteUrl,
+    web_url: siteUrl,
     resolved_web_url: siteUrl || '',
     runtime_assets_base_url: resolveRuntimeAssetBaseUrl(output),
     language_site_host: resolveLanguageSiteHost(selectedLanguage.code),
@@ -99,8 +99,42 @@ export function getSiteConfig(languageCode = null, options = {}) {
   };
 }
 
-export function resolveLanguageSitePublicBaseUrl(languageCode, fallbackWebUrl = '') {
-  return resolveLanguageSiteBaseUrl(languageCode, fallbackWebUrl);
+export function resolveLanguageSitePublicBaseUrl(languageCode) {
+  return resolveLanguageSiteBaseUrl(languageCode);
+}
+
+export function resolveLanguageSiteBaseUrlFromLanguages(languageCode, languages = []) {
+  const requestedCode = String(languageCode || '').trim();
+  if (!requestedCode) {
+    return '';
+  }
+
+  const language = languages.find((item) => item.code === requestedCode);
+  const site = language?.site || null;
+  if (!site) {
+    return '';
+  }
+
+  const host = normalizeHostUrl(site.host);
+  if (site.site_mode === 'standalone') {
+    return host;
+  }
+
+  const primaryLanguage = languages.find((item) => (
+    Number(item?.is_enabled || 0) === 1
+    && Number(item?.site?.is_primary || 0) === 1
+    && item?.site?.site_mode === 'standalone'
+  ));
+  const primaryHost = normalizeHostUrl(primaryLanguage?.site?.host);
+  if (!primaryHost) {
+    return '';
+  }
+
+  const pathPrefix = normalizePathPrefix(site.path_prefix);
+  if (!pathPrefix || pathPrefix === '/') {
+    return '';
+  }
+  return `${primaryHost}${pathPrefix}`;
 }
 
 export function normalizeLanguageSitePathPrefix(value) {
@@ -158,7 +192,6 @@ export async function updateSiteConfig(input) {
       INSERT INTO site_config (
         id,
         web_name,
-        web_url,
         company_name,
         company_address,
         postal_code,
@@ -174,10 +207,9 @@ export async function updateSiteConfig(input) {
         assets_public_base_url,
         favicon_source_path,
         favicon_manifest_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         web_name = excluded.web_name,
-        web_url = excluded.web_url,
         company_name = excluded.company_name,
         company_address = excluded.company_address,
         postal_code = excluded.postal_code,
@@ -197,7 +229,6 @@ export async function updateSiteConfig(input) {
     [
       1,
       basePayload.web_name,
-      basePayload.web_url,
       basePayload.company_name,
       basePayload.company_address,
       basePayload.postal_code,
@@ -278,7 +309,6 @@ function ensureSiteConfigTableSchema() {
     CREATE TABLE IF NOT EXISTS site_config (
       id INTEGER PRIMARY KEY,
       web_name TEXT,
-      web_url TEXT,
       company_name TEXT,
       company_address TEXT,
       postal_code TEXT,
@@ -302,6 +332,7 @@ function ensureSiteConfigTableSchema() {
   addColumnIfMissing('site_config', 'assets_public_base_url', 'TEXT');
   addColumnIfMissing('site_config', 'favicon_source_path', 'TEXT');
   addColumnIfMissing('site_config', 'favicon_manifest_json', 'TEXT');
+  dropColumnIfExists('site_config', 'web_url');
   dropColumnIfExists('site_config', 'web_copyright');
   dropColumnIfExists('site_config', 'web_author');
 
@@ -319,7 +350,6 @@ function getBaseSiteConfig() {
       SELECT
         id,
         web_name,
-        web_url,
         company_name,
         company_address,
         postal_code,
@@ -340,7 +370,6 @@ function getBaseSiteConfig() {
     `) || {
       id: 1,
       web_name: 'Spirax Sarco CN',
-      web_url: '',
       company_name: '',
       company_address: '',
       postal_code: '',
@@ -362,14 +391,6 @@ function getBaseSiteConfig() {
 }
 
 function normalizeSiteConfigInput(input) {
-  const webUrl = toNullableString(input.web_url);
-  if (!webUrl) {
-    throw new Error('网站地址不能为空');
-  }
-  if (!/^https?:\/\//i.test(webUrl)) {
-    throw new Error('网站地址必须以 http:// 或 https:// 开头');
-  }
-
   const assetsPort = normalizeOptionalPort(input.assets_port);
   const assetsPublicBaseUrl = normalizeOptionalPublicBaseUrl(input.assets_public_base_url);
   const assetsBindHost = toNullableString(input.assets_bind_host) || HOST;
@@ -389,7 +410,6 @@ function normalizeSiteConfigInput(input) {
 
   return {
     web_name: toNullableString(input.web_name),
-    web_url: webUrl,
     company_name: toNullableString(input.company_name),
     company_address: toNullableString(input.company_address),
     postal_code: toNullableString(input.postal_code),
@@ -716,44 +736,22 @@ function resolveLanguageForContent(languageCode) {
   };
 }
 
-function resolveSiteBaseUrl(baseConfig, languageCode) {
-  const languageSiteUrl = resolveLanguageSiteBaseUrl(languageCode, baseConfig?.web_url);
-  if (languageSiteUrl) {
-    return languageSiteUrl;
-  }
-  return normalizeAbsoluteUrl(baseConfig?.web_url);
+function resolveSiteBaseUrl(languageCode) {
+  return resolveLanguageSiteBaseUrl(languageCode);
 }
 
-function resolveLanguageSiteBaseUrl(languageCode, fallbackWebUrl = '') {
-  const requestedCode = String(languageCode || '').trim();
-  if (!requestedCode) {
-    return '';
-  }
+function resolveLanguageSiteBaseUrl(languageCode) {
+  return resolveLanguageSiteBaseUrlFromLanguages(languageCode, listLanguages());
+}
 
-  const language = listLanguages().find((item) => item.code === requestedCode);
-  const site = language?.site || null;
-  if (!site) {
-    return '';
-  }
-
-  const baseUrl = normalizeAbsoluteUrl(fallbackWebUrl);
-  const host = normalizeHostUrl(site.host);
-  if (site.site_mode === 'standalone') {
-    if (host) {
-      return host;
-    }
-    return baseUrl;
-  }
-
-  if (!baseUrl) {
-    return '';
-  }
-
-  const pathPrefix = normalizePathPrefix(site.path_prefix);
-  if (!pathPrefix || pathPrefix === '/') {
-    return baseUrl;
-  }
-  return `${baseUrl}${pathPrefix}`;
+function resolvePrimaryLanguageSiteBaseUrl() {
+  const languages = listLanguages();
+  const primaryLanguage = languages.find((item) => (
+    Number(item?.is_enabled || 0) === 1
+    && Number(item?.site?.is_primary || 0) === 1
+    && item?.site?.site_mode === 'standalone'
+  ));
+  return normalizeHostUrl(primaryLanguage?.site?.host);
 }
 
 function resolveLanguageSiteHost(languageCode) {
@@ -761,8 +759,15 @@ function resolveLanguageSiteHost(languageCode) {
   if (!requestedCode) {
     return '';
   }
-  const language = listLanguages().find((item) => item.code === requestedCode);
-  return normalizeHostUrl(language?.site?.host) || '';
+  const resolvedUrl = resolveLanguageSiteBaseUrl(requestedCode);
+  if (!resolvedUrl) {
+    return '';
+  }
+  try {
+    return new URL(resolvedUrl).origin;
+  } catch {
+    return '';
+  }
 }
 
 function normalizeAbsoluteUrl(value) {

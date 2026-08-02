@@ -19,11 +19,12 @@
     "admin:create": "node scripts/create-admin.mjs",
     "build:static": "node scripts/build-static.mjs",
     "test:access-logs": "node --test tests/access-logs.test.mjs",
+    "test:language-sites": "node --test tests/language-sites.test.mjs",
     "test:system-updates": "node --test tests/system-updates.test.mjs",
     "test:data-tables": "node --test tests/data-tables.test.mjs",
     "test:document-drafts": "node --test tests/document-drafts.test.mjs tests/document-agent-stream-events.test.mjs tests/responses-event-stream.test.mjs",
     "test:smoke": "node tests/smoke/runtime-smoke.mjs",
-    "test": "npm run test:access-logs && npm run test:system-updates && npm run test:data-tables && npm run test:document-drafts && npm run test:smoke"
+    "test": "npm run test:access-logs && npm run test:language-sites && npm run test:system-updates && npm run test:data-tables && npm run test:document-drafts && npm run test:smoke"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

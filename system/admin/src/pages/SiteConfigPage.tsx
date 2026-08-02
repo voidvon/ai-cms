@@ -10,7 +10,6 @@ import { toast } from 'sonner'
 import type { ApiResponse, SiteConfig } from '@/types'
 
 type SiteConfigBaseForm = {
-  web_url: string
   icp_number: string
   assets_bind_host: string
   assets_port: string
@@ -31,7 +30,7 @@ export default function SiteConfigPage() {
     return <div>加载中...</div>
   }
 
-  return <GlobalSiteConfigForm key={data.data.base_web_url || data.data.web_url} config={data.data} />
+  return <GlobalSiteConfigForm key={data.data.base_web_url || 'global'} config={data.data} />
 }
 
 function GlobalSiteConfigForm({ config }: { config: SiteConfig }) {
@@ -54,14 +53,6 @@ function GlobalSiteConfigForm({ config }: { config: SiteConfig }) {
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault()
-    if (!formData.web_url.trim()) {
-      toast.error('网站地址不能为空')
-      return
-    }
-    if (!/^https?:\/\//i.test(formData.web_url.trim())) {
-      toast.error('网站地址必须以 http:// 或 https:// 开头')
-      return
-    }
     mutation.mutate()
   }
 
@@ -69,7 +60,7 @@ function GlobalSiteConfigForm({ config }: { config: SiteConfig }) {
     <Card>
       <CardHeader>
         <CardTitle>全站配置</CardTitle>
-        <CardDescription>只维护所有语言站点共用的地址、备案、图标和资源服务。</CardDescription>
+        <CardDescription>维护所有语言站点共用的备案、图标和资源服务。</CardDescription>
       </CardHeader>
       <CardContent>
         <form onSubmit={handleSubmit} className="space-y-8">
@@ -79,15 +70,6 @@ function GlobalSiteConfigForm({ config }: { config: SiteConfig }) {
               <p className="text-sm text-muted-foreground">语言名称、公司资料和联系方式请前往多语言管理。</p>
             </div>
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="web_url">网站地址</Label>
-                <Input
-                  id="web_url"
-                  value={formData.web_url}
-                  onChange={(event) => setFormData({ ...formData, web_url: event.target.value })}
-                  placeholder="https://www.example.com"
-                />
-              </div>
               <div className="space-y-2 md:col-span-2">
                 <Label htmlFor="icp_number">ICP备案号</Label>
                 <Input
@@ -166,7 +148,6 @@ function GlobalSiteConfigForm({ config }: { config: SiteConfig }) {
 
 function createBaseData(config: SiteConfig): SiteConfigBaseForm {
   return {
-    web_url: config.base_web_url || config.web_url || '',
     icp_number: config.icp_number || '',
     assets_bind_host: config.assets_bind_host || '',
     assets_port: config.assets_port ? String(config.assets_port) : '',

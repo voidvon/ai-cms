@@ -51,9 +51,16 @@ export function ensureLanguagesSchema() {
   addColumnIfMissing('language_sites', 'access_port', 'INTEGER');
   addColumnIfMissing('language_sites', 'bind_host', 'TEXT');
   execute("UPDATE language_sites SET site_mode = 'subdir' WHERE site_mode IS NULL OR TRIM(site_mode) = ''");
+  execute(`
+    UPDATE language_sites
+    SET site_mode = '${SITE_MODE_STANDALONE}'
+    WHERE output_dir = 'html'
+      AND (path_prefix IS NULL OR TRIM(path_prefix) = '' OR path_prefix = '/')
+  `);
 
   ensureDefaultLanguage();
   ensureFallbackLanguage();
+  ensurePrimaryLanguageSite();
   getDb().exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_languages_default
     ON languages(is_default)
@@ -62,6 +69,10 @@ export function ensureLanguagesSchema() {
     CREATE UNIQUE INDEX IF NOT EXISTS idx_languages_fallback
     ON languages(is_fallback)
     WHERE is_fallback = 1;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_language_sites_primary
+    ON language_sites(is_primary)
+    WHERE is_primary = 1;
   `);
   schemaEnsured = true;
 }
@@ -218,41 +229,46 @@ export function createLanguage(input) {
   validateLanguageSiteConfig(payload);
   const now = new Date().toISOString();
 
-  if (payload.is_default) {
-    execute('UPDATE languages SET is_default = 0');
-  }
-  if (payload.is_fallback) {
-    execute('UPDATE languages SET is_fallback = 0');
-  }
+  const result = runInTransaction(() => {
+    if (payload.is_default) {
+      execute('UPDATE languages SET is_default = 0');
+    }
+    if (payload.is_fallback) {
+      execute('UPDATE languages SET is_fallback = 0');
+    }
+    const insertResult = execute(
+      `
+        INSERT INTO languages (
+          code,
+          name,
+          native_name,
+          is_default,
+          is_fallback,
+          is_enabled,
+          sort_order,
+          created_at,
+          updated_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `,
+      [
+        payload.code,
+        payload.name,
+        payload.native_name,
+        payload.is_default,
+        payload.is_fallback,
+        payload.is_enabled,
+        payload.sort_order,
+        now,
+        now
+      ]
+    );
 
-  const result = execute(
-    `
-      INSERT INTO languages (
-        code,
-        name,
-        native_name,
-        is_default,
-        is_fallback,
-        is_enabled,
-        sort_order,
-        created_at,
-        updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `,
-    [
-      payload.code,
-      payload.name,
-      payload.native_name,
-      payload.is_default,
-      payload.is_fallback,
-      payload.is_enabled,
-      payload.sort_order,
-      now,
-      now
-    ]
-  );
-
-  upsertLanguageSite(result.lastInsertRowid, payload.site, now);
+    if (payload.site.is_primary) {
+      execute('UPDATE language_sites SET is_primary = 0');
+    }
+    upsertLanguageSite(insertResult.lastInsertRowid, payload.site, now);
+    return insertResult;
+  });
   invalidateLanguagesCache();
   return getLanguageById(result.lastInsertRowid);
 }
@@ -271,15 +287,11 @@ export function updateLanguage(id, input) {
   validateLanguageSiteConfig(payload, { currentLanguageId: id });
   const now = new Date().toISOString();
 
-  if (payload.is_default) {
-    execute('UPDATE languages SET is_default = 0 WHERE id <> ?', [id]);
-  } else if (existing.is_default && !payload.is_default) {
+  if (existing.is_default && !payload.is_default) {
     throw new Error('必须保留一个后台管理语言');
   }
 
-  if (payload.is_fallback) {
-    execute('UPDATE languages SET is_fallback = 0 WHERE id <> ?', [id]);
-  } else if (existing.is_fallback && !payload.is_fallback) {
+  if (existing.is_fallback && !payload.is_fallback) {
     throw new Error('必须保留一个兜底语言');
   }
 
@@ -290,37 +302,61 @@ export function updateLanguage(id, input) {
     if (Number(existing.is_fallback || 0) === 1) {
       throw new Error('兜底语言不能停用');
     }
+    if (Number(existing.site?.is_primary || 0) === 1) {
+      throw new Error('主站点不能停用，请先将其他独立站点设为主站点');
+    }
     ensureAtLeastOneEnabledLanguage(id);
   }
 
-  execute(
-    `
-      UPDATE languages
-      SET
-        code = ?,
-        name = ?,
-        native_name = ?,
-        is_default = ?,
-        is_fallback = ?,
-        is_enabled = ?,
-        sort_order = ?,
-        updated_at = ?
-      WHERE id = ?
-    `,
-    [
-      payload.code,
-      payload.name,
-      payload.native_name,
-      payload.is_default,
-      payload.is_fallback,
-      payload.is_enabled,
-      payload.sort_order,
-      now,
-      id
-    ]
-  );
+  if (Number(existing.site?.is_primary || 0) === 1 && !payload.site.is_primary) {
+    const anotherPrimary = queryOne(
+      'SELECT language_id FROM language_sites WHERE is_primary = 1 AND language_id <> ? LIMIT 1',
+      [id]
+    );
+    if (!anotherPrimary) {
+      throw new Error('必须保留一个主站点，请先将其他独立站点设为主站点');
+    }
+  }
 
-  upsertLanguageSite(id, payload.site, now);
+  runInTransaction(() => {
+    if (payload.is_default) {
+      execute('UPDATE languages SET is_default = 0 WHERE id <> ?', [id]);
+    }
+    if (payload.is_fallback) {
+      execute('UPDATE languages SET is_fallback = 0 WHERE id <> ?', [id]);
+    }
+    execute(
+      `
+        UPDATE languages
+        SET
+          code = ?,
+          name = ?,
+          native_name = ?,
+          is_default = ?,
+          is_fallback = ?,
+          is_enabled = ?,
+          sort_order = ?,
+          updated_at = ?
+        WHERE id = ?
+      `,
+      [
+        payload.code,
+        payload.name,
+        payload.native_name,
+        payload.is_default,
+        payload.is_fallback,
+        payload.is_enabled,
+        payload.sort_order,
+        now,
+        id
+      ]
+    );
+
+    if (payload.site.is_primary) {
+      execute('UPDATE language_sites SET is_primary = 0 WHERE language_id <> ?', [id]);
+    }
+    upsertLanguageSite(id, payload.site, now);
+  });
   invalidateLanguagesCache();
   return getLanguageById(id);
 }
@@ -336,6 +372,9 @@ export function deleteLanguage(id) {
   }
   if (Number(existing.is_fallback || 0) === 1) {
     throw new Error('兜底语言不能删除');
+  }
+  if (Number(existing.site?.is_primary || 0) === 1) {
+    throw new Error('主站点不能删除，请先将其他独立站点设为主站点');
   }
 
   execute('DELETE FROM languages WHERE id = ?', [id]);
@@ -418,8 +457,61 @@ function ensureFallbackLanguage() {
   }
 }
 
+function ensurePrimaryLanguageSite() {
+  const validPrimary = queryOne(`
+    SELECT ls.language_id
+    FROM language_sites ls
+    INNER JOIN languages l ON l.id = ls.language_id
+    WHERE ls.is_primary = 1
+      AND ls.site_mode = '${SITE_MODE_STANDALONE}'
+      AND ls.output_dir = 'html'
+      AND l.is_enabled = 1
+    LIMIT 1
+  `);
+  const primaryCount = Number(queryOne('SELECT COUNT(*) AS count FROM language_sites WHERE is_primary = 1')?.count || 0);
+  if (validPrimary && primaryCount === 1) {
+    return;
+  }
+
+  const candidate = queryOne(`
+    SELECT ls.language_id
+    FROM language_sites ls
+    INNER JOIN languages l ON l.id = ls.language_id
+    WHERE l.is_enabled = 1
+      AND ls.site_mode = '${SITE_MODE_STANDALONE}'
+      AND ls.output_dir = 'html'
+    ORDER BY
+      l.is_fallback DESC,
+      ls.is_primary DESC,
+      l.is_default DESC,
+      l.sort_order ASC,
+      l.id ASC
+    LIMIT 1
+  `);
+  if (!candidate) {
+    return;
+  }
+
+  execute('UPDATE language_sites SET is_primary = 0');
+  execute('UPDATE language_sites SET is_primary = 1 WHERE language_id = ?', [candidate.language_id]);
+  invalidateLanguagesCache();
+}
+
 function invalidateLanguagesCache() {
   cachedLanguages = null;
+}
+
+function runInTransaction(callback) {
+  const database = getDb();
+  database.exec('BEGIN IMMEDIATE');
+  try {
+    const result = callback();
+    database.exec('COMMIT');
+    return result;
+  } catch (error) {
+    database.exec('ROLLBACK');
+    throw error;
+  }
 }
 
 function upsertLanguageSite(languageId, site, now = new Date().toISOString()) {
@@ -526,13 +618,13 @@ function normalizeSiteInput(input, { languageCode = '', isDefault = 0 } = {}) {
   const bindHost = siteMode === SITE_MODE_STANDALONE ? normalizeBindHost(input?.bind_host) : null;
 
   return {
-    host: toNullableString(input?.host),
+    host: siteMode === SITE_MODE_STANDALONE ? toNullableString(input?.host) : null,
     path_prefix: pathPrefix,
     output_dir: normalizeOutputDir(input?.output_dir) || deriveLanguageSiteOutputDir({ siteMode, pathPrefix, languageCode }),
     site_mode: siteMode,
     access_port: accessPort,
     bind_host: bindHost,
-    is_primary: toBooleanInt(input?.is_primary ?? 1),
+    is_primary: siteMode === SITE_MODE_STANDALONE ? toBooleanInt(input?.is_primary) : 0,
     language_code: languageCode,
     is_default: isDefault
   };
@@ -540,12 +632,21 @@ function normalizeSiteInput(input, { languageCode = '', isDefault = 0 } = {}) {
 
 function validateLanguageSiteConfig(payload, { currentLanguageId = null } = {}) {
   const site = payload.site || {};
+  if (site.is_primary && !payload.is_enabled) {
+    throw new Error('主站点必须保持启用');
+  }
+  if (site.is_primary && site.site_mode !== SITE_MODE_STANDALONE) {
+    throw new Error('只有独立站点可以设为主站点');
+  }
+  if (site.is_primary && !isRootStandaloneSite(site)) {
+    throw new Error('主站点必须使用根静态目录 html');
+  }
   if (site.site_mode === SITE_MODE_STANDALONE) {
-    if (isRootStandaloneSite(site)) {
-      return;
-    }
     if (!String(site.host || '').trim()) {
       throw new Error('独立站点必须配置正式域名');
+    }
+    if (isRootStandaloneSite(site)) {
+      return;
     }
     if (!site.access_port) {
       throw new Error('独立站点必须配置访问端口');
@@ -570,6 +671,25 @@ function validateLanguageSiteConfig(payload, { currentLanguageId = null } = {}) 
     if (conflict) {
       throw new Error(`端口 ${site.access_port} 已被语言 ${conflict.code} 使用`);
     }
+    return;
+  }
+
+  if (normalizePathPrefix(site.path_prefix) === '/') {
+    throw new Error('子目录站点必须配置非根路径前缀');
+  }
+
+  const primarySite = queryOne(`
+    SELECT ls.host
+    FROM language_sites ls
+    INNER JOIN languages l ON l.id = ls.language_id
+    WHERE ls.is_primary = 1
+      AND ls.site_mode = '${SITE_MODE_STANDALONE}'
+      AND ls.output_dir = 'html'
+      AND l.is_enabled = 1
+    LIMIT 1
+  `);
+  if (!String(primarySite?.host || '').trim()) {
+    throw new Error('请先为主站点配置正式域名，再保存子目录站点');
   }
 }
 
