@@ -19,6 +19,12 @@ export function buildColumnSlugPath(column, columnMap) {
       visited.add(currentId);
     }
 
+    // 栏目节点服务可能会把根栏目下的一级节点归一化为 parent_id=0；
+    // 路径计算仍以完整栏目映射为准，确保根目录不会丢失。
+    if (currentId > 0 && columnMap?.has(currentId)) {
+      current = columnMap.get(currentId);
+    }
+
     const dirName = String(current.dir_name || '').trim().replace(/^\/+|\/+$/g, '');
     if (!dirName || String(current.column_type || '').trim() === 'link') {
       break;
@@ -70,7 +76,10 @@ export function buildColumnPublicPath(column, columnMap = null) {
   const rowsById = columnMap instanceof Map ? columnMap : new Map();
   const columnId = toInteger(column.id, 0);
   if (columnId > 0) {
-    rowsById.set(columnId, column);
+    const mappedColumn = rowsById.get(columnId);
+    rowsById.set(columnId, mappedColumn
+      ? { ...mappedColumn, ...column, parent_id: toInteger(column.parent_id, 0) || mappedColumn.parent_id }
+      : column);
   }
   const segments = buildColumnSlugPath(column, rowsById);
   if (segments.length === 0) {

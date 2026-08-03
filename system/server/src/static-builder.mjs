@@ -80,10 +80,8 @@ let globalStaticBuildProgressState = {
 /**
  * 设置全局分类目录映射
  */
-function setGlobalColumnSlugMap(columns) {
-  globalManagedColumnMap = new Map(
-    columns.map((columnNode) => [normalizeInteger(columnNode.id, 0), columnNode])
-  );
+function setGlobalColumnSlugMap(columns, rootColumn = null) {
+  globalManagedColumnMap = buildManagedColumnPathMap(columns, rootColumn);
 
   // 为每个分类构建完整的目录路径
   globalColumnSlugMap = new Map(
@@ -92,6 +90,23 @@ function setGlobalColumnSlugMap(columns) {
       return [normalizeInteger(columnNode.id, 0), slugPath.join('/')];
     })
   );
+}
+
+function buildManagedColumnPathMap(categories, rootColumn = null) {
+  const rows = Array.isArray(categories) ? categories : [];
+  const map = new Map(rows.map((column) => [normalizeInteger(column.id, 0), column]));
+  const rootId = normalizeInteger(rootColumn?.id, 0);
+  if (rootId > 0 && !map.has(rootId)) {
+    map.set(rootId, rootColumn);
+  }
+  if (rootId > 0) {
+    for (const [id, column] of map) {
+      if (id !== rootId && normalizeInteger(column?.parent_id, 0) === 0) {
+        map.set(id, { ...column, parent_id: rootId });
+      }
+    }
+  }
+  return map;
 }
 
 function buildManagedContentUrl(contentItem, columnSlugPath = null) {
@@ -521,7 +536,7 @@ export function buildStaticSite({ outputRoot = DEFAULT_OUTPUT_ROOT, sections, cl
       .map((section) => languageTargetMap.get(section))
       .filter(Boolean)
       .sort((left, right) => Number(left.group === '系统文件') - Number(right.group === '系统文件'));
-    setGlobalColumnSlugMap(templateContext.managedColumnCategories);
+    setGlobalColumnSlugMap(templateContext.managedColumnCategories, templateContext.managedColumnRoot);
     globalColumnMap = new Map(
       templateContext.columns.map(col => [normalizeInteger(col.id, 0), col])
     );
@@ -1186,7 +1201,10 @@ function uniqueTopicRelatedContentRefs(refs) {
 
 function buildTopicContentColumnPath(column, templateContext) {
   const columnId = normalizeInteger(column?.id, 0);
-  const managedColumnMap = new Map((templateContext.managedColumnCategories || []).map((item) => [normalizeInteger(item.id, 0), item]));
+  const managedColumnMap = buildManagedColumnPathMap(
+    templateContext.managedColumnCategories,
+    templateContext.managedColumnRoot
+  );
   if (managedColumnMap.has(columnId)) {
     return buildColumnSlugPath(column, managedColumnMap);
   }
@@ -1308,7 +1326,7 @@ export function buildManagedColumnListPages({ outputRoot = DEFAULT_OUTPUT_ROOT, 
   const categories = templateContext.managedColumnCategories;
   const managedItems = listManagedColumnItems(targetRootColumn, { visibleOnly: false, limit: 10000, languageCode });
   const fallbackComparator = resolveContentItemComparator(resolveManagedColumnModelCode(targetRootColumn));
-  const columnMap = new Map(categories.map((item) => [item.id, item]));
+  const columnMap = buildManagedColumnPathMap(categories, targetRootColumn);
   const childrenByParent = groupBy(categories, (item) => normalizeInteger(item.parent_id, 0));
   const managedItemsByColumn = groupBy(managedItems, (item) => normalizeInteger(item.column_id, 0));
   const topLevelColumns = childrenByParent.get(0) || [];
@@ -1406,7 +1424,7 @@ export function buildManagedColumnContentPages({ outputRoot = DEFAULT_OUTPUT_ROO
 
   const managedItemsByColumn = groupBy(allManagedItems, (item) => normalizeInteger(item.column_id, 0));
   const compareManagedItems = resolveContentItemComparator(resolveManagedColumnModelCode(targetRootColumn));
-  const columnMap = new Map(templateContext.managedColumnCategories.map((item) => [normalizeInteger(item.id, 0), item]));
+  const columnMap = buildManagedColumnPathMap(templateContext.managedColumnCategories, targetRootColumn);
   let filesWritten = 0;
   const renderGroup = buildColumnRenderGroup({
     rootColumn: targetRootColumn,
@@ -1794,7 +1812,7 @@ function buildLegacyCommonProps(templateContext) {
     .slice(0, 11); // 取前11个一级分类
 
   // 创建栏目映射表，用于构建完整 URL
-  const columnMap = new Map(templateContext.managedColumnCategories.map((item) => [normalizeInteger(item.id, 0), item]));
+  const columnMap = buildManagedColumnPathMap(templateContext.managedColumnCategories, templateContext.managedColumnRoot);
 
   const footerManagedColumnCategories = level1Categories.map(cat => {
     // 获取该一级分类下的所有二级分类
@@ -1893,8 +1911,8 @@ function buildLegacyCommonProps(templateContext) {
       bottomHtml: '',
       indexFootHtml: '',
       aboutHtml: '',
-      managedMenuHtml: buildLegacyManagedColumnMenu(templateContext.managedColumnCategories, templateContext.site),
-      managedMenuCompactHtml: buildLegacyManagedColumnMenuCompact(templateContext.managedColumnCategories, templateContext.site),
+      managedMenuHtml: buildLegacyManagedColumnMenu(templateContext.managedColumnCategories, templateContext.site, templateContext.managedColumnRoot),
+      managedMenuCompactHtml: buildLegacyManagedColumnMenuCompact(templateContext.managedColumnCategories, templateContext.site, templateContext.managedColumnRoot),
       aboutCategoryHtml: buildLegacyAboutCategoryList(templateContext.corporationCategories, templateContext.site),
       newsCategoryHtml: buildSectionCategoryListHtml(templateContext, 'news'),
       serviceCategoryHtml: buildSectionCategoryListHtml(templateContext, 'service')
@@ -2128,8 +2146,8 @@ function expandLegacyCommonPlaceholders(value, templateContext) {
     .replaceAll('#HOPE_WebIcp#', site.icp_number || '')
     .replaceAll('#HOPE_WebQQ#', site.web_qq || '')
     .replaceAll('#HOPE_WebMsn#', site.web_mobile || '')
-    .replaceAll('#HOPE_ManagedCat()#', buildLegacyManagedColumnMenu(templateContext.managedColumnCategories, site))
-    .replaceAll('#HOPE_ManagedCat2()#', buildLegacyManagedColumnMenuCompact(templateContext.managedColumnCategories, site));
+    .replaceAll('#HOPE_ManagedCat()#', buildLegacyManagedColumnMenu(templateContext.managedColumnCategories, site, templateContext.managedColumnRoot))
+    .replaceAll('#HOPE_ManagedCat2()#', buildLegacyManagedColumnMenuCompact(templateContext.managedColumnCategories, site, templateContext.managedColumnRoot));
 
   html = html.replace(/#HOPE_aboutCat\((\d+)\)#/gi, () => buildLegacyAboutCategoryList(templateContext.corporationCategories, site));
   html = html.replace(/#HOPE_NewsCat\((\d+)\s*,\s*(\d+)\)#/gi, (_, id, dirCode) => {
@@ -2521,10 +2539,9 @@ function buildLegacySiteColumns(columns, options = {}) {
   const currentSite = options.templateContext?.site || null;
   const managedRootColumnId = normalizeInteger(options.templateContext?.managedColumnRoot?.id, 0);
   const managedRootModelCode = String(options.templateContext?.managedColumnRoot?.model_code || '').trim();
-  const managedCategoryMap = new Map(
-    Array.isArray(options.managedColumnCategories)
-      ? options.managedColumnCategories.map((item) => [normalizeInteger(item.id, 0), item])
-      : []
+  const managedCategoryMap = buildManagedColumnPathMap(
+    options.managedColumnCategories,
+    options.templateContext?.managedColumnRoot
   );
   const normalizedRows = rows.map((item) => ({
     id: normalizeInteger(item?.id, 0),
@@ -2969,7 +2986,7 @@ function buildLegacyManagedColumnListPageProps({ templateContext, rootColumn = n
   const rootLevelCategories = templateContext.managedColumnCategories.filter((item) => normalizeInteger(item.parent_id, 0) === 0);
   // 如果没有传入 columnMap，则创建一个
   if (!columnMap) {
-    columnMap = new Map(templateContext.managedColumnCategories.map((item) => [normalizeInteger(item.id, 0), item]));
+    columnMap = buildManagedColumnPathMap(templateContext.managedColumnCategories, rootColumn);
   }
   const columnUrl = buildLegacyManagedColumnUrl(columnNode, columnMap, templateContext.site);
   const rootManagedColumn = rootColumn || null;
@@ -3130,7 +3147,7 @@ function buildLegacyManagedColumnDetailPageProps({ templateContext, rootColumn =
   const rootLevelCategories = templateContext.managedColumnCategories.filter((item) => normalizeInteger(item.parent_id, 0) === 0);
 
   // 构建 columnMap 用于生成完整的栏目目录 URL
-  const columnMap = new Map(templateContext.managedColumnCategories.map((item) => [normalizeInteger(item.id, 0), item]));
+  const columnMap = buildManagedColumnPathMap(templateContext.managedColumnCategories, rootColumn);
   const rootManagedColumn = rootColumn || null;
   const rootManagedColumnUrl = rootManagedColumn
     ? buildLegacyColumnUrl(rootManagedColumn, templateContext.publicSections, templateContext.site)
@@ -3741,15 +3758,15 @@ function normalizeLegacyTemplateMarkup(value, site) {
     .replace(/\bhref=(["'])\/(?:Search|search)(?:\.asp(?:\?action=search)?)?\1/gi, 'href="#" data-search-open="true"');
 }
 
-function buildLegacyManagedColumnMenu(categories, site = null) {
+function buildLegacyManagedColumnMenu(categories, site = null, rootColumn = null) {
   const roots = categories.filter((item) => normalizeInteger(item.parent_id, 0) === 0 && normalizeInteger(item.id, 0) !== 0);
-  const columnMap = new Map(categories.map((item) => [normalizeInteger(item.id, 0), item]));
+  const columnMap = buildManagedColumnPathMap(categories, rootColumn);
   return `<table width="100%" border="0" align="center" cellpadding="0" cellspacing="0">${roots.map((item) => `<li><a href="${escapeHtml(buildLegacyManagedColumnUrl(item, columnMap, site))}"><span>${escapeHtml(item.name || '')}</span></a></li>`).join('')}</table>`;
 }
 
-function buildLegacyManagedColumnMenuCompact(categories, site = null) {
+function buildLegacyManagedColumnMenuCompact(categories, site = null, rootColumn = null) {
   const roots = categories.filter((item) => normalizeInteger(item.parent_id, 0) === 0 && normalizeInteger(item.id, 0) !== 0);
-  const columnMap = new Map(categories.map((item) => [normalizeInteger(item.id, 0), item]));
+  const columnMap = buildManagedColumnPathMap(categories, rootColumn);
   return roots.map((item, index) => `${index > 0 ? '&nbsp;' : ''}<a href="${escapeHtml(buildLegacyManagedColumnUrl(item, columnMap, site))}">${escapeHtml(item.name || '')}</a> |`).join('');
 }
 
@@ -4521,6 +4538,9 @@ function writeManagedColumnPageSet({
 }) {
   const pages = paginate(items, MANAGED_LIST_PAGE_SIZE);
   const pageList = pages.length > 0 ? pages : [[]];
+  const legacyColumnMap = new Map(
+    templateContext.managedColumnCategories.map((column) => [normalizeInteger(column.id, 0), column])
+  );
   let filesWritten = 0;
 
   for (let index = 0; index < pageList.length; index += 1) {
@@ -4547,6 +4567,12 @@ function writeManagedColumnPageSet({
     const outputPath = resolveColumnPageOutputPath(columnNode, columnMap, pageNumber);
     writeTextFile(outputRoot, outputPath, legacyHtml, templateContext.site);
     filesWritten += 1;
+
+    const legacyOutputPath = resolveColumnPageOutputPath(columnNode, legacyColumnMap, pageNumber);
+    if (legacyOutputPath !== outputPath) {
+      writeTextFile(outputRoot, legacyOutputPath, legacyHtml, templateContext.site);
+      filesWritten += 1;
+    }
   }
 
   return filesWritten;

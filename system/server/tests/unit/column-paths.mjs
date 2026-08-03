@@ -91,6 +91,16 @@ assert.equal(
 assert.equal(buildColumnPublicPath(managedRoot, managedColumnMap), '/learn-about-steam/');
 assert.equal(buildColumnPublicPath(managedColumn, managedColumnMap), '/learn-about-steam/control-hardware-self-acting-actuation/');
 
+const normalizedManagedColumn = { ...managedColumn, parent_id: 0 };
+const normalizedManagedColumnMap = new Map([
+  [managedRoot.id, managedRoot],
+  [managedColumn.id, { ...normalizedManagedColumn, parent_id: managedRoot.id }],
+]);
+assert.equal(
+  buildColumnPublicPath(normalizedManagedColumn, normalizedManagedColumnMap),
+  '/learn-about-steam/control-hardware-self-acting-actuation/',
+);
+
 const linkParent = { id: 500, parent_id: null, column_type: 'link', dir_name: null };
 const linkChild = { id: 501, parent_id: 500, column_type: 'single', dir_name: 'privacy-policy' };
 const slashColumn = { id: 502, parent_id: null, column_type: 'list', dir_name: 'data-tables/test-list' };
