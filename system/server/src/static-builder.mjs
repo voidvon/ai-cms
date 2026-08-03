@@ -28,6 +28,8 @@ import {
   buildRelativeCategoryPathFromRoutePath,
   buildColumnSlugPath,
   buildManagedColumnPublicUrl,
+  resolveColumnPageOutputPath,
+  resolvePublicPageOutputPath,
   resolveColumnRouteOutputPath,
   buildContentDetailUrlFromColumn,
   buildContentDetailPathFromColumn
@@ -189,18 +191,6 @@ function resolveManagedColumnRootPublicUrl(templateContext = null) {
     return '';
   }
   return buildLegacyColumnUrl(templateContext.managedColumnRoot, templateContext.publicSections, templateContext.site) || '';
-}
-
-function getManagedColumnRootPath(rootColumn) {
-  const routePath = String(rootColumn?.route_path || '').trim();
-  if (!routePath) {
-    throw new Error('缺少托管根栏目 route_path 配置');
-  }
-  return routePath.endsWith('/') ? routePath : `${routePath}/`;
-}
-
-function getManagedColumnRootOutputDir(rootColumn) {
-  return String(getManagedColumnRootPath(rootColumn)).replace(/^\/+|\/+$/g, '');
 }
 
 function getSectionEntries(templateContext, section, { includeLanguageFallback = false } = {}) {
@@ -1529,8 +1519,8 @@ function buildSectionCategoryPagesByDir({
           targets: [{ target_type: 'column', target_id: section.rootColumnId }],
           renderGroup
         });
-        const fileName = pageNumber === 1 ? 'index.html' : `index-${pageNumber}.html`;
-        writeTextFile(outputRoot, path.join(dirName, fileName), rootHtml, templateContext.site);
+        const outputPath = buildSectionListOutputPath(section, section.rootColumn, pageNumber);
+        writeTextFile(outputRoot, outputPath, rootHtml, templateContext.site);
         filesWritten += 1;
       }
     } else {
@@ -1551,7 +1541,7 @@ function buildSectionCategoryPagesByDir({
     }
   }
 
-  for (const [columnIndex, columnNode] of effectiveColumnList.entries()) {
+  for (const columnNode of effectiveColumnList) {
     const isRootCategory = normalizeInteger(columnNode.id, 0) === normalizeInteger(section.rootColumnId, 0);
     if (hasSectionRootLanding && isRootCategory) {
       continue;
@@ -1585,29 +1575,9 @@ function buildSectionCategoryPagesByDir({
         renderGroup
       });
 
-      const columnDirName = String(columnNode.dir_name || '').trim();
-      // 子栏目使用目录结构: /services/introduction/index.html
-      // 根栏目使用根目录: /services/index.html, /services/index-2.html
-      if (shouldRenderFullSectionColumnTree(section)) {
-        const outputPath = buildSectionListOutputPath(section, columnNode, pageNumber);
-        writeTextFile(outputRoot, outputPath, html, templateContext.site);
-        filesWritten += 1;
-      } else if (!isRootCategory && columnDirName) {
-        // 子栏目有目录名，使用目录结构
-        const fileName = pageNumber === 1 ? 'index.html' : `index-${pageNumber}.html`;
-        const relativePath = path.join(dirName, columnDirName, fileName);
-        writeTextFile(outputRoot, relativePath, html, templateContext.site);
-        filesWritten += 1;
-      } else {
-        // 根栏目，直接在section目录下
-        if (columnIndex === 0) {
-          // 第一个分类（根分类）生成 index.html
-          const fileName = pageNumber === 1 ? 'index.html' : `index-${pageNumber}.html`;
-          writeTextFile(outputRoot, path.join(dirName, fileName), html, templateContext.site);
-          filesWritten += 1;
-        }
-        // 其他非根栏目分类但没有dir_name的，暂不处理（未来可扩展）
-      }
+      const outputPath = buildSectionListOutputPath(section, columnNode, pageNumber);
+      writeTextFile(outputRoot, outputPath, html, templateContext.site);
+      filesWritten += 1;
     }
   }
 
@@ -1640,13 +1610,7 @@ function shouldRenderFullSectionColumnTree(section) {
 
 function buildSectionListOutputPath(section, columnNode, pageNumber) {
   const publicUrl = buildSectionColumnPublicUrl(section, columnNode);
-  const outputPath = resolveColumnRouteOutputPath(publicUrl);
-  if (pageNumber <= 1) {
-    return outputPath;
-  }
-  return outputPath.endsWith('index.html')
-    ? outputPath.replace(/index\.html$/u, `index-${pageNumber}.html`)
-    : outputPath;
+  return resolvePublicPageOutputPath(publicUrl, pageNumber);
 }
 
 function buildSectionDetailPagesByDir({
@@ -4559,18 +4523,6 @@ function writeManagedColumnPageSet({
   const pageList = pages.length > 0 ? pages : [[]];
   let filesWritten = 0;
 
-  const columnId = normalizeInteger(columnNode.id, 0);
-  const rootOutputDir = getManagedColumnRootOutputDir(rootColumn);
-  const isRootCategory = normalizeInteger(rootColumn?.id, 0) === columnId;
-  let columnSlugPath = columnId > 0 && columnNode.dir_name && columnMap
-    ? buildColumnSlugPath(columnNode, columnMap)
-    : [];
-  const rootDirName = String(rootColumn?.dir_name || '').trim();
-  if (rootDirName && columnSlugPath[0] === rootDirName) {
-    columnSlugPath = columnSlugPath.slice(1);
-  }
-  const useSlugPath = columnSlugPath.length > 0 || isRootCategory;
-
   for (let index = 0; index < pageList.length; index += 1) {
     const pageNumber = index + 1;
     const pageItems = pageList[index];
@@ -4592,18 +4544,8 @@ function writeManagedColumnPageSet({
       renderGroup
     });
 
-    let outputDir, fileName;
-
-    if (useSlugPath) {
-      outputDir = columnSlugPath.length > 0
-        ? path.join(rootOutputDir, ...columnSlugPath)
-        : rootOutputDir;
-      fileName = pageNumber === 1 ? 'index.html' : `index-${pageNumber}.html`;
-    } else {
-      continue;
-    }
-
-    writeTextFile(outputRoot, path.join(outputDir, fileName), legacyHtml, templateContext.site);
+    const outputPath = resolveColumnPageOutputPath(columnNode, columnMap, pageNumber);
+    writeTextFile(outputRoot, outputPath, legacyHtml, templateContext.site);
     filesWritten += 1;
   }
 

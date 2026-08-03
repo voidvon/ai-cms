@@ -167,6 +167,28 @@ export function resolveColumnRouteOutputPath(routePath) {
   return normalized;
 }
 
+export function resolveColumnPageOutputPath(column, columnMap = null, pageNumber = 1) {
+  const publicUrl = buildManagedColumnPublicUrl(column, columnMap);
+  return resolvePublicPageOutputPath(publicUrl, pageNumber);
+}
+
+export function resolvePublicPageOutputPath(publicUrl, pageNumber = 1) {
+  const outputPath = resolveColumnRouteOutputPath(publicUrl);
+  const normalizedPageNumber = Math.max(1, toInteger(pageNumber, 1));
+  if (normalizedPageNumber === 1) {
+    return outputPath;
+  }
+
+  const extension = path.extname(outputPath);
+  if (!extension) {
+    return path.join(outputPath, `index-${normalizedPageNumber}.html`);
+  }
+
+  const directory = path.dirname(outputPath);
+  const filename = path.basename(outputPath, extension);
+  return path.join(directory, `${filename}-${normalizedPageNumber}${extension}`);
+}
+
 export function resolveRelativePublicPath(value, parentPath = '/') {
   const normalizedValue = String(value || '').trim();
   if (!normalizedValue) {
