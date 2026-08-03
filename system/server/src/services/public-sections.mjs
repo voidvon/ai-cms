@@ -1,5 +1,5 @@
 import { buildColumnTreeIndex } from './column-tree.mjs';
-import { resolveRelativePublicPath } from './column-paths.mjs';
+import { buildColumnPublicPath, resolveRelativePublicPath } from './column-paths.mjs';
 
 const SERVICE_SECTION_PATTERN = /(service|services|support|knowledge|learn|training|服务|知识|学习|培训)/i;
 const NON_PUBLIC_SECTION_MODEL_CODES = new Set(['multidimensional_table']);
@@ -79,42 +79,16 @@ export function buildColumnPublicUrl(column, publicSections) {
     return '';
   }
 
-  const explicitRoutePath = normalizeColumnRoutePath(column.route_path);
   const relativeCustomUrl = String(column.custom_url || '').trim();
   const columnType = String(column.column_type || '');
-  const renderDriver = String(column.column_semantics?.render_driver || '');
-  if (renderDriver === 'managed_column' && toInteger(column.parent_id, 0) === 0) {
-    return '/products/';
-  }
-  if (renderDriver === 'managed_column') {
-    return '';
-  }
-  if (renderDriver === 'section') {
-    const section = publicSections?.getSectionByColumnId?.(column.id);
-    if (!section) {
-      return '';
-    }
-    if (toInteger(column.id, 0) === toInteger(section.rootColumnId, 0)) {
-      return `/${section.dirName}/`;
-    }
-    return '';
-  }
-  if (renderDriver === 'page_tree' && toInteger(column.parent_id, 0) === 0) {
-    return '/about/';
-  }
-  if (renderDriver === 'page_tree') {
-    return `/about/about-${toInteger(column.id, 0)}.html`;
-  }
-  if (columnType !== 'link' && explicitRoutePath) {
-    return explicitRoutePath;
-  }
   if (columnType === 'link') {
-    if (!relativeCustomUrl && !explicitRoutePath && toInteger(column.parent_id, 0) <= 0) {
+    if (!relativeCustomUrl && toInteger(column.parent_id, 0) <= 0) {
       return '/';
     }
     return resolveRelativePublicPath(relativeCustomUrl, resolveColumnParentPublicUrl(column, publicSections));
   }
-  return '';
+  const rowsById = publicSections instanceof Map ? publicSections : publicSections?.allById;
+  return column.public_path || buildColumnPublicPath(column, rowsById);
 }
 
 export function buildSectionColumnPublicUrl(section, columnNode) {
@@ -123,40 +97,7 @@ export function buildSectionColumnPublicUrl(section, columnNode) {
     return '';
   }
 
-  const routePath = normalizeColumnRoutePath(columnNode.route_path);
-  if (routePath) {
-    return routePath;
-  }
-
-  if (toInteger(columnNode?.parent_id, 0) === 0) {
-    return `/${dirName}/`;
-  }
-
-  const columnDirName = String(columnNode?.dir_name || '').trim();
-  if (columnDirName) {
-    return `/${dirName}/${columnDirName}/`;
-  }
-
-  return `/${dirName}/${resolveLegacyColumnPublicId(columnNode)}.html`;
-}
-
-function normalizeColumnRoutePath(value) {
-  const normalized = String(value || '').trim();
-  if (!normalized) {
-    return '';
-  }
-  if (normalized === '/' || normalized.endsWith('/')) {
-    return normalized;
-  }
-  if (pathLooksLikeFile(normalized)) {
-    return normalized;
-  }
-  return `${normalized}/`;
-}
-
-function pathLooksLikeFile(value) {
-  const lastSegment = String(value || '').split('/').filter(Boolean).pop() || '';
-  return lastSegment.includes('.');
+  return columnNode.public_path || columnNode.route_path || `/${dirName}/`;
 }
 
 function resolveColumnParentPublicUrl(column, publicSections) {
@@ -164,7 +105,8 @@ function resolveColumnParentPublicUrl(column, publicSections) {
   if (parentId <= 0) {
     return '/';
   }
-  const parent = publicSections?.allById?.get(parentId) || null;
+  const rowsById = publicSections instanceof Map ? publicSections : publicSections?.allById;
+  const parent = rowsById?.get(parentId) || null;
   if (!parent) {
     return '/';
   }

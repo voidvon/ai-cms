@@ -8,7 +8,7 @@ const TABLES = [
     translationTable: 'column_translations',
     sourceTable: 'columns',
     sourceIdField: 'column_id',
-    sourceKeySql: 'coalesce(s.route_path, s.dir_name, cast(s.id as text))'
+    sourceKeySql: 'coalesce(s.dir_name, cast(s.id as text))'
   },
   {
     translationTable: 'content_product_translations',

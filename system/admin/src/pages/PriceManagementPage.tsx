@@ -32,7 +32,6 @@ import { toast } from 'sonner'
 import type { Column, ContentTableViewColumn, DataTableField, DataTableRecord } from '@/types'
 
 const TABLE_RECORD_MODEL_CODE = 'multidimensional_table'
-const TABLE_BASE_PATH = '/data-tables/'
 
 type DashboardHeaderContext = {
   headerSlotElement: HTMLDivElement | null
@@ -121,7 +120,7 @@ export default function MultidimensionalTablesPage() {
       if (!tableRecordModel?.id) {
         throw new Error('多维表格记录模型尚未准备完成')
       }
-      const routePath = buildTableRoutePath(name)
+      const dirName = buildTableDirName(name)
       return columnsApi.create({
         base: {
           name,
@@ -129,8 +128,7 @@ export default function MultidimensionalTablesPage() {
           column_type: 'list',
           content_model_id: tableRecordModel.id,
           custom_url: '',
-          dir_name: '',
-          route_path: routePath,
+          dir_name: dirName,
           detail_rule: '{id}.html',
           sort_order: tableColumns.length * 10,
           is_visible: 1,
@@ -163,7 +161,6 @@ export default function MultidimensionalTablesPage() {
         parent_id: Number(column.parent_id || 0),
         content_model_id: Number(column.content_model_id || 0),
         dir_name: column.dir_name || '',
-        route_path: column.route_path || '',
         detail_rule: column.detail_rule || '{id}.html',
         sort_order: Number(column.sort_order || 0),
         is_visible: Number(column.is_visible ?? 1),
@@ -524,7 +521,7 @@ export default function MultidimensionalTablesPage() {
   )
 }
 
-function buildTableRoutePath(name: string) {
+function buildTableDirName(name: string) {
   const slug = String(name || '')
     .trim()
     .toLowerCase()
@@ -533,7 +530,7 @@ function buildTableRoutePath(name: string) {
     .replace(/^-|-$/g, '')
 
   const safeSlug = slug || `list-${Date.now()}`
-  return `${TABLE_BASE_PATH}${safeSlug}/`
+  return `data-tables/${safeSlug}`
 }
 
 function buildRenamedColumnTranslations(column: Column, name: string) {

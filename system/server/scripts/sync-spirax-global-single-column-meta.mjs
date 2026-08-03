@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execute, queryAll, queryOne } from '../src/db.mjs';
+import { listColumns } from '../src/services/columns.mjs';
 
 const sourceRoot = process.env.SPIRAX_GLOBAL_DIR
   ? path.resolve(process.env.SPIRAX_GLOBAL_DIR)
@@ -25,6 +26,9 @@ const defaultLanguage = queryOne(`
   ORDER BY id ASC
   LIMIT 1
 `);
+const publicPathByColumnId = new Map(
+  listColumns({ includeTranslations: false }).map((column) => [Number(column.id), column.public_path || '']),
+);
 
 if (!defaultLanguage?.id) {
   throw new Error('未找到默认语言');
@@ -34,7 +38,6 @@ const rows = queryAll(
   `
     SELECT
       c.id,
-      c.route_path,
       c.dir_name,
       c.legacy_extra,
       ct.name,
@@ -46,7 +49,6 @@ const rows = queryAll(
       ON ct.column_id = c.id
      AND ct.language_id = ?
     WHERE c.column_type = 'single'
-      AND coalesce(trim(c.route_path), '') <> ''
     ORDER BY c.id ASC
   `,
   [defaultLanguage.id],
@@ -56,6 +58,7 @@ const changed = [];
 const missing = [];
 
 for (const row of rows) {
+  row.route_path = publicPathByColumnId.get(Number(row.id)) || '';
   const metadata = resolveSourceMetadata(row.route_path);
   if (!metadata) {
     missing.push({

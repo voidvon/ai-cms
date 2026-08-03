@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execute, queryAll, queryOne } from '../src/db.mjs';
+import { listColumns } from '../src/services/columns.mjs';
 
 const sourceRoot = process.env.SPIRAX_GLOBAL_DIR
   ? path.resolve(process.env.SPIRAX_GLOBAL_DIR)
@@ -32,12 +33,14 @@ if (!defaultLanguage?.id) {
 
 const learnAboutSteamRoot = loadMdxMetadata(path.join(sourceDocsRoot, 'learn-about-steam', 'index.mdx'));
 const learnAboutSteamSections = buildLearnAboutSteamSectionMap(learnAboutSteamRoot);
+const publicPathByColumnId = new Map(
+  listColumns({ includeTranslations: false }).map((column) => [Number(column.id), column.public_path || '']),
+);
 
 const rows = queryAll(
   `
     SELECT
       c.id,
-      c.route_path,
       c.dir_name,
       c.legacy_extra,
       ct.name,
@@ -58,6 +61,7 @@ const changed = [];
 const missing = [];
 
 for (const row of rows) {
+  row.route_path = publicPathByColumnId.get(Number(row.id)) || '';
   const metadata = resolveSourceMetadata(row.route_path);
   if (!metadata) {
     missing.push({

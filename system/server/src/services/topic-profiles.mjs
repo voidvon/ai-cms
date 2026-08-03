@@ -1,5 +1,6 @@
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { getDefaultLanguage, listLanguages } from './languages.mjs';
+import { listColumns } from './columns.mjs';
 
 let schemaEnsured = false;
 
@@ -47,7 +48,6 @@ export function listTopicProfiles({ languageCode = null } = {}) {
       l.code AS profile_language_code,
       c.parent_id,
       c.dir_name,
-      c.route_path,
       c.column_type,
       p.publish_status,
       ct.name AS column_name
@@ -74,7 +74,6 @@ export function getTopicProfileByColumnId(columnId, { languageCode = null } = {}
       l.code AS profile_language_code,
       c.parent_id,
       c.dir_name,
-      c.route_path,
       c.column_type,
       p.publish_status,
       ct.name AS column_name
@@ -237,6 +236,10 @@ function mapTopicProfileRow(row) {
 }
 
 function hydrateTopicProfileRows(rows, language) {
+  const publicPathByColumnId = new Map(
+    listColumns({ languageCode: language.code, includeTranslations: false })
+      .map((column) => [toInteger(column.id, 0), column.public_path || null])
+  );
   const byColumnId = new Map();
   for (const row of rows) {
     const columnId = toInteger(row.column_id, 0);
@@ -256,6 +259,7 @@ function hydrateTopicProfileRows(rows, language) {
     }
     return mapTopicProfileRow({
       ...fallback,
+      route_path: publicPathByColumnId.get(toInteger(fallback.column_id, 0)) || null,
       requested_language_code: language.code,
       fallback_language_code: toInteger(fallback.language_id, 0) !== language.id ? fallback.profile_language_code : null,
       is_language_fallback: toInteger(fallback.language_id, 0) !== language.id ? 1 : 0

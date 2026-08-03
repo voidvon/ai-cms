@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execute, getDb, queryAll, queryOne } from '../src/db.mjs';
+import { listColumns } from '../src/services/columns.mjs';
 
 const sourceRoot = process.env.SPIRAX_GLOBAL_DIR
   ? path.resolve(process.env.SPIRAX_GLOBAL_DIR)
@@ -53,25 +54,15 @@ const homeColumnId = queryOne(`
   FROM columns
   WHERE column_type = 'link'
     AND parent_id IS NULL
-    AND coalesce(trim(route_path), '') = ''
     AND trim(coalesce(custom_url, '')) IN ('/', '')
   ORDER BY id ASC
   LIMIT 1
 `)?.id || null;
 
-const columns = queryAll(`
-  SELECT
-    c.id,
-    c.column_type,
-    c.route_path,
-    c.parent_id,
-    c.dir_name
-  FROM columns c
-  ORDER BY c.id ASC
-`);
+const columns = listColumns({ includeTranslations: false });
 const columnsByRoute = new Map();
 for (const row of columns) {
-  const route = normalizeRoutePath(row.route_path);
+  const route = normalizeRoutePath(row.public_path);
   if (!route) continue;
   columnsByRoute.set(route, row);
   const sourceRoute = mapCurrentRouteToSourceRoute(route);

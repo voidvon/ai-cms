@@ -14,7 +14,6 @@ import {
 import { queryOne } from '../db.mjs';
 import { getDefaultLanguage } from './languages.mjs';
 import { getContentModelByCode } from './content-models.mjs';
-import { resolveRelativePublicPath } from './column-paths.mjs';
 
 function toInteger(value, fallback = 0) {
   const parsed = Number.parseInt(String(value ?? ''), 10);
@@ -88,7 +87,6 @@ function buildRootColumnNodeContext(rootColumn) {
     columnType,
     contentModelCode: toNullableString(rootColumn.model_code),
     contentModelId: toInteger(rootColumn.content_model_id, 0) || null,
-    rootRoutePath: toNullableString(rootColumn.route_path) || '/'
   };
 }
 
@@ -281,7 +279,6 @@ export function createColumnNode(model, input) {
   ensureColumnsSchema();
   const config = getModelColumnConfig(model);
   const parentColumnId = resolveParentColumnId(model, input?.base?.parent_id ?? input?.parent_id);
-  const parentColumn = parentColumnId ? getColumnById(parentColumnId, { includeTranslations: true }) : null;
   const defaultLanguageCode = getDefaultLanguage()?.code || 'zh-CN';
   const translations = input?.translations || {
     [defaultLanguageCode]: {
@@ -298,21 +295,12 @@ export function createColumnNode(model, input) {
     ? Number(getContentModelByCode(config.contentModelCode)?.id || 0) || null
     : null;
   const dirName = normalizeDirName(input?.base?.dir_name ?? input?.dir_name) || slugifyName(defaultTranslation?.name, `${model}-${Date.now()}`);
-  const initialRoutePath = buildColumnNodeRoutePath({
-    model,
-    dirName,
-    parentColumn,
-    columnType: config.columnType,
-    fallbackName: defaultTranslation?.name || model
-  });
-
   const column = createManualColumn({
     base: {
       name: String(defaultTranslation?.name || '').trim(),
       parent_id: parentColumnId,
       column_type: config.columnType,
       content_model_id: contentModelId,
-      route_path: initialRoutePath,
       sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
       is_visible: 1,
       dir_name: dirName,
@@ -321,22 +309,12 @@ export function createColumnNode(model, input) {
     translations
   });
 
-  const finalRoutePath = buildColumnNodeRoutePath({
-    model,
-    dirName,
-    parentColumn: parentColumnId ? getColumnById(parentColumnId, { includeTranslations: true }) : null,
-    currentColumnId: column.id,
-    columnType: config.columnType,
-    fallbackName: defaultTranslation?.name || model
-  });
-
   if (config.columnType === 'single') {
     updateManualColumn(column.id, {
       base: {
         parent_id: parentColumnId,
         column_type: config.columnType,
         content_model_id: contentModelId,
-        route_path: finalRoutePath,
         dir_name: dirName,
         detail_rule: null,
         sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
@@ -350,7 +328,6 @@ export function createColumnNode(model, input) {
       parent_id: parentColumnId,
       content_model_id: contentModelId,
       dir_name: dirName,
-      route_path: finalRoutePath,
       detail_rule: toNullableString(input?.base?.detail_rule ?? input?.detail_rule),
       sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
       is_visible: 1,
@@ -365,7 +342,6 @@ export function createColumnNodeByRoot(rootColumnId, input) {
   ensureColumnsSchema();
   const rootContext = getRootColumnNodeContext(rootColumnId);
   const parentColumnId = resolveParentColumnIdInRoot(rootContext, input?.base?.parent_id ?? input?.parent_id);
-  const parentColumn = parentColumnId ? getColumnById(parentColumnId, { includeTranslations: true }) : null;
   const defaultLanguageCode = getDefaultLanguage()?.code || 'zh-CN';
   const translations = input?.translations || {
     [defaultLanguageCode]: {
@@ -379,21 +355,12 @@ export function createColumnNodeByRoot(rootColumnId, input) {
   };
   const defaultTranslation = translations[defaultLanguageCode] || Object.values(translations)[0] || {};
   const dirName = normalizeDirName(input?.base?.dir_name ?? input?.dir_name) || slugifyName(defaultTranslation?.name, `column-${Date.now()}`);
-  const initialRoutePath = buildColumnNodeRoutePath({
-    rootContext,
-    dirName,
-    parentColumn,
-    columnType: rootContext.columnType,
-    fallbackName: defaultTranslation?.name || rootContext.rootColumn?.name || 'column'
-  });
-
   const column = createManualColumn({
     base: {
       name: String(defaultTranslation?.name || '').trim(),
       parent_id: parentColumnId,
       column_type: rootContext.columnType,
       content_model_id: rootContext.contentModelId,
-      route_path: initialRoutePath,
       sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
       is_visible: 1,
       dir_name: dirName,
@@ -404,22 +371,12 @@ export function createColumnNodeByRoot(rootColumnId, input) {
     translations
   });
 
-  const finalRoutePath = buildColumnNodeRoutePath({
-    rootContext,
-    dirName,
-    parentColumn: parentColumnId ? getColumnById(parentColumnId, { includeTranslations: true }) : null,
-    currentColumnId: column.id,
-    columnType: rootContext.columnType,
-    fallbackName: defaultTranslation?.name || rootContext.rootColumn?.name || 'column'
-  });
-
   if (rootContext.columnType === 'single') {
     updateManualColumn(column.id, {
       base: {
         parent_id: parentColumnId,
         column_type: rootContext.columnType,
         content_model_id: rootContext.contentModelId,
-        route_path: finalRoutePath,
         dir_name: dirName,
         detail_rule: null,
         sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
@@ -433,7 +390,6 @@ export function createColumnNodeByRoot(rootColumnId, input) {
       parent_id: parentColumnId,
       content_model_id: rootContext.contentModelId,
       dir_name: dirName,
-      route_path: finalRoutePath,
       detail_rule: toNullableString(input?.base?.detail_rule ?? input?.detail_rule),
       sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order, 0),
       is_visible: 1,
@@ -451,7 +407,6 @@ export function updateColumnNode(model, id, input) {
   }
   const config = getModelColumnConfig(model);
   const parentColumnId = resolveParentColumnId(model, input?.base?.parent_id ?? input?.parent_id);
-  const parentColumn = parentColumnId ? getColumnById(parentColumnId, { includeTranslations: true }) : null;
   const existingTranslations = column.translations || {};
   const translations = normalizeColumnNodeTranslations(input, existingTranslations, column);
   const contentModelId = config.contentModelCode
@@ -460,22 +415,12 @@ export function updateColumnNode(model, id, input) {
   const dirName = normalizeDirName(input?.base?.dir_name ?? input?.dir_name ?? column.dir_name)
     || normalizeDirName(column.dir_name)
     || slugifyName(column.name, `${model}-${column.id}`);
-  const routePath = buildColumnNodeRoutePath({
-    model,
-    dirName,
-    parentColumn,
-    currentColumnId: column.id,
-    columnType: config.columnType,
-    fallbackName: column.name || model
-  });
-
   if (config.columnType === 'single') {
     updateManualColumn(column.id, {
       base: {
         parent_id: parentColumnId,
         column_type: config.columnType,
         content_model_id: contentModelId,
-        route_path: routePath,
         dir_name: dirName,
         detail_rule: null,
         sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order ?? column.sort_order, 0),
@@ -489,7 +434,6 @@ export function updateColumnNode(model, id, input) {
       parent_id: parentColumnId,
       content_model_id: contentModelId,
       dir_name: dirName,
-      route_path: routePath,
       detail_rule: toNullableString(input?.base?.detail_rule ?? input?.detail_rule ?? column.detail_rule),
       sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order ?? column.sort_order, 0),
       is_visible: toInteger(input?.base?.is_visible ?? column.is_visible, 1),
@@ -511,28 +455,17 @@ export function updateColumnNodeInRoot(rootColumnId, id, input) {
     input?.base?.parent_id ?? input?.parent_id,
     column.id
   );
-  const parentColumn = parentColumnId ? getColumnById(parentColumnId, { includeTranslations: true }) : null;
   const existingTranslations = column.translations || {};
   const translations = normalizeColumnNodeTranslations(input, existingTranslations, column);
   const dirName = normalizeDirName(input?.base?.dir_name ?? input?.dir_name ?? column.dir_name)
     || normalizeDirName(column.dir_name)
     || slugifyName(column.name, `column-${column.id}`);
-  const routePath = buildColumnNodeRoutePath({
-    rootContext,
-    dirName,
-    parentColumn,
-    currentColumnId: column.id,
-    columnType: rootContext.columnType,
-    fallbackName: column.name || rootContext.rootColumn?.name || 'column'
-  });
-
   if (rootContext.columnType === 'single') {
     updateManualColumn(column.id, {
       base: {
         parent_id: parentColumnId,
         column_type: rootContext.columnType,
         content_model_id: rootContext.contentModelId,
-        route_path: routePath,
         dir_name: dirName,
         detail_rule: null,
         sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order ?? column.sort_order, 0),
@@ -546,7 +479,6 @@ export function updateColumnNodeInRoot(rootColumnId, id, input) {
       parent_id: parentColumnId,
       content_model_id: rootContext.contentModelId,
       dir_name: dirName,
-      route_path: routePath,
       detail_rule: toNullableString(input?.base?.detail_rule ?? input?.detail_rule ?? column.detail_rule),
       sort_order: toInteger(input?.base?.sort_order ?? input?.sort_order ?? column.sort_order, 0),
       is_visible: toInteger(input?.base?.is_visible ?? column.is_visible, 1),
@@ -612,52 +544,4 @@ function normalizeColumnNodeTranslations(input, existingTranslations, column) {
         : 'published'
     }
   };
-}
-
-function buildColumnNodeRoutePath({
-  model,
-  rootContext = null,
-  dirName,
-  parentColumn,
-  currentColumnId = 0,
-  columnType,
-  fallbackName
-}) {
-  const config = rootContext || getModelColumnConfig(model);
-  const fallbackKey = rootContext?.rootColumnId
-    ? `column-${rootContext.rootColumnId}`
-    : model;
-  const normalizedDirName = dirName || slugifyName(fallbackName, currentColumnId > 0 ? `${fallbackKey}-${currentColumnId}` : `${fallbackKey}-column`);
-
-  if (rootContext && currentColumnId > 0 && currentColumnId === rootContext.rootColumnId) {
-    return rootContext.rootRoutePath;
-  }
-
-  if ((rootContext?.columnType || columnType) === 'single') {
-    if (parentColumn?.route_path) {
-      const parentDir = String(parentColumn.route_path || '').replace(/[^/]+\.html$/i, '').replace(/\/?$/, '/');
-      return resolveRelativePublicPath(`${normalizedDirName}.html`, parentDir) || `/${normalizedDirName}.html`;
-    }
-
-    const basePath = String(rootContext?.rootRoutePath || config.rootBasePath || '/')
-      .replace(/[^/]+\.html$/i, '')
-      .replace(/\/?$/, '/');
-    return resolveRelativePublicPath(`${normalizedDirName}.html`, basePath) || `/${normalizedDirName}.html`;
-  }
-
-  if (parentColumn?.route_path) {
-    return resolveRelativePublicPath(`${normalizedDirName}/`, parentColumn.route_path) || `/${normalizedDirName}/`;
-  }
-
-  if (rootContext?.rootRoutePath) {
-    return resolveRelativePublicPath(`${normalizedDirName}/`, rootContext.rootRoutePath) || `/${normalizedDirName}/`;
-  }
-
-  if (config.rootBasePath && config.renderDriver === 'managed_column') {
-    return currentColumnId > 0 && parentColumn
-      ? resolveRelativePublicPath(`${normalizedDirName}/`, parentColumn.route_path || config.rootBasePath) || `${config.rootBasePath}${normalizedDirName}/`
-      : config.rootBasePath;
-  }
-
-  return `/${normalizedDirName}/`;
 }

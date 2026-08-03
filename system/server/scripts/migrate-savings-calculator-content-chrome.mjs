@@ -1,4 +1,5 @@
 import { getDb } from '../src/db.mjs';
+import { listColumns } from '../src/services/columns.mjs';
 
 const WRITE = process.argv.includes('--write');
 
@@ -15,16 +16,19 @@ const BREADCRUMB_PATTERN = new RegExp(
 );
 
 const db = getDb();
+const targetColumnId = listColumns({ includeTranslations: false })
+  .find((column) => column.public_path === TARGET_ROUTE)?.id;
+if (!targetColumnId) throw new Error(`未找到栏目: ${TARGET_ROUTE}`);
 const rows = db.prepare(`
-  SELECT ct.id, ct.column_id, l.code AS language_code, c.route_path, ct.content_html
+  SELECT ct.id, ct.column_id, l.code AS language_code, ct.content_html
   FROM column_translations ct
   JOIN languages l ON l.id = ct.language_id
   JOIN columns c ON c.id = ct.column_id
-  WHERE c.route_path = ?
+  WHERE c.id = ?
     AND ct.content_html IS NOT NULL
     AND trim(ct.content_html) <> ''
   ORDER BY l.sort_order ASC, l.id ASC
-`).all(TARGET_ROUTE);
+`).all(targetColumnId);
 
 let changed = 0;
 const details = [];
@@ -41,6 +45,7 @@ try {
   `);
 
   for (const row of rows) {
+    row.route_path = TARGET_ROUTE;
     const original = String(row.content_html || '');
     const withoutHero = original.replace(HERO_PATTERN, '');
     const next = withoutHero.replace(BREADCRUMB_PATTERN, '');

@@ -5,6 +5,7 @@ import {
   mergeModelFieldConfigs,
   upsertConfiguredModelField
 } from './content-model-fields.mjs';
+import { buildColumnPublicPath } from './column-paths.mjs';
 
 const BUILTIN_MODELS = [
   {
@@ -362,13 +363,19 @@ function countBoundColumnsForModel(modelId) {
 }
 
 function listBoundColumnsForModel(modelId) {
+  const allColumns = queryAll(`
+    SELECT id, parent_id, column_type, dir_name
+    FROM columns
+    ORDER BY id ASC
+  `);
+  const rowsById = new Map(allColumns.map((row) => [Number(row.id), row]));
   return queryAll(
     `
       SELECT
         id,
         parent_id,
         column_type,
-        route_path,
+        dir_name,
         sort_order
       FROM columns
       WHERE content_model_id = ?
@@ -379,7 +386,7 @@ function listBoundColumnsForModel(modelId) {
     id: Number(row.id || 0),
     parent_id: row.parent_id === null || row.parent_id === undefined ? null : Number(row.parent_id),
     column_type: String(row.column_type || ''),
-    route_path: row.route_path || null,
+    route_path: buildColumnPublicPath(row, rowsById) || null,
     sort_order: Number(row.sort_order || 0)
   }));
 }

@@ -48,7 +48,6 @@ interface RootColumnNodeForm {
   name: string
   contentModelId: string
   dirName: string
-  routePath: string
   detailRule: string
   listTemplateId: string
   contentTemplateId: string
@@ -86,7 +85,6 @@ export default function ColumnsPage() {
     name: '',
     contentModelId: '',
     dirName: '',
-    routePath: '',
     detailRule: '{id}.html',
     listTemplateId: DEFAULT_TEMPLATE_VALUE,
     contentTemplateId: DEFAULT_TEMPLATE_VALUE,
@@ -168,9 +166,8 @@ export default function ColumnsPage() {
       if (!contentModelId) {
         throw new Error('请选择内容模型')
       }
-      const routePath = rootNodeForm.routePath.trim()
-      if (!routePath) {
-        throw new Error('请输入访问路径')
+      if (!rootNodeForm.dirName.trim()) {
+        throw new Error('请输入目录名')
       }
 
       const response = await columnsApi.create({
@@ -180,7 +177,6 @@ export default function ColumnsPage() {
           content_model_id: contentModelId,
           custom_url: '',
           dir_name: rootNodeForm.dirName.trim(),
-          route_path: routePath,
           detail_rule: rootNodeForm.detailRule.trim() || '{id}.html',
           sort_order: 0,
           is_visible: 1,
@@ -270,7 +266,6 @@ export default function ColumnsPage() {
         parent_id: value.base.parent_id,
         content_model_id: value.base.content_model_id,
         dir_name: value.base.dir_name,
-        route_path: value.base.route_path,
         detail_rule: value.base.detail_rule,
         sort_order: value.base.sort_order,
         is_visible: value.base.is_visible,
@@ -339,7 +334,6 @@ export default function ColumnsPage() {
       name: '',
       contentModelId: '',
       dirName: '',
-      routePath: '',
       detailRule: '{id}.html',
       listTemplateId: DEFAULT_TEMPLATE_VALUE,
       contentTemplateId: DEFAULT_TEMPLATE_VALUE,
@@ -641,7 +635,7 @@ export default function ColumnsPage() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-4">
               <div className="space-y-2">
                 <Label htmlFor="root-column-dir-name">目录名</Label>
                 <Input
@@ -649,15 +643,6 @@ export default function ColumnsPage() {
                   value={rootNodeForm.dirName}
                   onChange={(event) => setRootNodeForm({ ...rootNodeForm, dirName: event.target.value })}
                   placeholder="catalog"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="root-column-route-path">访问路径 *</Label>
-                <Input
-                  id="root-column-route-path"
-                  value={rootNodeForm.routePath}
-                  onChange={(event) => setRootNodeForm({ ...rootNodeForm, routePath: event.target.value })}
-                  placeholder="/catalog/"
                 />
               </div>
             </div>

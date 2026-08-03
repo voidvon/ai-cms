@@ -176,7 +176,7 @@ export default function TopicManagementPage() {
       setLanguageDrafts({})
       return
     }
-    setTopicRoutePath(selectedColumn.route_path || '')
+    setTopicRoutePath(selectedColumn.dir_name || '')
     const nextDrafts: Record<string, TopicLanguageDraft> = {}
     for (const language of languages) {
       const profile = profileMapsByLanguage.get(language.code)?.get(selectedColumn.id) || null
@@ -189,7 +189,7 @@ export default function TopicManagementPage() {
     setBaseRelatedContentJson(resolveSharedRelatedContentJson(selectedColumn.id, languages, profileMapsByLanguage, defaultLanguageCode))
   }, [
     selectedColumn?.id,
-    selectedColumn?.route_path,
+    selectedColumn?.dir_name,
     languages.map((language) => language.code).join('|'),
     JSON.stringify(selectedColumn?.translations || {}),
     JSON.stringify(Array.from(profileMapsByLanguage.entries()).map(([language, map]) => [
@@ -231,7 +231,7 @@ export default function TopicManagementPage() {
       throw new Error('请输入专题名称')
     }
     if (!topicRoutePath.trim()) {
-      throw new Error('请输入自定义 URL')
+      throw new Error('请输入栏目标识')
     }
     await columnsApi.update(
       selectedColumn.id,
@@ -422,19 +422,15 @@ export default function TopicManagementPage() {
                       </Select>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="topic_route_path">自定义 URL</Label>
+                      <Label htmlFor="topic_route_path">栏目标识</Label>
                       <Input
                         id="topic_route_path"
                         value={topicRoutePath}
                         onChange={(event) => setTopicRoutePath(event.target.value)}
-                        placeholder="/topics/example/"
+                        placeholder="example"
                         autoComplete="off"
                         spellCheck={false}
-                        aria-describedby="topic_route_path_help"
                       />
-                      <p id="topic_route_path_help" className="text-sm text-muted-foreground">
-                        栏目级共享路径；各语言站点前缀由站点配置自动添加。
-                      </p>
                     </div>
                   </div>
 
@@ -602,8 +598,7 @@ function buildTopicColumnTranslationsPayload(
   return {
     parent_id: column.parent_id || 0,
     content_model_id: column.content_model_id || null,
-    dir_name: column.dir_name || '',
-    route_path: routePath.trim(),
+    dir_name: routePath.trim(),
     detail_rule: column.detail_rule || '',
     sort_order: column.sort_order || 0,
     is_visible: column.is_visible ?? 1,

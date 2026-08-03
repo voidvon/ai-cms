@@ -2754,7 +2754,7 @@ function buildLegacyColumnUrl(column, rowsById = new Map(), site = null) {
 
 function buildLegacyContactPageProps(templateContext) {
   const uiText = getLegacyUiText(templateContext);
-  const contactColumn = templateContext.columns.find((item) => String(item.route_path || '') === '/contact-us/index.html') || null;
+  const contactColumn = templateContext.columns.find((item) => String(item.dir_name || '') === 'contact-us') || null;
   const contactPage = contactColumn
     ? resolveDedicatedColumnPageContent(contactColumn, templateContext.languageCode)
     : null;

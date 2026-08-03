@@ -79,9 +79,6 @@ export function migrateLegacyTableModel() {
     if (legacyModel) {
       execute('UPDATE columns SET content_model_id = ?, updated_at = CURRENT_TIMESTAMP WHERE content_model_id = ?', [targetModel.id, legacyModel.id]);
     }
-    execute(`UPDATE columns
-      SET route_path = replace(route_path, '/price-lists/', '/data-tables/'), updated_at = CURRENT_TIMESTAMP
-      WHERE content_model_id = ? AND route_path LIKE '/price-lists/%'`, [targetModel.id]);
     execute('UPDATE data_tables SET model_code = ?, updated_at = CURRENT_TIMESTAMP WHERE model_code = ?', [TABLE_MODEL_CODE, LEGACY_TABLE_MODEL_CODE]);
     if (tableExists('content_table_views')) {
       execute("UPDATE content_table_views SET model_code = ?, updated_at = CURRENT_TIMESTAMP WHERE model_code = ?", [TABLE_MODEL_CODE, LEGACY_TABLE_MODEL_CODE]);

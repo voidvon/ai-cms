@@ -3,7 +3,7 @@ import { ensureLanguagesSchema, getDefaultLanguage, listLanguages } from './lang
 import { ensureTemplatesSchema } from './templates.mjs';
 import { ensureContentModelsSchema, getContentModelById } from './content-models.mjs';
 import { getContentTableName, getTranslationTableName } from './content-model-storage.mjs';
-import { resolveRelativePublicPath } from './column-paths.mjs';
+import { buildColumnPublicPath } from './column-paths.mjs';
 import { normalizeTemplateDataAssetsDeep } from './template-data-assets.mjs';
 
 let schemaEnsured = false;
@@ -69,7 +69,6 @@ export function listColumns({ languageCode = null, includeTranslations = true } 
         parent_id,
         column_type,
         custom_url,
-        route_path,
         content_model_id,
         dir_name,
         images,
@@ -120,7 +119,6 @@ export function createManualColumn(input) {
         parent_id,
         column_type,
         custom_url,
-        route_path,
         content_model_id,
         dir_name,
         images,
@@ -129,13 +127,12 @@ export function createManualColumn(input) {
         sort_order,
         created_at,
         updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `,
     [
       payload.base.parent_id,
       payload.base.column_type,
       payload.base.custom_url,
-      payload.base.route_path,
       payload.base.content_model_id,
       payload.base.dir_name,
       payload.base.images,
@@ -169,7 +166,6 @@ export function updateManualColumn(id, input) {
         parent_id = ?,
         column_type = ?,
         custom_url = ?,
-        route_path = ?,
         content_model_id = ?,
         dir_name = ?,
         images = ?,
@@ -183,7 +179,6 @@ export function updateManualColumn(id, input) {
       payload.base.parent_id,
       payload.base.column_type,
       payload.base.custom_url,
-      payload.base.route_path,
       payload.base.content_model_id,
       payload.base.dir_name,
       payload.base.images,
@@ -217,7 +212,6 @@ export function updateColumnRecord(id, input) {
         content_model_id = ?,
         dir_name = ?,
         images = ?,
-        route_path = ?,
         detail_rule = ?,
         is_visible = ?,
         sort_order = ?,
@@ -229,7 +223,6 @@ export function updateColumnRecord(id, input) {
       payload.base.content_model_id,
       payload.base.dir_name,
       payload.base.images,
-      payload.base.route_path,
       payload.base.detail_rule,
       payload.base.is_visible,
       payload.base.sort_order,
@@ -332,7 +325,11 @@ function hydrateColumns(rows, {
   const columnIds = rows.map((row) => Number(row.id)).filter((id) => Number.isInteger(id) && id > 0);
   const translationsById = loadColumnTranslations(columnIds);
   const selectedLanguage = resolveLanguageForContent(languageCode);
-  const rowById = new Map(rows.map((row) => [toInteger(row.id, 0), row]));
+  const pathRows = queryAll('SELECT id, parent_id, column_type, dir_name FROM columns ORDER BY id ASC');
+  const rowById = new Map(pathRows.map((row) => [toInteger(row.id, 0), row]));
+  for (const row of rows) {
+    rowById.set(toInteger(row.id, 0), row);
+  }
   const semanticsById = new Map();
 
   return rows.map((row) => {
@@ -353,6 +350,7 @@ function hydrateColumns(rows, {
     const modelCode = inferModelCode(row, rowById, modelCodeById);
     const semantics = inferColumnSemantics(row, rowById, semanticsById, modelCode, resolvedTemplateData);
 
+    const publicPath = resolveColumnResolvedRoutePath(row, null, rowById);
     const base = {
       ...row,
       name: displayName,
@@ -372,7 +370,8 @@ function hydrateColumns(rows, {
       dir_name: row.dir_name || null,
       images: parseColumnImages(row.images),
       detail_rule: row.detail_rule || null,
-      route_path: row.route_path || null,
+      public_path: publicPath || null,
+      route_path: publicPath || null,
       custom_url: row.custom_url || null,
       sort_order: toInteger(row.sort_order, 0),
       is_visible: toBooleanInt(row.is_visible, 1),
@@ -525,7 +524,6 @@ function getColumnByIdRaw(id) {
         parent_id,
         column_type,
         custom_url,
-        route_path,
         content_model_id,
         dir_name,
         images,
@@ -593,9 +591,12 @@ function normalizeManualColumnInput(input, options = {}) {
     };
   }
 
-  const routePath = normalizeRoutePath(input.route_path ?? existing?.route_path);
+  const dirName = normalizeColumnDirName(input.dir_name ?? existing?.dir_name);
+  if (!dirName) {
+    throw new Error('栏目目录名不能为空');
+  }
   if (requestedType === 'single') {
-    validateSinglePageRoutePath(routePath, currentId || null);
+    validateSinglePageRoutePath({ ...existing, ...input, id: currentId || undefined, parent_id: parentId, column_type: requestedType, dir_name: dirName }, currentId || null);
   }
 
   return {
@@ -603,13 +604,13 @@ function normalizeManualColumnInput(input, options = {}) {
     parent_id: parentId || null,
     column_type: requestedType,
     custom_url: null,
-    route_path: routePath,
+    route_path: null,
     content_html: String(input.content_html ?? existingView.content_html ?? ''),
     summary,
     seo_title: seoTitle,
     seo_description: seoDescription,
     content_model_id: requestedType === 'link' ? null : contentModelId,
-    dir_name: normalizeColumnDirName(input.dir_name ?? existing?.dir_name),
+    dir_name: dirName,
     detail_rule: detailRule,
     publish_status: normalizePublishStatus(input.publish_status ?? existing?.publish_status),
     is_visible: isVisible,
@@ -656,7 +657,9 @@ function normalizeExistingColumnMutationInput(input, existingColumn = null) {
   const isVisible = toBooleanInt(input?.is_visible ?? existing.is_visible, 1);
   const contentModelId = normalizeContentModelId(input?.content_model_id ?? existing.content_model_id);
   const dirName = normalizeColumnDirName(input?.dir_name ?? existing.dir_name);
-  const routePath = normalizeRoutePath(input?.route_path ?? existing.route_path);
+  if (!dirName && String(existing.column_type || '') !== 'link') {
+    throw new Error('栏目目录名不能为空');
+  }
   const detailRule = normalizeColumnDetailRule(input?.detail_rule ?? existing.detail_rule, existing.column_type);
 
   const translations = normalizeColumnTranslations(input?.translations || {}, {
@@ -678,7 +681,7 @@ function normalizeExistingColumnMutationInput(input, existingColumn = null) {
       content_model_id: contentModelId,
       dir_name: dirName,
       images: serializeColumnImages(input?.images ?? existing.images ?? []),
-      route_path: routePath,
+      route_path: null,
       detail_rule: detailRule,
       sort_order: sortOrder,
       is_visible: isVisible
@@ -800,8 +803,8 @@ function wouldCreateColumnCycle(currentId, parentId) {
   return false;
 }
 
-function validateSinglePageRoutePath(routePath) {
-  const normalizedRoutePath = resolveColumnResolvedRoutePath({ route_path: routePath, parent_id: null, column_type: 'single' });
+function validateSinglePageRoutePath(column, currentId = null) {
+  const normalizedRoutePath = resolveColumnResolvedRoutePath(column, currentId);
   if (RESERVED_SINGLE_PAGE_PATHS.has(normalizedRoutePath.toLowerCase())) {
     throw new Error('该访问路径已被系统保留');
   }
@@ -1004,28 +1007,39 @@ function validateColumnResolvedPathConflict(base, currentId = null) {
     return;
   }
 
-  const resolvedRoutePath = resolveColumnResolvedRoutePath(base, currentId);
-  if (!resolvedRoutePath) {
-    return;
-  }
-
   const rows = queryAll(
     `
-      SELECT id, parent_id, column_type, route_path
+      SELECT id, parent_id, column_type, dir_name
       FROM columns
-      WHERE route_path IS NOT NULL
     `
   );
+  const rowById = new Map(rows.map((row) => [toInteger(row.id, 0), row]));
+  const candidateId = toInteger(currentId ?? base?.id, 0);
+  const candidate = { ...(candidateId > 0 ? rowById.get(candidateId) : {}), ...base, id: candidateId || base?.id };
+  if (candidateId > 0) {
+    rowById.set(candidateId, candidate);
+  }
+  const resolvedRoutePath = resolveColumnResolvedRoutePath(candidate, currentId, rowById);
+  if (!resolvedRoutePath) {
+    throw new Error('栏目目录名不能为空');
+  }
 
+  const pathsByValue = new Map();
   for (const row of rows) {
     const rowId = toInteger(row.id, 0);
-    if (currentId && rowId === toInteger(currentId, 0)) {
+    const currentRow = rowId === candidateId ? candidate : row;
+    const existingResolvedPath = resolveColumnResolvedRoutePath(currentRow, null, rowById);
+    if (!existingResolvedPath) {
       continue;
     }
-    const existingResolvedPath = resolveColumnResolvedRoutePath(row);
-    if (existingResolvedPath && existingResolvedPath === resolvedRoutePath) {
+    const conflictingId = pathsByValue.get(existingResolvedPath);
+    if (conflictingId && conflictingId !== rowId) {
       throw new Error('访问路径已存在');
     }
+    pathsByValue.set(existingResolvedPath, rowId);
+  }
+  if (!candidateId && pathsByValue.has(resolvedRoutePath)) {
+    throw new Error('访问路径已存在');
   }
 }
 
@@ -1035,37 +1049,16 @@ function resolveColumnResolvedRoutePath(column, currentId = null, rowById = null
     return '';
   }
 
-  const routePath = toNullableString(column?.route_path);
-  if (!routePath) {
-    return '';
+  const rowsById = rowById || new Map(
+    queryAll('SELECT id, parent_id, column_type, dir_name FROM columns ORDER BY id ASC')
+      .map((row) => [toInteger(row.id, 0), row])
+  );
+  const columnId = toInteger(currentId ?? column?.id, 0);
+  const candidate = { ...(columnId > 0 ? rowsById.get(columnId) : {}), ...column, id: columnId || column?.id };
+  if (columnId > 0) {
+    rowsById.set(columnId, candidate);
   }
-
-  const parentPublicPath = resolveColumnParentRoutePath(column, currentId, rowById);
-  const resolved = resolveRelativePublicPath(routePath, parentPublicPath);
-  if (!resolved) {
-    return '';
-  }
-  if (resolved !== '/' && !pathLooksLikeFile(resolved) && !resolved.endsWith('/')) {
-    return `${resolved}/`;
-  }
-  return resolved;
-}
-
-function resolveColumnParentRoutePath(column, currentId = null, rowById = null) {
-  const parentId = toInteger(column?.parent_id, 0);
-  if (parentId <= 0) {
-    return '/';
-  }
-
-  const parent = rowById?.get(parentId) || getColumnByIdRaw(parentId);
-  if (!parent) {
-    return '/';
-  }
-  if (currentId && toInteger(parent.id, 0) === toInteger(currentId, 0)) {
-    return '/';
-  }
-
-  return resolveColumnResolvedRoutePath(parent, currentId, rowById) || '/';
+  return buildColumnPublicPath(candidate, rowsById);
 }
 
 function ensureColumnsTableSchema() {
@@ -1076,7 +1069,6 @@ function ensureColumnsTableSchema() {
         parent_id INTEGER,
         column_type TEXT NOT NULL,
         custom_url TEXT,
-        route_path TEXT,
         content_model_id INTEGER,
         dir_name TEXT,
         images TEXT,
@@ -1096,7 +1088,6 @@ function ensureColumnsTableSchema() {
   const requiredColumns = [
     'column_type',
     'custom_url',
-    'route_path',
     'content_model_id',
     'dir_name',
     'images',
@@ -1199,9 +1190,6 @@ function createColumnsIndexes() {
     CREATE INDEX IF NOT EXISTS idx_columns_parent_sort ON columns(parent_id, sort_order, id);
     CREATE INDEX IF NOT EXISTS idx_columns_visible_sort ON columns(is_visible, sort_order, id);
     CREATE INDEX IF NOT EXISTS idx_columns_dir_name ON columns(dir_name);
-    CREATE INDEX IF NOT EXISTS idx_columns_route_path
-    ON columns(route_path)
-    WHERE route_path IS NOT NULL;
     CREATE INDEX IF NOT EXISTS idx_column_translations_column_id
     ON column_translations(column_id, language_id);
   `);

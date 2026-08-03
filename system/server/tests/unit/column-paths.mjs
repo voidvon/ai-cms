@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {
+  buildColumnPublicPath,
   buildContentDetailPathFromColumn,
   buildContentDetailUrlFromColumn,
   resolveColumnPageOutputPath,
@@ -63,11 +64,11 @@ const managedColumnMap = new Map([
 
 assert.equal(
   resolveColumnPageOutputPath(managedColumn, managedColumnMap),
-  'learn-about-steam/control-hardware---self-acting-actuation/index.html',
+  'learn-about-steam/control-hardware-self-acting-actuation/index.html',
 );
 assert.equal(
   resolveColumnPageOutputPath(managedColumn, managedColumnMap, 2),
-  'learn-about-steam/control-hardware---self-acting-actuation/index-2.html',
+  'learn-about-steam/control-hardware-self-acting-actuation/index-2.html',
 );
 assert.equal(
   resolvePublicPageOutputPath('/learn-about-steam/control-hardware---self-acting-actuation/', 3),
@@ -86,5 +87,15 @@ assert.equal(
   resolveColumnPageOutputPath(derivedManagedColumn, managedColumnMap),
   'learn-about-steam/derived-column/index.html',
 );
+
+assert.equal(buildColumnPublicPath(managedRoot, managedColumnMap), '/learn-about-steam/');
+assert.equal(buildColumnPublicPath(managedColumn, managedColumnMap), '/learn-about-steam/control-hardware-self-acting-actuation/');
+
+const linkParent = { id: 500, parent_id: null, column_type: 'link', dir_name: null };
+const linkChild = { id: 501, parent_id: 500, column_type: 'single', dir_name: 'privacy-policy' };
+const slashColumn = { id: 502, parent_id: null, column_type: 'list', dir_name: 'data-tables/test-list' };
+const pathMap = new Map([[500, linkParent], [501, linkChild], [502, slashColumn]]);
+assert.equal(buildColumnPublicPath(linkChild, pathMap), '/privacy-policy/');
+assert.equal(buildColumnPublicPath(slashColumn, pathMap), '/data-tables/test-list/');
 
 console.log('column-paths unit checks passed');

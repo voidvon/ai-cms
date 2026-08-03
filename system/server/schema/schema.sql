@@ -85,7 +85,6 @@ CREATE TABLE IF NOT EXISTS columns (
   parent_id INTEGER,
   column_type TEXT NOT NULL CHECK (column_type IN ('single', 'list', 'link')),
   custom_url TEXT,
-  route_path TEXT,
   content_model_id INTEGER,
   dir_name TEXT,
   detail_rule TEXT,
@@ -231,7 +230,6 @@ CREATE INDEX IF NOT EXISTS idx_admin_sessions_expires_at ON admin_sessions(expir
 CREATE INDEX IF NOT EXISTS idx_columns_parent_sort ON columns(parent_id, sort_order, id);
 CREATE INDEX IF NOT EXISTS idx_columns_visible_sort ON columns(is_visible, sort_order, id);
 CREATE INDEX IF NOT EXISTS idx_columns_dir_name ON columns(dir_name);
-CREATE INDEX IF NOT EXISTS idx_columns_route_path ON columns(route_path) WHERE route_path IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_column_translations_column_id ON column_translations(column_id, language_id);
 CREATE INDEX IF NOT EXISTS idx_templates_type_sort ON templates(type, sort_order, id);
 CREATE INDEX IF NOT EXISTS idx_templates_status ON templates(status);

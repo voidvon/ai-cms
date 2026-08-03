@@ -1,4 +1,5 @@
 import { getDb } from '../src/db.mjs';
+import { listColumns } from '../src/services/columns.mjs';
 
 const WRITE = process.argv.includes('--write');
 
@@ -6,16 +7,19 @@ const TARGET_ROUTE = '/resources-and-design-tools/savings-calculator/savings-cal
 const TARGET_SRC = '/embedded-tools/products-services/capabilities/steam-system-services/savings-calculator.asp';
 
 const db = getDb();
+const targetColumnId = listColumns({ includeTranslations: false })
+  .find((column) => column.public_path === TARGET_ROUTE)?.id;
+if (!targetColumnId) throw new Error(`未找到栏目: ${TARGET_ROUTE}`);
 const rows = db.prepare(`
-  SELECT ct.id, ct.column_id, l.code AS language_code, c.route_path, ct.template_data_json
+  SELECT ct.id, ct.column_id, l.code AS language_code, ct.template_data_json
   FROM column_translations ct
   JOIN languages l ON l.id = ct.language_id
   JOIN columns c ON c.id = ct.column_id
-  WHERE c.route_path = ?
+  WHERE c.id = ?
     AND ct.template_data_json IS NOT NULL
     AND trim(ct.template_data_json) <> ''
   ORDER BY l.sort_order ASC, l.id ASC
-`).all(TARGET_ROUTE);
+`).all(targetColumnId);
 
 let changed = 0;
 const details = [];
@@ -32,6 +36,7 @@ try {
   `);
 
   for (const row of rows) {
+    row.route_path = TARGET_ROUTE;
     const original = String(row.template_data_json || '').trim();
     let parsed;
 

@@ -1,10 +1,14 @@
 import { getDb } from '../src/db.mjs';
+import { listColumns } from '../src/services/columns.mjs';
 
 const WRITE = process.argv.includes('--write');
 const SOURCE_LANGUAGE_CODE = 'en';
 const TARGET_LANGUAGE_CODE = 'zh-CN';
 
 const db = getDb();
+const publicPathByColumnId = new Map(
+  listColumns({ includeTranslations: false }).map((column) => [Number(column.id), column.public_path || '']),
+);
 
 const sourceLanguageId = getLanguageId(SOURCE_LANGUAGE_CODE);
 const targetLanguageId = getLanguageId(TARGET_LANGUAGE_CODE);
@@ -19,7 +23,6 @@ const rows = db.prepare(`
     c.parent_id,
     c.column_type,
     c.custom_url,
-    c.route_path,
     src.id AS source_translation_id,
     src.name AS source_name,
     src.summary AS source_summary,
@@ -41,14 +44,8 @@ const rows = db.prepare(`
   JOIN column_translations dst
     ON dst.column_id = c.id
    AND dst.language_id = ?
-  WHERE (
-      coalesce(trim(c.route_path), '') <> ''
-      OR (
-        c.parent_id IS NULL
-        AND coalesce(trim(c.route_path), '') = ''
-        AND trim(coalesce(c.custom_url, '')) IN ('', '/')
-      )
-    )
+  WHERE c.column_type <> 'link'
+     OR (c.parent_id IS NULL AND trim(coalesce(c.custom_url, '')) IN ('', '/'))
   ORDER BY c.id ASC
 `).all(sourceLanguageId, targetLanguageId);
 
@@ -72,6 +69,7 @@ if (WRITE) {
 
 try {
   for (const row of rows) {
+    row.route_path = publicPathByColumnId.get(Number(row.column_id)) || '';
     const nextSummary = fillText(row.target_summary, row.source_summary);
     const nextContentHtml = fillText(row.target_content_html, row.source_content_html);
     const nextSeoTitle = fillNullableText(row.target_seo_title, row.source_seo_title);

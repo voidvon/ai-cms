@@ -8,9 +8,22 @@ function toInteger(value, fallback = 0) {
 export function buildColumnSlugPath(column, columnMap) {
   const dirNames = [];
   let current = column;
+  const visited = new Set();
 
-  while (current && current.dir_name) {
-    dirNames.unshift(current.dir_name);
+  while (current) {
+    const currentId = toInteger(current.id, 0);
+    if (currentId > 0 && visited.has(currentId)) {
+      break;
+    }
+    if (currentId > 0) {
+      visited.add(currentId);
+    }
+
+    const dirName = String(current.dir_name || '').trim().replace(/^\/+|\/+$/g, '');
+    if (!dirName || String(current.column_type || '').trim() === 'link') {
+      break;
+    }
+    dirNames.unshift(...dirName.split('/').filter(Boolean));
     const parentId = toInteger(current.parent_id, 0);
     if (parentId === 0) {
       break;
@@ -38,26 +51,44 @@ export function buildColumnSlugPathFromColumnIdMap(columnId, rowById) {
       break;
     }
 
-    const dirName = String(current.dir_name || '').trim();
-    if (dirName) {
-      segments.unshift(dirName);
+    const dirName = String(current.dir_name || '').trim().replace(/^\/+|\/+$/g, '');
+    if (!dirName || String(current.column_type || '').trim() === 'link') {
+      break;
     }
+    segments.unshift(...dirName.split('/').filter(Boolean));
     currentId = toInteger(current.parent_id, 0);
   }
 
   return segments;
 }
 
+export function buildColumnPublicPath(column, columnMap = null) {
+  if (!column || String(column.column_type || '').trim() === 'link') {
+    return '';
+  }
+
+  const rowsById = columnMap instanceof Map ? columnMap : new Map();
+  const columnId = toInteger(column.id, 0);
+  if (columnId > 0) {
+    rowsById.set(columnId, column);
+  }
+  const segments = buildColumnSlugPath(column, rowsById);
+  if (segments.length === 0) {
+    return '';
+  }
+  return normalizePublicCustomUrl(`/${segments.join('/')}/`);
+}
+
 export function buildManagedColumnPublicUrl(column, columnMap = null) {
-  const explicitRoutePath = String(column?.route_path || '').trim();
+  const calculatedPath = buildColumnPublicPath(column, columnMap);
+  if (calculatedPath) {
+    return calculatedPath;
+  }
+
   const id = toInteger(column?.id, 0);
   const rootColumn = resolveManagedColumnRoot(column, columnMap);
   const rootRoutePath = String(rootColumn?.route_path || '').trim();
   const baseRoutePath = ensureTrailingSlash(rootRoutePath || '/');
-
-  if (explicitRoutePath) {
-    return explicitRoutePath;
-  }
 
   if (column?.dir_name && columnMap) {
     let slugPath = buildColumnSlugPath(column, columnMap);
