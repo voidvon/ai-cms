@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
-import { Copy, Download, ExternalLink, Eye, FileUp, RefreshCw, Search, Trash2 } from 'lucide-react'
+import { Download, Eye, FileUp, Pencil, RefreshCw, Search, Settings, Trash2 } from 'lucide-react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { languagesApi } from '@/api/languages'
-import { mediaApi } from '@/api/media'
-import type { PdfDocumentType } from '@/api/media'
+import { mediaApi, mediaCategoriesApi } from '@/api/media'
+import MediaAssetMetadataDialog from '@/components/MediaAssetMetadataDialog'
+import MediaCategoryManagerDialog from '@/components/MediaCategoryManagerDialog'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -27,7 +28,7 @@ import { ADMIN_CONFIG } from '@/config'
 import { formatRelativeTime } from '@/lib/datetime'
 import { resolveMediaAssetUrl } from '@/lib/assets'
 import { toast } from 'sonner'
-import type { Language, MediaAsset } from '@/types'
+import type { Language, MediaAsset, MediaCategory } from '@/types'
 
 const MEDIA_PURPOSE_META = {
   product_cover: { label: '产品封面' },
@@ -52,12 +53,6 @@ const USAGE_OPTIONS = [
   { value: 'orphaned', label: '无使用位置' },
 ]
 
-const PDF_DOCUMENT_TYPE_OPTIONS: Array<{ value: PdfDocumentType; label: string }> = [
-  { value: 'sales_brochure', label: '销售手册' },
-  { value: 'installation_guide', label: '安装说明' },
-  { value: 'technical_information', label: '技术信息' },
-]
-
 type MediaAssetsPageProps = {
   mode?: 'attachments' | 'pdfs'
 }
@@ -65,9 +60,9 @@ type MediaAssetsPageProps = {
 const PAGE_CONFIG = {
   attachments: {
     title: '附件',
-    description: '上传附件、直接获取 URL，并查看本地媒体资产使用位置。',
+    description: '上传附件并查看本地媒体资产使用位置。',
     uploadTitle: '直接上传附件',
-    uploadDescription: '支持图片、PDF、Office、压缩包、音视频等常见文件，上传后可直接复制 URL。',
+    uploadDescription: '支持图片、PDF、Office、压缩包、音视频等常见文件。',
     uploadButton: '上传附件',
     uploadPending: '上传中...',
     uploadPurpose: 'attachment',
@@ -84,7 +79,7 @@ const PAGE_CONFIG = {
   },
   pdfs: {
     title: 'PDF',
-    description: '集中管理总站引用和用户查询用的 PDF 文档，可上传、下载、复制 URL 和删除。',
+    description: '集中管理总站引用和用户查询用的 PDF 文档，可上传、编辑、下载和删除。',
     uploadTitle: '上传 PDF 文档',
     uploadDescription: '仅支持 PDF 文件，上传后会进入 /uploads/pdfs/，可用于站内引用和用户下载查询。',
     uploadButton: '上传 PDF',
@@ -108,11 +103,16 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
   const config = PAGE_CONFIG[mode]
   const [page, setPage] = useState(1)
   const [purpose, setPurpose] = useState(config.fixedPurpose || 'all')
+  const [categoryId, setCategoryId] = useState('all')
   const [usage, setUsage] = useState('all')
   const [keywordInput, setKeywordInput] = useState('')
   const [keyword, setKeyword] = useState('')
   const [selectedPdfLanguageId, setSelectedPdfLanguageId] = useState('')
-  const [selectedPdfDocumentType, setSelectedPdfDocumentType] = useState<PdfDocumentType>('sales_brochure')
+  const [selectedPdfCategoryId, setSelectedPdfCategoryId] = useState('')
+  const [selectedPdfTitle, setSelectedPdfTitle] = useState('')
+  const [selectedPdfDocumentCode, setSelectedPdfDocumentCode] = useState('')
+  const [categoryManagerOpen, setCategoryManagerOpen] = useState(false)
+  const [metadataAsset, setMetadataAsset] = useState<MediaAsset | null>(null)
   const [uploadDialogOpen, setUploadDialogOpen] = useState(false)
   const [selectedUploadFile, setSelectedUploadFile] = useState<File | null>(null)
   const [usageAsset, setUsageAsset] = useState<MediaAsset | null>(null)
@@ -125,12 +125,13 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
   const isCompactPdfPage = mode === 'pdfs'
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['media-assets', mode, page, ADMIN_CONFIG.pagination.pageSize, effectivePurpose, usage, keyword],
+    queryKey: ['media-assets', mode, page, ADMIN_CONFIG.pagination.pageSize, effectivePurpose, categoryId, usage, keyword],
     queryFn: () => mediaApi.list({
       page,
       limit: ADMIN_CONFIG.pagination.pageSize,
       purpose: effectivePurpose,
       usage,
+      category_id: categoryId === 'all' ? undefined : Number(categoryId),
       q: keyword || undefined,
       pdf_search: mode === 'pdfs' ? 1 : undefined,
     }),
@@ -141,8 +142,15 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
     queryFn: () => languagesApi.list(),
   })
 
+  const { data: categoriesData } = useQuery({
+    queryKey: ['media-categories'],
+    queryFn: () => mediaCategoriesApi.list(),
+  })
+
   const languages: Language[] = languagesData?.data || []
   const enabledLanguages = languages.filter((language) => Number(language.is_enabled || 0) === 1)
+  const categories: MediaCategory[] = categoriesData?.data || []
+  const enabledCategories = categories.filter((category) => Number(category.is_enabled || 0) === 1)
 
   useEffect(() => {
     if (mode !== 'pdfs' || selectedPdfLanguageId || enabledLanguages.length === 0) {
@@ -152,17 +160,26 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
     setSelectedPdfLanguageId(String(defaultLanguage.id))
   }, [mode, selectedPdfLanguageId, enabledLanguages])
 
+  useEffect(() => {
+    if (mode !== 'pdfs' || selectedPdfCategoryId || enabledCategories.length === 0) return
+    setSelectedPdfCategoryId(String(enabledCategories[0].id))
+  }, [mode, selectedPdfCategoryId, enabledCategories])
+
   const uploadMutation = useMutation({
     mutationFn: async (file: File) => mediaApi.upload(file, config.uploadPurpose, {
       languageId: mode === 'pdfs' ? Number(selectedPdfLanguageId || 0) || null : null,
-      pdfDocumentType: mode === 'pdfs' ? selectedPdfDocumentType : null,
+      categoryId: mode === 'pdfs' ? Number(selectedPdfCategoryId || 0) || null : null,
+      pdfTitle: mode === 'pdfs' ? selectedPdfTitle : undefined,
+      pdfDocumentCode: mode === 'pdfs' ? selectedPdfDocumentCode : undefined,
     }),
-    onSuccess: (response) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['media-assets'] })
       setPurpose(config.fixedPurpose || config.uploadPurpose)
       setUsage('all')
       setPage(1)
       setSelectedUploadFile(null)
+      setSelectedPdfTitle('')
+      setSelectedPdfDocumentCode('')
       setUploadDialogOpen(false)
       toast.success(config.uploadSuccess)
     },
@@ -220,15 +237,6 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
     setPage(1)
   }
 
-  const copyText = async (value: string, successMessage: string) => {
-    try {
-      await navigator.clipboard.writeText(value)
-      toast.success(successMessage)
-    } catch {
-      toast.error('复制失败，请手动复制')
-    }
-  }
-
   const downloadAsset = async (asset: MediaAsset) => {
     setDownloadingAssetId(asset.id)
     try {
@@ -262,11 +270,18 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
               <FileUp className="size-4" />
               {config.uploadButton}
             </Button>
+            {mode === 'pdfs' ? (
+              <Button type="button" variant="outline" onClick={() => setCategoryManagerOpen(true)}>
+                <Settings className="size-4" />分类管理
+              </Button>
+            ) : null}
             {config.showPurposeFilter ? (
               <Select
                 value={purpose}
                 onValueChange={(value) => {
+                  if (!value) return
                   setPurpose(value)
+                  if (value !== 'pdf_document') setCategoryId('all')
                   setPage(1)
                 }}
               >
@@ -284,8 +299,31 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
             ) : null}
 
             <Select
+              value={categoryId}
+              onValueChange={(value) => {
+                if (!value) return
+                setCategoryId(value)
+                if (value !== 'all' && config.showPurposeFilter) setPurpose('pdf_document')
+                setPage(1)
+              }}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">全部 PDF 分类</SelectItem>
+                {categories.map((category) => (
+                  <SelectItem key={category.id} value={String(category.id)}>
+                    {category.name}{category.is_enabled ? '' : '（已停用）'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select
               value={usage}
               onValueChange={(value) => {
+                if (!value) return
                 setUsage(value)
                 setPage(1)
               }}
@@ -347,7 +385,7 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
                       <TableCell>{item.id}</TableCell>
                       <TableCell className={showLanguageColumn ? 'whitespace-nowrap' : undefined}>
                         {showLanguageColumn ? (
-                          <span className="text-sm">{formatPdfDocumentType(item.pdf_document_type)}</span>
+                          <span className="text-sm">{categories.find((category) => category.id === item.category_id)?.name || item.category_name || item.category_code || '未设置'}</span>
                         ) : (
                           formatPurpose(item.purpose)
                         )}
@@ -365,7 +403,7 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
                         </TableCell>
                       ) : null}
                       {!showLanguageColumn ? (
-                        <TableCell className="group w-[260px] max-w-[260px]">
+                        <TableCell className="w-[260px] max-w-[260px]">
                           <div className="flex min-w-0 items-center">
                             <a
                               href={getMediaAssetPublicUrl(item)}
@@ -376,16 +414,6 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
                             >
                               {item.original_name || item.relative_path}
                             </a>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              className="ml-1 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-                              onClick={() => copyText(getMediaAssetPublicUrl(item), '已复制完整 URL')}
-                              aria-label={`复制 ${item.original_name || item.relative_path} 的完整 URL`}
-                            >
-                              <Copy className="size-4" />
-                            </Button>
                           </div>
                         </TableCell>
                       ) : null}
@@ -416,24 +444,16 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
                       <TableCell>{formatRelativeTime(item.created_at)}</TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          <TableActionButton
-                            asChild
-                            variant="ghost"
-                            aria-label={`打开 ${item.original_name || item.relative_path}`}
-                            tooltip="打开 URL"
-                          >
-                            <a href={getMediaAssetPublicUrl(item)} target="_blank" rel="noreferrer">
-                              <ExternalLink className="size-4" />
-                            </a>
-                          </TableActionButton>
-                          <TableActionButton
-                            variant="ghost"
-                            onClick={() => copyText(getMediaAssetPublicUrl(item), '已复制完整 URL')}
-                            aria-label={`复制 ${item.original_name || item.relative_path} 的完整 URL`}
-                            tooltip="复制 URL"
-                          >
-                            <Copy className="size-4" />
-                          </TableActionButton>
+                          {item.purpose === 'pdf_document' ? (
+                            <TableActionButton
+                              variant="ghost"
+                              onClick={() => setMetadataAsset(item)}
+                              aria-label={`编辑 ${item.original_name || item.relative_path} 的元数据`}
+                              tooltip="编辑元数据"
+                            >
+                              <Pencil className="size-4" />
+                            </TableActionButton>
+                          ) : null}
                           <TableActionButton
                             variant="ghost"
                             disabled={!isLocalMediaAsset(item)}
@@ -473,6 +493,8 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
           setUploadDialogOpen(open)
           if (!open) {
             setSelectedUploadFile(null)
+            setSelectedPdfTitle('')
+            setSelectedPdfDocumentCode('')
           }
         }}
       >
@@ -483,17 +505,18 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
           </DialogHeader>
           <div className="space-y-4">
             {mode === 'pdfs' ? (
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="pdf-dialog-type">类型</Label>
-                  <Select value={selectedPdfDocumentType} onValueChange={(value) => setSelectedPdfDocumentType(value as PdfDocumentType)}>
+                  <Label htmlFor="pdf-dialog-type">分类</Label>
+                  <Select value={selectedPdfCategoryId} onValueChange={(value) => value && setSelectedPdfCategoryId(value)}>
                     <SelectTrigger id="pdf-dialog-type">
-                      <SelectValue />
+                      <SelectValue placeholder="选择分类" />
                     </SelectTrigger>
                     <SelectContent>
-                      {PDF_DOCUMENT_TYPE_OPTIONS.map((option) => (
-                        <SelectItem key={option.value} value={option.value}>
-                          {option.label}
+                      {enabledCategories.map((category) => (
+                        <SelectItem key={category.id} value={String(category.id)}>
+                          {category.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -501,7 +524,7 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="pdf-dialog-language">语言</Label>
-                  <Select value={selectedPdfLanguageId || 'none'} onValueChange={(value) => setSelectedPdfLanguageId(value === 'none' ? '' : value)}>
+                  <Select value={selectedPdfLanguageId || 'none'} onValueChange={(value) => value && setSelectedPdfLanguageId(value === 'none' ? '' : value)}>
                     <SelectTrigger id="pdf-dialog-language">
                       <SelectValue />
                     </SelectTrigger>
@@ -515,6 +538,9 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
                     </SelectContent>
                   </Select>
                 </div>
+                </div>
+                <div className="space-y-2"><Label htmlFor="pdf-dialog-title">公开名称</Label><Input id="pdf-dialog-title" value={selectedPdfTitle} placeholder="留空时从文件名推断" onChange={(event) => setSelectedPdfTitle(event.target.value)} /></div>
+                <div className="space-y-2"><Label htmlFor="pdf-dialog-code">文档编号</Label><Input id="pdf-dialog-code" value={selectedPdfDocumentCode} placeholder="例如 TI-P337-07" onChange={(event) => setSelectedPdfDocumentCode(event.target.value)} /></div>
               </div>
             ) : null}
 
@@ -553,6 +579,19 @@ export default function MediaAssetsPage({ mode = 'attachments' }: MediaAssetsPag
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MediaAssetMetadataDialog
+        asset={metadataAsset}
+        onOpenChange={(open) => !open && setMetadataAsset(null)}
+        languages={enabledLanguages}
+        categories={categories}
+      />
+
+      <MediaCategoryManagerDialog
+        open={categoryManagerOpen}
+        onOpenChange={setCategoryManagerOpen}
+        languages={enabledLanguages}
+      />
 
       <Dialog
         open={Boolean(replaceTarget)}
@@ -722,10 +761,6 @@ function renderAssetSourceBadge(item: MediaAsset) {
 function formatLanguageLabel(language: Language) {
   const name = language.name || language.native_name || language.code
   return `${name} (${language.code})`
-}
-
-function formatPdfDocumentType(value?: string | null) {
-  return PDF_DOCUMENT_TYPE_OPTIONS.find((option) => option.value === value)?.label || '未设置'
 }
 
 function formatFileSize(size: number) {

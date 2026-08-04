@@ -7,6 +7,7 @@ import {
   listMediaAssets,
   replaceMediaAssetFile,
   updateMediaAssetLanguage,
+  updateMediaAssetMetadata,
   updateMediaAssetPdfDocumentType,
   uploadMediaAsset,
 } from '../../services/media-assets.mjs';
@@ -15,7 +16,7 @@ export default async function mediaRoutes(app) {
   app.get('/media-assets', {
     onRequest: [requireAuth],
   }, async (request) => {
-    const { page, limit, purpose, usage, q, pdf_search, language_id } = request.query;
+    const { page, limit, purpose, usage, q, pdf_search, language_id, category_id } = request.query;
     const result = listMediaAssets({
       page: page ? Number.parseInt(page, 10) : undefined,
       limit: limit ? Number.parseInt(limit, 10) : undefined,
@@ -24,6 +25,7 @@ export default async function mediaRoutes(app) {
       q,
       pdfSearch: String(pdf_search || '') === '1',
       languageId: language_id ? Number.parseInt(language_id, 10) : undefined,
+      categoryId: category_id ? Number.parseInt(category_id, 10) : undefined,
     });
 
     return { success: true, ...result };
@@ -162,12 +164,32 @@ export default async function mediaRoutes(app) {
     }
   });
 
+  app.patch('/media-assets/:id/metadata', {
+    onRequest: [requireAuth],
+  }, async (request, reply) => {
+    try {
+      return {
+        success: true,
+        message: 'PDF 元数据已更新',
+        data: updateMediaAssetMetadata(request.params.id, request.body || {}),
+      };
+    } catch (error) {
+      if (error.statusCode === 404) return reply.notFound(error.message || '附件不存在');
+      if (error.statusCode === 400) return reply.badRequest(error.message || '元数据更新失败');
+      app.log.error(error);
+      return reply.internalServerError(error.message || '元数据更新失败');
+    }
+  });
+
   app.post('/media/upload', {
     onRequest: [requireAuth],
   }, async (request, reply) => {
     const purpose = request.query.purpose || 'attachment';
     const languageId = request.query.language_id;
+    const categoryId = request.query.category_id;
     const pdfDocumentType = request.query.pdf_document_type;
+    const pdfTitle = request.query.pdf_title;
+    const pdfDocumentCode = request.query.pdf_document_code;
     const data = await request.file();
 
     if (!data) {
@@ -181,7 +203,10 @@ export default async function mediaRoutes(app) {
         originalFilename: data.filename,
         purpose,
         languageId,
+        categoryId,
         pdfDocumentType,
+        pdfTitle,
+        pdfDocumentCode,
       });
 
       return {

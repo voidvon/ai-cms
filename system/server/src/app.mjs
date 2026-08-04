@@ -181,6 +181,7 @@ async function registerCommonRoutes(app, { publicSite }) {
     await app.register(import('./routes/api/columns.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/topic-profiles.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/languages.mjs'), { prefix: '/api' });
+    await app.register(import('./routes/api/media-categories.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/media.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/admin.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/bulk-replace.mjs'), { prefix: '/api' });

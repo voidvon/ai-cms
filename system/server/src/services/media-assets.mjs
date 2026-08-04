@@ -15,6 +15,7 @@ import {
 import { execute, getDb, queryAll, queryOne } from '../db.mjs';
 import { optimizeUploadedImage } from './image-optimizer.mjs';
 import { ensureLanguagesSchema, getLanguageById } from './languages.mjs';
+import { ensureMediaCategoriesSchema, getMediaCategoryByCode, getMediaCategoryById } from './media-categories.mjs';
 import { getSiteConfig } from './site.mjs';
 import { resolveRuntimeAssetUrl, resolveUploadedFilePath } from './uploads.mjs';
 
@@ -113,8 +114,6 @@ const PURPOSE_TARGETS = {
 
 const CONVERTIBLE_IMAGE_EXTENSIONS = new Set(['.heic', '.heif']);
 const COMPRESSIBLE_ATTACHMENT_IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png', '.webp', '.heic', '.heif']);
-const PDF_DOCUMENT_TYPES = new Set(['sales_brochure', 'installation_guide', 'technical_information']);
-
 let schemaEnsured = false;
 
 export function ensureMediaAssetsSchema() {
@@ -123,6 +122,7 @@ export function ensureMediaAssetsSchema() {
   }
 
   ensureLanguagesSchema();
+  ensureMediaCategoriesSchema();
 
   getDb().exec(`
     CREATE TABLE IF NOT EXISTS media_assets (
@@ -136,6 +136,7 @@ export function ensureMediaAssetsSchema() {
       relative_path TEXT NOT NULL UNIQUE,
       fs_path TEXT NOT NULL,
       language_id INTEGER,
+      category_id INTEGER,
       pdf_document_type TEXT,
       pdf_title TEXT,
       pdf_document_code TEXT,
@@ -147,20 +148,32 @@ export function ensureMediaAssetsSchema() {
 
   addColumnIfMissing('media_assets', 'usage_references_json', `TEXT NOT NULL DEFAULT '[]'`);
   addColumnIfMissing('media_assets', 'language_id', 'INTEGER');
+  addColumnIfMissing('media_assets', 'category_id', 'INTEGER');
   addColumnIfMissing('media_assets', 'pdf_document_type', 'TEXT');
   addColumnIfMissing('media_assets', 'pdf_title', 'TEXT');
   addColumnIfMissing('media_assets', 'pdf_document_code', 'TEXT');
+  getDb().exec(`
+    CREATE INDEX IF NOT EXISTS idx_media_assets_category ON media_assets(category_id, id);
+    UPDATE media_assets
+    SET category_id = COALESCE(
+      (SELECT id FROM media_categories WHERE code = NULLIF(TRIM(media_assets.pdf_document_type), '')),
+      (SELECT id FROM media_categories WHERE code = 'other_documents')
+    )
+    WHERE purpose = 'pdf_document' AND category_id IS NULL;
+  `);
 
   schemaEnsured = true;
 }
 
-export async function uploadMediaAsset({ buffer, originalFilename, purpose, languageId, pdfDocumentType, pdfTitle, pdfDocumentCode }) {
+export async function uploadMediaAsset({ buffer, originalFilename, purpose, languageId, categoryId, pdfDocumentType, pdfTitle, pdfDocumentCode }) {
   ensureMediaAssetsSchema();
 
   const normalizedPurpose = resolvePurpose(purpose);
   const target = PURPOSE_TARGETS[normalizedPurpose];
   const normalizedLanguageId = normalizeMediaAssetLanguageId(languageId);
-  const normalizedPdfDocumentType = normalizePdfDocumentType(pdfDocumentType);
+  const normalizedCategory = normalizedPurpose === 'pdf_document'
+    ? normalizeMediaCategory(categoryId, pdfDocumentType)
+    : null;
   const inferredPdfTitle = normalizedPurpose === 'pdf_document' ? inferPdfTitleFromFilename(originalFilename) : null;
   const inferredPdfDocumentCode = normalizedPurpose === 'pdf_document' ? inferPdfDocumentCodeFromFilename(originalFilename) : null;
   const extension = path.extname(String(originalFilename || '')).toLowerCase();
@@ -211,11 +224,12 @@ export async function uploadMediaAsset({ buffer, originalFilename, purpose, lang
         relative_path,
         fs_path,
         language_id,
+        category_id,
         pdf_document_type,
         pdf_title,
         pdf_document_code,
         usage_references_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]')
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '[]')
     `,
     [
       'local',
@@ -227,7 +241,8 @@ export async function uploadMediaAsset({ buffer, originalFilename, purpose, lang
       relativePath,
       fsPath,
       normalizedPurpose === 'pdf_document' ? normalizedLanguageId : null,
-      normalizedPurpose === 'pdf_document' ? normalizedPdfDocumentType : null,
+      normalizedCategory?.id || null,
+      normalizedCategory?.code || null,
       normalizedPurpose === 'pdf_document' ? String(pdfTitle || '').trim() || inferredPdfTitle : inferredPdfTitle,
       normalizedPurpose === 'pdf_document' ? String(pdfDocumentCode || '').trim() || inferredPdfDocumentCode : inferredPdfDocumentCode,
     ],
@@ -312,8 +327,8 @@ export async function replaceMediaAssetFile(id, { buffer, originalFilename }) {
       stored.mimeType || MIME_TYPES.get(stored.extension) || target.mimeFallback,
       stored.buffer.length,
       resolvedFsPath,
-      asset.purpose === 'pdf_document' ? inferPdfTitleFromFilename(originalFilename) : asset.pdf_title,
-      asset.purpose === 'pdf_document' ? inferPdfDocumentCodeFromFilename(originalFilename) : asset.pdf_document_code,
+      asset.purpose === 'pdf_document' ? asset.pdf_title || inferPdfTitleFromFilename(originalFilename) : asset.pdf_title,
+      asset.purpose === 'pdf_document' ? asset.pdf_document_code || inferPdfDocumentCodeFromFilename(originalFilename) : asset.pdf_document_code,
       asset.id,
     ],
   );
@@ -336,9 +351,19 @@ export function getMediaAssetById(id) {
         relative_path,
         fs_path,
         language_id,
+        category_id,
         pdf_document_type,
         pdf_title,
         pdf_document_code,
+        (
+          SELECT code FROM media_categories WHERE media_categories.id = media_assets.category_id
+        ) AS category_code,
+        (
+          SELECT COALESCE(
+            (SELECT t.name FROM media_category_translations t JOIN languages tl ON tl.id = t.language_id WHERE t.category_id = media_assets.category_id AND tl.is_default = 1 LIMIT 1),
+            (SELECT t.name FROM media_category_translations t JOIN languages tl ON tl.id = t.language_id WHERE t.category_id = media_assets.category_id ORDER BY tl.sort_order, tl.id LIMIT 1)
+          )
+        ) AS category_name,
         (
           SELECT code
           FROM languages
@@ -358,7 +383,7 @@ export function getMediaAssetById(id) {
   ), getSiteConfig());
 }
 
-export function listMediaAssets({ page = 1, limit = 50, purpose, usage, q, pdfSearch = false, languageId } = {}) {
+export function listMediaAssets({ page = 1, limit = 50, purpose, usage, q, pdfSearch = false, languageId, categoryId } = {}) {
   ensureMediaAssetsSchema();
 
   const safeLimit = Math.min(Math.max(Number.parseInt(String(limit), 10) || 50, 1), 200);
@@ -376,6 +401,12 @@ export function listMediaAssets({ page = 1, limit = 50, purpose, usage, q, pdfSe
   if (Number.isInteger(safeLanguageId) && safeLanguageId > 0) {
     whereParts.push('language_id = ?');
     params.push(safeLanguageId);
+  }
+
+  const safeCategoryId = Number.parseInt(String(categoryId || ''), 10);
+  if (Number.isInteger(safeCategoryId) && safeCategoryId > 0) {
+    whereParts.push('category_id = ?');
+    params.push(safeCategoryId);
   }
 
   const keyword = String(q || '').trim();
@@ -425,9 +456,19 @@ export function listMediaAssets({ page = 1, limit = 50, purpose, usage, q, pdfSe
         relative_path,
         fs_path,
         language_id,
+        category_id,
         pdf_document_type,
         pdf_title,
         pdf_document_code,
+        (
+          SELECT code FROM media_categories WHERE media_categories.id = media_assets.category_id
+        ) AS category_code,
+        (
+          SELECT COALESCE(
+            (SELECT t.name FROM media_category_translations t JOIN languages tl ON tl.id = t.language_id WHERE t.category_id = media_assets.category_id AND tl.is_default = 1 LIMIT 1),
+            (SELECT t.name FROM media_category_translations t JOIN languages tl ON tl.id = t.language_id WHERE t.category_id = media_assets.category_id ORDER BY tl.sort_order, tl.id LIMIT 1)
+          )
+        ) AS category_name,
         (
           SELECT code
           FROM languages
@@ -511,15 +552,52 @@ export function updateMediaAssetPdfDocumentType(id, pdfDocumentType) {
     throw error;
   }
 
+  const category = normalizeMediaCategory(null, pdfDocumentType);
   execute(
     `
       UPDATE media_assets
-      SET pdf_document_type = ?
+      SET category_id = ?, pdf_document_type = ?
       WHERE id = ?
     `,
-    [normalizePdfDocumentType(pdfDocumentType), asset.id],
+    [category?.id || null, category?.code || null, asset.id],
   );
 
+  return getMediaAssetById(asset.id);
+}
+
+export function updateMediaAssetMetadata(id, input = {}) {
+  ensureMediaAssetsSchema();
+  const asset = getMediaAssetById(id);
+  if (!asset) {
+    const error = new Error('附件不存在');
+    error.statusCode = 404;
+    throw error;
+  }
+  if (asset.purpose !== 'pdf_document') {
+    const error = new Error('只有 PDF 文档可以编辑文档元数据');
+    error.statusCode = 400;
+    throw error;
+  }
+
+  const requestedCategoryId = input.category_id ?? asset.category_id;
+  const category = normalizeMediaCategory(requestedCategoryId, input.pdf_document_type, {
+    allowDisabled: Number(requestedCategoryId) === Number(asset.category_id),
+  });
+  const languageId = input.language_id === undefined
+    ? asset.language_id
+    : normalizeMediaAssetLanguageId(input.language_id);
+  execute(`
+    UPDATE media_assets
+    SET language_id = ?, category_id = ?, pdf_document_type = ?, pdf_title = ?, pdf_document_code = ?
+    WHERE id = ?
+  `, [
+    languageId || null,
+    category?.id || null,
+    category?.code || null,
+    normalizeNullableText(input.pdf_title ?? asset.pdf_title),
+    normalizeNullableText(input.pdf_document_code ?? asset.pdf_document_code),
+    asset.id,
+  ]);
   return getMediaAssetById(asset.id);
 }
 
@@ -581,6 +659,7 @@ export function cleanupOrphanedMediaAssets({ purpose } = {}) {
         relative_path,
         fs_path,
         language_id,
+        category_id,
         pdf_document_type,
         pdf_title,
         pdf_document_code,
@@ -651,6 +730,9 @@ function decorateMediaAsset(item, siteConfig = null) {
     is_local_file: isLocalFile,
     is_original_url: isOriginalUrl,
     language_id: item.language_id ? Number(item.language_id) : null,
+    category_id: item.category_id ? Number(item.category_id) : null,
+    category_code: item.category_code || item.pdf_document_type || null,
+    category_name: item.category_name || null,
     language_code: item.language_code || null,
     language_name: item.language_name || null,
     pdf_document_type: item.pdf_document_type || null,
@@ -716,17 +798,21 @@ function inferPdfTitleFromFilename(filename) {
     .trim() || null;
 }
 
-function normalizePdfDocumentType(value) {
-  const documentType = String(value || '').trim();
-  if (!documentType) {
-    return null;
-  }
-  if (!PDF_DOCUMENT_TYPES.has(documentType)) {
-    const error = new Error('PDF 文档类型不存在');
+function normalizeMediaCategory(categoryId, legacyCode, { allowDisabled = false } = {}) {
+  const id = Number.parseInt(String(categoryId || ''), 10);
+  const category = Number.isInteger(id) && id > 0
+    ? getMediaCategoryById(id)
+    : getMediaCategoryByCode(String(legacyCode || '').trim() || 'other_documents');
+  if (!category || (!category.is_enabled && !allowDisabled)) {
+    const error = new Error('媒体分类不存在或已停用');
     error.statusCode = 400;
     throw error;
   }
-  return documentType;
+  return category;
+}
+
+function normalizeNullableText(value) {
+  return String(value || '').trim() || null;
 }
 
 function normalizeMediaAssetLanguageId(value) {

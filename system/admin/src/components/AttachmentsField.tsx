@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowDown, ArrowUp, ExternalLink, FileText, Plus, Search, Trash2, Upload } from 'lucide-react'
-import { mediaApi } from '@/api/media'
+import { mediaApi, mediaCategoriesApi } from '@/api/media'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
@@ -42,6 +42,11 @@ export default function AttachmentsField({
   })
 
   const assets = data?.items || []
+  const { data: categoriesData } = useQuery({
+    queryKey: ['media-categories'],
+    queryFn: () => mediaCategoriesApi.list(),
+  })
+  const categories = categoriesData?.data || []
 
   const addPath = (path: string) => {
     const normalizedPath = String(path || '').trim()
@@ -75,7 +80,9 @@ export default function AttachmentsField({
     try {
       const uploadedPaths: string[] = []
       for (const file of files) {
-        const response = await mediaApi.upload(file, 'pdf_document', { languageId })
+        const defaultCategory = categories.find((category) => category.code === 'other_documents' && category.is_enabled)
+          || categories.find((category) => category.is_enabled)
+        const response = await mediaApi.upload(file, 'pdf_document', { languageId, categoryId: defaultCategory?.id })
         uploadedPaths.push(response.data.relative_path)
       }
       onChange(Array.from(new Set([...normalizedValue, ...uploadedPaths])))
@@ -166,7 +173,9 @@ export default function AttachmentsField({
                   <FileText className="size-5 shrink-0 text-muted-foreground" />
                   <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-medium">{asset.pdf_title || asset.original_name || getFileName(asset.relative_path)}</div>
-                    <div className="truncate text-xs text-muted-foreground">{asset.pdf_document_code || asset.relative_path}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {[asset.pdf_document_code, categories.find((category) => category.id === asset.category_id)?.name || asset.category_name, asset.language_name || asset.language_code].filter(Boolean).join(' · ') || asset.relative_path}
+                    </div>
                   </div>
                   <Button type="button" size="sm" variant={selected ? 'secondary' : 'outline'} disabled={selected} onClick={() => addPath(asset.relative_path)}>
                     {selected ? '已选择' : '选择'}

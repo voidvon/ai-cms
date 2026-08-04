@@ -476,12 +476,26 @@ export interface MediaAsset {
   language_id?: number | null;
   language_code?: string | null;
   language_name?: string | null;
+  category_id?: number | null;
+  category_code?: string | null;
+  category_name?: string | null;
   pdf_document_type?: string | null;
   pdf_title?: string | null;
   pdf_document_code?: string | null;
   usage_count?: number;
   usage_references?: MediaAssetUsageReference[];
   created_at?: string;
+}
+
+export interface MediaCategory {
+  id: number;
+  code: string;
+  name: string;
+  sort_order: number;
+  is_enabled: number;
+  translations: Record<string, string>;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface MediaAssetUsageReference {

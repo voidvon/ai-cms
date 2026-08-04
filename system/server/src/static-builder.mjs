@@ -43,6 +43,7 @@ import {
 import { ensureTemplatesSchema } from './services/templates.mjs';
 import { getTopicProfileByColumnId, listTopicProfiles } from './services/topic-profiles.mjs';
 import { listLanguages } from './services/languages.mjs';
+import { ensureMediaAssetsSchema } from './services/media-assets.mjs';
 import { resolveNormalizedTemplateImagePath } from './services/template-data-assets.mjs';
 import { escapeHtml } from './utils/html.mjs';
 import { looksLikeLegacyMojibake } from './utils/legacy-text.mjs';
@@ -3272,42 +3273,33 @@ function buildProductAttachmentDownloads({ entryId, languageCode, site }) {
     englishAttachmentPaths,
     assetByPath
   });
-  const isZh = requestedLanguageCode.toLowerCase() === 'zh-cn';
-  const groupLabels = isZh
-    ? {
-        technical_information: '技术资料',
-        installation_guide: '安装与维护',
-        sales_brochure: '销售手册',
-        attachment: '其他文档'
-      }
-    : {
-        technical_information: 'Technical documentation',
-        installation_guide: 'Installation and maintenance',
-        sales_brochure: 'Sales brochures',
-        attachment: 'Other documents'
-      };
   const groupedEntries = new Map();
 
   for (const relativePath of resolvedAttachmentPaths) {
     const asset = assetByPath.get(relativePath);
     if (!asset) continue;
-    const groupType = String(asset.pdf_document_type || 'attachment').trim() || 'attachment';
+    const groupType = getProductPdfType(asset);
     if (!groupedEntries.has(groupType)) groupedEntries.set(groupType, []);
     groupedEntries.get(groupType).push({
       name: String(asset.pdf_title || asset.original_name || relativePath).trim(),
       reference: String(asset.pdf_document_code || '').trim() || '-',
-      language: String(asset.language_name || asset.language_code || '').trim() || 'Default',
+      language: String(asset.language_name || asset.language_code || '').trim() || '-',
       href: relativePath
     });
   }
 
-  const groupOrder = ['sales_brochure', 'technical_information', 'installation_guide', 'attachment'];
-  return groupOrder
-    .filter((groupType) => groupedEntries.has(groupType))
-    .map((groupType) => ({
-      title: groupLabels[groupType],
-      entries: groupedEntries.get(groupType)
-    }));
+  return Array.from(groupedEntries.entries())
+    .map(([groupType, entries]) => {
+      const asset = assetByPath.get(entries[0]?.href);
+      return {
+        title: resolveMediaCategoryName(asset, requestedLanguageCode),
+        entries,
+        sortOrder: normalizeInteger(asset?.category_sort_order, 0),
+        groupType
+      };
+    })
+    .sort((left, right) => left.sortOrder - right.sortOrder || left.groupType.localeCompare(right.groupType))
+    .map(({ title, entries }) => ({ title, entries }));
 }
 
 function resolveProductAttachmentPathsByType({ attachmentPaths, englishAttachmentPaths, assetByPath }) {
@@ -3325,7 +3317,17 @@ function uniqueKnownProductPdfPaths(paths, assetByPath) {
 }
 
 function getProductPdfType(asset) {
-  return String(asset?.pdf_document_type || 'attachment').trim() || 'attachment';
+  return String(asset?.category_code || asset?.pdf_document_type || 'other_documents').trim() || 'other_documents';
+}
+
+function resolveMediaCategoryName(asset, languageCode) {
+  const translations = asset?.category_translations || {};
+  const requestedCode = String(languageCode || '').trim().toLowerCase();
+  const requestedName = Object.entries(translations)
+    .find(([code]) => String(code).toLowerCase() === requestedCode)?.[1];
+  const englishName = Object.entries(translations)
+    .find(([code]) => String(code).toLowerCase() === 'en')?.[1];
+  return String(requestedName || englishName || asset?.category_code || 'Documents').trim();
 }
 
 function loadProductAttachmentPaths(entryId, languageCode) {
@@ -3350,19 +3352,38 @@ function loadProductAttachmentPaths(entryId, languageCode) {
 
 function getProductPdfAssetMap() {
   if (productPdfAssetCache) return productPdfAssetCache;
-  productPdfAssetCache = new Map(queryAll(
+  ensureMediaAssetsSchema();
+  const assets = queryAll(
     `SELECT
        m.relative_path,
        m.original_name,
+       m.category_id,
        m.pdf_document_type,
        m.pdf_title,
        m.pdf_document_code,
+       c.code AS category_code,
+       c.sort_order AS category_sort_order,
        l.code AS language_code,
-       l.name AS language_name
+       COALESCE(NULLIF(l.native_name, ''), NULLIF(l.name, ''), l.code) AS language_name
      FROM media_assets m
      LEFT JOIN languages l ON l.id = m.language_id
+     LEFT JOIN media_categories c ON c.id = m.category_id
      WHERE m.purpose = 'pdf_document'`
-  ).map((asset) => [String(asset.relative_path), asset]));
+  );
+  const translationsByCategory = new Map();
+  for (const translation of queryAll(`
+    SELECT t.category_id, l.code AS language_code, t.name
+    FROM media_category_translations t
+    JOIN languages l ON l.id = t.language_id
+  `)) {
+    const categoryId = Number(translation.category_id);
+    if (!translationsByCategory.has(categoryId)) translationsByCategory.set(categoryId, {});
+    translationsByCategory.get(categoryId)[translation.language_code] = translation.name;
+  }
+  productPdfAssetCache = new Map(assets.map((asset) => [String(asset.relative_path), {
+    ...asset,
+    category_translations: translationsByCategory.get(Number(asset.category_id)) || {}
+  }]));
   return productPdfAssetCache;
 }
 
