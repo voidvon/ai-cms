@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { redirectToLogin } from './client'
 
 export interface StaticSectionGroup {
   title: string
@@ -87,6 +88,16 @@ const staticGenerationClient = axios.create({
   timeout: 300000,
 })
 
+staticGenerationClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      redirectToLogin()
+    }
+    return Promise.reject(error)
+  }
+)
+
 export const staticGenerationApi = {
   async regenerateContentItem(modelCode: string, id: number) {
     const response = await staticGenerationClient.post<{
@@ -114,6 +125,10 @@ export const staticGenerationApi = {
         Accept: 'text/event-stream',
       },
     })
+
+    if (response.status === 401) {
+      redirectToLogin()
+    }
 
     if (!response.ok || !response.body) {
       let message = '静态生成连接失败'

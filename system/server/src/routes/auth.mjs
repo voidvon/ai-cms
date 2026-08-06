@@ -27,7 +27,7 @@ export default async function authRoutes(app) {
     }
 
     const session = createAdminSession(result.admin.id);
-    const cookies = createAdminCookies(session.token, result.admin);
+    const cookies = createAdminCookies(session.token, result.admin, session.expires_at);
 
     for (const cookie of cookies) {
       reply.setCookie(cookie.name, cookie.value, cookie.options);
@@ -75,7 +75,7 @@ export default async function authRoutes(app) {
     }
 
     const session = createAdminSession(result.admin.id);
-    const cookies = createAdminCookies(session.token, result.admin);
+    const cookies = createAdminCookies(session.token, result.admin, session.expires_at);
 
     for (const cookie of cookies) {
       reply.setCookie(cookie.name, cookie.value, cookie.options);

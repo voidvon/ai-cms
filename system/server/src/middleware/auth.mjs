@@ -1,4 +1,8 @@
-import { getAdminSession, deleteAdminSession } from '../services/sessions.mjs';
+import {
+  ADMIN_SESSION_IDLE_TTL_SECONDS,
+  getAdminSession,
+  deleteAdminSession
+} from '../services/sessions.mjs';
 import { hasAdminPermission } from '../services/admin-permissions.mjs';
 import { hasAiPermissions } from '../services/ai/core/permissions.mjs';
 
@@ -12,6 +16,13 @@ export async function authHook(request, reply) {
   if (token) {
     const session = getAdminSession(token);
     if (session) {
+      if (request.cookies.adminToken) {
+        const cookies = createAdminCookies(session.token, session, session.expires_at);
+        for (const cookie of cookies) {
+          reply.setCookie(cookie.name, cookie.value, cookie.options);
+        }
+      }
+
       request.session = session;
       // getAdminSession 返回的对象包含 admin_id, username, permission_flags
       // 构造一个 adminUser 对象
@@ -37,7 +48,8 @@ export async function requireAuth(request, reply) {
   if (!request.session || !request.adminUser) {
     reply.code(401).send({
       error: 'Unauthorized',
-      message: '需要登录'
+      code: 'AUTH_REQUIRED',
+      message: '登录状态已失效，请重新登录'
     });
     return;
   }
@@ -48,7 +60,8 @@ export function requirePermission(flag) {
     if (!request.session || !request.adminUser) {
       reply.code(401).send({
         error: 'Unauthorized',
-        message: '需要登录'
+        code: 'AUTH_REQUIRED',
+        message: '登录状态已失效，请重新登录'
       });
       return;
     }
@@ -135,7 +148,9 @@ function normalizeForwardedForHeader(value) {
 /**
  * 创建管理员 cookie（兼容旧系统）
  */
-export function createAdminCookies(token, admin) {
+export function createAdminCookies(token, admin, expiresAt) {
+  const maxAge = getSessionCookieMaxAge(expiresAt);
+
   return [
     {
       name: 'adminToken',
@@ -143,7 +158,7 @@ export function createAdminCookies(token, admin) {
       options: {
         httpOnly: true,
         path: '/',
-        maxAge: 24 * 3600 // 24 hours
+        maxAge
       }
     },
     {
@@ -151,10 +166,19 @@ export function createAdminCookies(token, admin) {
       value: encodeURIComponent(admin.username),
       options: {
         path: '/',
-        maxAge: 24 * 3600
+        maxAge
       }
     }
   ];
+}
+
+function getSessionCookieMaxAge(expiresAt) {
+  const expiresAtMs = Date.parse(String(expiresAt || ''));
+  if (!Number.isFinite(expiresAtMs)) {
+    return ADMIN_SESSION_IDLE_TTL_SECONDS;
+  }
+
+  return Math.max(1, Math.ceil((expiresAtMs - Date.now()) / 1000));
 }
 
 /**

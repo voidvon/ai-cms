@@ -25,4 +25,9 @@ export const authApi = {
     const response = await apiClient.get<ApiResponse<Admin>>('/admin/me');
     return response.data;
   },
+
+  refreshSession: async () => {
+    const response = await apiClient.post<ApiResponse<{ expires_at: string }>>('/admin/session/refresh');
+    return response.data;
+  },
 };

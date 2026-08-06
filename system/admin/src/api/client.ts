@@ -7,6 +7,8 @@ const apiClient = axios.create({
   withCredentials: true,
 });
 
+let isRedirectingToLogin = false;
+
 apiClient.interceptors.response.use(
   (response) => {
     const url = String(response.config?.url || '');
@@ -18,10 +20,33 @@ apiClient.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401) {
-      window.location.href = '/admin/login';
+      redirectToLogin();
     }
     return Promise.reject(error);
   }
 );
+
+export function redirectToLogin() {
+  const currentPath = window.location.pathname;
+  const isLoginPath = currentPath === '/admin/login' || currentPath === '/admin/login/';
+  if (isRedirectingToLogin || isLoginPath) {
+    return;
+  }
+
+  isRedirectingToLogin = true;
+
+  const loginUrl = new URL('/admin/login', window.location.origin);
+  loginUrl.searchParams.set('reason', 'session-expired');
+
+  if (currentPath === '/admin' || currentPath.startsWith('/admin/')) {
+    const appPath = currentPath.slice('/admin'.length) || '/';
+    const returnTo = `${appPath}${window.location.search}${window.location.hash}`;
+    if (returnTo !== '/' && returnTo !== '/login') {
+      loginUrl.searchParams.set('redirect', returnTo);
+    }
+  }
+
+  window.location.replace(`${loginUrl.pathname}${loginUrl.search}`);
+}
 
 export default apiClient;

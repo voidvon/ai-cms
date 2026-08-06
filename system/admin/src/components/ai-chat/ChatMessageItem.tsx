@@ -19,6 +19,7 @@ import type {
   UIMessage,
 } from 'ai'
 import type { AiGeneratedImage, AiMentionItem } from '@/types'
+import { redirectToLogin } from '@/api/client'
 import { resolveAssetUrl } from '@/lib/assets'
 import { cn } from '@/lib/utils'
 import {
@@ -297,6 +298,10 @@ async function fetchImageDownloadBlob(primaryUrl: string, relativePath: string) 
   for (const url of candidates) {
     try {
       const response = await fetch(url, { credentials: 'include' })
+      if (response.status === 401) {
+        redirectToLogin()
+        throw new Error('session expired')
+      }
       if (response.ok) return { blob: await response.blob(), mimeType: response.headers.get('content-type') }
     } catch {
       // Try the same-origin compatibility URL when the asset host blocks CORS.

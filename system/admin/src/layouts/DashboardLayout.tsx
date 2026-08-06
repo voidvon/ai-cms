@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Navigate, Outlet, useNavigate, useLocation } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { authApi } from '@/api/auth'
@@ -60,6 +60,7 @@ import { SidebarTreeMenu, type SidebarTreeMenuItem } from '@/components/SidebarT
 import SystemVersionControl from '@/components/SystemVersionControl'
 
 const SIDEBAR_OPEN_STORAGE_KEY = 'admin.sidebar.open'
+const SESSION_HEARTBEAT_INTERVAL_MS = 15 * 60 * 1000
 
 function getInitialSidebarOpen() {
   try {
@@ -81,12 +82,41 @@ export default function DashboardLayout() {
   const [documentTitleOverride, setDocumentTitleOverride] = useState<string>('')
   const [hasMainContentPadding, setHasMainContentPadding] = useState(true)
   const [isSidebarOpen, setIsSidebarOpen] = useState(getInitialSidebarOpen)
+  const sessionRefreshInFlight = useRef<Promise<unknown> | null>(null)
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['currentUser'],
     queryFn: authApi.getCurrentUser,
     retry: false,
   })
+
+  useEffect(() => {
+    if (!user?.success) {
+      return
+    }
+
+    const refreshSession = () => {
+      if (document.visibilityState !== 'visible' || sessionRefreshInFlight.current) {
+        return
+      }
+
+      const request = authApi.refreshSession().catch(() => null)
+      sessionRefreshInFlight.current = request
+      void request.finally(() => {
+        if (sessionRefreshInFlight.current === request) {
+          sessionRefreshInFlight.current = null
+        }
+      })
+    }
+
+    const heartbeatId = window.setInterval(refreshSession, SESSION_HEARTBEAT_INTERVAL_MS)
+    document.addEventListener('visibilitychange', refreshSession)
+
+    return () => {
+      window.clearInterval(heartbeatId)
+      document.removeEventListener('visibilitychange', refreshSession)
+    }
+  }, [user?.success])
 
   const handleLogout = async () => {
     await authApi.logout()

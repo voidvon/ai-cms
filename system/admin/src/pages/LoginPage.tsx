@@ -1,6 +1,7 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
+import type { AxiosError } from 'axios'
 import { authApi } from '@/api/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -10,16 +11,26 @@ import { toast } from 'sonner'
 
 export default function LoginPage() {
   const navigate = useNavigate()
+  const location = useLocation()
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
+  const searchParams = new URLSearchParams(location.search)
+  const isSessionExpired = searchParams.get('reason') === 'session-expired'
+  const redirectTo = getSafeRedirect(searchParams.get('redirect'))
+
+  useEffect(() => {
+    if (isSessionExpired) {
+      toast.error('登录状态已失效，请重新登录')
+    }
+  }, [isSessionExpired])
 
   const loginMutation = useMutation({
     mutationFn: () => authApi.login(username, password),
     onSuccess: () => {
       toast.success('登录成功')
-      navigate('/')
+      navigate(redirectTo)
     },
-    onError: (error: any) => {
+    onError: (error: AxiosError<{ message?: string }>) => {
       toast.error(error.response?.data?.message || '登录失败')
     },
   })
@@ -70,4 +81,25 @@ export default function LoginPage() {
       </Card>
     </div>
   )
+}
+
+function getSafeRedirect(value: string | null) {
+  if (!value || !value.startsWith('/') || value.startsWith('//')) {
+    return '/'
+  }
+
+  try {
+    const target = new URL(value, window.location.origin)
+    if (target.origin !== window.location.origin) {
+      return '/'
+    }
+
+    const appPath = target.pathname === '/admin' || target.pathname.startsWith('/admin/')
+      ? target.pathname.slice('/admin'.length) || '/'
+      : target.pathname
+
+    return `${appPath}${target.search}${target.hash}`
+  } catch {
+    return '/'
+  }
 }

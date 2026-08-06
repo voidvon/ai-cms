@@ -36,6 +36,18 @@ export default async function adminApiRoutes(app) {
     };
   });
 
+  // 后台可见页面的心跳会通过全局认证钩子续期会话和 Cookie。
+  app.post('/admin/session/refresh', {
+    onRequest: [requireAuth]
+  }, async (request) => {
+    return {
+      success: true,
+      data: {
+        expires_at: request.session.expires_at
+      }
+    };
+  });
+
   // 管理员列表
   app.get('/admin/list', {
     onRequest: [requireAuth, requireAdminManage]
