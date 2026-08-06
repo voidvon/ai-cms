@@ -17,6 +17,7 @@ import { withPortConflictDetails } from './utils/port-diagnostics.mjs';
 import { initializeAiService } from './services/ai/initialize.mjs';
 import { ensureAiModelsSchema } from './services/ai-models.mjs';
 import { ensureDataTablesSchema } from './services/data-tables.mjs';
+import { ensureInquiriesSchema } from './services/inquiries.mjs';
 
 const require = createRequire(import.meta.url);
 
@@ -25,6 +26,7 @@ ensureAdminGroupSchema();
 ensureAccessLogsSchema();
 ensureAiModelsSchema();
 ensureDataTablesSchema();
+ensureInquiriesSchema();
 
 // 初始化 AI 服务
 try {
@@ -169,10 +171,13 @@ function normalizeForwardedHeaderValue(value) {
 }
 
 async function registerCommonRoutes(app, { publicSite }) {
+  await app.register(import('./routes/api/public-inquiries.mjs'), { prefix: '/api' });
+
   if (!publicSite) {
     await app.register(import('./routes/auth.mjs'), { prefix: '/admin' });
     await app.register(import('./routes/api/content-items.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/data-tables.mjs'), { prefix: '/api' });
+    await app.register(import('./routes/api/inquiries.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/column-nodes.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/template-variants.mjs'), { prefix: '/api' });
     await app.register(import('./routes/api/templates.mjs'), { prefix: '/api' });

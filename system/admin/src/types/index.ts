@@ -82,6 +82,43 @@ export interface AdminLoginLog {
   created_at: string;
 }
 
+export type InquiryType = 'product' | 'technical' | 'service' | 'other';
+
+export type InquiryStatus = 'new' | 'processing' | 'quoted' | 'closed' | 'invalid';
+
+export interface Inquiry {
+  id: number;
+  reference_no: string;
+  inquiry_type: InquiryType;
+  contact_name: string;
+  company: string;
+  email: string;
+  phone: string;
+  requirements: string;
+  status: InquiryStatus;
+  internal_note: string;
+  source_column_id?: number | null;
+  language_code: string;
+  source_url: string;
+  notification_status: 'pending' | 'sent' | 'failed' | 'disabled';
+  notification_error: string;
+  notified_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InquirySettings {
+  feishu_webhook_url: string;
+  feishu_enabled: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface InquiryListResult {
+  items: Inquiry[];
+  pagination: PaginationMeta & { totalPages: number };
+}
+
 export interface LanguageSite {
   id?: number | null;
   host?: string;

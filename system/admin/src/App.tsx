@@ -12,6 +12,7 @@ import ContentModelDataPage from '@/pages/ContentModelDataPage'
 import ContentModelsPage from '@/pages/ContentModelsPage'
 import DashboardPage from '@/pages/DashboardPage'
 import LanguagesPage from '@/pages/LanguagesPage'
+import InquiriesPage from '@/pages/InquiriesPage'
 import LlmsDiagnosticsPage from '@/pages/LlmsDiagnosticsPage'
 import LoginPage from '@/pages/LoginPage'
 import MediaAssetsPage from '@/pages/MediaAssetsPage'
@@ -36,6 +37,7 @@ function App() {
           <Route path="content-models" element={<ContentModelsPage />} />
           <Route path="content-model-data" element={<ContentModelDataPage />} />
           <Route path="topics" element={<TopicManagementPage />} />
+          <Route path="inquiries" element={<InquiriesPage />} />
           <Route path="multidimensional-tables" element={<MultidimensionalTablesPage />} />
           <Route path="price-management" element={<LegacyPriceManagementRedirect />} />
           <Route path="pdf-assets" element={<MediaAssetsPage mode="pdfs" />} />

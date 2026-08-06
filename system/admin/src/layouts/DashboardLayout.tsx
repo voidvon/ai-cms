@@ -18,6 +18,7 @@ import {
   LayoutDashboard,
   LogOut,
   Moon,
+  MessageSquareQuote,
   Network,
   Paintbrush,
   Palette,
@@ -79,6 +80,7 @@ export default function DashboardLayout() {
   const location = useLocation()
   const { resolvedTheme, setTheme } = useTheme()
   const [headerSlotElement, setHeaderSlotElement] = useState<HTMLDivElement | null>(null)
+  const [titleSlotElement, setTitleSlotElement] = useState<HTMLDivElement | null>(null)
   const [documentTitleOverride, setDocumentTitleOverride] = useState<string>('')
   const [hasMainContentPadding, setHasMainContentPadding] = useState(true)
   const [isSidebarOpen, setIsSidebarOpen] = useState(getInitialSidebarOpen)
@@ -141,6 +143,7 @@ export default function DashboardLayout() {
     { path: '/ai-docs', label: 'AI 文档', icon: FilePenLine },
     { path: '/multidimensional-tables', label: '多维表格', icon: TableProperties },
     { path: '/content-model-data', label: '信息管理', icon: Database },
+    { path: '/inquiries', label: '询价管理', icon: MessageSquareQuote },
     { path: '/topics', label: '专题管理', icon: Tags },
     { path: '/columns', label: '栏目管理', icon: FolderTree },
     { path: '/pdf-assets', label: 'PDF', icon: FileType2 },
@@ -365,6 +368,7 @@ export default function DashboardLayout() {
               </Breadcrumb>
             </>
           ) : null}
+          <div ref={setTitleSlotElement} className="flex shrink-0 items-center" />
           <div ref={setHeaderSlotElement} className="min-w-0 flex-1" />
         </header>
         <main
@@ -377,6 +381,7 @@ export default function DashboardLayout() {
           <Outlet
             context={{
               headerSlotElement,
+              titleSlotElement,
               setDocumentTitle: setDocumentTitleOverride,
               setMainContentPadding: setHasMainContentPadding,
             }}
