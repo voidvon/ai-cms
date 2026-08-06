@@ -105,6 +105,29 @@ function buildMainTableSelect(modelCode, alias = 'e') {
   return selectParts.join(',\n        ');
 }
 
+function buildAdminListSelect(modelCode, alias = 'e') {
+  const { mainFields } = getModelFieldNames(modelCode);
+  const field = (fieldName, fallback) => (
+    mainFields.includes(fieldName) ? `${alias}.${fieldName}` : `${fallback} AS ${fieldName}`
+  );
+
+  return [
+    `${alias}.id`,
+    `${alias}.column_id`,
+    field('code', "''"),
+    field('is_visible', '1'),
+    field('is_featured_home', '0'),
+    field('sort_order', '0'),
+    `${alias}.created_at`,
+    `${alias}.updated_at`,
+    `${buildContentValueExpr(modelCode, 'name')} AS name`,
+    `${buildContentValueExpr(modelCode, 'publish_status')} AS translation_publish_status`,
+    `coalesce(tc.name, dtc.name, '') AS column_name`,
+    `? AS requested_language_code`,
+    `coalesce(l.code, dl.code, fl.code, ?) AS current_language_code`
+  ].join(',\n        ');
+}
+
 function buildDynamicFieldSelect(modelCode, mainAlias = 'e') {
   const fields = getDynamicModelFields(modelCode);
   if (!fields.length) {
@@ -256,7 +279,8 @@ export function listContentEntriesPaged(modelCode, {
   publishedOnly = false,
   languageCode = null,
   nameKeyword = '',
-  orderBy = 'default'
+  orderBy = 'default',
+  summaryOnly = false
 } = {}) {
   ensureContentModelStorageSchema();
   const selectedLanguage = resolveLanguage(languageCode);
@@ -314,6 +338,7 @@ export function listContentEntriesPaged(modelCode, {
     `
       ${treeSql}
       SELECT
+        ${summaryOnly ? buildAdminListSelect(modelCode, 'e') : `
         e.id,
         e.column_id,
         ${buildMainTableSelect(modelCode, 'e')},
@@ -330,7 +355,7 @@ export function listContentEntriesPaged(modelCode, {
         ${getTranslationCreatedAtExpr('t', 'dt', 'e')} AS translation_created_at,
         coalesce(tc.name, dtc.name, '') AS column_name,
         ? AS requested_language_code,
-        coalesce(l.code, dl.code, fl.code, ?) AS current_language_code
+        coalesce(l.code, dl.code, fl.code, ?) AS current_language_code`}
       FROM ${quoteIdentifier(tableName)} e
       LEFT JOIN ${quoteIdentifier(translationTableName)} t ON t.entry_id = e.id AND t.language_id = ?
       LEFT JOIN ${quoteIdentifier(translationTableName)} dt ON dt.entry_id = e.id AND dt.language_id = ?
@@ -380,7 +405,9 @@ export function listContentEntriesPaged(modelCode, {
   )?.count || 0;
 
   return {
-    items: rows.map((row) => mapEntryRow(modelCode, row)),
+    items: rows.map((row) => (
+      summaryOnly ? mapEntrySummaryRow(row) : mapEntryRow(modelCode, row)
+    )),
     pagination: {
       page: safePage,
       limit: safeLimit,
@@ -951,6 +978,35 @@ function mapEntryRow(modelCode, row) {
   });
 
   return entry;
+}
+
+function mapEntrySummaryRow(row) {
+  const requestedLanguageCode = row.requested_language_code || row.current_language_code || null;
+  const resolvedLanguageCode = row.current_language_code || requestedLanguageCode;
+  return {
+    id: toInteger(row.id, 0),
+    name: row.name || '',
+    publish_status: normalizePublishStatus(row.translation_publish_status || row.publish_status),
+    code: row.code || '',
+    column_id: toNullableInteger(row.column_id),
+    is_visible: toBooleanInt(row.is_visible, 1),
+    is_featured_home: toBooleanInt(row.is_featured_home, 0),
+    sort_order: toInteger(row.sort_order, 0),
+    column_name: row.column_name || undefined,
+    current_language_code: resolvedLanguageCode,
+    requested_language_code: requestedLanguageCode,
+    resolved_language_code: resolvedLanguageCode,
+    fallback_language_code: resolvedLanguageCode && requestedLanguageCode && resolvedLanguageCode !== requestedLanguageCode
+      ? resolvedLanguageCode
+      : null,
+    is_language_fallback: Boolean(
+      resolvedLanguageCode
+      && requestedLanguageCode
+      && resolvedLanguageCode !== requestedLanguageCode
+    ),
+    created_at: row.created_at,
+    updated_at: row.updated_at
+  };
 }
 
 export function resolveContentEntryComparator(modelCode) {

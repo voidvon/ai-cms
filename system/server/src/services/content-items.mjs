@@ -72,7 +72,8 @@ export function listContentItemsAdmin(modelCode, {
     visibleOnly: false,
     languageCode,
     nameKeyword,
-    orderBy: 'updated_at_desc'
+    orderBy: 'updated_at_desc',
+    summaryOnly: true
   });
   return result;
 }
