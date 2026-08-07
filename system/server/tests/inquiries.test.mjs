@@ -52,15 +52,15 @@ test('creates and manages private inquiry records', async () => {
   assert.equal(getInquiryById(inquiry.id), null);
 });
 
-test('requires a contact channel and validates management values', async () => {
+test('requires an email address and validates management values', async () => {
   await assert.rejects(() => createInquiry({
     inquiry_type: 'technical',
     contact_name: 'Grace Hopper',
     company: '',
     email: '',
-    phone: '',
+    phone: '+86 138 0000 0000',
     requirements: 'Need technical information.'
-  }), /邮箱和电话至少填写一项/);
+  }), /邮箱不能为空/);
 
   const inquiry = await createInquiry({
     inquiry_type: 'other',

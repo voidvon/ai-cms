@@ -1,3 +1,5 @@
+import { getSiteConfig } from './site.mjs';
+
 const TURNSTILE_VERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
 export async function verifyTurnstileToken(token, options = {}) {
@@ -42,7 +44,7 @@ export async function verifyTurnstileToken(token, options = {}) {
 }
 
 function resolveTurnstileSecret(override) {
-  const configured = String(override || process.env.TURNSTILE_SECRET_KEY || '').trim();
+  const configured = String(override || process.env.TURNSTILE_SECRET_KEY || getSiteConfig(null, { includeSecrets: true }).turnstile_secret_key || '').trim();
   if (configured) return configured;
   throw createTurnstileError('人机验证服务尚未配置', 'TURNSTILE_NOT_CONFIGURED', 503);
 }

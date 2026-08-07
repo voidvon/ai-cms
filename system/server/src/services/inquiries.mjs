@@ -301,14 +301,11 @@ function normalizeInquiryInput(input) {
   const inquiryType = normalizeRequiredEnum(input.inquiry_type, INQUIRY_TYPES, '询价类型');
   const contactName = normalizeRequiredText(input.contact_name, 100, '姓名');
   const company = normalizeText(input.company, 200);
-  const email = normalizeText(input.email, 254).toLowerCase();
+  const email = normalizeRequiredText(input.email, 254, '邮箱').toLowerCase();
   const phone = normalizeText(input.phone, 60);
   const requirements = normalizeRequiredText(input.requirements, 5000, '具体需求');
 
-  if (!email && !phone) {
-    throw new Error('邮箱和电话至少填写一项');
-  }
-  if (email && !isValidEmail(email)) {
+  if (!isValidEmail(email)) {
     throw new Error('邮箱格式不正确');
   }
 

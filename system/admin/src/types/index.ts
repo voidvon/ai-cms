@@ -474,6 +474,8 @@ export interface SiteConfig {
   assets_bind_host?: string | null;
   assets_port?: number | null;
   assets_public_base_url?: string | null;
+  turnstile_site_key?: string | null;
+  turnstile_secret_key?: string | null;
   runtime_assets_base_url?: string | null;
   favicon_source_path?: string | null;
   favicon_manifest_json?: string | null;

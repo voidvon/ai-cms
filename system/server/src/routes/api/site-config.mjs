@@ -14,7 +14,7 @@ export default async function siteConfigRoutes(app) {
   app.get('/site-config', async (request, reply) => {
     const languageCode = String(request.query?.language || '').trim() || app.publicSite?.languageCode || null;
     const includeTranslations = Number.parseInt(String(request.query?.include_translations ?? 0), 10) === 1;
-    const config = getSiteConfig(languageCode, { includeTranslations });
+    const config = getSiteConfig(languageCode, { includeTranslations, includeSecrets: Boolean(request.user && String(request.query?.include_secrets || '') === '1') });
     return { success: true, data: config };
   });
 

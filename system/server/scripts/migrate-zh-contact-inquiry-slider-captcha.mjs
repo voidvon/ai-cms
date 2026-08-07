@@ -207,7 +207,12 @@ const INQUIRY_SCRIPT_BLOCK = `const INQUIRY_FORM_SCRIPT = \`
       setStatus(form, form.dataset.contactError || '请至少填写邮箱或电话其中一项。', 'error');
       return;
     }
-    if (form.dataset.captchaEnabled !== 'true') {
+    if (form.dataset.captchaMode === 'turnstile') {
+      if (!String(formData.get('cf-turnstile-response') || '').trim()) {
+        setStatus(form, form.dataset.captchaRequired || '请完成人机验证后再提交。', 'error');
+        return;
+      }
+    } else if (form.dataset.captchaEnabled !== 'true') {
       setStatus(form, form.dataset.captchaUnavailable || '人机验证服务暂时不可用，请稍后再试。', 'error');
       return;
     }
@@ -220,6 +225,15 @@ const INQUIRY_SCRIPT_BLOCK = `const INQUIRY_FORM_SCRIPT = \`
 
     let captchaState;
     try {
+      if (form.dataset.captchaMode === 'turnstile') {
+        const payload = Object.fromEntries(formData.entries());
+        const response = await fetch(form.action, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload), credentials: 'same-origin' });
+        const result = await response.json().catch(() => null);
+        if (!response.ok || !result?.success) throw new Error(result?.message || form.dataset.errorMessage || '提交失败，请稍后再试。');
+        form.reset();
+        setStatus(form, result.message || form.dataset.successMessage || '感谢您的询价，我们会尽快与您联系。', 'success');
+        return;
+      }
       captchaState = await initializeInquiryCaptcha(form);
       if (!captchaState.token) {
         throw new Error(form.dataset.captchaRequired || '请拖动滑块完成验证后再提交。');
@@ -270,7 +284,10 @@ const INQUIRY_COMPONENT_BLOCK = `function InquiryForm({ config, renderButton }) 
   const types = asArray(config.types).filter((item) => text(item?.value) && text(item?.label));
   const endpoint = text(config.endpoint) || '/api/public/inquiries';
   const captcha = config.sliderCaptcha && typeof config.sliderCaptcha === 'object' ? config.sliderCaptcha : null;
+  const turnstile = config.turnstile && typeof config.turnstile === 'object' ? config.turnstile : null;
   const captchaEnabled = Boolean(captcha?.enabled);
+  const turnstileEnabled = Boolean(turnstile?.enabled && text(turnstile?.siteKey));
+  const captchaMode = turnstileEnabled ? 'turnstile' : (captchaEnabled ? 'slider' : '');
   const statusId = 'sg-inquiry-form-status';
   const captchaStatusId = 'sg-inquiry-captcha-status';
   const Button = renderButton || ((buttonProps) => <button {...buttonProps}>{buttonProps.children}</button>);
@@ -285,6 +302,8 @@ const INQUIRY_COMPONENT_BLOCK = `function InquiryForm({ config, renderButton }) 
         aria-describedby={statusId + ' ' + captchaStatusId}
         className="sg-inquiry-form"
         data-captcha-enabled={captchaEnabled ? 'true' : 'false'}
+        data-captcha-mode={captchaMode}
+        data-captcha-required={text((turnstileEnabled ? turnstile : captcha)?.requiredMessage)}
         data-captcha-fail={text(captcha?.failMessage)}
         data-captcha-height={text(captcha?.height) || '160'}
         data-captcha-loading={text(captcha?.loadingMessage)}
@@ -319,7 +338,7 @@ const INQUIRY_COMPONENT_BLOCK = `function InquiryForm({ config, renderButton }) 
         </div>
         <div className="sg-inquiry-form__field">
           <label htmlFor="inquiry-email">{text(config.emailLabel) || '邮箱'}</label>
-          <input autoComplete="email" id="inquiry-email" maxLength="254" name="email" type="email" />
+          <input autoComplete="email" id="inquiry-email" maxLength="254" name="email" required type="email" />
         </div>
         <div className="sg-inquiry-form__field">
           <label htmlFor="inquiry-phone">{text(config.phoneLabel) || '电话'}</label>
@@ -333,7 +352,9 @@ const INQUIRY_COMPONENT_BLOCK = `function InquiryForm({ config, renderButton }) 
           <label htmlFor="inquiry-website">Website</label>
           <input autoComplete="off" id="inquiry-website" name="website" tabIndex="-1" type="text" />
         </div>
-        {captchaEnabled ? (
+        {turnstileEnabled ? (
+          <div className="sg-inquiry-form__turnstile sg-inquiry-form__field--full"><div className="cf-turnstile" data-inquiry-turnstile data-sitekey={text(turnstile.siteKey)} data-theme={text(turnstile.theme) || 'light'}></div></div>
+        ) : captchaEnabled ? (
           <div className="sg-inquiry-form__captcha sg-inquiry-form__field--full">
             <div data-inquiry-captcha></div>
             <p aria-live="polite" className="sg-inquiry-form__captcha-status" data-inquiry-captcha-status id={captchaStatusId}>{text(captcha?.label) || '请拖动滑块完成验证'}</p>
@@ -356,6 +377,7 @@ const INQUIRY_COMPONENT_BLOCK = `function InquiryForm({ config, renderButton }) 
       {captchaEnabled ? <link data-sg-slider-captcha-style href={text(captcha?.styleUrl) || '/assets/captcha/slider-captcha.css'} rel="stylesheet" /> : null}
       {renderScript(INQUIRY_FORM_SCRIPT)}
       {captchaEnabled ? <script async defer data-sg-slider-captcha src={text(captcha?.scriptUrl) || '/assets/captcha/slider-captcha.umd.js'}></script> : null}
+      {turnstileEnabled ? <script async defer src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script> : null}
     </section>
   );
 }
@@ -585,6 +607,9 @@ const template = queryOne(
 );
 if (!template) throw new Error(`模板 ${TEMPLATE_ID} 不存在`);
 if (template.engine !== 'tsx') throw new Error(`模板 ${TEMPLATE_ID} 不是 TSX 引擎`);
+if (String(template.tsx_source || '').includes('type="radio"')) {
+  throw new Error('当前联系页已是新版询价表单，请使用专用恢复脚本，禁止旧迁移覆盖表单界面');
+}
 
 const hadInquiryForm = String(template.tsx_source || '').includes(COMPONENT_MARKER);
 const nextTsxSource = updateTsxSource(template.tsx_source);

@@ -79,10 +79,12 @@ export function getSiteConfig(languageCode = null, options = {}) {
     fallback_language_code: usedFallback ? selectedLanguage.fallback_code : null,
     fallback_fields: translationResolution.fallback_fields,
     is_language_fallback: usedFallback,
+    ...(options.includeSecrets ? { turnstile_secret_key: base.turnstile_secret_key || '' } : {}),
     ...(includeTranslations ? {
       translations: translationOutput
     } : {})
   };
+  if (!options.includeSecrets) delete output.turnstile_secret_key;
 
   const siteUrl = resolveSiteBaseUrl(selectedLanguage.code);
   const primarySiteUrl = resolvePrimaryLanguageSiteBaseUrl();
@@ -172,7 +174,7 @@ export function prefixLanguageSitePath(url, pathPrefix, options = {}) {
 
 export async function updateSiteConfig(input) {
   ensureSiteConfigSchema();
-  const existing = getSiteConfig(null, { includeTranslations: true });
+  const existing = getSiteConfig(null, { includeTranslations: true, includeSecrets: true });
   const payload = normalizeSiteConfigMutationInput(input, { existingConfig: existing });
   const siteIcon = await prepareSiteIconConfig(
     payload.base.favicon_source_path,
@@ -205,9 +207,11 @@ export async function updateSiteConfig(input) {
         assets_bind_host,
         assets_port,
         assets_public_base_url,
+        turnstile_site_key,
+        turnstile_secret_key,
         favicon_source_path,
         favicon_manifest_json
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       ON CONFLICT(id) DO UPDATE SET
         web_name = excluded.web_name,
         company_name = excluded.company_name,
@@ -223,6 +227,8 @@ export async function updateSiteConfig(input) {
         assets_bind_host = excluded.assets_bind_host,
         assets_port = excluded.assets_port,
         assets_public_base_url = excluded.assets_public_base_url,
+        turnstile_site_key = excluded.turnstile_site_key,
+        turnstile_secret_key = excluded.turnstile_secret_key,
         favicon_source_path = excluded.favicon_source_path,
         favicon_manifest_json = excluded.favicon_manifest_json
     `,
@@ -242,14 +248,32 @@ export async function updateSiteConfig(input) {
       basePayload.assets_bind_host,
       basePayload.assets_port,
       basePayload.assets_public_base_url,
+      basePayload.turnstile_site_key,
+      basePayload.turnstile_secret_key,
       basePayload.favicon_source_path,
       basePayload.favicon_manifest_json
     ]
   );
 
   saveSiteConfigTranslations(payload.translations);
+  syncInquiryTurnstileSiteKey(basePayload.turnstile_site_key);
   cleanupSupersededSiteIconFiles(existing.favicon_manifest_json, basePayload.favicon_manifest_json);
   return getSiteConfig(null, { includeTranslations: true });
+}
+
+function syncInquiryTurnstileSiteKey(siteKey) {
+  const key = String(siteKey || '').trim();
+  const rows = queryAll('SELECT id, template_data_json FROM column_translations WHERE template_data_json LIKE ?', ['%"inquiryForm"%']);
+  for (const row of rows) {
+    let data;
+    try { data = JSON.parse(row.template_data_json || '{}'); } catch { continue; }
+    const form = data?.inquiryForm;
+    if (!form || typeof form !== 'object') continue;
+    const code = String(form.languageCode || '').trim();
+    if (/^zh(?:-|$)/i.test(code)) continue;
+    form.turnstile = { ...(form.turnstile || {}), enabled: true, siteKey: key };
+    execute('UPDATE column_translations SET template_data_json = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?', [JSON.stringify(data), row.id]);
+  }
 }
 
 function ensureSiteConfigSchema() {
@@ -330,6 +354,8 @@ function ensureSiteConfigTableSchema() {
   addColumnIfMissing('site_config', 'assets_bind_host', 'TEXT');
   addColumnIfMissing('site_config', 'assets_port', 'INTEGER');
   addColumnIfMissing('site_config', 'assets_public_base_url', 'TEXT');
+  addColumnIfMissing('site_config', 'turnstile_site_key', 'TEXT');
+  addColumnIfMissing('site_config', 'turnstile_secret_key', 'TEXT');
   addColumnIfMissing('site_config', 'favicon_source_path', 'TEXT');
   addColumnIfMissing('site_config', 'favicon_manifest_json', 'TEXT');
   dropColumnIfExists('site_config', 'web_url');
@@ -363,6 +389,8 @@ function getBaseSiteConfig() {
         assets_bind_host,
         assets_port,
         assets_public_base_url,
+        turnstile_site_key,
+        turnstile_secret_key,
         favicon_source_path,
         favicon_manifest_json
       FROM site_config
@@ -382,7 +410,9 @@ function getBaseSiteConfig() {
       web_mobile: '',
       assets_bind_host: HOST,
       assets_port: null,
-      assets_public_base_url: '',
+        assets_public_base_url: '',
+        turnstile_site_key: '',
+        turnstile_secret_key: '',
       favicon_source_path: null,
       favicon_manifest_json: null
     }
@@ -423,6 +453,8 @@ function normalizeSiteConfigInput(input) {
     assets_bind_host: assetsBindHost,
     assets_port: assetsPort,
     assets_public_base_url: assetsPublicBaseUrl,
+    turnstile_site_key: toNullableString(input.turnstile_site_key),
+    turnstile_secret_key: toNullableString(input.turnstile_secret_key),
     favicon_source_path: toNullableString(input.favicon_source_path),
     favicon_manifest_json: toNullableString(input.favicon_manifest_json)
   };

@@ -15,6 +15,20 @@ import {
 
 const CONTACT_PUBLIC_PATH = '/contact-us/';
 const SUCCESS_MESSAGE = '感谢您的询价，我们会尽快与您联系。';
+const SUCCESS_MESSAGES = new Map([
+  ['zh-cn', SUCCESS_MESSAGE],
+  ['ru', 'Спасибо за ваш запрос. Мы свяжемся с вами в ближайшее время.'],
+  ['en', 'Thank you for your enquiry. We will contact you shortly.'],
+  ['fr', 'Merci pour votre demande. Nous vous contacterons prochainement.'],
+  ['tr', 'Talebiniz için teşekkür ederiz. En kısa sürede sizinle iletişime geçeceğiz.'],
+  ['es', 'Gracias por su consulta. Nos pondremos en contacto con usted lo antes posible.'],
+  ['id', 'Terima kasih atas pertanyaan Anda. Kami akan segera menghubungi Anda.'],
+  ['pt', 'Obrigado pela sua consulta. Entraremos em contacto consigo em breve.'],
+  ['th', 'ขอบคุณสำหรับคำถามของคุณ เราจะติดต่อกลับโดยเร็วที่สุด'],
+  ['vi', 'Cảm ơn yêu cầu của bạn. Chúng tôi sẽ sớm liên hệ với bạn.'],
+  ['ar', 'شكرًا لاستفسارك. سنتواصل معك قريبًا.'],
+  ['ar-me', 'شكرًا لاستفسارك. سنتواصل معك قريبًا.']
+]);
 
 export default async function publicInquiryRoutes(app) {
   app.get('/public/inquiry-captcha', {
@@ -84,7 +98,7 @@ export default async function publicInquiryRoutes(app) {
   }, async (request, reply) => {
     const body = request.body && typeof request.body === 'object' ? request.body : {};
     if (String(body.website || '').trim()) {
-      return { success: true, message: SUCCESS_MESSAGE };
+      return { success: true, message: getInquirySuccessMessage(body.language_code) };
     }
 
     try {
@@ -113,7 +127,7 @@ export default async function publicInquiryRoutes(app) {
       return {
         success: true,
         data: { reference_no: inquiry.reference_no },
-        message: SUCCESS_MESSAGE
+        message: getInquirySuccessMessage(languageCode)
       };
     } catch (error) {
       reply.code(error?.statusCode || (error?.code === 'INQUIRY_RATE_LIMIT' ? 429 : 400));
@@ -123,6 +137,10 @@ export default async function publicInquiryRoutes(app) {
       };
     }
   });
+}
+
+function getInquirySuccessMessage(languageCode) {
+  return SUCCESS_MESSAGES.get(String(languageCode || '').trim().toLowerCase()) || SUCCESS_MESSAGE;
 }
 
 function resolveRequestLanguageCode(app, body) {
