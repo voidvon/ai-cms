@@ -34,4 +34,8 @@ node_modules/
 public/upload/
 /public/*
 !/public/logo.svg
+!/public/assets/
+!/public/assets/captcha/
+!/public/assets/captcha/slider-captcha.css
+!/public/assets/captcha/slider-captcha.umd.js
 *_副本*

@@ -15,6 +15,7 @@
     "db:sync:single-meta": "node scripts/sync-spirax-global-single-column-meta.mjs",
     "db:migrate:product-spec-options": "node scripts/migrate-product-spec-options-to-main-table.mjs",
     "db:fix:en-spec-options": "node scripts/fix-en-product-spec-options.mjs",
+    "db:migrate:zh-inquiry-slider-captcha": "node scripts/migrate-zh-contact-inquiry-slider-captcha.mjs",
     "db:repair-encoding": "node scripts/repair-legacy-encoding.mjs --write",
     "admin:create": "node scripts/create-admin.mjs",
     "build:static": "node scripts/build-static.mjs",
@@ -42,9 +43,11 @@
     "fastify": "^5.8.5",
     "heic-convert": "^2.1.0",
     "lightningcss": "^1.32.0",
+    "node-puzzle": "2.0.2",
     "openai": "6.49.0",
     "png-to-ico": "^3.0.2",
     "sharp": "^0.33.5",
+    "slider-captcha-js": "1.0.8",
     "zod": "^4.4.3"
   }
 }

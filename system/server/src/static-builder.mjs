@@ -256,7 +256,7 @@ function prefixRelativeHrefPaths(html, prefix) {
 
 const MANAGED_STATIC_ROOT_FILES = ['index.html', 'sitemap.xml', 'robots.txt', 'llms.txt', 'llms-full.txt', 'index.md'];
 const LEGACY_MANAGED_STATIC_DIRS = ['about'];
-const SHARED_STATIC_DIRS = ['css'];
+const SHARED_STATIC_DIRS = ['css', path.join('assets', 'captcha')];
 const SHARED_STATIC_ROOT_FILES = [
   'logo.svg',
   'favicon.ico',

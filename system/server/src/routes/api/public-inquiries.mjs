@@ -7,12 +7,77 @@ import {
   hashInquirySubmitterIp
 } from '../../services/inquiries.mjs';
 import { getDefaultLanguage } from '../../services/languages.mjs';
-import { verifyTurnstileToken } from '../../services/turnstile.mjs';
+import { verifyInquiryCaptcha } from '../../services/inquiry-captcha.mjs';
+import {
+  createInquiryCaptcha,
+  verifyInquiryCaptchaChallenge
+} from '../../services/slider-captcha.mjs';
 
 const CONTACT_PUBLIC_PATH = '/contact-us/';
 const SUCCESS_MESSAGE = '感谢您的询价，我们会尽快与您联系。';
 
 export default async function publicInquiryRoutes(app) {
+  app.get('/public/inquiry-captcha', {
+    onRequest: [requireSameOrigin],
+    bodyLimit: 4 * 1024
+  }, async (request, reply) => {
+    if (reply.sent) return;
+
+    try {
+      const challenge = await createInquiryCaptcha({
+        remoteIp: getClientIp(request),
+        width: request.query?.width
+      });
+      reply.header('cache-control', 'no-store, max-age=0');
+      return {
+        success: true,
+        data: {
+          captcha_id: challenge.id,
+          bg_url: challenge.bgUrl,
+          puzzle_url: challenge.puzzleUrl,
+          width: challenge.width,
+          height: challenge.height,
+          expires_at: challenge.expiresAt
+        }
+      };
+    } catch (error) {
+      reply.code(error?.statusCode || 503);
+      return {
+        success: false,
+        message: error?.message || '人机验证服务暂时不可用，请稍后重试'
+      };
+    }
+  });
+
+  app.post('/public/inquiry-captcha/verify', {
+    onRequest: [requireSameOrigin],
+    bodyLimit: 24 * 1024
+  }, async (request, reply) => {
+    if (reply.sent) return;
+
+    const body = request.body && typeof request.body === 'object' ? request.body : {};
+    try {
+      const result = verifyInquiryCaptchaChallenge({
+        captchaId: body.captcha_id,
+        x: body.x,
+        duration: body.duration,
+        trail: body.trail,
+        remoteIp: getClientIp(request)
+      });
+      reply.header('cache-control', 'no-store, max-age=0');
+      return {
+        success: true,
+        data: { token: result.token }
+      };
+    } catch (error) {
+      reply.code(error?.statusCode || 400);
+      return {
+        success: false,
+        message: error?.message || '人机验证未通过，请重试'
+      };
+    }
+  });
+
   app.post('/public/inquiries', {
     onRequest: [requireSameOrigin],
     bodyLimit: 32 * 1024
@@ -27,8 +92,8 @@ export default async function publicInquiryRoutes(app) {
       const clientIp = getClientIp(request);
       const submitterIpHash = hashInquirySubmitterIp(clientIp);
       assertInquiryRateLimit(submitterIpHash);
-      await verifyTurnstileToken(body['cf-turnstile-response'], { remoteIp: clientIp });
       const languageCode = resolveRequestLanguageCode(app, body);
+      await verifyInquiryCaptcha({ body, languageCode, remoteIp: clientIp });
       const sourceColumn = resolveContactColumn(languageCode);
 
       const inquiry = await createInquiry({
