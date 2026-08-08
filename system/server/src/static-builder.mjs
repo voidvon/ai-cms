@@ -2440,6 +2440,29 @@ function buildHeaderNavItem(base, overrides = {}) {
   };
 }
 
+function buildManagedHeaderChildren(categories, parentId, {
+  activeColumnId = 0,
+  managedCategoryMap = new Map(),
+  modelCode = '',
+  site = null
+} = {}) {
+  return categories
+    .filter((item) => normalizeInteger(item?.parent_id, 0) === normalizeInteger(parentId, 0))
+    .filter((item) => normalizeInteger(item?.is_visible, 1) !== 0)
+    .sort(compareCategoryOrder)
+    .map((item) => ({
+      id: normalizeInteger(item?.id, 0),
+      name: resolveColumnDisplayLabel(item, ['navLabel', 'menuLabel', 'shortLabel']) || item?.name || '',
+      parentId: normalizeInteger(item?.parent_id, 0),
+      modelCode: modelCode || item?.model_code || '',
+      sourceType: item?.column_type || 'list',
+      sourceId: normalizeInteger(item?.id, 0),
+      active: activeColumnId !== 0 && normalizeInteger(item?.id, 0) === activeColumnId,
+      showInNav: normalizeInteger(item?.is_visible, 1),
+      url: buildLegacyManagedColumnUrl(item, managedCategoryMap, site)
+    }));
+}
+
 function normalizePathSegments(pathname) {
   return String(pathname || '')
     .trim()
@@ -2631,22 +2654,24 @@ function buildLegacySiteColumns(columns, options = {}) {
     let children = [];
 
     if (item.renderDriver === 'managed_column') {
-      children = Array.isArray(options.managedColumnCategories)
-        ? options.managedColumnCategories
-          .filter((cat) => normalizeInteger(cat.parent_id, 0) === 0 && normalizeInteger(cat.id, 0) !== 0)
+      if (Array.isArray(options.managedColumnCategories)) {
+        children = buildManagedHeaderChildren(options.managedColumnCategories, 0, {
+          activeColumnId,
+          managedCategoryMap,
+          modelCode: managedRootModelCode || item.modelCode,
+          site: options.templateContext?.site || null
+        })
           .slice(0, 11)
           .map((cat) => ({
-            id: cat.id,
-            name: resolveColumnDisplayLabel(cat, ['navLabel', 'menuLabel', 'shortLabel']) || cat.name,
-            parentId: normalizeInteger(cat.parent_id, 0),
-            modelCode: managedRootModelCode || item.modelCode,
-            sourceType: 'list',
-            sourceId: normalizeInteger(cat.id, 0),
-            active: false,
-            showInNav: 1,
-            url: buildLegacyManagedColumnUrl(cat, managedCategoryMap, options.templateContext?.site || null)
-          }))
-        : [];
+            ...cat,
+            children: buildManagedHeaderChildren(options.managedColumnCategories, cat.id, {
+              activeColumnId,
+              managedCategoryMap,
+              modelCode: managedRootModelCode || item.modelCode,
+              site: options.templateContext?.site || null
+            })
+          }));
+      }
     } else if (item.renderDriver === 'section') {
       const section = publicSections.getSectionByColumnId(item.id);
       children = buildHeaderSectionChildren(normalizedRows, section, activeColumnId, {
