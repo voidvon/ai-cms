@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { ArrowLeft, ArrowRight, ImagePlus, Star, Trash2, Upload } from 'lucide-react'
 import { mediaApi, type MediaPurpose } from '@/api/media'
-import { Button } from '@/components/ui/button'
+import { AdminButton as Button } from '@/components/AdminButton'
 import { Input } from '@/components/ui/input'
 import { resolveAssetUrl } from '@/lib/assets'
 import { toast } from 'sonner'

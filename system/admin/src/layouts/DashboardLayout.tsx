@@ -55,7 +55,7 @@ import {
   BreadcrumbList,
   BreadcrumbPage,
 } from '@/components/ui/breadcrumb'
-import { Button } from '@/components/ui/button'
+import { AdminButton as Button } from '@/components/AdminButton'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { SidebarTreeMenu, type SidebarTreeMenuItem } from '@/components/SidebarTreeMenu'
 import SystemVersionControl from '@/components/SystemVersionControl'

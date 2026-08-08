@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Eye, EyeOff, Save } from 'lucide-react'
 import { aiModelsApi } from '@/api/ai-models'
-import { Button } from '@/components/ui/button'
+import { AdminButton as Button } from '@/components/AdminButton'
 import {
   Dialog,
   DialogContent,

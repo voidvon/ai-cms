@@ -44,7 +44,7 @@ import {
 import { useTheme } from 'next-themes'
 import { toast } from 'sonner'
 import { mediaApi, type MediaPurpose } from '@/api/media'
-import { Button } from '@/components/ui/button'
+import { AdminButton as Button } from '@/components/AdminButton'
 import {
   DropdownMenu,
   DropdownMenuContent,

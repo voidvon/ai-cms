@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, Save, Settings2, Trash2 } from 'lucide-react'
 import { adminApi } from '@/api/admin'
-import { Button } from '@/components/ui/button'
+import { AdminButton as Button } from '@/components/AdminButton'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import {

@@ -5,7 +5,7 @@ import { languagesApi } from '@/api/languages'
 import apiClient from '@/api/client'
 import LanguageForm from '@/components/LanguageForm'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { AdminButton as Button } from '@/components/AdminButton'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import {
   AlertDialog,

@@ -1,5 +1,5 @@
 import type { ComponentProps, ReactNode } from 'react'
-import { Button } from '@/components/ui/button'
+import { AdminButton as Button } from '@/components/AdminButton'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 
 type TableActionButtonProps = ComponentProps<typeof Button> & {

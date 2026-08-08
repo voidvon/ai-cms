@@ -12,7 +12,7 @@ import {
   type AiChatPanelMessage,
 } from '@/components/ai-chat/AiChatPanel'
 import { AI_CHAT_PANEL_CONFIGS } from '@/components/ai-chat/ai-chat-panel-config'
-import { Button } from '@/components/ui/button'
+import { AdminButton as Button } from '@/components/AdminButton'
 import { toast } from 'sonner'
 import type {
   AiChatCapabilityDefinition,

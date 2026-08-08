@@ -57,6 +57,10 @@
     页面特定调整必须通过调用处的 `className`、页面组件或 `system/admin/src/components/ui/` 之外的包装组件实现。
     只有用户明确要求升级或重新生成 shadcn 组件时，才允许通过官方 shadcn 更新流程变更该目录；此类更新必须与普通功能改动分开处理并单独验证。
 
+13. 后台业务按钮统一使用 `system/admin/src/components/AdminButton.tsx`。
+    除 `AdminButton.tsx` 封装自身外，`system/admin/src/pages/`、`system/admin/src/components/` 和 `system/admin/src/layouts/` 不要直接从 `components/ui/button` 引入按钮；按钮的默认圆角、尺寸和交互样式通过业务封装集中维护。
+    `system/admin/src/components/ui/` 内部为保持 shadcn 组件依赖可以继续使用原始 Button，但不得通过修改上游组件源码实现业务页面样式。
+
 ## Required Workflow
 处理涉及栏目、内容模型、模板、静态生成、站点配置的任务时，默认按以下顺序执行：
 

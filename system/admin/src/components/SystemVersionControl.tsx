@@ -3,7 +3,7 @@ import { ExternalLink, LoaderCircle, Power, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { adminApi } from '@/api/admin'
-import { Button } from '@/components/ui/button'
+import { AdminButton as Button } from '@/components/AdminButton'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 
 export default function SystemVersionControl() {

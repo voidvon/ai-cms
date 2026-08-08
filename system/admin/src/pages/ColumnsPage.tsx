@@ -5,7 +5,7 @@ import { contentModelsApi, templateVariantsApi, templatesApi } from '@/api/advan
 import { columnNodesApi } from '@/api/column-nodes'
 import { columnsApi } from '@/api/columns'
 import { languagesApi } from '@/api/languages'
-import { Button } from '@/components/ui/button'
+import { AdminButton as Button } from '@/components/AdminButton'
 import { SidebarTreeMenu, type SidebarTreeMenuItem } from '@/components/SidebarTreeMenu'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'

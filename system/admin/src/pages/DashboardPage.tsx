@@ -4,7 +4,7 @@ import { Check, ListFilter, Pencil, Plus, Trash2, X } from 'lucide-react'
 import { adminApi, type AccessLogFilterParams } from '@/api/admin'
 import { Card, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
-import { Button } from '@/components/ui/button'
+import { AdminButton as Button } from '@/components/AdminButton'
 import { Badge } from '@/components/ui/badge'
 import {
   AlertDialog,
