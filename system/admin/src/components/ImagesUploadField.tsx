@@ -32,7 +32,10 @@ export default function ImagesUploadField({
 }: ImagesUploadFieldProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [isUploading, setIsUploading] = useState(false)
-  const normalizedValue = Array.isArray(value) ? value.filter(Boolean) : []
+  // Keep empty slots so "添加路径" can render an input before the user fills it.
+  const normalizedValue = Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : []
   const normalizedPrimaryImage = String(primaryImage || '').trim()
 
   const updateImages = (nextImages: string[], preferredPrimaryImage = normalizedPrimaryImage) => {
