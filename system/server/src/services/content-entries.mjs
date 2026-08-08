@@ -203,7 +203,8 @@ export function listContentEntries(modelCode, {
   visibleOnly = true,
   publishedOnly = false,
   limit = 20,
-  languageCode = null
+  languageCode = null,
+  orderBy = 'default'
 } = {}) {
   ensureContentModelStorageSchema();
   const selectedLanguage = resolveLanguage(languageCode);
@@ -253,7 +254,7 @@ export function listContentEntries(modelCode, {
       LEFT JOIN column_translations tc ON tc.column_id = c.id AND tc.language_id = ?
       LEFT JOIN column_translations dtc ON dtc.column_id = c.id AND dtc.language_id = ?
       ${whereParts.length ? `WHERE ${whereParts.join(' AND ')}` : ''}
-      ORDER BY ${buildContentEntryOrderClause(modelCode)}
+      ORDER BY ${buildContentEntryOrderClause(modelCode, orderBy)}
       LIMIT ?
     `,
     [
@@ -1009,7 +1010,10 @@ function mapEntrySummaryRow(row) {
   };
 }
 
-export function resolveContentEntryComparator(modelCode) {
+export function resolveContentEntryComparator(modelCode, orderBy = 'default') {
+  if (orderBy === 'created_at_desc') {
+    return compareEntriesByCreatedAt;
+  }
   return hasSortableContentEntries(modelCode)
     ? compareEntriesBySortOrder
     : compareEntriesByCreatedAt;
@@ -1026,6 +1030,9 @@ export function resolveContentEntryCoverImage(item) {
 }
 
 function buildContentEntryOrderClause(modelCode, orderBy = 'default') {
+  if (orderBy === 'created_at_desc') {
+    return 'datetime(e.created_at) DESC, e.id DESC';
+  }
   if (orderBy === 'updated_at_desc') {
     return 'datetime(e.updated_at) DESC, e.id DESC';
   }

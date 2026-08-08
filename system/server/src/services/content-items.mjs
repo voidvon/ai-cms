@@ -31,7 +31,8 @@ export function listContentItems(modelCode, {
   limit = 20,
   columnId = null,
   includeDescendants = false,
-  languageCode = null
+  languageCode = null,
+  orderBy = 'default'
 } = {}) {
   const normalizedModelCode = requireContentModelCode(modelCode);
   const safeColumnId = Number.isInteger(Number(columnId)) ? Number(columnId) : null;
@@ -43,16 +44,18 @@ export function listContentItems(modelCode, {
       includeDescendants,
       visibleOnly,
       publishedOnly,
-      languageCode
+      languageCode,
+      orderBy
     }).items
     : listContentEntries(normalizedModelCode, {
       featured,
       visibleOnly,
       publishedOnly,
       limit,
-      languageCode
+      languageCode,
+      orderBy
     });
-  return items.sort(resolveContentItemComparator(normalizedModelCode));
+  return items.sort(resolveContentItemComparator(normalizedModelCode, orderBy));
 }
 
 export function listContentItemsAdmin(modelCode, {
@@ -143,6 +146,6 @@ function requireContentModelCode(modelCode) {
   return normalizedModelCode;
 }
 
-export function resolveContentItemComparator(modelCode) {
-  return resolveContentEntryComparator(modelCode);
+export function resolveContentItemComparator(modelCode, orderBy = 'default') {
+  return resolveContentEntryComparator(modelCode, orderBy);
 }

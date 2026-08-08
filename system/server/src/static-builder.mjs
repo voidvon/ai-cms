@@ -1929,7 +1929,15 @@ function createTemplateColumnTag(templateContext) {
     || ''
   ).trim() || null;
 
-  return ({ id, columnId, limit = 20, visibleOnly = true } = {}) => {
+  return ({
+    id,
+    columnId,
+    limit = 20,
+    visibleOnly = true,
+    publishedOnly = true,
+    includeDescendants = false,
+    orderBy = 'default'
+  } = {}) => {
     const targetColumnId = normalizeInteger(columnId ?? id, 0);
     if (targetColumnId <= 0) {
       return [];
@@ -1943,10 +1951,12 @@ function createTemplateColumnTag(templateContext) {
 
     return listContentItems(modelCode, {
       visibleOnly,
-      publishedOnly: true,
+      publishedOnly,
       limit: Math.min(Math.max(normalizeInteger(limit, 20), 1), 200),
       columnId: targetColumnId,
-      languageCode: safeLanguageCode
+      includeDescendants,
+      languageCode: safeLanguageCode,
+      orderBy
     })
       .map((item) => {
         const templateData = item?.template_data && typeof item.template_data === 'object'
@@ -1954,7 +1964,7 @@ function createTemplateColumnTag(templateContext) {
           : null;
         const title = String(item?.name || '').trim();
         const summary = normalizeRenderableLegacyText(item?.summary || '');
-        const image = resolveLegacyContentPreviewImage(item);
+        const image = resolveTemplateColumnTagImage(item);
         return {
           id: normalizeInteger(item?.id, 0),
           columnId: normalizeInteger(item?.column_id, 0),
@@ -1969,6 +1979,20 @@ function createTemplateColumnTag(templateContext) {
         };
       });
   };
+}
+
+function resolveTemplateColumnTagImage(item) {
+  const candidates = [
+    item?.primary_image,
+    ...(Array.isArray(item?.images) ? item.images : [])
+  ];
+  for (const candidate of candidates) {
+    const normalized = normalizeUploadedRelativePath(String(candidate || '').trim());
+    if (normalized && !isDecorativeLegacyPreviewImage(normalized)) {
+      return normalized;
+    }
+  }
+  return resolveLegacyContentPreviewImage(item);
 }
 
 function buildConfiguredFooterLinks(items = [], site = null) {
